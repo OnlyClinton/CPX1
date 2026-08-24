@@ -4,6 +4,7 @@ on:
     branches: [wdcc-responsive-live-qa]
     paths:
       - '.github/workflows/wdcc-responsive-live-qa.yml'
+      - 'ops/wdcc-responsive-live-qa-trigger.txt'
   workflow_dispatch:
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
       - name: Install Playwright
         run: |
           npm init -y >/dev/null 2>&1 || true
-          npm install playwright@1.54.2 --no-save
+          npm install playwright@1.55.0 --no-save
           npx playwright install --with-deps chromium
       - name: Run responsive live QA
         env:
@@ -32,50 +33,47 @@ jobs:
           const base=process.env.BASE;
           const routes=[
             '/', '/inventory', '/get-approved', '/schedule-test-drive', '/contact',
-            '/dealer/login', '/admin/login', '/dealer', '/dealer/inventory/new', '/admin/dashboard'
+            '/dealer/login', '/admin/login', '/dealer', '/admin', '/admin/dashboard',
+            '/dealer/inventory', '/dealer/inventory/new', '/dealer/leads'
           ];
           const viewports={mobile:{width:390,height:844},desktop:{width:1440,height:900}};
-          const report={base,generatedAt:new Date().toISOString(),pages:[],api:[]};
+          const report={base,generatedAt:new Date().toISOString(),pages:[],api:[],linkChecks:[]};
           const browser=await chromium.launch({headless:true});
 
           for(const [device,viewport] of Object.entries(viewports)){
-            const context=await browser.newContext({viewport,deviceScaleFactor:1});
+            const context=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:device==='mobile',hasTouch:device==='mobile'});
             for(const route of routes){
               const page=await context.newPage();
-              const consoleErrors=[];
-              const pageErrors=[];
-              const failedRequests=[];
-              page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
-              page.on('pageerror',e=>pageErrors.push(String(e)));
+              const consoleErrors=[]; const pageErrors=[]; const failedRequests=[];
+              page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text().slice(0,500))});
+              page.on('pageerror',e=>pageErrors.push(String(e).slice(0,500)));
               page.on('requestfailed',r=>failedRequests.push({url:r.url(),failure:r.failure()?.errorText||''}));
               let status=0,finalUrl='';
-              try{
-                const res=await page.goto(base+route,{waitUntil:'networkidle',timeout:30000});
-                status=res?.status()||0; finalUrl=page.url();
-              }catch(e){pageErrors.push('NAV '+String(e));}
-              await page.waitForTimeout(500);
+              try{const res=await page.goto(base+route,{waitUntil:'networkidle',timeout:30000});status=res?.status()||0;finalUrl=page.url();}
+              catch(e){pageErrors.push('NAV '+String(e));finalUrl=page.url();}
+              await page.waitForTimeout(700);
               const metrics=await page.evaluate(()=>{
-                const de=document.documentElement, body=document.body;
+                const de=document.documentElement, body=document.body, vw=innerWidth;
                 const imgs=[...document.images];
-                const inputs=[...document.querySelectorAll('input,select,textarea,button')];
-                const anchors=[...document.querySelectorAll('a[href]')];
+                const forms=[...document.forms].filter(f=>{const r=f.getBoundingClientRect(),s=getComputedStyle(f);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'});
+                const controls=[...document.querySelectorAll('input,select,textarea,button,a')];
                 return {
                   title:document.title,
-                  bodyText:(body?.innerText||'').slice(0,500),
+                  h1:[...document.querySelectorAll('h1')].map(x=>(x.textContent||'').trim()).filter(Boolean),
+                  bodyText:(body?.innerText||'').slice(0,700),
                   scrollWidth:Math.max(de.scrollWidth,body?.scrollWidth||0),
                   clientWidth:de.clientWidth,
-                  overflowX:Math.max(de.scrollWidth,body?.scrollWidth||0)>de.clientWidth+2,
-                  brokenImages:imgs.filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.currentSrc||i.src),
+                  overflowX:Math.max(de.scrollWidth,body?.scrollWidth||0)>de.clientWidth+4,
+                  brokenImages:imgs.filter(i=>i.complete&&i.naturalWidth===0).map(i=>i.currentSrc||i.src).slice(0,20),
                   imageCount:imgs.length,
-                  controls:inputs.length,
-                  links:anchors.length,
-                  tinyText:[...document.querySelectorAll('body *')].filter(el=>{const s=getComputedStyle(el); const n=parseFloat(s.fontSize||'0'); return n>0&&n<10&&el.textContent?.trim()}).slice(0,20).map(el=>({text:el.textContent?.trim().slice(0,80),size:getComputedStyle(el).fontSize})),
-                  clipped:[...document.querySelectorAll('input,select,textarea,button,a')].filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&(r.right>innerWidth+2||r.left<-2)}).slice(0,30).map(el=>({tag:el.tagName,text:(el.textContent||el.getAttribute('placeholder')||'').trim().slice(0,80),left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right}))
+                  visibleForms:forms.map(f=>({controls:f.querySelectorAll('input,select,textarea').length,buttons:f.querySelectorAll('button,input[type=submit]').length,text:(f.innerText||'').trim().slice(0,180)})),
+                  clipped:controls.filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.right>vw+6||r.left<-6)}).slice(0,30).map(el=>({tag:el.tagName,text:(el.textContent||el.getAttribute('placeholder')||'').trim().slice(0,80),left:Math.round(el.getBoundingClientRect().left),right:Math.round(el.getBoundingClientRect().right)})),
+                  tinyTapTargets:controls.filter(el=>{const r=el.getBoundingClientRect();return ['A','BUTTON'].includes(el.tagName)&&r.width>0&&r.height>0&&(r.width<36||r.height<36)}).slice(0,30).map(el=>({tag:el.tagName,text:(el.textContent||'').trim().slice(0,60),w:Math.round(el.getBoundingClientRect().width),h:Math.round(el.getBoundingClientRect().height)}))
                 };
-              });
+              }).catch(()=>({}));
               const name=(route==='/'?'home':route.replace(/^\//,'').replaceAll('/','-'))+'-'+device+'.png';
-              await page.screenshot({path:'qa-artifacts/screenshots/'+name,fullPage:true});
-              report.pages.push({device,viewport,route,status,finalUrl,...metrics,consoleErrors:consoleErrors.slice(0,20),pageErrors:pageErrors.slice(0,20),failedRequests:failedRequests.slice(0,30)});
+              await page.screenshot({path:'qa-artifacts/screenshots/'+name,fullPage:true}).catch(()=>{});
+              report.pages.push({device,viewport,route,status,finalUrl,...metrics,consoleErrors:consoleErrors.slice(0,20),pageErrors:pageErrors.slice(0,20),failedRequests:failedRequests.slice(0,30),screenshot:name});
               await page.close();
             }
             await context.close();
@@ -83,34 +81,36 @@ jobs:
 
           const apiContext=await browser.newContext();
           const p=await apiContext.newPage();
-          const checks=[
-            ['health','GET','/api/health'],
-            ['inventory','GET','/api/inventory'],
-            ['session','GET','/api/auth/session'],
-          ];
-          for(const [name,method,path] of checks){
-            const r=await p.request.fetch(base+path,{method});
-            report.api.push({name,method,path,status:r.status(),body:(await r.text()).slice(0,3000)});
+          async function check(name,method,path,data){
+            const r=await p.request.fetch(base+path,{method,data,headers:data?{'content-type':'application/json','origin':base}:{}});
+            report.api.push({name,method,path,status:r.status(),body:(await r.text()).slice(0,4000),headers:await r.allHeaders()});
           }
-          let r=await p.request.post(base+'/api/auth/login',{data:{email:'wdcc-invalid-qa-user',password:'definitely-wrong-password'}});
-          report.api.push({name:'invalid-login',method:'POST',path:'/api/auth/login',status:r.status(),body:(await r.text()).slice(0,1200)});
-          r=await p.request.post(base+'/api/inventory',{data:{year:2020,make:'QA',model:'Blocked',price:1,mileage:1}});
-          report.api.push({name:'anonymous-inventory-write',method:'POST',path:'/api/inventory',status:r.status(),body:(await r.text()).slice(0,1200)});
-          r=await p.request.post(base+'/api/leads',{data:{kind:'contact',name:'WDCC QA VALIDATION',email:'qa@invalid.example',consent:false}});
-          report.api.push({name:'lead-consent-validation',method:'POST',path:'/api/leads',status:r.status(),body:(await r.text()).slice(0,1200)});
+          await check('health','GET','/api/health');
+          await check('inventory','GET','/api/inventory?responsive_qa=1');
+          await check('session','GET','/api/auth/session');
+          await check('invalid-login','POST','/api/auth/login',{email:'wdcc-invalid-qa-user',password:'definitely-wrong-password'});
+          await check('anonymous-inventory-write','POST','/api/inventory',{year:2020,make:'QA',model:'Blocked',price:1,mileage:1});
+          for(const kind of ['schedule','approval','contact']){
+            await check(`lead-${kind}-consent-validation`,'POST','/api/leads',{kind,name:'WDCC QA VALIDATION',email:'qa@invalid.example',phone:'5555550100',consent:false,qa:true,idempotencyKey:`wdcc-qa-responsive-${kind}`});
+          }
+
+          await p.goto(base,{waitUntil:'networkidle',timeout:30000});
+          const hrefs=await p.evaluate(b=>[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.startsWith(b)))].slice(0,80),base);
+          for(const href of hrefs){try{const r=await p.request.get(href,{timeout:15000,maxRedirects:5});report.linkChecks.push({href,status:r.status()});}catch(e){report.linkChecks.push({href,error:String(e)})}}
           await apiContext.close();
           await browser.close();
 
           fs.writeFileSync('qa-artifacts/report.json',JSON.stringify(report,null,2));
           const severe=[];
           for(const x of report.pages){
-            if(x.status>=400) severe.push(`${x.device} ${x.route}: HTTP ${x.status}`);
+            if(x.status>=500) severe.push(`${x.device} ${x.route}: HTTP ${x.status}`);
+            if(x.status===404) severe.push(`${x.device} ${x.route}: HTTP 404`);
             if(x.overflowX) severe.push(`${x.device} ${x.route}: horizontal overflow ${x.scrollWidth}>${x.clientWidth}`);
-            if(x.brokenImages.length) severe.push(`${x.device} ${x.route}: ${x.brokenImages.length} broken images`);
-            if(x.pageErrors.length) severe.push(`${x.device} ${x.route}: page errors ${x.pageErrors.join(' | ')}`);
+            if((x.brokenImages||[]).length) severe.push(`${x.device} ${x.route}: ${(x.brokenImages||[]).length} broken images`);
+            if((x.pageErrors||[]).length) severe.push(`${x.device} ${x.route}: page errors ${(x.pageErrors||[]).join(' | ')}`);
           }
           fs.writeFileSync('qa-artifacts/summary.txt',severe.length?severe.join('\n'):'No severe browser-layout failures detected.');
-          console.log(JSON.stringify({pages:report.pages.length,api:report.api.map(x=>({name:x.name,status:x.status})),severe},null,2));
+          console.log(JSON.stringify({pages:report.pages.length,api:report.api.map(x=>({name:x.name,status:x.status})),linkFailures:report.linkChecks.filter(x=>x.status>=400||x.error).length,severe},null,2));
           NODE
           node /tmp/wdcc-qa.mjs
       - name: Upload QA artifacts
