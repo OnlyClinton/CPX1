@@ -1,0 +1,2 @@
+Trigger final WDCC dealer/admin candidate preview from corrected main.
+Expected: /dealer/login -> dealer dashboard, /admin/login -> /admin/dashboard, /admin/users remains separate.
