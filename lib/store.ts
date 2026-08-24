@@ -56,7 +56,6 @@ export async function writeState(input:State){
   const body=JSON.stringify(state,null,2)+"\n";
   const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
 
-  // Every mutation gets an immutable restore point before the canonical ledger moves.
   await put(backupPath,body,{
     access:"private",
     addRandomSuffix:false,
@@ -78,7 +77,9 @@ export function publicVehicles(state:State){
   const nextYear=new Date().getUTCFullYear()+1;
   return state.vehicles.filter(vehicle=>{
     const badges=Array.isArray(vehicle.badges)?vehicle.badges.map((value:any)=>String(value).toUpperCase()):[];
+    const visibility=String(vehicle.visibility||"public").toLowerCase();
     return String(vehicle.status||"").toLowerCase()==="published"&&
+      visibility!=="internal"&&vehicle.internalOnly!==true&&
       Number(vehicle.year)>1900&&Number(vehicle.year)<=nextYear&&
       Boolean(String(vehicle.make||"").trim())&&
       Boolean(String(vehicle.model||"").trim())&&
