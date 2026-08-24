@@ -2,6 +2,8 @@ name: WDCC CRM Branch Build
 on:
   push:
     branches: [wdcc-crm-inventory-8ar]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   build:
