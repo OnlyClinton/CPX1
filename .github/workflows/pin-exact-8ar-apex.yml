@@ -1,0 +1,93 @@
+name: Pin exact 8AR apex
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pin-exact-8ar-apex.yml'
+  workflow_dispatch:
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      DONOR: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
+      APEX: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+    steps:
+      - name: Require token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Verify immutable 8AR donor before pin
+        id: donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://$DONOR/?intro=1" -o /tmp/donor.html
+          grep -q 'intro-sequence' /tmp/donor.html
+          grep -q 'intro-scene' /tmp/donor.html
+          grep -q 'intro-badge' /tmp/donor.html
+          grep -q 'intro-tagline' /tmp/donor.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
+          inv_code="$(curl -sS -o /tmp/inv.json -w '%{http_code}' "https://$DONOR/api/inventory")"
+          test "$inv_code" = '200'
+          jq -e '.ok == true' /tmp/inv.json >/dev/null
+          run="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          lead_code="$(curl -sS -o /tmp/lead.json -w '%{http_code}' -X POST "https://$DONOR/api/leads" \
+            -H 'content-type: application/json' \
+            -H "idempotency-key: wdcc-8ar-pin-$run" \
+            --data "{\"kind\":\"contact\",\"name\":\"WDCC 8AR PIN QA $run\",\"phone\":\"813-555-0198\",\"email\":\"qa-8ar-$run@invalid.example\",\"vehicleInterest\":\"QA only\",\"message\":\"Automated exact 8AR pre-pin verification - do not contact\",\"consent\":true,\"source\":\"8ar-pin-qa\"}")"
+          test "$lead_code" = '200' -o "$lead_code" = '201'
+          jq -e '.ok == true' /tmp/lead.json >/dev/null
+          echo "lead_code=$lead_code" >> "$GITHUB_OUTPUT"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Pin apex and www to exact 8AR artifact
+        id: alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
+
+      - name: Verify exact intro on public domain
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 20); do
+            curl -sS "https://$APEX/?intro=1&pin=${GITHUB_RUN_ID}" -o /tmp/live.html || true
+            if grep -q 'intro-sequence' /tmp/live.html \
+              && grep -q 'intro-scene' /tmp/live.html \
+              && grep -q 'intro-badge' /tmp/live.html \
+              && grep -q 'intro-tagline' /tmp/live.html; then
+              ok=1; break
+            fi
+            sleep 2
+          done
+          test "$ok" = '1'
+          code="$(curl -sS -o /tmp/live-inv.json -w '%{http_code}' "https://$APEX/api/inventory")"
+          test "$code" = '200'
+          jq -e '.ok == true' /tmp/live-inv.json >/dev/null
+          echo 'exact=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report exact 8AR pin
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DONOR_STATUS: ${{ steps.donor.outcome }}
+          ALIAS_STATUS: ${{ steps.alias.outcome }}
+          VERIFY_STATUS: ${{ steps.verify.outcome }}
+          EXACT: ${{ steps.verify.outputs.exact }}
+          LEAD_CODE: ${{ steps.donor.outputs.lead_code }}
+        shell: bash
+        run: |
+          body=$(printf '8AR donor checks: **%s**\nAlias pin: **%s**\nPublic exact-intro verification: **%s**\nExact markers live: `%s`\nDonor lead POST: `%s`\n\nApex: https://wedontcarecars.com/?intro=1\nPinned donor: `%s`' "$DONOR_STATUS" "$ALIAS_STATUS" "$VERIFY_STATUS" "$EXACT" "$LEAD_CODE" "$DONOR")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact 8AR live pin ${GITHUB_SHA:0:7}" --body "$body" || true
