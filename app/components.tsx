@@ -1,95 +1,26 @@
 "use client";
 import Link from"next/link";
-import{useEffect,useRef,useState}from"react";
+import{useEffect,useState}from"react";
 import TrackedCallLink from"./TrackedCallLink";
 
-type IntroPhase="enter"|"move"|"flight"|"exit"|"done";
-
 export function Intro(){
-  const[phase,setPhase]=useState<IntroPhase>("enter");
-  const logoRef=useRef<HTMLImageElement>(null);
-
+  const[done,setDone]=useState(false);
   useEffect(()=>{
     const forceReplay=new URLSearchParams(window.location.search).get("intro")==="1";
-    const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reducedMotion){setPhase("done");return;}
-
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reduced){setDone(true);return;}
     sessionStorage.setItem("wdcc_intro_seen","1");
-    let cancelled=false;
-    const timers:number[]=[];
-    const later=(fn:()=>void,ms:number)=>{const id=window.setTimeout(fn,ms);timers.push(id);};
-
-    const complete=()=>{
-      if(cancelled)return;
-      setPhase("exit");
-      later(()=>{if(!cancelled)setPhase("done")},520);
-    };
-
-    const flyLogo=()=>{
-      if(cancelled)return;
-      setPhase("flight");
-      const source=logoRef.current;
-      const target=document.querySelector<HTMLImageElement>("[data-wdcc-header-logo]");
-      if(!source||!target){complete();return;}
-
-      source.getAnimations().forEach(animation=>animation.cancel());
-      const start=source.getBoundingClientRect();
-      const end=target.getBoundingClientRect();
-      if(!start.width||!start.height||!end.width||!end.height){complete();return;}
-
-      target.style.opacity="0";
-      source.style.left=`${start.left}px`;
-      source.style.top=`${start.top}px`;
-      source.style.width=`${start.width}px`;
-      source.style.height=`${start.height}px`;
-      source.style.transform="none";
-      source.style.transformOrigin="top left";
-      source.style.opacity="1";
-
-      const dx=end.left-start.left;
-      const dy=end.top-start.top;
-      const scale=Math.min(end.width/start.width,end.height/start.height);
-
-      const flight=source.animate([
-        {transform:"translate3d(0,0,0) scale(1)",opacity:1,offset:0},
-        {transform:`translate3d(${dx*.84}px,${dy*.84}px,0) scale(${Math.max(scale*1.18,.12)})`,opacity:1,offset:.72},
-        {transform:`translate3d(${dx}px,${dy}px,0) scale(${scale})`,opacity:.12,offset:1}
-      ],{duration:900,easing:"cubic-bezier(.16,1,.3,1)",fill:"forwards"});
-
-      const reveal=target.animate([
-        {opacity:0,offset:0},
-        {opacity:0,offset:.74},
-        {opacity:1,offset:1}
-      ],{duration:900,easing:"ease-out",fill:"forwards"});
-
-      Promise.allSettled([flight.finished,reveal.finished]).then(()=>{
-        if(cancelled)return;
-        target.style.opacity="1";
-        complete();
-      });
-    };
-
-    later(()=>setPhase("move"),520);
-    later(()=>window.requestAnimationFrame(flyLogo),1500);
-    later(complete,3300);
-
-    return()=>{
-      cancelled=true;
-      timers.forEach(id=>window.clearTimeout(id));
-      const target=document.querySelector<HTMLImageElement>("[data-wdcc-header-logo]");
-      if(target)target.style.opacity="";
-    };
+    const t=window.setTimeout(()=>setDone(true),3000);
+    return()=>window.clearTimeout(t);
   },[]);
-
-  if(phase==="done")return null;
-  return <div className={`cinematic cinematic-${phase}`} aria-label="WDCC opening animation">
-    <div className="cinScene" aria-hidden="true"/>
-    <div className="cinVignette" aria-hidden="true"/>
-    <div className="cinSmoke one" aria-hidden="true"/>
-    <div className="cinSmoke two" aria-hidden="true"/>
-    <img ref={logoRef} className="cinLogo" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/>
-    <p className="cinTagline">Tampa Bay · Drive today</p>
-    <button className="skipIntro" onClick={()=>setPhase("done")}>Skip intro</button>
+  if(done)return null;
+  return <div className="intro-sequence intro-reveal" aria-label="WDCC opening animation">
+    <div className="intro-scene" style={{"--hero-image":"url(/wdcc-hero-v2.webp)"} as React.CSSProperties}/>
+    <div className="intro-smoke smoke-one"/>
+    <div className="intro-smoke smoke-two"/>
+    <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
+    <p className="intro-tagline">Tampa Bay · Drive today</p>
+    <button className="intro-skip" onClick={()=>setDone(true)}>Skip intro</button>
   </div>;
 }
 
