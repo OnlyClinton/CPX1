@@ -52,7 +52,7 @@ jobs:
             curl -fsS -X POST "$BASE/api/leads" \
               -H 'content-type: application/json' \
               -H "idempotency-key: wdcc-qa-$kind-$RUN" \
-              --data "{\"kind\":\"$kind\",\"name\":\"WDCC QA $kind $RUN\",\"phone\":\"$phone\",\"email\":\"qa-$kind-$RUN@invalid.example\",\"vehicleInterest\":\"QA Test Vehicle\",\"message\":\"Automated WDCC contract verification - do not contact\",\"preferredTime\":\"QA only\",\"consent\":true,\"source\":\"$source\"}"
+              --data "{\"qa\":true,\"kind\":\"$kind\",\"name\":\"WDCC QA $kind $RUN\",\"phone\":\"$phone\",\"email\":\"qa-$kind-$RUN@invalid.example\",\"vehicleInterest\":\"QA Test Vehicle\",\"message\":\"Automated WDCC contract verification - do not contact\",\"preferredTime\":\"QA only\",\"consent\":true,\"source\":\"$source\"}"
           }
 
           SCHEDULE="$(submit schedule schedule-test-drive 813-555-0101)"
