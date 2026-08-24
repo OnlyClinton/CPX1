@@ -1,0 +1,89 @@
+name: WDCC Canonical Ledger Clean
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-canonical-ledger-clean.yml'
+  workflow_dispatch:
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Backup revision 305 and clean synthetic records
+        id: clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-clean-canonical.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {get,put} from '@vercel/blob';
+          const oidc=process.env.VERCEL_OIDC_TOKEN,storeId=process.env.STORE_ID,path='private/state/platform-v3.json';
+          const read=async()=>{const r=await get(path,{access:'private',useCache:false,oidcToken:oidc,storeId});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c);return {r,raw,state:JSON.parse(raw.toString('utf8'))}};
+          const before=await read();
+          const originalRevision=Number(before.state.revision||0);
+          if(originalRevision!==305)throw Error(`REVISION_CHANGED_EXPECTED_305_GOT_${originalRevision}`);
+          const beforeHash=crypto.createHash('sha256').update(before.raw).digest('hex');
+          const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+          const backup=`private/state/backups/platform-v3-pre-qa-clean-r${originalRevision}-${stamp}-${crypto.randomUUID()}.json`;
+          await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',oidcToken:oidc,storeId});
+          const s=before.state,now=new Date().toISOString();
+          const badVehicle=v=>{const status=String(v?.status||'').toLowerCase(),stock=String(v?.stock||'').toUpperCase(),badges=Array.isArray(v?.badges)?v.badges.map(x=>String(x).toUpperCase()):[];const invalid=Number(v?.year)<=1900||!String(v?.make||'').trim()||!String(v?.model||'').trim()||Number(v?.price||0)<=0;const synthetic=stock.startsWith('R36TEST-')||stock.startsWith('WDCC-QA-')||badges.includes('R36-TEST')||badges.includes('QA');return status==='published'&&(invalid||synthetic)};
+          const qaLead=l=>l?.qa===true||String(l?.status||'').toLowerCase()==='test'||String(l?.email||'').toLowerCase().endsWith('@invalid.example')||String(l?.name||'').toUpperCase().startsWith('WDCC QA ')||String(l?.name||'').toUpperCase().startsWith('WDCC V52 QA')||String(l?.name||'').toUpperCase().startsWith('WDCC MATRIX')||String(l?.name||'').toUpperCase().startsWith('WDCC ISOLATED');
+          const vehicleIds=(Array.isArray(s.vehicles)?s.vehicles:[]).filter(badVehicle).map(v=>v.id);
+          const leadIds=(Array.isArray(s.leads)?s.leads:[]).filter(qaLead).map(l=>l.id);
+          s.vehicles=(Array.isArray(s.vehicles)?s.vehicles:[]).map(v=>vehicleIds.includes(v.id)?{...v,status:'archived',updatedAt:now,qaCleanupAt:now}:v);
+          s.leads=(Array.isArray(s.leads)?s.leads:[]).filter(l=>!leadIds.includes(l.id));
+          s.audit=Array.isArray(s.audit)?s.audit:[];
+          for(const id of vehicleIds)s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.cleanup.vehicle_archive',actor:'wdcc-canonical-ledger-clean',vehicleId:id});
+          for(const id of leadIds)s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.cleanup.lead_remove',actor:'wdcc-canonical-ledger-clean',leadId:id});
+          s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.cleanup.summary',actor:'wdcc-canonical-ledger-clean',fromRevision:originalRevision,vehiclesArchived:vehicleIds.length,qaLeadsRemoved:leadIds.length,backup,beforeHash});
+          s.revision=originalRevision+1;s.updatedAt=now;
+          const afterRaw=Buffer.from(JSON.stringify(s,null,2)+'\n');
+          const etag=before.r?.blob?.etag;
+          await put(path,afterRaw,{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',oidcToken:oidc,storeId,...(etag?{ifMatch:etag}:{})});
+          const after=await read();
+          const badRemaining=(after.state.vehicles||[]).filter(badVehicle).length;
+          const qaRemaining=(after.state.leads||[]).filter(qaLead).length;
+          if(Number(after.state.revision)!==306||badRemaining||qaRemaining)throw Error(`CLEAN_VERIFY_FAILED_revision_${after.state.revision}_bad_${badRemaining}_qa_${qaRemaining}`);
+          const afterHash=crypto.createHash('sha256').update(after.raw).digest('hex');
+          console.log('CLEAN_RESULT='+JSON.stringify({ok:true,storeId,backup,fromRevision:originalRevision,toRevision:after.state.revision,vehiclesArchived:vehicleIds.length,qaLeadsRemoved:leadIds.length,remainingVehicles:(after.state.vehicles||[]).length,remainingLeads:(after.state.leads||[]).length,badPublishedRemaining:badRemaining,qaLeadsRemaining:qaRemaining,beforeHash,afterHash}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-clean-canonical.mjs | tee /tmp/clean.log
+          grep '^CLEAN_RESULT=' /tmp/clean.log | tail -1 | cut -d= -f2- >/tmp/clean.json
+          cat /tmp/clean.json | jq .
+          echo "vehicles=$(jq -r '.vehiclesArchived' /tmp/clean.json)" >> "$GITHUB_OUTPUT"
+          echo "leads=$(jq -r '.qaLeadsRemoved' /tmp/clean.json)" >> "$GITHUB_OUTPUT"
+          echo "backup=$(jq -r '.backup' /tmp/clean.json)" >> "$GITHUB_OUTPUT"
+          echo "revision=$(jq -r '.toRevision' /tmp/clean.json)" >> "$GITHUB_OUTPUT"
+      - name: Report canonical cleanup
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          VEHICLES: ${{ steps.clean.outputs.vehicles }}
+          LEADS: ${{ steps.clean.outputs.leads }}
+          BACKUP: ${{ steps.clean.outputs.backup }}
+          REVISION: ${{ steps.clean.outputs.revision }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical ledger clean ${GITHUB_RUN_ID}" --body "Status: **$STATUS**\nCanonical store: \`store_cNUyQRVlXtyvZQ5N\`\nNew revision: \`${REVISION:-unknown}\`\nSynthetic/invalid published vehicles archived: \`${VEHICLES:-unknown}\`\nSynthetic QA leads removed: \`${LEADS:-unknown}\`\nImmutable pre-clean backup: \`${BACKUP:-unknown}\`\nNo valid vehicle or non-QA lead was deleted." || true
+
+# One-shot cleanup guarded by exact starting revision 305 and immutable pre-write backup.
