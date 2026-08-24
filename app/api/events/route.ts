@@ -1,10 +1,12 @@
 import {NextResponse} from "next/server";
-import {recordAnalyticsEvent} from "../../../lib/analyticsAudit";
+import {currentUser} from "../../../lib/auth";
+import {readRecentAnalyticsEvents,recordAnalyticsEvent} from "../../../lib/analyticsAudit";
 import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
+const readerRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const text=(v:unknown,max:number)=>String(v??"").trim().slice(0,max);
 
 function canonicalRuntime(request:Request){
@@ -12,6 +14,17 @@ function canonicalRuntime(request:Request){
   if(project===DEALER_PROJECT_ID||project===CPX_BACKEND_PROJECT_ID)return true;
   const host=new URL(request.url).host.toLowerCase();
   return host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");
+}
+
+export async function GET(request:Request){
+  if(!canonicalRuntime(request))return proxyDealer(request,"/api/events");
+  const user=await currentUser().catch(()=>null);
+  if(!user||!readerRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401,headers:{"Cache-Control":"private, no-store"}});
+  try{
+    const url=new URL(request.url);const limit=Math.max(1,Math.min(Number(url.searchParams.get("limit"))||200,500));
+    const items=await readRecentAnalyticsEvents(limit);
+    return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
+  }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"analytics_read_failed",items:[]},{status:500,headers:{"Cache-Control":"private, no-store"}});}
 }
 
 export async function POST(request:Request){
