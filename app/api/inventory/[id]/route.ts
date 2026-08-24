@@ -13,12 +13,18 @@ function canEdit(user:any,vehicle:any){
     String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc");
 }
 
+function isPublic(vehicle:any){
+  return String(vehicle?.status||"").toLowerCase()==="published"&&
+    String(vehicle?.visibility||"public").toLowerCase()!=="internal"&&
+    vehicle?.internalOnly!==true;
+}
+
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   try{
     const{id}=await params;
     const [state,user]=await Promise.all([readState(),currentUser()]);
     const item=state.vehicles.find(vehicle=>vehicle.id===id);
-    if(!item||((item.status!=="published")&&!canEdit(user,item))){
+    if(!item||(!isPublic(item)&&!canEdit(user,item))){
       return NextResponse.json({ok:false,error:"Not found"},{status:404});
     }
     return NextResponse.json({ok:true,item},{headers:{"Cache-Control":"private, no-store"}});
@@ -51,6 +57,11 @@ export async function PATCH(req:Request,{params}:{params:Promise<{id:string}>}){
     if(body.mileage!==undefined)next.mileage=Math.trunc(Number(body.mileage));
     if(body.stock!==undefined)next.stock=text(body.stock,80);
     if(body.description!==undefined)next.description=text(body.description,3000);
+    if(body.visibility!==undefined||body.internalOnly!==undefined){
+      const requested=body.internalOnly===true||String(body.visibility||"").toLowerCase()==="internal"?"internal":"public";
+      next.visibility=requested;
+      next.internalOnly=requested==="internal";
+    }
 
     if(Array.isArray(body.photoPathnames)){
       const requested=body.photoPathnames
@@ -83,10 +94,11 @@ export async function PATCH(req:Request,{params}:{params:Promise<{id:string}>}){
 
     next.updatedAt=new Date().toISOString();
     state.vehicles[index]=next;
+    const visibilityChanged=String(next.visibility||"public")!==String(current.visibility||"public")||Boolean(next.internalOnly)!==Boolean(current.internalOnly);
     state.audit.push({
       id:crypto.randomUUID(),at:next.updatedAt,
-      action:next.status!==current.status?`vehicle.status.${next.status}`:"vehicle.update",
-      actor:user.id,vehicleId:id
+      action:next.status!==current.status?`vehicle.status.${next.status}`:visibilityChanged?`vehicle.visibility.${next.visibility||"public"}`:"vehicle.update",
+      actor:user.id,vehicleId:id,visibility:next.visibility||"public"
     });
     await writeState(state);
     return NextResponse.json({ok:true,item:next});
