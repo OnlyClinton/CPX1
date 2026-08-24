@@ -8,10 +8,11 @@ on:
 
 concurrency:
   group: wdcc-8ar-working-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
+  statuses: write
 
 env:
   VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
@@ -25,6 +26,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: wdcc-release-8ar-working
+      - name: Mark release pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -d '{"state":"pending","context":"WDCC 8AR Release Gate","description":"Preview, persistence and production gates running"}' >/dev/null
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -119,7 +130,7 @@ jobs:
           echo "live_lead=$LIVE_LEAD" >> "$GITHUB_OUTPUT"
           echo "before=$LIVE_BEFORE" >> "$GITHUB_OUTPUT"
           echo "after=$LIVE_AFTER" >> "$GITHUB_OUTPUT"
-      - name: Write release proof
+      - name: Write successful release proof
         if: success()
         env:
           PREVIEW_URL: ${{ steps.preview.outputs.url }}
@@ -154,3 +165,39 @@ jobs:
           git add release/WDCC-RELEASE-RESULT.txt
           git commit -m 'Record successful WDCC 8AR working release'
           git push origin HEAD:wdcc-release-8ar-working
+      - name: Mark release success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -d '{"state":"success","context":"WDCC 8AR Release Gate","description":"8AR visual + persisted leads deployed and verified"}' >/dev/null
+      - name: Record and mark release failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p release
+          cat > release/WDCC-RELEASE-RESULT.txt <<EOF
+          status=FAILURE
+          source_commit=$GITHUB_SHA
+          source_branch=wdcc-release-8ar-working
+          production_domain=https://wedontcarecars.com
+          failed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          note=Release gate stopped before successful completion; production must not be considered validated by this run.
+          EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add release/WDCC-RELEASE-RESULT.txt
+          git commit -m 'Record failed WDCC 8AR working release' || true
+          git push origin HEAD:wdcc-release-8ar-working || true
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -d '{"state":"failure","context":"WDCC 8AR Release Gate","description":"Release gate failed; production not validated"}' >/dev/null
