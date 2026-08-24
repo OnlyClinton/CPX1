@@ -1,0 +1,33 @@
+source_commit=5a3501e454b25cac1ccd5c410b99a35585b93e26
+started_at=2026-08-24T10:19:01Z
+npm_ci_rc=0
+source_build_rc=0
+vercel_token=missing
+vercel_cli_install_rc=99
+vercel_whoami_rc=99
+vercel_pull_preview_rc=99
+vercel_build_preview_rc=99
+vercel_deploy_preview_rc=99
+preview_url=
+completed_at=2026-08-24T10:19:23Z
+--- npm-ci.log tail ---
+
+added 64 packages, and audited 65 packages in 9s
+
+16 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+--- npm-build.log tail ---
+├ ○ /dealer/inventory/new
+├ ○ /dealer/leads
+├ ○ /dealer/login
+├ ○ /get-approved
+├ ○ /inventory
+├ ○ /schedule-test-drive
+└ ƒ /vehicle/[id]
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
