@@ -1,0 +1,161 @@
+name: WDCC Emergency Apex Cutover
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-emergency-apex-cutover.yml'
+  workflow_dispatch:
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM_SLUG: cpxagency
+      SOURCE_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      TARGET_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      TARGET_DEPLOYMENT: wdcc-dealer-portal-9yp7ajong-cpxagency.vercel.app
+      DEALER: https://dealer.wedontcarecars.com
+      APEX: https://wedontcarecars.com
+    steps:
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Verify V52 recovery artifact through dealer production
+        id: donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$DEALER/api/health" -o /tmp/dealer-health.json
+          jq -e '.ok == true and .degraded == false and .release == "WDCC-V52-LEAD-INVENTORY-CONTRACT"' /tmp/dealer-health.json >/dev/null
+          curl -fsS "$DEALER/api/inventory" -o /tmp/dealer-inventory.json
+          jq -e '.ok == true and ((.items // []) | length > 0)' /tmp/dealer-inventory.json >/dev/null
+          curl -fsS "$DEALER/" -o /tmp/dealer-home.html
+          grep -qi 'BAD CREDIT' /tmp/dealer-home.html
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Move apex domains to healthy V52 project and pin artifact
+        id: domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in wedontcarecars.com www.wedontcarecars.com; do
+            safe="${domain//./_}"
+            code="$(curl -sS -o "/tmp/move-$safe.json" -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              "https://api.vercel.com/v1/projects/$SOURCE_PROJECT/domains/$domain/move?teamId=$TEAM_ID" \
+              --data "{\"projectId\":\"$TARGET_PROJECT\"}" || true)"
+            echo "Move $domain HTTP $code"
+            if [ "$code" != "200" ]; then
+              cat "/tmp/move-$safe.json" || true
+              echo "Move endpoint did not return 200; trying exact alias assignment in case the domain is already on the target project."
+            fi
+            vercel alias set "$TARGET_DEPLOYMENT" "$domain" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG"
+          done
+
+      - name: Verify public production cutover
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            hcode="$(curl -sS -o /tmp/apex-health.json -w '%{http_code}' "$APEX/api/health" || true)"
+            icode="$(curl -sS -o /tmp/apex-inventory.json -w '%{http_code}' "$APEX/api/inventory" || true)"
+            if [ "$hcode" = "200" ] && [ "$icode" = "200" ] \
+              && jq -e '.ok == true and .degraded == false and .release == "WDCC-V52-LEAD-INVENTORY-CONTRACT"' /tmp/apex-health.json >/dev/null 2>&1 \
+              && jq -e '.ok == true and ((.items // []) | length > 0)' /tmp/apex-inventory.json >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ok" = "1"
+          curl -fsS "$APEX/" -o /tmp/apex-home.html
+          grep -qi 'BAD CREDIT' /tmp/apex-home.html
+          grep -qi 'schedule-test-drive?source=schedule-test-drive' /tmp/apex-home.html
+          grep -qi 'get-approved?source=get-approved' /tmp/apex-home.html
+          grep -qi 'contact?source=call-sean' /tmp/apex-home.html
+
+      - name: Run three production lead contracts
+        id: leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          post_lead(){
+            kind="$1"; source="$2"; suffix="$3"; phone="$4"
+            curl -fsS -X POST "$APEX/api/leads" \
+              -H 'content-type: application/json' \
+              -H "idempotency-key: wdcc-v52-$suffix-$RUN" \
+              --data "{\"kind\":\"$kind\",\"name\":\"WDCC V52 QA $suffix $RUN\",\"phone\":\"$phone\",\"email\":\"qa-$suffix-$RUN@invalid.example\",\"vehicleInterest\":\"Production contract QA\",\"preferredTime\":\"QA only\",\"message\":\"Automated V52 production contract verification\",\"consent\":true,\"source\":\"$source\"}"
+          }
+          post_lead schedule schedule-test-drive schedule 813-555-0101 > /tmp/lead-schedule.json
+          post_lead approval get-approved approval 813-555-0102 > /tmp/lead-approval.json
+          post_lead contact call-sean contact 813-555-0103 > /tmp/lead-contact.json
+          jq -e '.ok == true and .persisted == true and .item.kind == "schedule" and .item.source == "schedule-test-drive" and (.item.id|length>0)' /tmp/lead-schedule.json >/dev/null
+          jq -e '.ok == true and .persisted == true and .item.kind == "approval" and .item.source == "get-approved" and (.item.id|length>0)' /tmp/lead-approval.json >/dev/null
+          jq -e '.ok == true and .persisted == true and .item.kind == "contact" and .item.source == "call-sean" and (.item.id|length>0)' /tmp/lead-contact.json >/dev/null
+          echo "schedule_id=$(jq -r '.item.id' /tmp/lead-schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "approval_id=$(jq -r '.item.id' /tmp/lead-approval.json)" >> "$GITHUB_OUTPUT"
+          echo "contact_id=$(jq -r '.item.id' /tmp/lead-contact.json)" >> "$GITHUB_OUTPUT"
+          echo "schedule_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "approval_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-approval.json)" >> "$GITHUB_OUTPUT"
+          echo "contact_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-contact.json)" >> "$GITHUB_OUTPUT"
+          echo "schedule_sms=$(jq -r '.notifications.sms // "unknown"' /tmp/lead-schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "approval_sms=$(jq -r '.notifications.sms // "unknown"' /tmp/lead-approval.json)" >> "$GITHUB_OUTPUT"
+          echo "contact_sms=$(jq -r '.notifications.sms // "unknown"' /tmp/lead-contact.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify dealer remains healthy after public writes
+        id: postcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$DEALER/api/health" | jq -e '.ok == true and .degraded == false' >/dev/null
+          curl -fsS "$DEALER/api/inventory" | jq -e '.ok == true and ((.items // []) | length > 0)' >/dev/null
+
+      - name: Report recovery result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DONOR: ${{ steps.donor.outcome }}
+          DOMAINS: ${{ steps.domains.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+          LEADS: ${{ steps.leads.outcome }}
+          POSTCHECK: ${{ steps.postcheck.outcome }}
+          SCHEDULE_ID: ${{ steps.leads.outputs.schedule_id }}
+          APPROVAL_ID: ${{ steps.leads.outputs.approval_id }}
+          CONTACT_ID: ${{ steps.leads.outputs.contact_id }}
+          SCHEDULE_EMAIL: ${{ steps.leads.outputs.schedule_email }}
+          APPROVAL_EMAIL: ${{ steps.leads.outputs.approval_email }}
+          CONTACT_EMAIL: ${{ steps.leads.outputs.contact_email }}
+          SCHEDULE_SMS: ${{ steps.leads.outputs.schedule_sms }}
+          APPROVAL_SMS: ${{ steps.leads.outputs.approval_sms }}
+          CONTACT_SMS: ${{ steps.leads.outputs.contact_sms }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          V52 donor verification: **$DONOR**
+          Apex domain cutover: **$DOMAINS**
+          Public health/inventory/home verification: **$VERIFY**
+          Three lead contracts: **$LEADS**
+          Dealer post-write health: **$POSTCHECK**
+
+          Schedule lead: \`$SCHEDULE_ID\` — email \`$SCHEDULE_EMAIL\` — sms \`$SCHEDULE_SMS\`
+          Approval lead: \`$APPROVAL_ID\` — email \`$APPROVAL_EMAIL\` — sms \`$APPROVAL_SMS\`
+          Contact/Call Sean lead: \`$CONTACT_ID\` — email \`$CONTACT_EMAIL\` — sms \`$CONTACT_SMS\`
+
+          Production: https://wedontcarecars.com/
+          Dealer: https://dealer.wedontcarecars.com/
+          Pinned artifact: \`$TARGET_DEPLOYMENT\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V52 emergency apex cutover ${GITHUB_RUN_ID}" --body "$body" || true
