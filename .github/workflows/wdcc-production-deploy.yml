@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
     env:
       VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
@@ -42,4 +43,31 @@ jobs:
       - name: Build production bundle
         run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
       - name: Deploy production bundle
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production URL: $url"
+      - name: Verify apex homepage
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L -o /tmp/wdcc-home.html -w '%{http_code}' https://wedontcarecars.com/)"
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -qi "BAD CREDIT" /tmp/wdcc-home.html
+      - name: Report deployment result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          body=$(printf 'Commit: `%s`\nDeploy outcome: `%s`\nVerify outcome: `%s`\nProduction URL: `%s`\nApex: https://wedontcarecars.com/' "$GITHUB_SHA" "${DEPLOY_OUTCOME:-unknown}" "${VERIFY_OUTCOME:-unknown}" "${DEPLOY_URL:-not-created}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC production deploy report $short" --body "$body" || true
