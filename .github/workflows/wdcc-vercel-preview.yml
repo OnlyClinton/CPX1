@@ -1,0 +1,62 @@
+name: WDCC Canonical Vercel Preview
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-canonical-preview
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify source build
+        run: npm run build
+      - name: Require Vercel deploy credential
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "VERCEL_TOKEN repository secret is required for canonical WDCC preview deployment."
+            exit 1
+          fi
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Pull preview environment
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}" --scope=cpxagency
+      - name: Build with Vercel preview environment
+        run: vercel build --token="${{ secrets.VERCEL_TOKEN }}" --scope=cpxagency
+      - name: Deploy canonical preview
+        id: deploy
+        shell: bash
+        run: |
+          URL="$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}" --scope=cpxagency)"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Preview: $URL"
+      - name: Smoke test storefront and persisted lead transport
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "$PREVIEW_URL/" >/dev/null
+          curl --fail --silent --show-error --location "$PREVIEW_URL/api/health" >/dev/null
+          RESPONSE="$(curl --fail --silent --show-error --location -X POST "$PREVIEW_URL/api/leads" \
+            -H 'content-type: application/json' \
+            -H "idempotency-key: gha-${GITHUB_SHA}" \
+            --data "{\"kind\":\"contact\",\"name\":\"CPX Preview Smoke ${GITHUB_SHA::7}\",\"email\":\"preview-smoke@invalid.example\",\"message\":\"Automated canonical preview persistence test\",\"consent\":true,\"source\":\"github-preview-smoke\"}")"
+          echo "$RESPONSE" | grep -q '"persisted":true'
+          echo "Storefront, health endpoint, and persisted lead transport passed."
