@@ -13,7 +13,8 @@ const clean=(value:unknown,max=500)=>String(value??"").trim().slice(0,max);
 
 export async function recordAnalyticsEvent(input:AnalyticsEvent){
   const at=input.at&&Number.isFinite(Date.parse(input.at))?new Date(input.at).toISOString():new Date().toISOString();
-  const dedupeKey=input.dedupeKey?clean(input.dedupeKey,300):"";
+  const automaticDedupe=String(input.event||"")==="lead.persisted"&&input.leadId?`lead.persisted:${clean(input.leadId,160)}`:"";
+  const dedupeKey=input.dedupeKey?clean(input.dedupeKey,300):automaticDedupe;
   const id=dedupeKey?crypto.createHash("sha256").update(dedupeKey).digest("hex").slice(0,32):crypto.randomUUID();
   const record={id,at,tenantId:clean(input.tenantId||"wdcc",100)||"wdcc",event:clean(input.event,100)||"unknown",sessionId:input.sessionId?clean(input.sessionId,160):null,anonymousUserId:input.anonymousUserId?clean(input.anonymousUserId,160):null,leadId:input.leadId?clean(input.leadId,160):null,vehicleId:input.vehicleId?clean(input.vehicleId,160):null,source:input.source?clean(input.source,120):null,medium:input.medium?clean(input.medium,120):null,campaign:input.campaign?clean(input.campaign,160):null,content:input.content?clean(input.content,160):null,term:input.term?clean(input.term,160):null,clickId:input.clickId?clean(input.clickId,220):null,referralCode:input.referralCode?clean(input.referralCode,160):null,pagePath:input.pagePath?clean(input.pagePath,300):null,landingPath:input.landingPath?clean(input.landingPath,300):null,referrer:input.referrer?clean(input.referrer,700):null,channel:input.channel?clean(input.channel,80):null,cta:input.cta?clean(input.cta,100):null,metadata:input.metadata&&typeof input.metadata==="object"?input.metadata:null};
   const pathname=dedupeKey?`private/logs/analytics/dedupe/${id}.json`:`private/logs/analytics/${at.slice(0,10)}/${at.replace(/[:.]/g,"-")}-${id}.json`;
