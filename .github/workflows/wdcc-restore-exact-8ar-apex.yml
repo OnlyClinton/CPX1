@@ -14,21 +14,26 @@ jobs:
       issues: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      TEAM: cpxagency
-      DONOR: wdcc-v32-storefront-grwygu1ip-cpxagency.vercel.app
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEPLOYMENT_ID: dpl_B7iTYdinR6VFWEnFGf5wWMBwH8H1
       APEX: wedontcarecars.com
       WWW: www.wedontcarecars.com
     steps:
       - name: Require token
         run: test -n "$VERCEL_TOKEN"
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.3.0 >/dev/null
-      - name: Restore functional 8AR to apex and www
+      - name: Assign apex and www directly through Vercel API
         shell: bash
         run: |
           set -euo pipefail
-          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
-          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          for alias in "$APEX" "$WWW"; do
+            code="$(curl -sS -o /tmp/alias.json -w '%{http_code}' -X POST \
+              "https://api.vercel.com/v2/deployments/$DEPLOYMENT_ID/aliases?teamId=$TEAM_ID" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data "{\"alias\":\"$alias\"}")"
+            cat /tmp/alias.json
+            test "$code" = '200'
+          done
       - name: Verify public domains and core routes
         id: verify
         shell: bash
@@ -51,4 +56,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ steps.verify.outputs.restored }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC functional 8AR apex restore ${GITHUB_SHA:0:7}" --body "Functional donor: \`$DONOR\`\nApex restore verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC functional 8AR REST cutover ${GITHUB_SHA:0:7}" --body "Deployment: \`$DEPLOYMENT_ID\`\nApex restore verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
