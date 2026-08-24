@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import {get,list,put} from "@vercel/blob";
+import {recordAnalyticsEvent} from "./analyticsAudit";
 
 export type VehicleAuditEvent={
   action:string;
@@ -48,6 +49,15 @@ export async function recordVehicleAudit(input:VehicleAuditEvent){
     });
   }catch(error){
     console.error("WDCC_VEHICLE_AUDIT_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:error instanceof Error?error.message:"unknown"}));
+  }
+  try{
+    await recordAnalyticsEvent({
+      event:record.action,at,vehicleId:record.vehicleId,
+      source:"dealer-portal",medium:"dealer-ui",channel:"inventory",
+      metadata:{outcome:record.outcome,requestId:record.requestId,actorId:record.actorId,actorRole:record.actorRole,year:record.year,make:record.make,model:record.model,mileage:record.mileage,stock:record.stock,status:record.status,photoCount:record.photoCount,detail:record.detail}
+    });
+  }catch(error){
+    console.error("WDCC_VEHICLE_ANALYTICS_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:error instanceof Error?error.message:"unknown"}));
   }
   console.log("WDCC_VEHICLE_EVENT",JSON.stringify(record));
   return record;
