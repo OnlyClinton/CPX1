@@ -1,9 +1,5 @@
-name: WDCC Production Deploy
+name: WDCC Manual Production Build
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -72,3 +68,5 @@ jobs:
           short="${GITHUB_SHA:0:7}"
           body=$(printf 'Commit: `%s`\nDeploy outcome: `%s`\nVerify outcome: `%s`\nProduction URL: `%s`\nApex: https://wedontcarecars.com/' "$GITHUB_SHA" "${DEPLOY_OUTCOME:-unknown}" "${VERIFY_OUTCOME:-unknown}" "${DEPLOY_URL:-not-created}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC production deploy report $short" --body "$body" || true
+
+# Quota-expensive workflow: manual only. Normal pushes and PRs must never invoke it.
