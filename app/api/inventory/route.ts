@@ -14,15 +14,44 @@ function response(body:any,status:number,requestIdValue:string){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":requestIdValue}});
 }
 
+function isQaVehicle(item:any){
+  const stock=String(item?.stock||"").toUpperCase();
+  const id=String(item?.id||"").toUpperCase();
+  const description=String(item?.description||"").toLowerCase();
+  const badges=Array.isArray(item?.badges)?item.badges.map((value:any)=>String(value||"").toUpperCase()):[];
+  return /^R36TEST[-_]/.test(stock)||/^QA[-_]/.test(stock)||/^TEST[-_]/.test(stock)||/^QA[-_]/.test(id)||badges.some((badge:string)=>badge==="R36-TEST"||badge==="QA"||badge==="TEST"||badge.includes("CERTIFICATION"))||description.includes("automated temporary qa vehicle")||description.includes("automated dealer workflow certification")||description.includes("automated recovery certification vehicle");
+}
+
+function publicEligible(item:any){
+  const year=Number(item?.year);
+  const price=Number(item?.price);
+  const mileage=Number(item?.mileage||0);
+  const downPayment=Number(item?.downPayment||0);
+  const maxYear=new Date().getUTCFullYear()+1;
+  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicle(item);
+}
+
+async function proxyPublicInventory(request:Request){
+  const upstream=await proxyDealer(request,"/api/inventory");
+  if(!upstream.ok)return upstream;
+  const json=await upstream.json().catch(()=>({}));
+  const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
+  const items=source.filter(publicEligible);
+  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+}
+
 export async function GET(request:Request){
-  if(!isDealerRuntime(request))return proxyDealer(request,"/api/inventory");
+  if(!isDealerRuntime(request)){
+    const hasSession=String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=");
+    return hasSession?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
+  }
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     let items;
     if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
       items=String(user.role).toLowerCase()==="platform_admin"?state.vehicles:state.vehicles.filter(vehicle=>String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc"));
-    }else items=publicVehicles(state);
+    }else items=publicVehicles(state).filter(publicEligible);
     return response({ok:true,count:items.length,items,revision:state.revision},200,rid);
   }catch(error){
     return response({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},500,rid);
