@@ -91,6 +91,8 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical hybrid hardening ${GITHUB_RUN_ID}" --body "Candidate branch: \`qa/wdcc-canonical-hardening\`\nValidation status: **${{ job.status }}**\nRepairs: financing/reviews/about routing, privacy/terms pages, vehicle-detail routing, and tracked Call Sean links.\nNo production deployment was requested." || true
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical hybrid hardening ${GITHUB_RUN_ID}" --body "Candidate branch: qa/wdcc-canonical-hardening. Validation status: ${{ job.status }}. Repairs: financing/reviews/about routing, privacy/terms pages, vehicle-detail routing, and tracked Call Sean links. No production deployment was requested." || true
 
 # This workflow hardens a non-release QA branch only; it must not promote or deploy production.
