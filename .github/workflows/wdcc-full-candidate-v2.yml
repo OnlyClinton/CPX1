@@ -1,0 +1,36 @@
+name: WDCC Full Candidate Build v2
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/wdcc-full-candidate-v2.yml'
+      - 'scripts/wdcc-full-candidate.sh'
+  workflow_dispatch:
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Compose and validate full candidate
+        id: build
+        run: bash scripts/wdcc-full-candidate.sh
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        run: |
+          lint="unknown"
+          if [ -f /tmp/wdcc-candidate-lint.txt ]; then lint="$(grep -Eo 'Found [0-9]+ error' /tmp/wdcc-candidate-lint.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"; fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC full candidate v2 ${GITHUB_RUN_ID}" --body "Candidate qa/wdcc-full-candidate-v1 status: **$STATUS**. Mounted hardened 2vfD+8AR on latest main, vendored 2vfD CSS, removed b01 source dependency, restored Phoenix as the only data/auth authority, typechecked and production-built. Remaining Biome errors: $lint. No Vercel app deployment." || true
