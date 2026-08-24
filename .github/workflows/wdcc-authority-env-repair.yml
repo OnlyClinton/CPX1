@@ -1,0 +1,50 @@
+name: WDCC Authority Env Repair
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-authority-env-repair.yml']
+  workflow_dispatch:
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions: {contents: read, issues: write}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Upsert canonical store and new session secret on Phoenix
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRET="$(openssl rand -base64 72 | tr -d '\n')"; test "${#SECRET}" -ge 64
+          api="https://api.vercel.com/v10/projects/$PHOENIX_ID/env?upsert=true&teamId=$TEAM_ID"
+          jq -n --arg v "$STORE_ID" '{key:"BLOB_STORE_ID",value:$v,type:"plain",target:["production","preview"]}' >/tmp/store.json
+          jq -n --arg v "$SECRET" '{key:"SESSION_SECRET",value:$v,type:"sensitive",target:["production","preview"]}' >/tmp/session.json
+          curl -fsS -X POST "$api" -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/store.json >/tmp/store-response.json
+          curl -fsS -X POST "$api" -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/session.json >/tmp/session-response.json
+          rm -f /tmp/session.json
+      - name: Verify Phoenix production environment can read canonical store by default
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel; printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          cat > .envverify.mjs <<'NODE'
+          import {get} from '@vercel/blob';
+          const session=String(process.env.SESSION_SECRET||'').length>=64,store=process.env.BLOB_STORE_ID;let readable=false,revision=null,error=null;try{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false});if(r?.statusCode===200&&r.stream){const c=[];for await(const x of r.stream)c.push(x);const s=JSON.parse(Buffer.concat(c).toString('utf8'));readable=true;revision=Number(s.revision||0)}}catch(e){error=String(e?.message||e)}console.log('VERIFY='+JSON.stringify({session,store,readable,revision,error}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .envverify.mjs | tee /tmp/verify.log
+          grep '^VERIFY=' /tmp/verify.log | tail -1 | cut -d= -f2- >/tmp/verify.json; cat /tmp/verify.json | jq .
+          jq -e --arg sid "$STORE_ID" '.session==true and .store==$sid and .readable==true' /tmp/verify.json >/dev/null
+          echo "revision=$(jq -r '.revision' /tmp/verify.json)" >> "$GITHUB_OUTPUT"
+      - name: Report
+        if: always()
+        env: {GH_TOKEN: '${{ github.token }}', STATUS: '${{ job.status }}', REVISION: '${{ steps.verify.outputs.revision }}'}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC authority env repair ${GITHUB_RUN_ID}" --body "Phoenix next-deployment authority config: **$STATUS**. Canonical store is configured and readable; session secret is set (value never exposed). Ledger revision ${REVISION:-unknown}. No application deployment was performed." || true
