@@ -1,0 +1,68 @@
+name: WDCC Live E2E Tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-live-e2e-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run live WDCC tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BASE="https://wedontcarecars.com"
+          BACKEND="https://wdcc-cpx-launch.vercel.app"
+          mkdir -p qa-results
+
+          SCHEDULE="$(curl -fsS -X POST "$BASE/api/leads" \
+            -H 'content-type: application/json' \
+            -H "idempotency-key: wdcc-qa-schedule-$RUN" \
+            --data "{\"kind\":\"schedule\",\"name\":\"WDCC QA Schedule $RUN\",\"phone\":\"813-555-0101\",\"email\":\"qa-schedule-$RUN@invalid.example\",\"vehicleInterest\":\"QA Test Vehicle\",\"preferredTime\":\"Today 3 PM\",\"message\":\"Automated schedule E2E verification\",\"consent\":true,\"source\":\"qa-e2e\"}")"
+          echo "$SCHEDULE" | jq -e '.ok == true and .persisted == true and (.item.id|length>0)' >/dev/null
+
+          APPROVAL="$(curl -fsS -X POST "$BASE/api/leads" \
+            -H 'content-type: application/json' \
+            -H "idempotency-key: wdcc-qa-approval-$RUN" \
+            --data "{\"kind\":\"approval\",\"name\":\"WDCC QA Approval $RUN\",\"phone\":\"813-555-0102\",\"email\":\"qa-approval-$RUN@invalid.example\",\"vehicleInterest\":\"QA Financing Vehicle\",\"message\":\"Automated approval E2E verification\",\"consent\":true,\"source\":\"qa-e2e\"}")"
+          echo "$APPROVAL" | jq -e '.ok == true and .persisted == true and (.item.id|length>0)' >/dev/null
+
+          BACKEND_PROOF="$(curl -fsS -X POST "$BACKEND/api/qa-proof" -H 'content-type: application/json' --data '{}')"
+          echo "$BACKEND_PROOF" | jq -e '.ok == true and .lead != null and .vehicle != null' >/dev/null
+
+          INVENTORY="$(curl -fsS "$BASE/api/inventory")"
+          echo "$INVENTORY" | jq -e '((.items // .inventory // []) | length) > 0' >/dev/null
+
+          jq -n \
+            --arg run "$RUN" \
+            --arg testedAt "$(date -u +%FT%TZ)" \
+            --arg scheduleId "$(echo "$SCHEDULE" | jq -r '.item.id')" \
+            --arg scheduleEmail "$(echo "$SCHEDULE" | jq -r '.notifications.email // "unknown"')" \
+            --arg approvalId "$(echo "$APPROVAL" | jq -r '.item.id')" \
+            --arg approvalEmail "$(echo "$APPROVAL" | jq -r '.notifications.email // "unknown"')" \
+            --arg backendLeadId "$(echo "$BACKEND_PROOF" | jq -r '.lead.id')" \
+            --arg backendVehicleId "$(echo "$BACKEND_PROOF" | jq -r '.vehicle.id')" \
+            --arg backendVehicleStatus "$(echo "$BACKEND_PROOF" | jq -r '.vehicle.status')" \
+            --argjson inventoryCount "$(echo "$INVENTORY" | jq '(.items // .inventory // []) | length')" \
+            '{ok:true,run:$run,testedAt:$testedAt,tests:{schedule:{ok:true,leadId:$scheduleId,emailStatus:$scheduleEmail},approval:{ok:true,leadId:$approvalId,emailStatus:$approvalEmail},dealerInventory:{backendWrite:true,backendLeadId:$backendLeadId,vehicleId:$backendVehicleId,vehicleStatus:$backendVehicleStatus,storefrontInventoryRead:true,storefrontInventoryCount:$inventoryCount,publishTransitionVerified:($backendVehicleStatus=="published")}}}' \
+            > qa-results/latest.json
+
+      - name: Publish proof to QA branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "WDCC QA Bot"
+          git config user.email "wdcc-qa@users.noreply.github.com"
+          git checkout -B wdcc-qa-results
+          git add qa-results/latest.json
+          git commit -m "WDCC live E2E proof ${GITHUB_RUN_ID}" || true
+          git push --force origin HEAD:wdcc-qa-results
