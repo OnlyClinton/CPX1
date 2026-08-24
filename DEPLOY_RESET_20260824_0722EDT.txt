@@ -1,0 +1,2 @@
+Force WDCC production rebuild after Vercel deployment quota reset window.
+Deploy exact current main including hero contrast correction and current lead/inventory routing.
