@@ -1,0 +1,2 @@
+Build-only verification marker for WDCC vehicle upload repair commit 6175f15df76c118bbc26bd5d73fac2c5505d4214.
+No runtime behavior change.
