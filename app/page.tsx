@@ -12,10 +12,11 @@ export default function Home(){
         <h1><span className="redWord">BAD CREDIT?</span><br/><span className="blueWord">NO CREDIT?</span><br/>WE DON'T CARE.</h1>
         <p className="lede">In-house financing. Low down payments. Fast approvals. Straight answers. Get on the road without the runaround.</p>
         <div className="actions">
-          <Link className="cta primary" href="/get-approved?source=hero-get-approved">GET PRE-APPROVED →</Link>
-          <Link className="cta secondary" href="/inventory">BROWSE INVENTORY →</Link>
+          <Link className="cta primary" href="/schedule-test-drive?source=hero-test-drive">SCHEDULE A TEST DRIVE →</Link>
+          <Link className="cta secondary" href="/get-approved?source=hero-get-approved">GET PRE-APPROVED →</Link>
+          <TrackedCallLink className="cta contact" source="hero-call-sean">CALL SEAN →</TrackedCallLink>
         </div>
-        <div className="heroCall"><TrackedCallLink source="hero-call-sean">☎ CALL SEAN <b>813-516-4752</b></TrackedCallLink></div>
+        <div className="heroCall"><TrackedCallLink source="hero-phone">☎ CALL SEAN <b>813-516-4752</b></TrackedCallLink></div>
       </div>
     </section>
 
@@ -34,8 +35,8 @@ export default function Home(){
     <section id="how-it-works" className="financePremium"><div className="wrap">
       <h2>IN-HOUSE FINANCING. <em>WE MAKE IT EASY.</em></h2>
       <div className="financeSteps">
-        <article><div className="stepNum">1</div><b>APPLY ONLINE</b><p>Send the basics in minutes.</p></article>
-        <article><div className="stepNum">2</div><b>GET APPROVED</b><p>We handle the hard part and give you a straight answer.</p></article>
+        <article><div className="stepNum">1</div><b>START ONLINE</b><p>Send the basics in minutes.</p></article>
+        <article><div className="stepNum">2</div><b>TALK TO SEAN</b><p>Get a straight answer and confirm your options.</p></article>
         <article><div className="stepNum">3</div><b>CHOOSE YOUR CAR</b><p>Pick from actual available inventory.</p></article>
         <article><div className="stepNum">4</div><b>DRIVE TODAY</b><p>Schedule pickup or a test drive.</p></article>
       </div>
