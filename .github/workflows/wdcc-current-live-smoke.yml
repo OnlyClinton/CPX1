@@ -1,0 +1,89 @@
+name: WDCC Current Live Smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-current-live-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Test current live WDCC contracts
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          STOREFRONT="https://wedontcarecars.com"
+          BACKEND="https://wdcc-cpx-launch.vercel.app"
+          DEALER="https://dealer.wedontcarecars.com"
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$STOREFRONT/")"
+          test "$home_code" = "200"
+          grep -q 'cinematic' /tmp/home.html
+          grep -q 'stickyCtaBar' /tmp/home.html
+          grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html
+          grep -q 'GET PRE-APPROVED' /tmp/home.html
+          grep -q 'CALL SEAN' /tmp/home.html
+
+          backend_health="$(curl -fsS "$BACKEND/api/health")"
+          echo "$backend_health" | jq -e '.ok==true' >/dev/null
+          dealer_health_code="$(curl -sS -o /tmp/dealer-health.json -w '%{http_code}' "$DEALER/api/health")"
+
+          lead="$(curl -fsS -X POST "$STOREFRONT/api/leads" \
+            -H 'content-type: application/json' \
+            -H "idempotency-key: wdcc-current-smoke-$RUN" \
+            --data "{\"kind\":\"schedule\",\"name\":\"WDCC LIVE QA $RUN\",\"phone\":\"813-555-0101\",\"email\":\"qa-$RUN@invalid.example\",\"vehicleInterest\":\"Live QA Test Vehicle\",\"message\":\"Automated WDCC production smoke test - do not contact\",\"preferredTime\":\"QA only\",\"consent\":true,\"source\":\"live-smoke\"}")"
+          echo "$lead" | jq -e '.ok==true and .persisted==true' >/dev/null
+
+          proof="$(curl -fsS -X POST "$BACKEND/api/qa-proof" -H 'content-type: application/json' --data '{}')"
+          echo "$proof" | jq -e '.ok==true and .vehicle.status=="published"' >/dev/null
+          vehicle_id="$(echo "$proof" | jq -r '.vehicle.id')"
+
+          inventory="$(curl -fsS "$STOREFRONT/api/inventory")"
+          echo "$inventory" | jq -e --arg id "$vehicle_id" '.ok==true and any((.items // [])[]; .id==$id)' >/dev/null
+
+          auth_code="$(curl -sS -o /tmp/inventory-post.json -w '%{http_code}' -X POST "$DEALER/api/inventory" -H 'content-type: application/json' --data '{"year":2020,"make":"QA","model":"AUTH-GATE","price":1}')"
+          test "$auth_code" = "401" -o "$auth_code" = "403"
+
+          lead_id="$(echo "$lead" | jq -r '.item.id')"
+          lead_source="$(echo "$lead" | jq -r '.source // .item.source // "unknown"')"
+          email_status="$(echo "$lead" | jq -r '.notifications.email // "unknown"')"
+          sms_status="$(echo "$lead" | jq -r '.notifications.sms // "unknown"')"
+          backend_release="$(echo "$backend_health" | jq -r '.release // "unknown"')"
+
+          {
+            echo "home_code=$home_code"
+            echo "backend_release=$backend_release"
+            echo "dealer_health_code=$dealer_health_code"
+            echo "lead_id=$lead_id"
+            echo "lead_source=$lead_source"
+            echo "email_status=$email_status"
+            echo "sms_status=$sms_status"
+            echo "vehicle_id=$vehicle_id"
+            echo "auth_code=$auth_code"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Report current live smoke result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          HOME_CODE: ${{ steps.smoke.outputs.home_code }}
+          BACKEND_RELEASE: ${{ steps.smoke.outputs.backend_release }}
+          DEALER_HEALTH: ${{ steps.smoke.outputs.dealer_health_code }}
+          LEAD_ID: ${{ steps.smoke.outputs.lead_id }}
+          LEAD_SOURCE: ${{ steps.smoke.outputs.lead_source }}
+          EMAIL_STATUS: ${{ steps.smoke.outputs.email_status }}
+          SMS_STATUS: ${{ steps.smoke.outputs.sms_status }}
+          VEHICLE_ID: ${{ steps.smoke.outputs.vehicle_id }}
+          AUTH_CODE: ${{ steps.smoke.outputs.auth_code }}
+        shell: bash
+        run: |
+          body=$(printf 'Status: `%s`\nHomepage: `%s`\nBackend release: `%s`\nDealer health HTTP: `%s`\nLead: `%s`\nLead source: `%s`\nEmail: `%s`\nSMS: `%s`\nQA published vehicle: `%s`\nDealer inventory unauthenticated gate: `%s`' "$JOB_STATUS" "$HOME_CODE" "$BACKEND_RELEASE" "$DEALER_HEALTH" "$LEAD_ID" "$LEAD_SOURCE" "$EMAIL_STATUS" "$SMS_STATUS" "$VEHICLE_ID" "$AUTH_CODE")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC current live smoke ${GITHUB_SHA:0:7}" --body "$body" || true
