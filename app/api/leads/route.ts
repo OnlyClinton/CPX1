@@ -7,6 +7,7 @@ export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
+const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
 
 function leadKind(body:any){
   const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();
@@ -14,6 +15,12 @@ function leadKind(body:any){
   if(["contact","call","call-or-contact","general"].includes(raw))return "contact";
   if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";
   return raw;
+}
+
+function upstreamRequestType(kind:string){
+  if(kind==="schedule")return "test-drive";
+  if(kind==="approval")return "pre-approval";
+  return "contact";
 }
 
 async function sendNotifications(lead:any){
@@ -35,6 +42,30 @@ async function sendNotifications(lead:any){
   return notifications;
 }
 
+async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
+  const payload={
+    name:body.name,
+    phone:body.phone,
+    email:body.email,
+    vehicle:body.vehicleInterest,
+    message:[body.preferredTime?`Preferred time: ${body.preferredTime}`:"",body.message||""].filter(Boolean).join(" | "),
+    requestType:upstreamRequestType(kind),
+    consent:true,
+    source:body.source||"wedontcarecars.com",
+    idempotencyKey:idempotencyKey||undefined
+  };
+  const response=await fetch(LEAD_UPSTREAM,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});
+  const json=await response.json().catch(()=>({}));
+  if(!response.ok||!json?.ok||!json?.leadId)throw Error(json?.error||`LEAD_UPSTREAM_${response.status}`);
+  const item={
+    id:String(json.leadId),kind,name:body.name,phone:body.phone,email:body.email,
+    vehicleInterest:body.vehicleInterest,message:body.message,preferredTime:body.preferredTime,
+    consent:true,status:"new",source:body.source||"website",idempotencyKey:idempotencyKey||null,
+    createdBy:"public",createdByRole:"public",createdAt:new Date().toISOString(),transport:"lead-upstream"
+  };
+  return {item,notifications:{email:json.emailStatus||json.email||"upstream",webhook:"upstream"},mailto:json.mailto||null};
+}
+
 export async function GET(){
   const user=await currentUser();
   if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
@@ -51,32 +82,40 @@ export async function POST(req:Request){
     const actor=await currentUser().catch(()=>null);
     const body=await req.json();
     const kind=leadKind(body);
-    const name=text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120);
-    const phone=text(body?.phone,40);
-    const email=text(body?.email,160).toLowerCase();
-    const vehicleInterest=text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240);
-    const message=text(body?.message??body?.notes,2000);
-    const preferredTime=text(body?.preferredTime??body?.appointmentTime,120);
+    const normalized={
+      name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),
+      phone:text(body?.phone,40),
+      email:text(body?.email,160).toLowerCase(),
+      vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),
+      message:text(body?.message??body?.notes,2000),
+      preferredTime:text(body?.preferredTime??body?.appointmentTime,120),
+      source:text(body?.source,80)||"website"
+    };
     const consent=body?.consent===true||String(body?.consent||"").toLowerCase()==="true"||body?.consent==="on";
     if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});
-    if(!name)return NextResponse.json({ok:false,error:"name_required"},{status:400});
-    if(!phone&&!email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});
+    if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});
+    if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});
     if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
 
-    const state=await readState();
     const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160);
-    if(idempotencyKey){const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{}},{status:200});}
+    try{
+      const state=await readState();
+      if(idempotencyKey){const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{},source:"local-ledger"},{status:200});}
 
-    const now=new Date().toISOString();
-    const createdBy=actor?.id||"public";
-    const createdByRole=actor?.role||"public";
-    const tenantId=actor?.tenantId||"wdcc";
-    const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,name,phone,email,vehicleInterest,message,preferredTime,consent:true,status:"new",source:text(body?.source,80)||"website",idempotencyKey:idempotencyKey||null,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now};
-    state.leads.push(lead);
-    state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source});
-    const saved=await writeState(state);
-    const notifications=await sendNotifications(lead);
-    lead.notifications=notifications;
-    return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,notifications},{status:201,headers:{"Cache-Control":"no-store"}});
+      const now=new Date().toISOString();
+      const createdBy=actor?.id||"public";
+      const createdByRole=actor?.role||"public";
+      const tenantId=actor?.tenantId||"wdcc";
+      const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,status:"new",idempotencyKey:idempotencyKey||null,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now};
+      state.leads.push(lead);
+      state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source});
+      const saved=await writeState(state);
+      const notifications=await sendNotifications(lead);
+      lead.notifications=notifications;
+      return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});
+    }catch(localError){
+      const upstream=await persistViaUpstream(normalized,kind,idempotencyKey);
+      return NextResponse.json({ok:true,persisted:true,item:upstream.item,notifications:upstream.notifications,mailto:upstream.mailto,source:"lead-upstream",localError:localError instanceof Error?localError.message:"local_persistence_failed"},{status:201,headers:{"Cache-Control":"no-store"}});
+    }
   }catch(error){return NextResponse.json({ok:false,persisted:false,error:error instanceof Error?error.message:"create_failed"},{status:500});}
 }
