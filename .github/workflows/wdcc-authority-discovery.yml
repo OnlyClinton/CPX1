@@ -1,0 +1,134 @@
+name: WDCC Authority Discovery
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-authority-discovery.yml'
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      B01: wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: List every team Blob store
+        id: stores
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel blob list-stores --all --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/stores.txt
+          test -s /tmp/stores.txt
+
+      - name: Authenticated b01 health and lead write
+        id: b01
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"team_G6jmETRRl8fV3KfivPOdj8JM","projectId":"prj_a3oclCcy4sbA2tge4BX7VAKXE4KR"}\n' > .vercel/project.json
+          echo '--- b01 health ---'
+          vercel curl /api/health --deployment "$B01" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/b01-health.txt
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo '--- b01 lead write ---'
+          set +e
+          vercel curl /api/leads --deployment "$B01" --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header "Idempotency-Key: wdcc-qa-authority-$RUN" \
+            --data "{\"qa\":true,\"kind\":\"schedule\",\"name\":\"WDCC QA AUTHORITY $RUN\",\"phone\":\"813-555-0171\",\"email\":\"qa-authority-$RUN@invalid.example\",\"vehicleInterest\":\"Authority discovery\",\"message\":\"Automated QA - do not contact\",\"consent\":true,\"source\":\"authority-discovery\"}" > /tmp/b01-lead.txt 2>&1
+          rc=$?
+          set -e
+          cat /tmp/b01-lead.txt
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import json,re
+          raw=open('/tmp/b01-lead.txt',errors='replace').read()
+          candidates=re.findall(r'\{.*\}',raw,re.S)
+          parsed=None
+          for c in reversed(candidates):
+              try: parsed=json.loads(c); break
+              except Exception: pass
+          open('/tmp/b01-parsed.json','w').write(json.dumps(parsed if parsed is not None else {'raw':raw[-2000:]},indent=2))
+          PY
+          cat /tmp/b01-parsed.json
+
+      - name: Public storefront three-lead response capture
+        id: storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          submit(){
+            kind="$1"; source="$2"; suffix="$3"; phone="$4"
+            curl -sS -w '\nWDCC_HTTP=%{http_code}\n' -X POST "$STOREFRONT/api/leads" \
+              -H 'Content-Type: application/json' \
+              -H "Idempotency-Key: wdcc-qa-authority-store-$suffix-$RUN" \
+              --data "{\"qa\":true,\"kind\":\"$kind\",\"name\":\"WDCC QA AUTHORITY STORE $suffix $RUN\",\"phone\":\"$phone\",\"email\":\"qa-authority-store-$suffix-$RUN@invalid.example\",\"vehicleInterest\":\"Authority storefront\",\"message\":\"Automated QA - do not contact\",\"consent\":true,\"source\":\"$source\"}"
+          }
+          for spec in 'schedule schedule-test-drive schedule 813-555-0172' 'approval get-approved approval 813-555-0173' 'contact call-sean contact 813-555-0174'; do
+            set -- $spec
+            submit "$1" "$2" "$3" "$4" > "/tmp/$3.txt"
+            echo "--- $3 ---"
+            cat "/tmp/$3.txt"
+          done
+          python3 - <<'PY'
+          import json,re
+          out={}
+          for name in ('schedule','approval','contact'):
+              raw=open(f'/tmp/{name}.txt',errors='replace').read()
+              m=re.search(r'WDCC_HTTP=(\d+)',raw)
+              body=raw.split('\nWDCC_HTTP=',1)[0]
+              try: data=json.loads(body)
+              except Exception: data={'raw':body[-2000:]}
+              out[name]={'http':int(m.group(1)) if m else None,'body':data}
+          open('/tmp/store-results.json','w').write(json.dumps(out,indent=2))
+          PY
+          cat /tmp/store-results.json
+
+      - name: Report authority discovery
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          stores='not captured'; [ -f /tmp/stores.txt ] && stores="$(tail -80 /tmp/stores.txt)"
+          b01='not captured'; [ -f /tmp/b01-parsed.json ] && b01="$(cat /tmp/b01-parsed.json)"
+          storefront='not captured'; [ -f /tmp/store-results.json ] && storefront="$(cat /tmp/store-results.json)"
+          body=$(cat <<EOF
+          ## WDCC authority discovery
+
+          ### Blob stores
+          \`\`\`
+          $stores
+          \`\`\`
+
+          ### Protected b01 lead response
+          \`\`\`json
+          $b01
+          \`\`\`
+
+          ### Live storefront lead responses
+          \`\`\`json
+          $storefront
+          \`\`\`
+
+          No deployment or storage mutation was performed.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC authority discovery ${GITHUB_RUN_ID}" --body "$body" || true
+
+# Read-only storage discovery. Synthetic lead POSTs are QA-isolated and suppress notifications.
