@@ -1,0 +1,64 @@
+name: Restore exact 8AR storefront apex
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-restore-exact-8ar-apex.yml'
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      DONOR: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
+      APEX: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+    steps:
+      - name: Require token
+        run: test -n "$VERCEL_TOKEN"
+      - name: Verify exact 8AR donor before alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://$DONOR/" -o /tmp/donor.html
+          grep -q 'intro-sequence intro-reveal' /tmp/donor.html
+          grep -q 'intro-scene' /tmp/donor.html
+          grep -q 'intro-badge' /tmp/donor.html
+          grep -q 'intro-tagline' /tmp/donor.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Restore exact 8AR to apex and www
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
+      - name: Verify live intro is exact 8AR
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 20); do
+              code="$(curl -sS -L -o /tmp/live.html -w '%{http_code}' "https://$host/" || true)"
+              if [ "$code" = '200' ] && grep -q 'intro-sequence intro-reveal' /tmp/live.html && grep -q 'intro-scene' /tmp/live.html && grep -q 'intro-badge' /tmp/live.html && grep -q 'intro-tagline' /tmp/live.html; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" = '1'
+          done
+          echo 'exact_8ar=true' >> "$GITHUB_OUTPUT"
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.verify.outputs.exact_8ar }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact 8AR apex restore ${GITHUB_SHA:0:7}" --body "Exact 8AR donor: \`$DONOR\`\nLive exact intro verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
