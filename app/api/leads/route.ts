@@ -18,9 +18,8 @@ function notificationText(lead:any){return [`New WDCC ${lead.kind} lead`,`Name: 
 function isQaLead(body:any,lead:any,idempotencyKey:string){
   const name=String(lead?.name||"").trim().toUpperCase();
   const email=String(lead?.email||"").trim().toLowerCase();
-  const phone=String(lead?.phone||"").replace(/\D/g,"");
   const message=String(lead?.message||"").toLowerCase();
-  return body?.qa===true||String(body?.qa||"").toLowerCase()==="true"||idempotencyKey.toLowerCase().startsWith("wdcc-qa-")||email.endsWith("@invalid.example")||name.startsWith("WDCC QA ")||name.startsWith("WDCC MATRIX")||name.startsWith("WDCC ISOLATED")||phone.includes("555")||message.includes("automated wdcc contract verification");
+  return body?.qa===true||String(body?.qa||"").toLowerCase()==="true"||idempotencyKey.toLowerCase().startsWith("wdcc-qa-")||email.endsWith("@invalid.example")||name.startsWith("WDCC QA ")||name.startsWith("WDCC MATRIX")||name.startsWith("WDCC ISOLATED")||message.includes("automated wdcc contract verification");
 }
 
 async function sendNotifications(lead:any){
