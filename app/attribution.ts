@@ -1,86 +1,55 @@
 "use client";
 
 export type AttributionContext={
-  sessionId:string;
-  anonymousUserId:string;
-  source:string;
-  medium:string;
-  campaign:string;
-  content:string;
-  term:string;
-  clickId:string;
-  referralCode:string;
-  landingPath:string;
-  referrer:string;
-  firstSource:string;
-  firstMedium:string;
-  firstCampaign:string;
-  firstContent:string;
-  firstTerm:string;
-  firstClickId:string;
-  firstReferralCode:string;
+  sessionId:string;anonymousUserId:string;source:string;medium:string;campaign:string;content:string;term:string;clickId:string;referralCode:string;landingPath:string;referrer:string;
+  firstSource:string;firstMedium:string;firstCampaign:string;firstContent:string;firstTerm:string;firstClickId:string;firstReferralCode:string;
+  lastNonDirectSource:string;lastNonDirectMedium:string;lastNonDirectCampaign:string;
 };
 
+type QueuedEvent={eventId:string;body:string;attempts:number;queuedAt:string};
 const uuid=()=>crypto.randomUUID();
 const safeGet=(storage:Storage,key:string)=>{try{return storage.getItem(key)||""}catch{return ""}};
 const safeSet=(storage:Storage,key:string,value:string)=>{try{storage.setItem(key,value)}catch{}};
 const safeRemove=(storage:Storage,key:string)=>{try{storage.removeItem(key)}catch{}};
 const SESSION_MS=30*60*1000;
+const QUEUE_KEY="wdcc_analytics_queue_v1";
+const MAX_QUEUE=100;
+let flushing=false;
 
-function hostReferrer(){
-  try{return document.referrer?new URL(document.referrer).hostname.replace(/^www\./,""):""}catch{return ""}
-}
+function hostReferrer(){try{return document.referrer?new URL(document.referrer).hostname.replace(/^www\./,""):""}catch{return ""}}
+function readQueue():QueuedEvent[]{try{const v=JSON.parse(safeGet(localStorage,QUEUE_KEY)||"[]");return Array.isArray(v)?v.slice(-MAX_QUEUE):[]}catch{return []}}
+function writeQueue(items:QueuedEvent[]){safeSet(localStorage,QUEUE_KEY,JSON.stringify(items.slice(-MAX_QUEUE)))}
+function queueEvent(item:QueuedEvent){const q=readQueue();if(!q.some(x=>x.eventId===item.eventId)){q.push(item);writeQueue(q)}}
+async function sendQueued(item:QueuedEvent){const response=await fetch("/api/events",{method:"POST",headers:{"Content-Type":"application/json","X-WDCC-Event-ID":item.eventId},body:item.body,keepalive:true});if(!response.ok)throw Error(`analytics_${response.status}`)}
+export async function flushAnalyticsQueue(){if(flushing||typeof window==="undefined"||!navigator.onLine)return;flushing=true;try{const q=readQueue();const keep:QueuedEvent[]=[];for(const item of q){try{await sendQueued(item)}catch{keep.push({...item,attempts:item.attempts+1})}}writeQueue(keep)}finally{flushing=false}}
 
 export function getAttributionContext():AttributionContext{
   const url=new URL(window.location.href);const q=url.searchParams;const now=Date.now();
   let anonymousUserId=safeGet(localStorage,"wdcc_anonymous_user_id");if(!anonymousUserId){anonymousUserId=uuid();safeSet(localStorage,"wdcc_anonymous_user_id",anonymousUserId)}
-
-  const lastSeen=Number(safeGet(localStorage,"wdcc_session_last_seen")||0);
-  let sessionId=safeGet(localStorage,"wdcc_session_id");
-  if(!sessionId||!lastSeen||now-lastSeen>SESSION_MS){
-    sessionId=uuid();safeSet(localStorage,"wdcc_session_id",sessionId);
-    for(const key of ["wdcc_landing_path","wdcc_first_referrer","wdcc_referral_code","wdcc_source","wdcc_medium","wdcc_campaign","wdcc_content","wdcc_term","wdcc_click_id"])safeRemove(sessionStorage,key);
-  }
+  const lastSeen=Number(safeGet(localStorage,"wdcc_session_last_seen")||0);let sessionId=safeGet(localStorage,"wdcc_session_id");
+  if(!sessionId||!lastSeen||now-lastSeen>SESSION_MS){sessionId=uuid();safeSet(localStorage,"wdcc_session_id",sessionId);for(const key of ["wdcc_landing_path","wdcc_first_referrer","wdcc_referral_code","wdcc_source","wdcc_medium","wdcc_campaign","wdcc_content","wdcc_term","wdcc_click_id"])safeRemove(sessionStorage,key)}
   safeSet(localStorage,"wdcc_session_last_seen",String(now));
-
   let landingPath=safeGet(sessionStorage,"wdcc_landing_path");if(!landingPath){landingPath=url.pathname+url.search;safeSet(sessionStorage,"wdcc_landing_path",landingPath)}
   let referrer=safeGet(sessionStorage,"wdcc_first_referrer");if(!referrer){referrer=document.referrer||"";safeSet(sessionStorage,"wdcc_first_referrer",referrer)}
-
-  const incomingReferral=q.get("ref")||q.get("referral")||q.get("referral_code")||"";
-  const incomingSource=q.get("utm_source")||q.get("source")||"";
-  const incomingMedium=q.get("utm_medium")||"";
-  const incomingCampaign=q.get("utm_campaign")||q.get("campaign")||"";
-  const incomingContent=q.get("utm_content")||"";
-  const incomingTerm=q.get("utm_term")||"";
-  const incomingClickId=q.get("gclid")||q.get("fbclid")||q.get("msclkid")||q.get("ttclid")||"";
-
-  const referralCode=incomingReferral||safeGet(sessionStorage,"wdcc_referral_code");
-  const source=incomingSource||safeGet(sessionStorage,"wdcc_source")||((referralCode&&"referral")||hostReferrer()||"direct");
-  const medium=incomingMedium||safeGet(sessionStorage,"wdcc_medium")||(referralCode?"referral":source==="direct"?"direct":"referral");
-  const campaign=incomingCampaign||safeGet(sessionStorage,"wdcc_campaign")||"";
-  const content=incomingContent||safeGet(sessionStorage,"wdcc_content")||"";
-  const term=incomingTerm||safeGet(sessionStorage,"wdcc_term")||"";
-  const clickId=incomingClickId||safeGet(sessionStorage,"wdcc_click_id")||"";
+  const incomingReferral=q.get("ref")||q.get("referral")||q.get("referral_code")||"";const incomingSource=q.get("utm_source")||q.get("source")||"";const incomingMedium=q.get("utm_medium")||"";const incomingCampaign=q.get("utm_campaign")||q.get("campaign")||"";const incomingContent=q.get("utm_content")||"";const incomingTerm=q.get("utm_term")||"";const incomingClickId=q.get("gclid")||q.get("fbclid")||q.get("msclkid")||q.get("ttclid")||"";
+  const referralCode=incomingReferral||safeGet(sessionStorage,"wdcc_referral_code");const source=incomingSource||safeGet(sessionStorage,"wdcc_source")||((referralCode&&"referral")||hostReferrer()||"direct");const medium=incomingMedium||safeGet(sessionStorage,"wdcc_medium")||(referralCode?"referral":source==="direct"?"direct":"referral");const campaign=incomingCampaign||safeGet(sessionStorage,"wdcc_campaign")||"";const content=incomingContent||safeGet(sessionStorage,"wdcc_content")||"";const term=incomingTerm||safeGet(sessionStorage,"wdcc_term")||"";const clickId=incomingClickId||safeGet(sessionStorage,"wdcc_click_id")||"";
   for(const [k,v] of [["wdcc_referral_code",referralCode],["wdcc_source",source],["wdcc_medium",medium],["wdcc_campaign",campaign],["wdcc_content",content],["wdcc_term",term],["wdcc_click_id",clickId]] as const)if(v)safeSet(sessionStorage,k,v);
-
-  const firstSource=safeGet(localStorage,"wdcc_first_source")||source;
-  const firstMedium=safeGet(localStorage,"wdcc_first_medium")||medium;
-  const firstCampaign=safeGet(localStorage,"wdcc_first_campaign")||campaign;
-  const firstContent=safeGet(localStorage,"wdcc_first_content")||content;
-  const firstTerm=safeGet(localStorage,"wdcc_first_term")||term;
-  const firstClickId=safeGet(localStorage,"wdcc_first_click_id")||clickId;
-  const firstReferralCode=safeGet(localStorage,"wdcc_first_referral_code")||referralCode;
+  const firstSource=safeGet(localStorage,"wdcc_first_source")||source;const firstMedium=safeGet(localStorage,"wdcc_first_medium")||medium;const firstCampaign=safeGet(localStorage,"wdcc_first_campaign")||campaign;const firstContent=safeGet(localStorage,"wdcc_first_content")||content;const firstTerm=safeGet(localStorage,"wdcc_first_term")||term;const firstClickId=safeGet(localStorage,"wdcc_first_click_id")||clickId;const firstReferralCode=safeGet(localStorage,"wdcc_first_referral_code")||referralCode;
   for(const [k,v] of [["wdcc_first_source",firstSource],["wdcc_first_medium",firstMedium],["wdcc_first_campaign",firstCampaign],["wdcc_first_content",firstContent],["wdcc_first_term",firstTerm],["wdcc_first_click_id",firstClickId],["wdcc_first_referral_code",firstReferralCode]] as const)if(v&&!safeGet(localStorage,k))safeSet(localStorage,k,v);
-
-  return {sessionId,anonymousUserId,source,medium,campaign,content,term,clickId,referralCode,landingPath,referrer,firstSource,firstMedium,firstCampaign,firstContent,firstTerm,firstClickId,firstReferralCode};
+  if(source&&source!=="direct"){safeSet(localStorage,"wdcc_last_non_direct_source",source);safeSet(localStorage,"wdcc_last_non_direct_medium",medium);safeSet(localStorage,"wdcc_last_non_direct_campaign",campaign);safeSet(localStorage,"wdcc_last_non_direct_at",new Date(now).toISOString())}
+  const lastNonDirectSource=safeGet(localStorage,"wdcc_last_non_direct_source");const lastNonDirectMedium=safeGet(localStorage,"wdcc_last_non_direct_medium");const lastNonDirectCampaign=safeGet(localStorage,"wdcc_last_non_direct_campaign");
+  return {sessionId,anonymousUserId,source,medium,campaign,content,term,clickId,referralCode,landingPath,referrer,firstSource,firstMedium,firstCampaign,firstContent,firstTerm,firstClickId,firstReferralCode,lastNonDirectSource,lastNonDirectMedium,lastNonDirectCampaign};
 }
 
 export function trackEvent(event:string,extra:Record<string,unknown>={}){
   try{
-    const a=getAttributionContext();
-    const body=JSON.stringify({event,at:new Date().toISOString(),sessionId:a.sessionId,anonymousUserId:a.anonymousUserId,source:a.source,medium:a.medium,campaign:a.campaign,content:a.content,term:a.term,clickId:a.clickId,referralCode:a.referralCode,pagePath:window.location.pathname,landingPath:a.landingPath,referrer:a.referrer,metadata:{firstTouch:{source:a.firstSource,medium:a.firstMedium,campaign:a.firstCampaign,content:a.firstContent,term:a.firstTerm,clickId:a.firstClickId,referralCode:a.firstReferralCode},...((extra.metadata&&typeof extra.metadata==="object")?extra.metadata as Record<string,unknown>:{})},...Object.fromEntries(Object.entries(extra).filter(([key])=>key!=="metadata"))});
-    const blob=new Blob([body],{type:"application/json"});
-    const queued=navigator.sendBeacon?navigator.sendBeacon("/api/events",blob):false;
-    if(!queued)void fetch("/api/events",{method:"POST",headers:{"Content-Type":"application/json"},body,keepalive:true});
+    const a=getAttributionContext();const eventId=uuid();
+    const body=JSON.stringify({eventId,event,at:new Date().toISOString(),sessionId:a.sessionId,anonymousUserId:a.anonymousUserId,source:a.source,medium:a.medium,campaign:a.campaign,content:a.content,term:a.term,clickId:a.clickId,referralCode:a.referralCode,pagePath:window.location.pathname,landingPath:a.landingPath,referrer:a.referrer,metadata:{firstTouch:{source:a.firstSource,medium:a.firstMedium,campaign:a.firstCampaign,content:a.firstContent,term:a.firstTerm,clickId:a.firstClickId,referralCode:a.firstReferralCode},lastNonDirectTouch:{source:a.lastNonDirectSource,medium:a.lastNonDirectMedium,campaign:a.lastNonDirectCampaign},...((extra.metadata&&typeof extra.metadata==="object")?extra.metadata as Record<string,unknown>:{})},...Object.fromEntries(Object.entries(extra).filter(([key])=>key!=="metadata"))});
+    const item={eventId,body,attempts:0,queuedAt:new Date().toISOString()};queueEvent(item);
+    const blob=new Blob([body],{type:"application/json"});const queued=navigator.sendBeacon?navigator.sendBeacon("/api/events",blob):false;
+    if(!queued)void sendQueued(item).then(()=>{writeQueue(readQueue().filter(x=>x.eventId!==eventId))}).catch(()=>{});
+    else setTimeout(()=>void flushAnalyticsQueue(),1500);
   }catch{}
 }
+
+if(typeof window!=="undefined"){window.addEventListener("online",()=>void flushAnalyticsQueue());window.addEventListener("pageshow",()=>void flushAnalyticsQueue())}
