@@ -1,0 +1,1 @@
+Trigger preview for dealer app release based on main commit 4babc75ff57ab00304615108e14a9f80c24fb516. Validate /dealer home shows Post a Car, Dashboard, Notifications before alias cutover.
