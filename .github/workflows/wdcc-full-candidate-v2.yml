@@ -22,6 +22,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Normalize recovered donor CSS compatibility
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('scripts/wdcc-full-candidate.sh')
+          s=p.read_text()
+          needle='test "$(wc -c < app/exact2vfd-base.css)" -gt 90000\n'
+          addition='sed -i \'1{/^@import "tailwindcss";/d;}\' app/exact2vfd-base.css\n'
+          if addition not in s:
+              if needle not in s:
+                  raise SystemExit('recovered CSS size gate not found')
+              s=s.replace(needle,needle+addition)
+          p.write_text(s)
+          PY
       - name: Compose and validate full candidate
         id: build
         run: bash scripts/wdcc-full-candidate.sh
@@ -33,4 +48,4 @@ jobs:
         run: |
           lint="unknown"
           if [ -f /tmp/wdcc-candidate-lint.txt ]; then lint="$(grep -Eo 'Found [0-9]+ error' /tmp/wdcc-candidate-lint.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"; fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC full candidate v2 ${GITHUB_RUN_ID}" --body "Candidate qa/wdcc-full-candidate-v1 status: **$STATUS**. Mounted hardened 2vfD+8AR on latest main, vendored 2vfD CSS, removed b01 source dependency, restored Phoenix as the only data/auth authority, typechecked and production-built. Remaining Biome errors: $lint. No Vercel app deployment." || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC full candidate v2 ${GITHUB_RUN_ID}" --body "Candidate qa/wdcc-full-candidate-v1 status: **$STATUS**. Mounted hardened 2vfD+8AR on latest main, vendored recovered 2vfD CSS, removed b01 source dependency, restored Phoenix as the only data/auth authority, typechecked and production-built. Remaining Biome errors: $lint. No Vercel app deployment." || true
