@@ -1,0 +1,57 @@
+name: Ops pin exact 8AR
+on:
+  push:
+    branches: [ops-pin-exact-8ar]
+    paths:
+      - '.github/workflows/ops-pin-exact-8ar.yml'
+  workflow_dispatch:
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      DONOR: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
+      APEX: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+    steps:
+      - name: Require token
+        run: test -n "$VERCEL_TOKEN"
+      - name: Verify exact 8AR donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://$DONOR/?intro=1" -o /tmp/donor.html
+          grep -q 'intro-sequence' /tmp/donor.html
+          grep -q 'intro-scene' /tmp/donor.html
+          grep -q 'intro-badge' /tmp/donor.html
+          grep -q 'intro-tagline' /tmp/donor.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Pin live apex to exact 8AR
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
+      - name: Verify live exact intro
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 25); do
+            curl -sS "https://$APEX/?intro=1&ops=${GITHUB_RUN_ID}" -o /tmp/live.html || true
+            if grep -q 'intro-sequence' /tmp/live.html && grep -q 'intro-scene' /tmp/live.html && grep -q 'intro-badge' /tmp/live.html && grep -q 'intro-tagline' /tmp/live.html; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC ops exact 8AR pin ${GITHUB_SHA:0:7}" --body "Dedicated ops-branch no-build alias pin executed for exact 8AR donor. Verify at https://wedontcarecars.com/?intro=1" || true
