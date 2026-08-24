@@ -18,7 +18,7 @@ export default function AdminLogin(){
       if(!role.includes("admin")) throw new Error("Admin account required");
       document.cookie="wdcc_login_context=admin; Path=/; SameSite=Lax; Secure";
       sessionStorage.setItem("wdcc_login_context","admin");
-      router.replace("/admin/users");
+      router.replace("/admin/dashboard");
     }catch(x:any){setMsg(x?.message||"Sign-in failed"); setBusy(false)}
   }
   return <main style={{minHeight:"100svh",display:"grid",placeItems:"center",padding:18,background:"radial-gradient(circle at 70% 0,#26131a 0,#05080d 42%)",color:"#fff",fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -39,4 +39,3 @@ export default function AdminLogin(){
 const lab={display:"block",margin:"12px 0 6px",fontSize:10,fontWeight:900,textTransform:"uppercase" as const,color:"#c7d1dc"};
 const inp={width:"100%",height:48,borderRadius:9,border:"1px solid #34465f",padding:"0 12px",fontSize:16,color:"#111",background:"#fff"};
 const btn={width:"100%",height:48,marginTop:18,border:0,borderRadius:9,background:"#ef2029",color:"#fff",fontWeight:950,cursor:"pointer"};
-
