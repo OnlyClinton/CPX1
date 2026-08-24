@@ -1,12 +1,103 @@
 "use client";
 import Link from"next/link";
 import{useEffect,useState}from"react";
+import TrackedCallLink from"./TrackedCallLink";
 
-export function Intro(){const[done,setDone]=useState(false);useEffect(()=>{if(sessionStorage.getItem("wdcc_intro_seen")||window.matchMedia("(prefers-reduced-motion: reduce)").matches){setDone(true);return}sessionStorage.setItem("wdcc_intro_seen","1");const t=setTimeout(()=>setDone(true),2600);return()=>clearTimeout(t)},[]);if(done)return null;return <div className="cinematic" aria-hidden="true"><div className="cinSmoke one"/><div className="cinSmoke two"/><img className="cinLogo" src="/wdcc-official-logo.webp" alt=""/><div className="cinCar"><img src="https://wedontcarecars.com/assets/hero-car.webp" alt=""/></div><button className="skipIntro" onClick={()=>setDone(true)}>Skip intro</button></div>}
+export function Intro(){
+  const[done,setDone]=useState(false);
+  const[leaving,setLeaving]=useState(false);
+  useEffect(()=>{
+    const forceReplay=new URLSearchParams(window.location.search).get("intro")==="1";
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reduced){setDone(true);return;}
+    sessionStorage.setItem("wdcc_intro_seen","1");
+    const flight=window.setTimeout(()=>{
+      const introLogo=document.querySelector<HTMLElement>("[data-v43-intro-logo]");
+      const headerLogo=document.querySelector<HTMLElement>("[data-v43-header-logo]");
+      if(!introLogo||!headerLogo)return;
+      const a=introLogo.getBoundingClientRect(),b=headerLogo.getBoundingClientRect();
+      introLogo.animate([
+        {left:`${a.left}px`,top:`${a.top}px`,width:`${a.width}px`,transform:"none",opacity:1},
+        {left:`${b.left}px`,top:`${b.top}px`,width:`${b.width}px`,transform:"none",opacity:.08}
+      ],{duration:850,easing:"cubic-bezier(.16,1,.3,1)",fill:"forwards"});
+    },1450);
+    const exit=window.setTimeout(()=>setLeaving(true),2750);
+    const remove=window.setTimeout(()=>setDone(true),3250);
+    return()=>{window.clearTimeout(flight);window.clearTimeout(exit);window.clearTimeout(remove)};
+  },[]);
+  if(done)return null;
+  const finish=()=>{setLeaving(true);window.setTimeout(()=>setDone(true),430)};
+  return <div className={`v43Intro${leaving?" out":""}`} aria-label="WDCC opening animation">
+    <div className="v43IntroBg" aria-hidden="true"/>
+    <div className="v43IntroSmoke" aria-hidden="true"/>
+    <div className="v43IntroCar" aria-hidden="true"/>
+    <div className="v43Flare" aria-hidden="true"/>
+    <img data-v43-intro-logo className="v43IntroLogo" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/>
+    <button className="v43Skip" type="button" onClick={finish}>Skip</button>
+  </div>;
+}
 
-export function Header(){const[open,setOpen]=useState(false);return <><div className="commandStrip"><div className="wrap"><span>Tampa Bay · In-house financing</span><span>Fast answers · Real inventory</span><span>Sean · <b>813-516-4752</b></span></div></div><header className="premiumHeader"><div className="wrap nav"><Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars"/></Link><button className="mobileMenuButton" type="button" aria-expanded={open} aria-controls="mobileHeaderMenu" onClick={()=>setOpen(v=>!v)}>{open?"CLOSE":"MENU"}</button><a className="mobileCallButton" href="tel:+18135164752" aria-label="Call Sean">☎</a><div className="navlinks"><Link href="/inventory">INVENTORY</Link><Link href="/schedule-test-drive">TEST DRIVE</Link><Link href="/get-approved">FINANCING</Link><Link href="/contact">CONTACT</Link><a className="premiumPhone" href="tel:+18135164752">SEAN · <b>813-516-4752</b></a><Link className="premiumApply" href="/get-approved">GET APPROVED</Link></div></div>{open&&<nav id="mobileHeaderMenu" className="mobileHeaderMenu"><Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link><Link href="/schedule-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link><Link href="/get-approved" onClick={()=>setOpen(false)}>FINANCING</Link><Link href="/contact" onClick={()=>setOpen(false)}>CONTACT</Link></nav>}</header><div className="mobilebar"><a href="tel:+18135164752">CALL SEAN</a><Link href="/get-approved">GET APPROVED</Link><Link href="/inventory">INVENTORY</Link></div></>}
+export function Header(){
+  const[open,setOpen]=useState(false);
+  return <>
+    <div className="commandStrip"><div className="wrap"><span>● TAMPA BAY</span><span>IN-HOUSE FINANCING</span><span>SEAN · <b>813-516-4752</b></span></div></div>
+    <header className="premiumHeader"><div className="wrap nav">
+      <Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img data-v43-header-logo src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
+      <button className="mobileMenuButton" type="button" aria-expanded={open} aria-controls="mobileHeaderMenu" onClick={()=>setOpen(v=>!v)}>{open?"CLOSE":"☰"}</button>
+      <TrackedCallLink className="mobileCallButton" source="header-mobile-phone" label="Call Sean">☎</TrackedCallLink>
+      <div className="navlinks">
+        <Link href="/inventory">INVENTORY</Link>
+        <Link href="/get-approved?source=header-financing">FINANCING</Link>
+        <Link href="/#how-it-works">HOW IT WORKS</Link>
+        <Link href="/dealer/login">DEALER PORTAL</Link>
+        <Link href="/contact?source=header-contact">CONTACT</Link>
+        <TrackedCallLink className="premiumPhone" source="header-phone">☎ <b>813-516-4752</b></TrackedCallLink>
+        <Link className="premiumApply" href="/get-approved?source=header-get-approved">GET PRE-APPROVED</Link>
+      </div>
+    </div>
+    {open&&<nav id="mobileHeaderMenu" className="mobileHeaderMenu">
+      <Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link>
+      <Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link>
+      <Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link>
+      <Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link>
+      <Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
+    </nav>}
+    </header>
+    <nav className="stickyCtaBar" aria-label="Quick actions">
+      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean"><span>CALL</span></TrackedCallLink>
+      <a className="stickySecondary" href="sms:+18135164752"><span>TEXT</span></a>
+      <Link className="stickyCars" href="/inventory"><span>CARS</span></Link>
+      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply"><span>APPLY</span></Link>
+    </nav>
+  </>
+}
 
-export function Footer(){return <footer className="premiumFooter"><div className="wrap premiumFooterRow"><div style={{display:"flex",alignItems:"center",gap:14}}><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><strong>WE DON'T CARE CARS</strong><br/><small>Tampa Bay · Real inventory · Direct help</small></div></div><div><a href="tel:+18135164752">813-516-4752</a> · <Link href="/contact">Contact</Link></div></div></footer>}
+export function Footer(){
+  return <footer className="premiumFooter"><div className="wrap premiumFooterRow">
+    <div className="footerBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><strong>WE DON'T CARE CARS</strong><br/><small>Tampa Bay · Real inventory · Direct help</small></div></div>
+    <div><TrackedCallLink source="footer-phone">813-516-4752</TrackedCallLink> · <Link href="/contact?source=footer-contact">Contact</Link></div>
+  </div></footer>
+}
 
-function customerVisible(v:any){const status=String(v?.status||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x).toUpperCase());const stock=String(v?.stock||v?.stock_id||"").toUpperCase();return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST")}
-export function VehicleGrid({limit}:{limit?:number}){const[items,setItems]=useState<any[]>([]),[loading,setLoading]=useState(true);useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>setItems((j.items||j.inventory||[]).filter(customerVisible))).catch(()=>{}).finally(()=>setLoading(false))},[]);const shown=limit?items.slice(0,limit):items;if(loading)return <div className="grid">{[1,2,3].map(i=><div className="card" key={i}><div className="photo">LOADING VEHICLE…</div><div className="cardBody"><div className="carTitle">Inventory loading</div></div></div>)}</div>;return <div className="grid">{shown.length?shown.map(v=><article className="card" key={v.id}><Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{v.primaryPhotoPathname?<img src={`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`} alt={`${v.year} ${v.make} ${v.model}`}/>:v.primary_image_url?<img src={v.primary_image_url} alt={`${v.year} ${v.make} ${v.model}`}/>:"PHOTOS COMING"}</Link><div className="cardBody"><div className="carTitle">{v.year} {v.make} {v.model}</div><div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MI</span>{(v.stock||v.stock_id)&&<span>STOCK {v.stock||v.stock_id}</span>}</div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null&&<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} estimated down</div>}<div className="cardButtons"><Link href={`/vehicle/${v.id}`}><span>VIEW VEHICLE</span></Link><Link href={`/get-approved?vehicle=${encodeURIComponent(v.id)}`}><span>GET APPROVED</span></Link></div></div></article>):<div><h3>Inventory is being updated.</h3><p className="muted">Call or text Sean for vehicles being prepared now.</p></div>}</div>}
+function customerVisible(v:any){
+  const status=String(v?.status||"").toLowerCase();
+  const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x).toUpperCase());
+  const stock=String(v?.stock||v?.stock_id||"").toUpperCase();
+  return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST");
+}
+
+export function VehicleGrid({limit}:{limit?:number}){
+  const[items,setItems]=useState<any[]>([]),[loading,setLoading]=useState(true);
+  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>setItems((j.items||j.inventory||[]).filter(customerVisible))).catch(()=>{}).finally(()=>setLoading(false))},[]);
+  const shown=limit?items.slice(0,limit):items;
+  if(loading)return <div className="grid">{[1,2,3,4,5].map(i=><div className="card" key={i}><div className="photo">LOADING VEHICLE…</div><div className="cardBody"><div className="carTitle">Inventory loading</div></div></div>)}</div>;
+  return <div className="grid">{shown.length?shown.map(v=><article className="card" key={v.id}>
+    <Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{v.primaryPhotoPathname?<img src={`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`} alt={`${v.year} ${v.make} ${v.model}`}/>:v.primary_image_url?<img src={v.primary_image_url} alt={`${v.year} ${v.make} ${v.model}`}/>:"PHOTOS COMING"}</Link>
+    <div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div>
+      <div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div>
+      <div className="price">${Number(v.price||0).toLocaleString()}</div>
+      {(v.downPayment??v.down_payment)!=null&&<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>}
+      <div className="cardButtons"><Link href={`/vehicle/${v.id}`}><span>VIEW VEHICLE</span></Link><Link href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(v.id)}`}><span>GET APPROVED</span></Link></div>
+    </div>
+  </article>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
+}
