@@ -1,0 +1,100 @@
+name: WDCC Lint Hardening
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-lint-hardening.yml'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa/wdcc-lint-hardening
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Capture lint baseline
+        id: before
+        continue-on-error: true
+        shell: bash
+        run: |
+          npx --yes @biomejs/biome@1.9.4 lint --max-diagnostics=1000 app lib scripts 2>&1 | tee /tmp/before.txt
+          count="$(grep -Eo 'Found [0-9]+ error' /tmp/before.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Apply Biome safe and unsafe mechanical fixes on QA branch
+        continue-on-error: true
+        run: npx --yes @biomejs/biome@1.9.4 check --write --unsafe --max-diagnostics=1000 app lib scripts
+      - name: Repair critical accessibility and typed-form hotspots
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          p=Path('app/LeadForm.tsx')
+          if p.exists():
+              s=p.read_text()
+              s=s.replace('const body:any=Object.fromEntries(form.entries());','const body:Record<string,FormDataEntryValue>=Object.fromEntries(form.entries());')
+              s=s.replace('{message&&<div className="leadMessage" role="status" aria-live="polite">{message}</div>}','{message&&<output className="leadMessage" aria-live="polite">{message}</output>}')
+              p.write_text(s)
+
+          p=Path('app/admin/login/page.tsx')
+          if p.exists():
+              s=p.read_text()
+              s=s.replace('import { FormEvent, useState } from "react";','import { type FormEvent, useState } from "react";')
+              s=s.replace('}catch(x:any){setMsg(x?.message||"Sign-in failed"); setBusy(false)}','}catch(x:unknown){setMsg(x instanceof Error?x.message:"Sign-in failed"); setBusy(false)}')
+              s=s.replace('<label style={lab}>Username</label>\n      <input autoComplete="username"', '<label htmlFor="admin-username" style={lab}>Username</label>\n      <input id="admin-username" autoComplete="username"')
+              s=s.replace('<label style={lab}>Password</label>\n      <input type="password"', '<label htmlFor="admin-password" style={lab}>Password</label>\n      <input id="admin-password" type="password"')
+              s=s.replace('<button disabled={busy} style={btn}>','<button type="submit" disabled={busy} style={btn}>')
+              p.write_text(s)
+
+          p=Path('lib/vehicleAudit.ts')
+          if p.exists():
+              s=p.read_text().replace('JSON.stringify(record,null,2)+"\\n"', '`${JSON.stringify(record,null,2)}\\n`')
+              p.write_text(s)
+          PY
+      - name: Strict TypeScript after fixes
+        run: npx tsc --noEmit
+      - name: Production build after fixes
+        run: npm run build
+      - name: Capture lint after fixes
+        id: after
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npx --yes @biomejs/biome@1.9.4 lint --max-diagnostics=1000 app lib scripts 2>&1 | tee /tmp/after.txt
+          rc=${PIPESTATUS[0]}
+          count="$(grep -Eo 'Found [0-9]+ error' /tmp/after.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Commit isolated lint hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "WDCC QA Bot"
+          git config user.email "wdcc-qa@users.noreply.github.com"
+          git add app lib scripts
+          git commit -m "Harden WDCC lint accessibility and typing" || true
+          git push origin HEAD:qa/wdcc-lint-hardening
+      - name: Report lint hardening
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ steps.before.outputs.count }}
+          AFTER: ${{ steps.after.outputs.count }}
+          STATUS: ${{ job.status }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC lint hardening ${GITHUB_RUN_ID}" --body "QA branch: \`qa/wdcc-lint-hardening\`\nStatus: **$STATUS**\nBiome errors before: **${BEFORE:-unknown}**\nBiome errors after: **${AFTER:-unknown}**\nTypeScript and production build are required to pass before changes are committed. No production deployment." || true
+
+# Isolated source-quality branch only. Never promotes or deploys production.
