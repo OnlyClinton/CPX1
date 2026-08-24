@@ -19,39 +19,58 @@ jobs:
       APEX: wedontcarecars.com
       WWW: www.wedontcarecars.com
     steps:
-      - name: Require token
-        run: test -n "$VERCEL_TOKEN"
-      - name: Verify exact 8AR donor
+      - name: Diagnose and pin
+        id: pin
         shell: bash
         run: |
-          set -euo pipefail
-          curl -fsS "https://$DONOR/?intro=1" -o /tmp/donor.html
-          grep -q 'intro-sequence' /tmp/donor.html
-          grep -q 'intro-scene' /tmp/donor.html
-          grep -q 'intro-badge' /tmp/donor.html
-          grep -q 'intro-tagline' /tmp/donor.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.3.0 >/dev/null
-      - name: Pin live apex to exact 8AR
-        shell: bash
-        run: |
-          set -euo pipefail
-          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
-          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
-      - name: Verify live exact intro
-        shell: bash
-        run: |
-          set -euo pipefail
-          ok=0
-          for i in $(seq 1 25); do
-            curl -sS "https://$APEX/?intro=1&ops=${GITHUB_RUN_ID}" -o /tmp/live.html || true
-            if grep -q 'intro-sequence' /tmp/live.html && grep -q 'intro-scene' /tmp/live.html && grep -q 'intro-badge' /tmp/live.html && grep -q 'intro-tagline' /tmp/live.html; then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = 1
-      - name: Report
+          set +e
+          token=missing
+          [ -n "$VERCEL_TOKEN" ] && token=present
+          curl -sS "https://$DONOR/?intro=1" -o /tmp/donor.html
+          donor_http=$?
+          donor_markers=0
+          grep -q 'intro-sequence' /tmp/donor.html && grep -q 'intro-scene' /tmp/donor.html && grep -q 'intro-badge' /tmp/donor.html && grep -q 'intro-tagline' /tmp/donor.html && donor_markers=1
+          npm install --global vercel@59.3.0 >/tmp/npm.log 2>&1
+          cli_install=$?
+          alias_apex=99
+          alias_www=99
+          if [ "$token" = present ] && [ "$donor_markers" = 1 ] && [ "$cli_install" = 0 ]; then
+            vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM" >/tmp/alias-apex.log 2>&1
+            alias_apex=$?
+            vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM" >/tmp/alias-www.log 2>&1
+            alias_www=$?
+          fi
+          sleep 3
+          curl -sS "https://$APEX/?intro=1&ops=${GITHUB_RUN_ID}" -o /tmp/live.html
+          live_http=$?
+          live_markers=0
+          grep -q 'intro-sequence' /tmp/live.html && grep -q 'intro-scene' /tmp/live.html && grep -q 'intro-badge' /tmp/live.html && grep -q 'intro-tagline' /tmp/live.html && live_markers=1
+          {
+            echo "token=$token"
+            echo "donor_http=$donor_http"
+            echo "donor_markers=$donor_markers"
+            echo "cli_install=$cli_install"
+            echo "alias_apex=$alias_apex"
+            echo "alias_www=$alias_www"
+            echo "live_http=$live_http"
+            echo "live_markers=$live_markers"
+          } >> "$GITHUB_OUTPUT"
+          tail -40 /tmp/alias-apex.log 2>/dev/null || true
+          tail -40 /tmp/alias-www.log 2>/dev/null || true
+          if [ "$live_markers" = 1 ]; then exit 0; else exit 1; fi
+      - name: Report exact result
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC ops exact 8AR pin ${GITHUB_SHA:0:7}" --body "Dedicated ops-branch no-build alias pin executed for exact 8AR donor. Verify at https://wedontcarecars.com/?intro=1" || true
+          TOKEN: ${{ steps.pin.outputs.token }}
+          DONOR_HTTP: ${{ steps.pin.outputs.donor_http }}
+          DONOR_MARKERS: ${{ steps.pin.outputs.donor_markers }}
+          CLI_INSTALL: ${{ steps.pin.outputs.cli_install }}
+          ALIAS_APEX: ${{ steps.pin.outputs.alias_apex }}
+          ALIAS_WWW: ${{ steps.pin.outputs.alias_www }}
+          LIVE_HTTP: ${{ steps.pin.outputs.live_http }}
+          LIVE_MARKERS: ${{ steps.pin.outputs.live_markers }}
+        shell: bash
+        run: |
+          body=$(printf 'Token: `%s`\nDonor fetch rc: `%s`\nDonor exact markers: `%s`\nCLI install rc: `%s`\nApex alias rc: `%s`\nWWW alias rc: `%s`\nLive fetch rc: `%s`\nLive exact markers: `%s`\n\nApex: https://wedontcarecars.com/?intro=1\nDonor: https://wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app/' "$TOKEN" "$DONOR_HTTP" "$DONOR_MARKERS" "$CLI_INSTALL" "$ALIAS_APEX" "$ALIAS_WWW" "$LIVE_HTTP" "$LIVE_MARKERS")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact 8AR alias diagnostic ${GITHUB_SHA:0:7}" --body "$body" || true
