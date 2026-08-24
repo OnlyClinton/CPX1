@@ -1,10 +1,12 @@
-/* Conversion controls: desktop uses hero/header CTAs; mobile gets a fixed Call/Text/Apply bar. */
-.stickyCtaBar{display:none}
+/* WDCC conversion controls: Test Drive -> Get Approved -> Call Sean. */
+.stickyCtaBar{position:fixed;z-index:140;left:50%;bottom:14px;transform:translateX(-50%);width:min(900px,calc(100% - 32px));display:grid;grid-template-columns:1.15fr 1fr .82fr;gap:8px;padding:8px;background:#040a10ef;border:1px solid #ffffff20;border-radius:14px;box-shadow:0 16px 44px #000b;backdrop-filter:blur(18px)}
+.stickyCtaBar a{min-height:52px;display:flex;align-items:center;justify-content:center;padding:0 14px;border-radius:8px;color:#fff;font-size:11px;font-weight:950;letter-spacing:.035em;text-transform:uppercase;text-align:center}
+.stickyCtaBar .stickyPrimary{background:#ef202f}.stickyCtaBar .stickySecondary{background:#126dc4}.stickyCtaBar .stickyContact{background:#111b25;border:1px solid #ffffff1c}.premiumFooter{padding-bottom:112px}
+.premiumHero .actions{display:grid!important;grid-template-columns:1.18fr 1.02fr .82fr!important;gap:10px!important;max-width:760px!important}.premiumHero .actions .cta{width:100%;min-height:50px;padding:0 14px!important}.premiumHero .cta.contact{background:#07131f;color:#fff;border:1px solid #ffffff5c}
 @media(max-width:900px){
-  .stickyCtaBar{position:fixed;z-index:140;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr 1fr 1.18fr;background:#020509;border-top:1px solid #ffffff20;box-shadow:0 -10px 30px #0009}
-  .stickyCtaBar a{min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#fff;font-size:17px;font-weight:950}
-  .stickyCtaBar a span{font-size:9px;letter-spacing:.04em}
-  .stickyCtaBar .stickyPrimary,.stickyCtaBar .stickySecondary{border-right:1px solid #ffffff18}
-  .stickyCtaBar .stickyContact{background:#ef202f}
-  .premiumFooter{padding-bottom:92px}
+  .stickyCtaBar{left:0;right:0;bottom:0;transform:none;width:100%;grid-template-columns:1.1fr 1fr .8fr;gap:0;padding:0;border-radius:0;border-left:0;border-right:0;border-bottom:0}
+  .stickyCtaBar a{min-height:60px;border-radius:0;padding:0 8px;font-size:10px;letter-spacing:.02em}
+  .stickyCtaBar .stickyPrimary,.stickyCtaBar .stickySecondary{border-right:1px solid #ffffff18}.stickyCtaBar .stickyContact{border:0}.premiumFooter{padding-bottom:94px}
+  .premiumHero .actions{grid-template-columns:1fr 1fr!important;max-width:none!important;gap:8px!important}.premiumHero .actions .cta.contact{grid-column:1/-1}
 }
+@media(max-width:560px){.stickyCtaBar a{min-height:58px;font-size:9px;padding:0 5px}.premiumHero .actions .cta{font-size:9px!important}}
