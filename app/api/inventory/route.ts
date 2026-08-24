@@ -6,10 +6,24 @@ import {publicVehicles,readState,writeState} from "../../../lib/store";
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
+const PHOENIX_BASE=(process.env.WDCC_PHOENIX_BASE_URL||"https://wdcc-cpx-launch.vercel.app").replace(/\/$/,"");
+
+async function phoenixPublicInventory(){
+  const response=await fetch(`${PHOENIX_BASE}/api/inventory?storefront_fallback=${Date.now()}`,{
+    cache:"no-store",
+    signal:AbortSignal.timeout(8000)
+  });
+  if(!response.ok)throw Error(`PHOENIX_INVENTORY_${response.status}`);
+  const json=await response.json();
+  const raw=Array.isArray(json)?json:(json?.items||json?.inventory||json?.vehicles||[]);
+  const state:any={revision:0,tenants:[],users:[],vehicles:Array.isArray(raw)?raw:[],leads:[],audit:[]};
+  return publicVehicles(state);
+}
 
 export async function GET(){
+  const user=await currentUser().catch(()=>null);
   try{
-    const [state,user]=await Promise.all([readState(),currentUser()]);
+    const state=await readState();
     let items;
     if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
       items=String(user.role).toLowerCase()==="platform_admin"?
@@ -18,16 +32,23 @@ export async function GET(){
     }else{
       items=publicVehicles(state);
     }
-    return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
-  }catch(error){
-    return NextResponse.json({
-      ok:false,items:[],error:error instanceof Error?error.message:"read_failed"
-    },{status:500,headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json({ok:true,count:items.length,items,source:"local-ledger"},{headers:{"Cache-Control":"private, no-store"}});
+  }catch(localError){
+    try{
+      const items=await phoenixPublicInventory();
+      return NextResponse.json({ok:true,count:items.length,items,source:"phoenix-fallback"},{headers:{"Cache-Control":"private, no-store"}});
+    }catch(fallbackError){
+      return NextResponse.json({
+        ok:false,items:[],error:"inventory_unavailable",
+        localError:localError instanceof Error?localError.message:"local_read_failed",
+        fallbackError:fallbackError instanceof Error?fallbackError.message:"phoenix_read_failed"
+      },{status:503,headers:{"Cache-Control":"no-store"}});
+    }
   }
 }
 
 export async function POST(req:Request){
-  const user=await currentUser();
+  const user=await currentUser().catch(()=>null);
   if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
     return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
   }
