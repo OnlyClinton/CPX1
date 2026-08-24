@@ -1,0 +1,38 @@
+name: WDCC Auth Build Proof
+on:
+  push:
+    branches: [wdcc-auth-live-fix]
+    paths: ['.github/workflows/wdcc-auth-build-proof.yml']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - id: install
+        continue-on-error: true
+        run: npm ci
+      - id: build
+        continue-on-error: true
+        run: npm run build
+      - id: inspect
+        continue-on-error: true
+        run: |
+          grep -q 'setSession' app/api/auth/login/route.ts
+          grep -q 'currentUser' app/api/auth/session/route.ts
+          grep -q 'clearSession' app/api/auth/logout/route.ts
+          ! grep -q 'proxyDealer' app/api/auth/login/route.ts
+          ! grep -q 'proxyDealer' app/api/auth/session/route.ts
+          ! grep -q 'proxyDealer' app/api/auth/logout/route.ts
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL: ${{ steps.install.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          INSPECT: ${{ steps.inspect.outcome }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC auth build proof $GITHUB_RUN_ID" --body "Install: **$INSTALL**\nBuild: **$BUILD**\nAuth authority inspection: **$INSPECT**\nCommit: \`$GITHUB_SHA\`"
