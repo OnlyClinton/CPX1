@@ -1,0 +1,59 @@
+name: WDCC Isolated Production Contract Test
+on:
+  push:
+    branches: [wdcc-run-login-post-test]
+    paths: ['.github/workflows/wdcc-run-production-contract-test.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Public health and inventory
+        id: health
+        run: |
+          set -euo pipefail
+          B=https://dealer.wedontcarecars.com
+          curl -fsS "$B/api/health" -o /tmp/h
+          jq -e '.ok==true and .degraded==false' /tmp/h >/dev/null
+          curl -fsS "$B/api/inventory" -o /tmp/i
+          jq -e '.ok==true and ((.items//[])|length)>0' /tmp/i >/dev/null
+      - name: All lead forms contract
+        id: leads
+        run: |
+          set -euo pipefail
+          B=https://wedontcarecars.com; R=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          for spec in 'schedule schedule-test-drive 0141' 'approval get-approved 0142' 'contact call-sean 0143'; do
+            set -- $spec; K=$1; S=$2; P=$3
+            curl -fsS -X POST "$B/api/leads" -H 'content-type: application/json' -H "idempotency-key: isolated-$K-$R" --data "{\"kind\":\"$K\",\"name\":\"WDCC ISOLATED $K $R\",\"phone\":\"813-555-$P\",\"email\":\"qa-$K-$R@invalid.example\",\"vehicleInterest\":\"QA only\",\"preferredTime\":\"QA only\",\"message\":\"Automated production acceptance test - do not contact\",\"consent\":true,\"source\":\"$S\"}" > /tmp/$K.json
+            jq -e '.ok==true and .persisted==true' /tmp/$K.json >/dev/null
+          done
+      - name: Auth boundary
+        id: auth
+        run: |
+          set -euo pipefail
+          B=https://dealer.wedontcarecars.com
+          c=$(curl -sS -o /tmp/s -w '%{http_code}' "$B/api/auth/session"); test "$c" = 200; jq -e '.authenticated==false' /tmp/s >/dev/null
+          c=$(curl -sS -o /tmp/l -w '%{http_code}' -X POST "$B/api/auth/login" -H 'Origin: https://dealer.wedontcarecars.com' -H 'content-type: application/json' --data '{"email":"__qa_invalid__","password":"invalid"}'); test "$c" = 401
+          c=$(curl -sS -o /tmp/x -w '%{http_code}' -X POST "$B/api/inventory" -H 'Origin: https://dealer.wedontcarecars.com' -H 'content-type: application/json' --data '{"year":2024,"make":"WDCC-QA","model":"BLOCKED","price":1}'); case "$c" in 400|401|403) ;; *) exit 1;; esac
+      - name: Canonical vehicle create to publish proof
+        id: vehicle
+        run: |
+          set -euo pipefail
+          B=https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+          c=$(curl -sS -o /tmp/v -w '%{http_code}' -X POST "$B/api/qa-proof" -H 'content-type: application/json' --data '{}')
+          test "$c" = 200
+          jq -e '.ok==true and .vehicle!=null and .vehicle.status=="published"' /tmp/v >/dev/null
+          echo "id=$(jq -r '.vehicle.id' /tmp/v)" >> "$GITHUB_OUTPUT"
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H: ${{ steps.health.outcome }}
+          L: ${{ steps.leads.outcome }}
+          A: ${{ steps.auth.outcome }}
+          V: ${{ steps.vehicle.outcome }}
+          VID: ${{ steps.vehicle.outputs.id }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC isolated production test $GITHUB_RUN_ID" --body "Health/inventory: **$H**\nLead forms: **$L**\nAuth boundary: **$A**\nCanonical vehicle publish: **$V**\nVehicle: \`$VID\`" || true
