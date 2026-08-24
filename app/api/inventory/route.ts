@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {publicVehicles,readState,writeState} from "../../../lib/store";
+import {isTrustedWriteRequest,securityError} from "../../../lib/request-security";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -48,9 +49,10 @@ export async function GET(){
 }
 
 export async function POST(req:Request){
+  if(!isTrustedWriteRequest(req))return securityError();
   const user=await currentUser().catch(()=>null);
   if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
-    return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
+    return NextResponse.json({ok:false,error:"Unauthorized"},{status:401,headers:{"Cache-Control":"private, no-store"}});
   }
   try{
     const body=await req.json();
@@ -87,10 +89,10 @@ export async function POST(req:Request){
     state.vehicles.push(item);
     state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,vehicleId:item.id});
     await writeState(state);
-    return NextResponse.json({ok:true,item},{status:201});
+    return NextResponse.json({ok:true,item},{status:201,headers:{"Cache-Control":"private, no-store"}});
   }catch(error){
     return NextResponse.json({
       ok:false,error:error instanceof Error?error.message:"create_failed"
-    },{status:500});
+    },{status:500,headers:{"Cache-Control":"private, no-store"}});
   }
 }
