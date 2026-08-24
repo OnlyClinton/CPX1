@@ -1,9 +1,12 @@
+import {isDealerRuntime} from "../../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../../lib/dealerProxy";
 import {currentUser} from "../../../../lib/auth";
 import {readState} from "../../../../lib/store";
 
 export const dynamic="force-dynamic";
 
-export async function GET(){
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/admin/export");
   const user=await currentUser();
   const role=String(user?.role||"").toLowerCase();
   if(!user||!new Set(["platform_admin","tenant_admin"]).has(role)){

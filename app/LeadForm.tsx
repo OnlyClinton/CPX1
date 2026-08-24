@@ -14,7 +14,7 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
     setBusy(true);setMessage("Sending…");
     try{
       const form=new FormData(formEl);
-      const body:any=Object.fromEntries(form.entries());
+      const body:Record<string,FormDataEntryValue>=Object.fromEntries(form.entries());
       const url=new URL(window.location.href);
       const qs=url.searchParams;
       const vehicle=qs.get("vehicle")||qs.get("vehicleId")||"";
@@ -56,6 +56,6 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
       <label className="consent wide"><input name="consent" type="checkbox" required/> I agree WDCC may call, text, or email me about this request at the contact information I provided. Consent is not a condition of purchase. Message and data rates may apply.</label>
     </div>
     <button className="cta red" disabled={busy} type="submit">{busy?"SENDING…":"SEND REQUEST"}</button>
-    {message&&<div className="leadMessage" role="status" aria-live="polite">{message}</div>}
+    {message&&<output className="leadMessage" aria-live="polite">{message}</output>}
   </form>;
 }

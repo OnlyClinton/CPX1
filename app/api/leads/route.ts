@@ -2,13 +2,15 @@ import crypto from "node:crypto";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readState,writeState} from "../../../lib/store";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
-const DEALER_BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
+const DEALER_BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch.vercel.app").replace(/\/$/,"");
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 
@@ -40,9 +42,9 @@ async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
   return {leadId:String(json.leadId),emailStatus:json.emailStatus||json.email||"upstream",smsStatus:json.smsStatus||json.sms||"upstream",mailto:json.mailto||null};
 }
 
-function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===DEALER_PROJECT_ID||project===CPX_BACKEND_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
+function canonicalHost(req:Request){return isDealerRuntime(req);}
 
-export async function GET(){const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
+export async function GET(request:Request){if(!isDealerRuntime(request))return proxyDealer(request,"/api/leads");const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
 
 export async function POST(req:Request){
   try{

@@ -1,4 +1,4 @@
-const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
+const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch.vercel.app").replace(/\/$/,"");
 const TRUSTED_ORIGINS=new Set(["https://dealer.wedontcarecars.com","https://wedontcarecars.com","https://www.wedontcarecars.com"]);
 const mutationMethods=new Set(["POST","PUT","PATCH","DELETE"]);
 

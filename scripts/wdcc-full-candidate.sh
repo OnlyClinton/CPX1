@@ -11,6 +11,7 @@ git show origin/release/8ar-on-exact-2vfd:app/exact2vfd.css > app/exact2vfd.css
 # Use exact recovered 2vfD source CSS, not a runtime _next URL.
 git show origin/recovered-2vfd-source:src/app/globals.css > app/exact2vfd-base.css
 test "$(wc -c < app/exact2vfd-base.css)" -gt 90000
+sed -i '1{/^@import "tailwindcss";/d;}' app/exact2vfd-base.css
 sed -i '1{/^@import url(/d;}' app/exact2vfd.css
 cat > app/page.tsx <<'EOF'
 import Exact2vfDHome from "./Exact2vfDHome";
