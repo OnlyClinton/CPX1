@@ -1,0 +1,57 @@
+name: Restore exact 8AR logo + auth smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-8ar-logo-auth-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact immutable 8AR logo binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          ROOT='https://wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app/?_vercel_share=wFSh02n2mJkz942P0fZ3GVF9vfAuH96o'
+          HOST='https://wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app'
+          curl -fsSL -L -c /tmp/vcookie "$ROOT" -o /tmp/root.html
+          curl -fsSL -b /tmp/vcookie "$HOST/wdcc-logo-transparent.webp" -o /tmp/wdcc-logo-transparent.webp
+          test "$(stat -c '%s' /tmp/wdcc-logo-transparent.webp)" = '47594'
+          test "$(head -c 4 /tmp/wdcc-logo-transparent.webp)" = 'RIFF'
+          cp /tmp/wdcc-logo-transparent.webp public/wdcc-logo-transparent.webp
+          cp /tmp/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+          sha256sum public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+      - name: Commit exact donor if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Recovery Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+          if git diff --cached --quiet; then
+            echo 'Exact 8AR logo already present.'
+          else
+            git commit -m 'Restore exact 8AR transparent WDCC logo'
+            git push origin HEAD:main
+          fi
+      - name: Verify dealer auth transport does not crash
+        shell: bash
+        run: |
+          set -euo pipefail
+          for base in 'https://dealer.wedontcarecars.com' 'https://wdcc-cpx-launch.vercel.app'; do
+            health="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$base/api/health")"
+            test "$health" = '200' || { echo "$base health=$health"; cat /tmp/health.json; exit 1; }
+            code="$(curl -sS -o /tmp/login.json -w '%{http_code}' -X POST "$base/api/auth/login" -H 'content-type: application/json' -H "origin: $base" --data '{"email":"wdcc-auth-smoke-invalid","password":"invalid-smoke-password"}')"
+            if [ "$code" = '500' ]; then
+              echo "$base LOGIN STILL CRASHES" >&2
+              cat /tmp/login.json >&2
+              exit 1
+            fi
+            test "$code" = '401' || { echo "$base unexpected login status=$code"; cat /tmp/login.json; exit 1; }
+            echo "$base auth transport PASS (invalid credentials correctly returned 401)"
+          done
