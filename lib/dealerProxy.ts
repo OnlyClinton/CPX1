@@ -1,4 +1,4 @@
-const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-dealer-portal.vercel.app").replace(/\/$/,"");
+const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
 const TRUSTED_ORIGINS=new Set(["https://dealer.wedontcarecars.com"]);
 const mutationMethods=new Set(["POST","PUT","PATCH","DELETE"]);
 
@@ -38,7 +38,7 @@ function copyResponseHeaders(upstream:Response){
   headers.set("access-control-allow-origin","https://dealer.wedontcarecars.com");
   headers.set("access-control-allow-credentials","true");
   headers.set("vary","Origin");
-  headers.set("x-wdcc-backend","dealer-healthy-facade");
+  headers.set("x-wdcc-backend","immutable-healthy-dealer");
   return headers;
 }
 
