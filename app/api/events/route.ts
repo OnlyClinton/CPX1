@@ -8,6 +8,7 @@ const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 const readerRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const text=(v:unknown,max:number)=>String(v??"").trim().slice(0,max);
+const allowedEvent=/^(page_view|cta\.[a-z0-9._-]+|inventory\.[a-z0-9._-]+|vehicle\.[a-z0-9._-]+|lead\.[a-z0-9._-]+)$/i;
 
 function canonicalRuntime(request:Request){
   const project=process.env.VERCEL_PROJECT_ID||"";
@@ -22,7 +23,9 @@ export async function GET(request:Request){
   if(!user||!readerRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401,headers:{"Cache-Control":"private, no-store"}});
   try{
     const url=new URL(request.url);const limit=Math.max(1,Math.min(Number(url.searchParams.get("limit"))||200,500));
-    const items=await readRecentAnalyticsEvents(limit);
+    const role=String(user.role||"").toLowerCase();
+    const tenantId=role==="platform_admin"?null:String(user.tenantId||"wdcc");
+    const items=await readRecentAnalyticsEvents(limit,tenantId);
     return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
   }catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"analytics_read_failed",items:[]},{status:500,headers:{"Cache-Control":"private, no-store"}});}
 }
@@ -30,10 +33,14 @@ export async function GET(request:Request){
 export async function POST(request:Request){
   if(!canonicalRuntime(request))return proxyDealer(request,"/api/events");
   try{
+    const length=Number(request.headers.get("content-length")||0);if(length>32768)return NextResponse.json({ok:false,error:"event_payload_too_large"},{status:413});
     const body=await request.json().catch(()=>({}));
     const event=text(body?.event??body?.name,100);
-    if(!event)return NextResponse.json({ok:false,error:"event_required"},{status:400});
+    if(!event||!allowedEvent.test(event))return NextResponse.json({ok:false,error:"invalid_event"},{status:400});
+    const metadata=body?.metadata&&typeof body.metadata==="object"?body.metadata:null;
+    if(metadata&&JSON.stringify(metadata).length>8192)return NextResponse.json({ok:false,error:"metadata_too_large"},{status:413});
     const record=await recordAnalyticsEvent({
+      tenantId:"wdcc",
       event,at:text(body?.at,80)||undefined,
       sessionId:text(body?.sessionId,160)||null,anonymousUserId:text(body?.anonymousUserId,160)||null,
       leadId:text(body?.leadId,160)||null,vehicleId:text(body?.vehicleId,160)||null,
@@ -43,7 +50,7 @@ export async function POST(request:Request){
       referralCode:text(body?.referralCode,160)||null,pagePath:text(body?.pagePath??body?.path,300)||null,
       landingPath:text(body?.landingPath,300)||null,referrer:text(body?.referrer,700)||null,
       channel:text(body?.channel,80)||null,cta:text(body?.cta,100)||null,
-      metadata:body?.metadata&&typeof body.metadata==="object"?body.metadata:null
+      metadata
     });
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-WDCC-Event-ID":record.id}});
   }catch(error){
