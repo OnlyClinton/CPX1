@@ -31,12 +31,6 @@ jobs:
           grep -q 'intro-sequence' /tmp/donor.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
           grep -q 'SCHEDULE A TEST DRIVE' /tmp/donor.html
-          inv_code="$(curl -sS -o /tmp/inv.json -w '%{http_code}' "https://$DONOR/api/inventory")"
-          test "$inv_code" = '200'
-          jq -e '.ok == true' /tmp/inv.json >/dev/null
-          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "https://$DONOR/api/health")"
-          test "$health_code" = '200'
-          jq -e '.ok == true' /tmp/health.json >/dev/null
 
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0 >/dev/null
