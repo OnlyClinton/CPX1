@@ -1,0 +1,110 @@
+name: WDCC Dealer Auth Fix + Full Acceptance
+on:
+  push:
+    branches: [wdcc-auth-live-fix]
+    paths: ['.github/workflows/wdcc-auth-live-fix.yml']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      DEALER: https://dealer.wedontcarecars.com
+      SITE: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - name: Build source
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+      - name: Link only dealer project and pull production bindings
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
+          grep -q '^SESSION_SECRET=' /tmp/dealer.env
+      - name: Build and deploy dealer production candidate
+        id: deploy
+        run: |
+          set -euo pipefail
+          vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s' "$url" > /tmp/url
+      - name: Verify auth transport before cutover
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/url)"
+          code=$(curl -sS -o /tmp/session -w '%{http_code}' "$url/api/auth/session")
+          test "$code" = 200
+          jq -e '.authenticated==false' /tmp/session >/dev/null
+          code=$(curl -sS -o /tmp/login -w '%{http_code}' -X POST "$url/api/auth/login" -H 'content-type: application/json' --data '{"email":"wdcc-invalid-acceptance","password":"invalid"}')
+          test "$code" = 401
+          jq -e '.error=="invalid_credentials"' /tmp/login >/dev/null
+      - name: Create short-lived signed production sessions
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer.env; set +a
+          node <<'NODE' > /tmp/sessions.env
+          const crypto=require('crypto'); const {get}=require('@vercel/blob');
+          const sign=u=>{const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+20*60*1000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');return `${raw}.${sig}`}
+          ;(async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));const active=(s.users||[]).filter(u=>u.status!=='disabled'&&!u.disabled);const dealer=active.find(u=>['dealer_agent','tenant_admin','platform_admin'].includes(String(u.role).toLowerCase()));const admin=active.find(u=>String(u.role).toLowerCase()==='platform_admin')||active.find(u=>String(u.role).toLowerCase()==='tenant_admin')||dealer;if(!dealer||!admin)throw Error('ACTIVE_USERS_NOT_FOUND');console.log('DEALER_COOKIE='+sign(dealer));console.log('ADMIN_COOKIE='+sign(admin))})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/sessions.env >> "$GITHUB_ENV"
+      - name: Verify protected candidate routes use same session authority
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/url)"
+          for p in /api/auth/session /api/crm/dashboard /api/inventory /dealer /dealer/dashboard /dealer/leads /dealer/inventory /dealer/inventory/new; do
+            code=$(curl -sS -o /tmp/out -w '%{http_code}' "$url$p" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE")
+            test "$code" = 200 || { echo "$p -> $code"; cat /tmp/out; exit 1; }
+          done
+          curl -sS "$url/api/auth/session" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE" | jq -e '.authenticated==true' >/dev/null
+      - name: Cut over dealer domain only
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/url)"
+          vercel alias set "$url" dealer.wedontcarecars.com --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Test all public customer forms on live storefront
+        run: |
+          set -euo pipefail
+          for p in / /inventory /get-approved /schedule-test-drive /contact; do code=$(curl -sS -o /tmp/page -w '%{http_code}' "$SITE$p"); test "$code" = 200; done
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          submit(){ kind="$1"; source="$2"; phone="$3"; curl -fsS -X POST "$SITE/api/leads" -H 'content-type: application/json' -H "idempotency-key: full-$kind-$RUN" --data "{\"kind\":\"$kind\",\"name\":\"WDCC FULL QA $kind $RUN\",\"phone\":\"$phone\",\"email\":\"qa-$kind-$RUN@invalid.example\",\"vehicleInterest\":\"QA only\",\"preferredTime\":\"QA only\",\"message\":\"Automated full acceptance - do not contact\",\"consent\":true,\"source\":\"$source\"}"; }
+          S=$(submit schedule schedule-test-drive 813-555-0121); A=$(submit approval get-approved 813-555-0122); C=$(submit contact call-sean 813-555-0123)
+          echo "$S"|jq -e '.ok==true and .persisted==true and .item.kind=="schedule"' >/dev/null
+          echo "$A"|jq -e '.ok==true and .persisted==true and .item.kind=="approval"' >/dev/null
+          echo "$C"|jq -e '.ok==true and .persisted==true and .item.kind=="contact"' >/dev/null
+      - name: Verify live dealer protected features and admin
+        run: |
+          set -euo pipefail
+          for p in /api/auth/session /api/crm/dashboard /api/inventory /dealer /dealer/dashboard /dealer/leads /dealer/inventory /dealer/inventory/new; do code=$(curl -sS -o /tmp/live -w '%{http_code}' "$DEALER$p" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE"); test "$code" = 200 || { echo "$p -> $code"; cat /tmp/live; exit 1; }; done
+          curl -sS "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE" | jq -e '.authenticated==true' >/dev/null
+          for p in /admin /admin/users; do code=$(curl -sS -o /tmp/admin -w '%{http_code}' "$DEALER$p" -H "Cookie: __Host-wdcc_session=$ADMIN_COOKIE"); test "$code" = 200 || test "$code" = 307 || { echo "$p -> $code"; cat /tmp/admin; exit 1; }; done
+      - name: Test vehicle photo upload, publish, storefront visibility, and cleanup
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          (async()=>{const dealer=process.env.DEALER,site=process.env.SITE,run=process.env.RUN_ID,stock=`FULLQA-${run}`;fs.writeFileSync('/tmp/car.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.DEALER_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();await p.goto(dealer+'/dealer/inventory/new',{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('SESSION_REDIRECTED_TO_LOGIN');await p.getByLabel('Year').fill('2020');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill('Full QA');await p.getByLabel('Trim').fill('Acceptance');await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill('Automated full production acceptance. QA only.');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/car.png');await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});const r=await c.request.get(dealer+'/api/inventory',{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`}});const j=await r.json();const item=(j.items||[]).find(v=>v.stock===stock);if(!item)throw Error('VEHICLE_NOT_IN_DEALER_INVENTORY');const pub=await c.request.get(site+'/api/inventory');const pj=await pub.json();if(!(pj.items||[]).some(v=>v.stock===stock))throw Error('VEHICLE_NOT_VISIBLE_ON_STOREFRONT');const h=await c.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!h.ok())throw Error('QA_CLEANUP_FAILED_'+h.status());await b.close()})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+      - name: Verify logout cookie clear
+        run: |
+          set -euo pipefail
+          curl -sS -D /tmp/headers -o /tmp/logout -X POST "$DEALER/api/auth/logout" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE" -H "Origin: $DEALER"
+          grep -qi '^set-cookie: __Host-wdcc_session=' /tmp/headers
