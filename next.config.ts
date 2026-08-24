@@ -7,6 +7,34 @@ const baselineHeaders = [
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()" }
 ];
 
+const storefrontHeaders = [
+  ...baselineHeaders,
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://wedontcarecars.com https://www.wedontcarecars.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      "connect-src 'self' https://dealer.wedontcarecars.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      "font-src 'self' data:",
+      "media-src 'self' blob:",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
+      "upgrade-insecure-requests"
+    ].join("; ")
+  },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-site" },
+  { key: "Access-Control-Allow-Origin", value: "https://wedontcarecars.com" },
+  { key: "Vary", value: "Origin" }
+];
+
 const dealerHeaders = [
   ...baselineHeaders,
   { key: "Cache-Control", value: "private, no-store, max-age=0, must-revalidate" },
@@ -50,7 +78,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
-      { source: "/:path*", headers: baselineHeaders },
+      { source: "/:path*", headers: storefrontHeaders },
       { source: "/dealer/:path*", headers: dealerHeaders },
       { source: "/api/auth/:path*", headers: privilegedApiHeaders },
       { source: "/api/inventory/:path*", headers: privilegedApiHeaders },
