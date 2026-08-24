@@ -1,23 +1,50 @@
 "use client";
 import Link from"next/link";
+import type{CSSProperties}from"react";
 import{useEffect,useState}from"react";
 import TrackedCallLink from"./TrackedCallLink";
 
 export function Intro(){
-  const[done,setDone]=useState(false);
+  const[phase,setPhase]=useState<"reveal"|"dock"|"done">("reveal");
+  const[landing,setLanding]=useState({x:0,y:0,scale:.42});
   useEffect(()=>{
-    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setDone(true);return}
-    const t=setTimeout(()=>setDone(true),3050);
-    return()=>clearTimeout(t);
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setPhase("done");return}
+    document.documentElement.classList.add("wdcc-intro-active");
+    const measure=()=>{
+      const target=document.querySelector(".homeComposite .logoBrand img") as HTMLElement|null;
+      const badge=document.querySelector(".intro-badge") as HTMLElement|null;
+      if(!target||!badge)return;
+      const tr=target.getBoundingClientRect();
+      const bw=badge.offsetWidth||300;
+      const originY=window.innerHeight*(window.innerWidth<=900?.47:.49);
+      setLanding({
+        x:tr.left+tr.width/2-window.innerWidth/2,
+        y:tr.top+tr.height/2-originY,
+        scale:Math.max(.2,Math.min(.7,tr.width/bw))
+      });
+    };
+    const raf=requestAnimationFrame(measure);
+    window.addEventListener("resize",measure);
+    const dockTimer=window.setTimeout(()=>setPhase("dock"),1550);
+    const doneTimer=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2850);
+    return()=>{
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize",measure);
+      window.clearTimeout(dockTimer);
+      window.clearTimeout(doneTimer);
+      document.documentElement.classList.remove("wdcc-intro-active");
+    };
   },[]);
-  if(done)return null;
-  return <div className="intro-sequence intro-reveal" aria-label="WDCC opening animation">
-    <div className="intro-scene" style={{backgroundImage:"url('/wdcc-hero-v2.webp')"}} aria-hidden="true"/>
+  const finish=()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")};
+  if(phase==="done")return null;
+  const style={"--intro-dock-x":`${landing.x}px`,"--intro-dock-y":`${landing.y}px`,"--intro-dock-scale":landing.scale} as CSSProperties;
+  return <div className={`intro-sequence intro-${phase}`} aria-label="WDCC opening animation">
+    <div className="intro-scene" aria-hidden="true"/>
     <div className="intro-smoke smoke-one" aria-hidden="true"/>
     <div className="intro-smoke smoke-two" aria-hidden="true"/>
-    <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
+    <div className="intro-badge" style={style}><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
     <p className="intro-tagline">Tampa Bay · Drive today</p>
-    <button className="intro-skip" type="button" onClick={()=>setDone(true)}>Skip intro</button>
+    <button className="intro-skip" type="button" onClick={finish}>Skip intro</button>
   </div>
 }
 
@@ -47,10 +74,9 @@ export function Header(){
       <Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
     </nav>}
     </header>
-    <div className="stickyCtaBar" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean">☎<span>CALL</span></TrackedCallLink>
-      <a className="stickySecondary" href="sms:+18135164752">▰<span>TEXT</span></a>
-      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply">▣<span>APPLY NOW</span></Link>
+    <div className="stickyCtaBar compositeMobileDock" aria-label="Quick actions">
+      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean">☎<span>CALL SEAN</span></TrackedCallLink>
+      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply">▣<span>GET PRE-APPROVED</span></Link>
     </div>
   </>
 }
