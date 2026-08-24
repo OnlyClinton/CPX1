@@ -1,0 +1,96 @@
+name: WDCC Canonical Hybrid Hardening
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-canonical-hardening.yml'
+  workflow_dispatch:
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa/wdcc-canonical-hardening
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Repair all known hybrid navigation and tracking gaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('app/Exact2vfDHome.tsx')
+          s=p.read_text()
+          s=s.replace('import Link from "next/link";\n', 'import Link from "next/link";\nimport TrackedCallLink from "./TrackedCallLink";\n')
+          for old,new in {
+            'id:"2004-nissan-350z"':'id:"recovered-2004-nissan-350z"',
+            'id:"2016-ford-f150-limited"':'id:"recovered-2016-ford-f150-limited"',
+            'id:"2019-honda-pilot"':'id:"recovered-2019-honda-pilot"',
+            'id:"2019-kia-sportage"':'id:"recovered-2019-kia-sportage"',
+            'id:"2019-toyota-rav4"':'id:"recovered-2019-toyota-rav4"',
+          }.items(): s=s.replace(old,new)
+          s=s.replace('function customerVisible(v:any){', 'type PublicVehicleInput=Partial<Vehicle>&{cashPrice?:number};\n\nfunction customerVisible(v:PublicVehicleInput){')
+          s=s.replace('(x:any)=>String(x).toUpperCase()', 'x=>String(x).toUpperCase()')
+          s=s.replace('function href(v:Vehicle){return v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`}', 'function href(v:Vehicle){const id=String(v.id||"");return id?`/vehicle/${encodeURIComponent(id)}`:"/inventory"}')
+          s=s.replace('<Link href="/inventory">Inventory</Link><Link href="/financing">Financing</Link><Link href="/#how-it-works">How it works</Link><Link href="/reviews">Reviews</Link><Link href="/about">About us</Link>', '<Link href="/inventory">Inventory</Link><Link href="/get-approved?source=nav-financing">Financing</Link><Link href="/#how-it-works">How it works</Link><Link href="/#reviews">Reviews</Link><Link href="/#about">About us</Link>')
+          s=s.replace('<a className="mobile-call" href="tel:+18135164752" aria-label="Call Sean at 813-516-4752">', '<TrackedCallLink className="mobile-call" source="mobile-header-call" label="Call Sean at 813-516-4752">')
+          s=s.replace('</svg><span><small>Call</small>Sean</span></a>', '</svg><span><small>Call</small>Sean</span></TrackedCallLink>')
+          s=s.replace('<Link className="hero-call hero-cta-contact" aria-label="Contact WDCC" href="/contact?source=call-sean"><span><small>Questions or ready?</small><strong>Contact us</strong></span><b aria-hidden="true">→</b></Link>', '<TrackedCallLink className="hero-call hero-cta-contact" source="hero-call-sean" label="Call Sean"><span><small>Questions or ready?</small><strong>Call Sean</strong></span><b aria-hidden="true">→</b></TrackedCallLink>')
+          s=s.replace('<a href="tel:+18135164752">813-516-4752</a><span className="footer-links">', '<TrackedCallLink source="footer-phone" label="Call Sean at 813-516-4752">813-516-4752</TrackedCallLink><span className="footer-links">')
+          s=s.replace('<a className="mobile-dock-contact" href="tel:+18135164752">Call Sean</a>', '<TrackedCallLink className="mobile-dock-contact" source="mobile-dock-call" label="Call Sean">Call Sean</TrackedCallLink>')
+          s=s.replace('<button className="mobile-menu" aria-expanded=', '<button type="button" className="mobile-menu" aria-expanded=')
+          s=s.replace('<button className="carousel-arrow carousel-prev"', '<button type="button" className="carousel-arrow carousel-prev"')
+          s=s.replace('<button className="carousel-arrow carousel-next"', '<button type="button" className="carousel-arrow carousel-next"')
+          s=s.replace('<button key={String(v.id||i)} className=', '<button type="button" key={String(v.id||i)} className=')
+          p.write_text(s)
+          PY
+          mkdir -p app/privacy app/terms
+          cat > app/privacy/page.tsx <<'EOF'
+          import {Footer,Header} from "../components";
+          export default function PrivacyPage(){return <><Header/><main className="section light"><div className="wrap leadPage"><div className="eyebrow muted">PRIVACY</div><h1>Privacy Notice</h1><p>When you submit a WDCC form, we may collect the contact information and vehicle/request details you provide, plus basic referral and campaign attribution used to understand where the request came from.</p><p>We use that information to respond to your request, support dealer operations, prevent duplicate submissions, and maintain an audit trail. We do not ask for payment-card information on these lead forms.</p><p>By checking the consent box on a request form, you agree that WDCC may contact you about that request using the contact information you provided. You can ask us to stop marketing communications at any time.</p><p>For privacy questions or requests, use the Contact page or call Sean at 813-516-4752.</p></div></main><Footer/></>}
+          EOF
+          cat > app/terms/page.tsx <<'EOF'
+          import {Footer,Header} from "../components";
+          export default function TermsPage(){return <><Header/><main className="section light"><div className="wrap leadPage"><div className="eyebrow muted">TERMS</div><h1>Website Terms</h1><p>Vehicle availability, pricing, mileage, down-payment examples, financing options, and other listing details can change and should be confirmed directly with the dealer before purchase.</p><p>Submitting a test-drive, contact, or financing-interest form does not guarantee vehicle availability, financing approval, a particular rate, or a completed transaction.</p><p>Use this site only for lawful purposes and provide accurate information when requesting dealer follow-up. Final transaction documents and lender/dealer disclosures control if they differ from general website information.</p><p>Questions about a listing or these terms can be directed to WDCC through the Contact page or by calling 813-516-4752.</p></div></main><Footer/></>}
+          EOF
+      - name: Install and validate candidate
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+      - name: Candidate link contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eq 'href="/(financing|reviews|about)"' app/Exact2vfDHome.tsx
+          grep -q 'href="/#reviews"' app/Exact2vfDHome.tsx
+          grep -q 'href="/#about"' app/Exact2vfDHome.tsx
+          grep -q 'href="/privacy"' app/Exact2vfDHome.tsx
+          grep -q 'href="/terms"' app/Exact2vfDHome.tsx
+          grep -q 'TrackedCallLink' app/Exact2vfDHome.tsx
+          test -f app/privacy/page.tsx
+          test -f app/terms/page.tsx
+      - name: Commit hardened candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "WDCC QA Bot"
+          git config user.email "wdcc-qa@users.noreply.github.com"
+          git add app/Exact2vfDHome.tsx app/privacy/page.tsx app/terms/page.tsx
+          git commit -m "Harden canonical hybrid navigation and CTA attribution" || true
+          git push origin HEAD:qa/wdcc-canonical-hardening
+      - name: Report hardening result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical hybrid hardening ${GITHUB_RUN_ID}" --body "Candidate branch: \`qa/wdcc-canonical-hardening\`\nValidation status: **${{ job.status }}**\nRepairs: financing/reviews/about routing, privacy/terms pages, vehicle-detail routing, and tracked Call Sean links.\nNo production deployment was requested." || true
+
+# This workflow hardens a non-release QA branch only; it must not promote or deploy production.
