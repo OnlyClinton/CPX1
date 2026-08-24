@@ -1,0 +1,91 @@
+name: WDCC Pre8AR 5923 Exact Preview
+on:
+  push:
+    branches: [fix/restore-pre8ar-5923-visual]
+    paths:
+      - '.github/workflows/wdcc-pre8ar-5923-preview.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-pre8ar-5923-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify exact recovered visual source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'type IntroPhase="enter"|"move"|"flight"|"exit"|"done"' app/components.tsx
+          grep -q 'data-wdcc-header-logo' app/components.tsx
+          grep -q 'window.requestAnimationFrame(flyLogo)' app/components.tsx
+          grep -q "background:url('/wdcc-hero-v2.webp') 68% center/cover no-repeat" app/premium.css
+          grep -q 'SCHEDULE A TEST DRIVE' app/page.tsx
+          grep -q 'stickyCtaBar' app/cta-lock.css
+          ! grep -q 'v43-approved.css' app/layout.tsx
+          ! grep -q 'intro8ar.css' app/layout.tsx
+          ! grep -q 'composite.css' app/layout.tsx
+      - name: Build application
+        run: npm run build
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
+      - name: Link canonical project
+        shell: bash
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Pull preview environment
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build preview bundle
+        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy isolated preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "PREVIEW_URL=$url"
+      - name: Verify preview contract
+        id: verify
+        shell: bash
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          test -n "$URL"
+          vercel curl / --deployment "$URL" --token="$VERCEL_TOKEN" --scope=cpxagency > /tmp/home.html
+          grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html
+          grep -q 'data-wdcc-header-logo' /tmp/home.html
+          grep -q 'WDCC opening animation' /tmp/home.html
+          vercel curl /api/inventory --deployment "$URL" --token="$VERCEL_TOKEN" --scope=cpxagency > /tmp/inventory.json
+          node -e "const j=require('/tmp/inventory.json'); if(j.ok!==true||!Array.isArray(j.items||j.inventory)) process.exit(1)"
+      - name: Report exact preview
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          body=$(printf 'Source branch: `fix/restore-pre8ar-5923-visual`\nCommit: `%s`\nDeploy: `%s`\nVerify: `%s`\nPreview: %s\nProduction was not changed.' "$GITHUB_SHA" "${DEPLOY:-unknown}" "${VERIFY:-unknown}" "${URL:-not-created}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact pre-8AR preview $short" --body "$body" || true
