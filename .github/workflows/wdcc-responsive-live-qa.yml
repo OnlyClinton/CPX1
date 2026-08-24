@@ -26,7 +26,7 @@ jobs:
           BASE: https://wedontcarecars.com
         run: |
           mkdir -p qa-artifacts/screenshots
-          cat > /tmp/wdcc-qa.mjs <<'NODE'
+          cat > wdcc-qa.mjs <<'NODE'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
 
@@ -112,7 +112,7 @@ jobs:
           fs.writeFileSync('qa-artifacts/summary.txt',severe.length?severe.join('\n'):'No severe browser-layout failures detected.');
           console.log(JSON.stringify({pages:report.pages.length,api:report.api.map(x=>({name:x.name,status:x.status})),linkFailures:report.linkChecks.filter(x=>x.status>=400||x.error).length,severe},null,2));
           NODE
-          node /tmp/wdcc-qa.mjs
+          node ./wdcc-qa.mjs
       - name: Upload QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
