@@ -46,6 +46,15 @@ jobs:
       - id: appbuild
         name: Build application
         run: npm run build
+      - name: Package exact built source
+        shell: bash
+        run: |
+          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/wdcc-pre8ar-5923-source.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-pre8ar-5923-source
+          path: /tmp/wdcc-pre8ar-5923-source.tgz
+          if-no-files-found: error
       - id: token
         name: Require Vercel token
         run: test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
@@ -104,5 +113,5 @@ jobs:
         shell: bash
         run: |
           short="${GITHUB_SHA:0:7}"
-          body=$(printf 'Source branch: `fix/restore-pre8ar-5923-visual`\nCommit: `%s`\ninstall=%s\nsource=%s\nappbuild=%s\ntoken=%s\nlink=%s\ncli=%s\npull=%s\nvbuild=%s\ndeploy=%s\nverify=%s\nPreview: %s\nProduction was not changed.' "$GITHUB_SHA" "${INSTALL:-unknown}" "${SOURCE:-unknown}" "${APPBUILD:-unknown}" "${TOKEN:-unknown}" "${LINK:-unknown}" "${CLI:-unknown}" "${PULL:-unknown}" "${VBUILD:-unknown}" "${DEPLOY:-unknown}" "${VERIFY:-unknown}" "${URL:-not-created}")
+          body=$(printf 'Source branch: `fix/restore-pre8ar-5923-visual`\nCommit: `%s`\nRun ID: `%s`\ninstall=%s\nsource=%s\nappbuild=%s\ntoken=%s\nlink=%s\ncli=%s\npull=%s\nvbuild=%s\ndeploy=%s\nverify=%s\nPreview: %s\nProduction was not changed.' "$GITHUB_SHA" "$GITHUB_RUN_ID" "${INSTALL:-unknown}" "${SOURCE:-unknown}" "${APPBUILD:-unknown}" "${TOKEN:-unknown}" "${LINK:-unknown}" "${CLI:-unknown}" "${PULL:-unknown}" "${VBUILD:-unknown}" "${DEPLOY:-unknown}" "${VERIFY:-unknown}" "${URL:-not-created}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact pre-8AR preview $short" --body "$body" || true
