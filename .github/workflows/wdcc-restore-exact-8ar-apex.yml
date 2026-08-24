@@ -1,4 +1,4 @@
-name: Restore functional 8AR storefront apex
+name: Deploy current WDCC composite to production
 on:
   push:
     branches: [main]
@@ -6,34 +6,46 @@ on:
       - '.github/workflows/wdcc-restore-exact-8ar-apex.yml'
   workflow_dispatch:
 
+concurrency:
+  group: wdcc-production-cutover
+  cancel-in-progress: true
+
 jobs:
-  restore:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-      DEPLOYMENT_ID: dpl_B7iTYdinR6VFWEnFGf5wWMBwH8H1
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
       APEX: wedontcarecars.com
       WWW: www.wedontcarecars.com
     steps:
-      - name: Require token
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Require Vercel token
         run: test -n "$VERCEL_TOKEN"
-      - name: Assign apex and www directly through Vercel API
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Link canonical storefront project
+        run: vercel link --yes --project wdcc-v32-storefront --scope cpxagency --token "$VERCEL_TOKEN"
+      - name: Pull production environment
+        run: vercel pull --yes --environment=production --scope cpxagency --token "$VERCEL_TOKEN"
+      - name: Build current main for production
+        run: vercel build --prod --scope cpxagency --token "$VERCEL_TOKEN"
+      - name: Deploy exact prebuilt output to production
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          for alias in "$APEX" "$WWW"; do
-            code="$(curl -sS -o /tmp/alias.json -w '%{http_code}' -X POST \
-              "https://api.vercel.com/v2/deployments/$DEPLOYMENT_ID/aliases?teamId=$TEAM_ID" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H 'Content-Type: application/json' \
-              --data "{\"alias\":\"$alias\"}")"
-            cat /tmp/alias.json
-            test "$code" = '200'
-          done
+          url="$(vercel deploy --prebuilt --prod --scope cpxagency --token "$VERCEL_TOKEN" | tail -n1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url"
       - name: Verify public domains and core routes
         id: verify
         shell: bash
@@ -41,7 +53,7 @@ jobs:
           set -euo pipefail
           for host in "$APEX" "$WWW"; do
             ok=0
-            for i in $(seq 1 20); do
+            for i in $(seq 1 30); do
               home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "https://$host/" || true)"
               inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "https://$host/api/inventory" || true)"
               if [ "$home_code" = '200' ] && [ "$inv_code" = '200' ]; then ok=1; break; fi
@@ -49,11 +61,15 @@ jobs:
             done
             test "$ok" = '1'
           done
-          echo 'restored=true' >> "$GITHUB_OUTPUT"
-      - name: Report
+          curl -sS -L "https://$APEX/" -o /tmp/live-home.html
+          grep -q 'SCHEDULE A TEST DRIVE' /tmp/live-home.html
+          grep -q 'GET PRE-APPROVED' /tmp/live-home.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+      - name: Report cutover
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          RESULT: ${{ steps.verify.outputs.restored }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          RESULT: ${{ steps.verify.outputs.verified }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC functional 8AR REST cutover ${GITHUB_SHA:0:7}" --body "Deployment: \`$DEPLOYMENT_ID\`\nApex restore verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC composite production cutover ${GITHUB_SHA:0:7}" --body "Current-main production deployment: \`${DEPLOY_URL:-unknown}\`\nPublic verification: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
