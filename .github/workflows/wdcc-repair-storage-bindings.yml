@@ -4,6 +4,11 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/wdcc-repair-storage-bindings.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ops/wdcc-repair-trigger.txt'
+      - '.github/workflows/wdcc-repair-storage-bindings.yml'
   workflow_dispatch:
 
 jobs:
@@ -28,13 +33,16 @@ jobs:
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.3.0
 
-      - name: Verify known-good rollback target
+      - name: Restore healthy dealer alias before repair
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/fallback-health.json -w '%{http_code}' "https://$SAFE_FALLBACK/api/health")"
+          npx --yes vercel@59.3.0 alias set "$SAFE_FALLBACK" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+          sleep 4
+          code="$(curl -sS -o /tmp/fallback-health.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/health")"
           test "$code" = "200"
           jq -e '.ok == true' /tmp/fallback-health.json >/dev/null
+          echo "WDCC_SAFE_FALLBACK=PASS"
 
       - name: Pull healthy dealer production environment
         shell: bash
@@ -46,6 +54,7 @@ jobs:
           vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
           grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env || { echo 'healthy dealer project has no BLOB_READ_WRITE_TOKEN' >&2; exit 1; }
           grep -q '^SESSION_SECRET=' /tmp/dealer.env || { echo 'healthy dealer project has no SESSION_SECRET' >&2; exit 1; }
+          echo "WDCC_SOURCE_BINDINGS=FOUND"
 
       - name: Sync storage and auth bindings to hardened Phoenix project
         shell: bash
@@ -67,6 +76,10 @@ jobs:
             vercel env rm SESSION_SECRET production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
             printf '%s' "$SESSION_SECRET" | vercel env add SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
           }
+          vercel env pull /tmp/phoenix-check.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix-check.env
+          grep -q '^SESSION_SECRET=' /tmp/phoenix-check.env
+          echo "WDCC_TARGET_BINDINGS=SYNCED"
 
       - name: Redeploy hardened artifact with repaired bindings
         shell: bash
@@ -95,6 +108,7 @@ jobs:
           grep -qi '^access-control-allow-origin: https://dealer\.wedontcarecars\.com' /tmp/headers.txt
           grep -qi '^strict-transport-security: max-age=63072000; includeSubDomains; preload' /tmp/headers.txt
           grep -qi '^x-frame-options: DENY' /tmp/headers.txt
+          echo "WDCC_HARDENED_PRECUTOVER=PASS"
 
       - name: Cut over dealer alias with automatic rollback
         shell: bash
