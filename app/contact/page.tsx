@@ -1,0 +1,1 @@
+import LeadForm from "../LeadForm";import{Footer,Header}from"../components";export default function Page(){return <><Header/><main className="section light"><div className="wrap leadPage"><div className="eyebrow muted">DIRECT HUMAN HELP</div><h1>Call or Contact Us</h1><p>Send your question and Sean's team will follow up.</p><LeadForm kind="contact"/></div></main><Footer/></>}

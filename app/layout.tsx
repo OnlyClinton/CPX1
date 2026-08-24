@@ -1,0 +1,1 @@
+import "./globals.css";import "./routing.css"; export const metadata={title:"We Don't Care Cars | Tampa Bay",description:"Real cars. Real down payments. Direct help from Sean."}; export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}

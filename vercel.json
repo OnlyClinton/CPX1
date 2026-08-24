@@ -1,16 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "git": {
-    "deploymentEnabled": false
-  },
-  "rewrites": [
-    {
-      "source": "/dealer/:path*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/:path*",
-      "destination": "/index.html"
-    }
-  ]
+  "framework": "nextjs",
+  "regions": ["iad1"]
 }
