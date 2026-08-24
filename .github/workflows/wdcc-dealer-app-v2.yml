@@ -1,0 +1,115 @@
+name: WDCC Dealer App V2
+
+on:
+  push:
+    branches: [dealer-app-v2]
+    paths: ['.github/workflows/wdcc-dealer-app-v2.yml']
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Restore approved WDCC logo asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          curl -fsSL 'https://wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app/wdcc-logo-transparent.webp' -o public/wdcc-logo-transparent.webp
+          test "$(wc -c < public/wdcc-logo-transparent.webp)" -gt 20000
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/wdcc-logo-transparent.webp').read_bytes()
+          assert p[:4]==b'RIFF' and p[8:12]==b'WEBP'
+          PY
+      - name: Preserve current dashboard as deeper dashboard route
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/dealer/dashboard
+          cp app/dealer/page.tsx app/dealer/dashboard/page.tsx
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/dealer/dashboard/page.tsx')
+          s=p.read_text().replace('/wdcc-official-logo.webp','/wdcc-logo-transparent.webp')
+          s=s.replace('<span className="crmKicker">WDCC AUTOMOTIVE CRM</span><h1>My Day</h1>','<span className="crmKicker">WDCC DEALER COMMAND</span><h1>Dashboard</h1>')
+          p.write_text(s)
+          PY
+      - name: Build simple app home screen
+        shell: bash
+        run: |
+          cat > app/dealer/page.tsx <<'EOF'
+          "use client";
+          import Link from "next/link";
+          import {useEffect,useMemo,useState} from "react";
+          const when=(v:any)=>{if(!v)return "";const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})};
+          const sameDay=(v:any)=>{if(!v)return false;const d=new Date(v),n=new Date();return !Number.isNaN(d.getTime())&&d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate()};
+          const text=(v:any)=>String(v||"").toLowerCase();
+          export default function DealerHome(){
+            const[session,setSession]=useState<any>();const[data,setData]=useState<any>();const[message,setMessage]=useState("Loading Dealer Command…");
+            useEffect(()=>{fetch("/api/auth/session",{cache:"no-store"}).then(r=>r.json()).then(async s=>{setSession(s);if(!s.authenticated){location.href="/dealer/login";return;}const r=await fetch("/api/crm/dashboard",{cache:"no-store"});if(r.status===401){location.href="/dealer/login";return;}const j=await r.json();if(!r.ok)throw Error(j.error||"Dealer Command could not be loaded");setData(j);setMessage("")}).catch(e=>setMessage(e?.message||"Dealer Command could not be loaded"))},[]);
+            const summary=data?.summary||{};const leads=data?.leads||[];const latest=leads[0];
+            const appointmentsToday=useMemo(()=>leads.filter((l:any)=>sameDay(l.appointmentAt||l.appointment_at||l.scheduledAt||l.scheduled_at||l.testDriveAt||l.test_drive_at)).length,[leads]);
+            const openTestDrives=useMemo(()=>leads.filter((l:any)=>{const signal=[l.kind,l.source,l.message,l.vehicleInterest].map(text).join(" ");return (signal.includes("test drive")||signal.includes("test-drive")||signal.includes("schedule-test-drive"))&&!['sold','lost'].includes(l.pipelineStage)}).length,[leads]);
+            const newToday=Number(summary.newToday||0),hot=Number(summary.hotLeads||0);const attention=[newToday,appointmentsToday,openTestDrives,hot].filter(n=>n>0).length;
+            if(!session?.authenticated)return <main className="dealerLaunchShell"><div className="dealerLaunchLoading">Checking secure session…</div></main>;
+            return <main className="dealerLaunchShell">
+              <header className="dealerLaunchHeader"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/><div><span>DEALER COMMAND</span><strong>{session?.user?.displayName||session?.user?.username||"Dealer"}</strong></div><Link className="dealerBell" href="/dealer/leads" aria-label="Notifications"><span>●</span><b>{attention}</b></Link></header>
+              <section className="dealerLaunchHero"><span className="dealerLaunchKicker">WHAT DO YOU NEED TO DO?</span><h1>Keep it simple.</h1><p>Post inventory fast or open the full sales dashboard. Anything that needs attention is right below.</p></section>
+              <section className="dealerPrimaryActions"><Link className="dealerPrimaryCard post" href="/dealer/inventory/new"><div className="dealerActionIcon">＋</div><div><small>INVENTORY</small><h2>Post a Car</h2><p>Take photos, add the vehicle details, save a draft or publish it live.</p></div><b>START →</b></Link><Link className="dealerPrimaryCard dashboard" href="/dealer/dashboard"><div className="dealerActionIcon">▦</div><div><small>SALES COMMAND</small><h2>Dashboard</h2><p>Leads, appointments, pipeline, hot buyers, inventory and follow-up.</p></div><b>OPEN →</b></Link></section>
+              <section className="dealerAttention"><div className="dealerAttentionHead"><div><span>NOTIFICATIONS</span><h2>Needs Attention</h2></div><Link href="/dealer/leads">View leads →</Link></div><div className="dealerNoticeGrid"><Link className={`dealerNotice ${newToday?"live":"quiet"}`} href="/dealer/leads"><i>NEW</i><strong>{newToday}</strong><div><b>New leads today</b><span>{newToday?"Fresh customer requests are waiting.":"No new leads yet today."}</span></div></Link><Link className={`dealerNotice ${appointmentsToday?"live":"quiet"}`} href="/dealer/dashboard#appointments"><i>CAL</i><strong>{appointmentsToday}</strong><div><b>Appointments today</b><span>{appointmentsToday?"Protect the appointment and show rate.":"Nothing scheduled for today yet."}</span></div></Link><Link className={`dealerNotice ${openTestDrives?"live":"quiet"}`} href="/dealer/leads"><i>DRIVE</i><strong>{openTestDrives}</strong><div><b>Test drive requests</b><span>{openTestDrives?"Confirm time, vehicle and customer.":"No open test-drive requests."}</span></div></Link><Link className={`dealerNotice ${hot?"hot":"quiet"}`} href="/dealer/leads"><i>HOT</i><strong>{hot}</strong><div><b>Hot buyers</b><span>{hot?"High-intent buyers need a response.":"No high-priority buyers waiting."}</span></div></Link></div></section>
+              {latest&&<section className="dealerLatestLead"><div><span>LATEST LEAD</span><h3>{latest.name||"Unnamed buyer"}</h3><p>{latest.vehicleInterest||latest.kind||"General vehicle inquiry"}</p><small>{when(latest.createdAt)}</small></div><div className="dealerLatestActions">{latest.phone&&<a href={`tel:${latest.phone}`}>Call</a>}{latest.phone&&<a href={`sms:${latest.phone}`}>Text</a>}<Link href="/dealer/leads">Open Lead</Link></div></section>}
+              {message&&<div className="dealerLaunchMessage">{message}</div>}
+              <nav className="dealerQuickNav" aria-label="Dealer quick navigation"><Link href="/dealer">Home</Link><Link href="/dealer/leads">Leads</Link><Link href="/dealer/inventory">Inventory</Link><Link href="/">Website</Link></nav>
+            </main>;
+          }
+          EOF
+      - name: Update supporting dealer screens and login
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in ['app/dealer/leads/page.tsx']:
+              p=Path(name);s=p.read_text().replace('/wdcc-official-logo.webp','/wdcc-logo-transparent.webp');p.write_text(s)
+          p=Path('app/dealer/inventory/new/page.tsx');s=p.read_text().replace('<div className="dealerLogo"><b>WDCC</b><span>DEALER COMMAND</span></div>', '<Link className="dealerLogo dealerLogoImage" href="/dealer"><img src="/wdcc-logo-transparent.webp" alt="We Don\'t Care Cars"/><span>DEALER COMMAND</span></Link>');p.write_text(s)
+          p=Path('app/layout.tsx');s=p.read_text();
+          if 'dealer-home.css' not in s:s=s.replace('import"./crm.css";','import"./crm.css";import"./dealer-home.css";')
+          p.write_text(s)
+          PY
+          cat > app/dealer/login/page.tsx <<'EOF'
+          "use client";
+          import {FormEvent,useState} from "react";import {useRouter} from "next/navigation";
+          export default function DealerLogin(){const router=useRouter();const[username,setUsername]=useState("");const[password,setPassword]=useState("");const[msg,setMsg]=useState("");const[busy,setBusy]=useState(false);async function submit(e:FormEvent){e.preventDefault();setBusy(true);setMsg("Signing in…");try{const r=await fetch("/api/auth/login",{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({email:username.trim(),password})});const j=await r.json().catch(()=>({}));if(!r.ok||!j?.ok)throw new Error(j?.error||"Sign-in failed");document.cookie="wdcc_login_context=dealer; Path=/; SameSite=Lax; Secure";sessionStorage.setItem("wdcc_login_context","dealer");router.replace("/dealer")}catch(x:any){setMsg(x?.message||"Sign-in failed");setBusy(false)}}return <main className="dealerLoginShell"><form className="dealerLoginCard" onSubmit={submit}><img className="dealerLoginLogo" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/><span className="dealerLoginKicker">PRIVATE DEALER ACCESS</span><h1>Dealer Command</h1><p>Post cars, work leads and manage today without digging through menus.</p><label>Username</label><input autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required/><label>Password</label><input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button disabled={busy}>{busy?"SIGNING IN…":"SIGN IN"}</button><div className="dealerLoginMessage">{msg}</div><div className="dealerLoginNote">Internal dealer system. Customer and dealer information is private.</div></form></main>}
+          EOF
+          mkdir -p app/app
+          cat > app/app/page.tsx <<'EOF'
+          import {redirect} from "next/navigation";
+          export default function DealerAppEntry(){redirect("https://dealer.wedontcarecars.com/dealer")}
+          EOF
+      - name: Add mobile-first visual system
+        shell: bash
+        run: |
+          cat > app/dealer-home.css <<'EOF'
+          .dealerLaunchShell{min-height:100svh;background:radial-gradient(circle at 50% -12%,#19334d 0,transparent 34%),radial-gradient(circle at 50% 112%,#3b1016 0,transparent 30%),#03070b;color:#f7f9fb;padding:0 18px 96px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.dealerLaunchHeader{max-width:980px;margin:auto;height:106px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #243745}.dealerLaunchHeader>img{width:94px;height:94px;object-fit:contain;filter:drop-shadow(0 10px 26px #000a)}.dealerLaunchHeader>div{display:grid;gap:1px}.dealerLaunchHeader>div span{font-size:8px;letter-spacing:.22em;color:#94a6b4;font-weight:900}.dealerLaunchHeader>div strong{font-size:14px}.dealerBell{margin-left:auto;width:48px;height:48px;border-radius:16px;border:1px solid #324b5e;background:#0b1721;color:#fff;text-decoration:none;display:grid;place-items:center;position:relative}.dealerBell>span{font-size:20px;color:#dce8f2}.dealerBell>b{position:absolute;right:-4px;top:-5px;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#ef202f;color:#fff;display:grid;place-items:center;font-size:10px}.dealerLaunchHero{max-width:980px;margin:32px auto 18px}.dealerLaunchKicker{font-size:9px;letter-spacing:.18em;color:#78b7f4;font-weight:900}.dealerLaunchHero h1{margin:5px 0 5px;font-size:clamp(38px,8vw,64px);line-height:.95;letter-spacing:-.05em}.dealerLaunchHero p{margin:0;color:#91a2af;max-width:660px;line-height:1.55;font-size:13px}.dealerPrimaryActions{max-width:980px;margin:20px auto 18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dealerPrimaryCard{min-height:250px;padding:24px;border-radius:24px;text-decoration:none;color:#fff;display:grid;grid-template-columns:auto 1fr;grid-template-rows:1fr auto;gap:14px;border:1px solid #2d4354;box-shadow:0 25px 70px #0005;position:relative;overflow:hidden}.dealerPrimaryCard.post{background:linear-gradient(145deg,#351016,#13090c);border-color:#61242b}.dealerPrimaryCard.dashboard{background:linear-gradient(145deg,#0c2943,#07131e);border-color:#284d6a}.dealerActionIcon{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:#ffffff12;border:1px solid #ffffff1c;font-size:31px}.dealerPrimaryCard small{font-size:8px;letter-spacing:.16em;font-weight:900;color:#a8b6c1}.dealerPrimaryCard h2{font-size:30px;margin:4px 0 4px;letter-spacing:-.04em}.dealerPrimaryCard p{margin:0;color:#9eacb6;font-size:11px;line-height:1.55}.dealerPrimaryCard>b{grid-column:1/-1;justify-self:end;font-size:10px}.dealerAttention{max-width:980px;margin:14px auto}.dealerAttentionHead{display:flex;justify-content:space-between;align-items:end;margin:25px 0 10px}.dealerAttentionHead span{font-size:8px;letter-spacing:.16em;color:#ff646d;font-weight:900}.dealerAttentionHead h2{margin:3px 0 0;font-size:22px}.dealerAttentionHead>a{color:#80bfff;text-decoration:none;font-size:9px;font-weight:900;text-transform:uppercase}.dealerNoticeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.dealerNotice{min-height:92px;padding:12px 14px;border-radius:15px;background:#09141d;border:1px solid #213746;color:#fff;text-decoration:none;display:grid;grid-template-columns:44px 42px 1fr;align-items:center;gap:10px}.dealerNotice i{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:#0e2231;color:#79baff;font-style:normal;font-size:7px;font-weight:950}.dealerNotice>strong{font-size:28px;text-align:center}.dealerNotice div b,.dealerNotice div span{display:block}.dealerNotice div b{font-size:11px}.dealerNotice div span{font-size:9px;color:#8294a2;margin-top:3px;line-height:1.35}.dealerNotice.hot{border-color:#6c2b31}.dealerNotice.quiet{opacity:.74}.dealerLatestLead{max-width:980px;margin:14px auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px;border-radius:17px;background:linear-gradient(145deg,#0d1822,#071019);border:1px solid #273d4e}.dealerLatestLead span{font-size:8px;letter-spacing:.16em;color:#70b4f7;font-weight:900}.dealerLatestLead h3{margin:3px 0;font-size:18px}.dealerLatestLead p,.dealerLatestLead small{margin:0;color:#8798a5;font-size:10px}.dealerLatestActions{display:flex;flex-wrap:wrap;gap:6px}.dealerLatestActions a{min-height:38px;padding:0 12px;border-radius:9px;border:1px solid #355167;color:#e1e9ef;text-decoration:none;text-transform:uppercase;font-size:8px;font-weight:900;display:flex;align-items:center}.dealerLatestActions a:first-child{background:#ef202f;border-color:#ef202f;color:#fff}.dealerLaunchMessage,.dealerLaunchLoading{max-width:980px;margin:15px auto;padding:12px;border-radius:12px;background:#2d1116;border:1px solid #6c2b31;color:#ffb7bb;font-size:11px}.dealerQuickNav{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));height:64px;background:#07111af5;border:1px solid #2c4050;border-radius:20px;box-shadow:0 20px 55px #000b;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px;z-index:120}.dealerQuickNav a{display:grid;place-items:center;border-radius:14px;color:#9cabb7;text-decoration:none;font-size:9px;font-weight:900}.dealerQuickNav a:first-child{background:#122332;color:#fff}.dealerLoginShell{min-height:100svh;display:grid;place-items:center;padding:18px;background:#02060a;color:#fff}.dealerLoginCard{width:min(460px,100%);padding:22px;border-radius:22px;background:linear-gradient(160deg,#0e1923,#071019);border:1px solid #2b4050}.dealerLoginLogo{display:block;width:190px;height:190px;object-fit:contain;margin:-20px auto -4px}.dealerLoginKicker{font-size:8px;letter-spacing:.18em;color:#ef5b64;font-weight:900}.dealerLoginCard h1{font-size:32px;margin:4px 0}.dealerLoginCard>p{color:#90a1ae;font-size:11px;line-height:1.5}.dealerLoginCard label{display:block;margin:12px 0 6px;font-size:9px;text-transform:uppercase;font-weight:900}.dealerLoginCard input{width:100%;height:50px;border-radius:10px;padding:0 12px;font-size:16px}.dealerLoginCard button{width:100%;height:52px;margin-top:18px;border:0;border-radius:11px;background:#ef202f;color:#fff;font-weight:950}.dealerLogoImage{display:grid!important;justify-items:center!important;text-decoration:none!important}.dealerLogoImage img{width:150px!important;height:150px!important;object-fit:contain!important}@media(max-width:700px){.dealerLaunchShell{padding-inline:13px}.dealerLaunchHeader{height:92px}.dealerLaunchHeader>img{width:82px;height:82px}.dealerLaunchHero h1{font-size:42px}.dealerPrimaryActions{grid-template-columns:1fr}.dealerPrimaryCard{min-height:190px;padding:19px}.dealerNoticeGrid{grid-template-columns:1fr}.dealerLatestLead{display:grid}.dealerLatestActions a{flex:1;justify-content:center}.dealerLogoImage img{width:110px!important;height:110px!important}}
+          EOF
+      - name: Validate app build
+        run: npm ci && npm run build
+      - name: Commit validated app update to production branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Dealer App Update'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add app public/wdcc-logo-transparent.webp
+          git commit -m 'Upgrade WDCC dealer app home, notifications, and approved logo'
+          git pull --rebase origin main
+          git push origin HEAD:main
