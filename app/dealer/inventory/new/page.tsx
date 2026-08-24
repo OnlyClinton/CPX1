@@ -47,6 +47,7 @@ export default function NewVehicle(){
 
     try{
       const form=new FormData(event.currentTarget);
+      const internalOnly=form.get("internalOnly")==="on";
       const body={
         year:Number(form.get("year")),
         make:String(form.get("make")),
@@ -56,7 +57,9 @@ export default function NewVehicle(){
         downPayment:Number(form.get("downPayment")||0),
         mileage:Number(form.get("mileage")||0),
         stock:String(form.get("stock")||""),
-        description:String(form.get("description")||"")
+        description:String(form.get("description")||""),
+        visibility:internalOnly?"internal":"public",
+        internalOnly
       };
 
       const created=await fetch("/api/inventory",{
@@ -81,7 +84,6 @@ export default function NewVehicle(){
         });
         paths.push(blob.pathname);
 
-        // Checkpoint each successful photo so an interrupted upload remains recoverable.
         const checkpoint=await fetch(`/api/inventory/${draftId}`,{
           method:"PATCH",
           headers:{"Content-Type":"application/json"},
@@ -94,7 +96,7 @@ export default function NewVehicle(){
       }
 
       if(intent==="published"){
-        setMessage("Photos saved. Publishing the listing…");
+        setMessage(internalOnly?"Photos saved. Publishing internally…":"Photos saved. Publishing the listing…");
         const published=await fetch(`/api/inventory/${draftId}`,{
           method:"PATCH",
           headers:{"Content-Type":"application/json"},
@@ -104,7 +106,7 @@ export default function NewVehicle(){
         if(!published.ok)throw new Error(publishedJson.error||"Publish failed");
       }
 
-      router.push(`/dealer?saved=${intent}`);
+      router.push(`/dealer?saved=${intent}&visibility=${internalOnly?"internal":"public"}`);
       router.refresh();
     }catch(error){
       const reason=error instanceof Error?error.message:"Vehicle upload failed";
@@ -134,7 +136,7 @@ export default function NewVehicle(){
           <div className="wizardHeader">
             <div className="eyebrow">NEW INVENTORY</div>
             <h1>Add a Vehicle</h1>
-            <p className="muted">A draft is saved first. The listing cannot go live until its photos and required details are safely stored.</p>
+            <p className="muted">A recoverable draft is saved first. Mark a vehicle Internal Only when it must never appear on the customer website.</p>
             <div className="wizardSteps" aria-label="Listing steps">
               <div className="wizardStep done"><b>1</b>Info</div>
               <div className="wizardStep done"><b>2</b>Pricing</div>
@@ -146,7 +148,7 @@ export default function NewVehicle(){
 
           <div className="vehicleFormPanel">
             <h2>Vehicle Information</h2>
-            <p className="help">Enter the actual details customers should see.</p>
+            <p className="help">Enter the actual details customers should see unless the vehicle is marked Internal Only.</p>
             <div className="vehicleFormGrid">
               <div className="vehicleField"><label>Year</label><input name="year" type="number" min="1901" max={new Date().getFullYear()+1} placeholder="2020" required/></div>
               <div className="vehicleField"><label>Make</label><input name="make" maxLength={80} placeholder="Dodge" required/></div>
@@ -157,6 +159,7 @@ export default function NewVehicle(){
               <div className="vehicleField"><label>Mileage</label><input name="mileage" type="number" min="0" max="2000000" placeholder="62500"/></div>
               <div className="vehicleField"><label>Stock #</label><input name="stock" maxLength={80} placeholder="WDCC-1024"/></div>
               <div className="vehicleField wide"><label>Description</label><textarea name="description" maxLength={3000} placeholder="Condition, equipment, key features and anything the customer should know."/></div>
+              <label className="consent wide"><input name="internalOnly" type="checkbox"/> <strong>INTERNAL USE ONLY</strong> — keep this vehicle inside Dealer Command and never show it on the public customer site.</label>
 
               <div className="vehicleField wide">
                 <label>Vehicle Photos</label>
