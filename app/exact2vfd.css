@@ -1,0 +1,30 @@
+@import url("https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/_next/static/chunks/0_a.-rzdmu95t.css");
+
+/* 8AR is the intro authority. These rules intentionally load after the immutable 2vfD sheet. */
+.wdcc-app .intro-sequence{position:fixed!important;inset:0!important;z-index:9999!important;overflow:hidden!important;background:#020305!important;pointer-events:auto!important;opacity:1!important;visibility:visible!important}
+.wdcc-app .intro-sequence .intro-scene{display:block!important;position:absolute!important;inset:-3%!important;height:auto!important;background-image:linear-gradient(90deg,#020509e9 0,#0205099e 33%,#02050928 67%,#0205090a 82%),var(--hero-image)!important;background-position:68% center!important;background-size:cover!important;background-repeat:no-repeat!important;filter:saturate(1.08) contrast(1.08) brightness(.83)!important;opacity:1!important;transform:scale(1.09);animation:wdcc8arScene 2.65s cubic-bezier(.16,1,.3,1) forwards!important}
+.wdcc-app .intro-sequence .intro-smoke{display:block!important;position:absolute!important;z-index:2!important;border-radius:50%!important;filter:blur(36px)!important;mix-blend-mode:screen!important;pointer-events:none!important}
+.wdcc-app .intro-sequence .smoke-one{left:8%!important;right:auto!important;bottom:2%!important;width:58%!important;height:38%!important;background:radial-gradient(circle,#ffffff36,transparent 66%)!important;animation:wdcc8arSmokeOne 2.45s .14s ease-out both!important}
+.wdcc-app .intro-sequence .smoke-two{left:auto!important;right:0!important;bottom:4%!important;width:48%!important;height:36%!important;background:radial-gradient(circle,#168af447,transparent 66%)!important;animation:wdcc8arSmokeTwo 2.6s .28s ease-out both!important}
+.wdcc-app .intro-sequence .intro-badge{display:block!important;position:absolute!important;z-index:5!important;left:50%!important;top:49%!important;width:min(28vw,300px)!important;height:min(28vw,300px)!important;opacity:0!important;filter:none!important;transform:translate(-50%,-50%) scale(.78);transition:none!important;animation:wdcc8arBadge .72s .12s cubic-bezier(.16,1,.3,1) forwards!important;will-change:transform,opacity!important}
+.wdcc-app .intro-sequence .intro-badge .brand-logo{display:grid!important;width:100%!important;min-width:0!important;height:100%!important;filter:none!important}
+.wdcc-app .intro-sequence .intro-badge img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important;filter:drop-shadow(0 14px 32px #000a) drop-shadow(0 0 30px #168af43c)!important}
+.wdcc-app .intro-sequence .intro-tagline{display:block!important;position:absolute!important;z-index:6!important;left:50%!important;right:auto!important;top:69%!important;bottom:auto!important;transform:translateX(-50%);margin:0!important;color:#e8edf2!important;font-size:11px!important;font-weight:900!important;letter-spacing:.13em!important;text-transform:uppercase!important;white-space:nowrap!important;opacity:0;animation:wdcc8arTag .72s .38s ease forwards!important}
+.wdcc-app .intro-sequence .intro-skip{display:block!important;position:absolute!important;right:18px!important;bottom:18px!important;z-index:8!important;opacity:1!important;pointer-events:auto!important;background:#02050999!important;border:1px solid #ffffff42!important;color:#d8e0e7!important;border-radius:999px!important;min-height:38px!important;padding:0 14px!important;font-size:10px!important;font-weight:900!important;text-transform:uppercase!important;backdrop-filter:blur(8px)!important}
+.wdcc-app .intro-dock{background:#020305!important}
+.wdcc-app .intro-dock .intro-badge{opacity:1!important;animation:wdcc8arDock .95s cubic-bezier(.16,1,.3,1) forwards!important}
+.wdcc-app .intro-dock .intro-tagline,.wdcc-app .intro-dock .intro-smoke,.wdcc-app .intro-dock .intro-skip{opacity:0!important;transition:opacity .2s ease!important}
+.intro-state-reveal .home-header-shell .brand-logo,.intro-state-dock .home-header-shell .brand-logo{opacity:0!important}
+.intro-state-reveal .hero-copy{opacity:0!important}
+.intro-state-dock .hero-copy{opacity:0!important}
+.intro-state-done .home-header-shell .brand-logo{opacity:1!important}
+.intro-state-done .hero-copy{animation:wdcc8arCopy .5s both!important}
+@keyframes wdcc8arScene{0%{opacity:0;transform:scale(1.09);filter:saturate(1.05) contrast(1.06) brightness(.68)}35%{opacity:1}55%{transform:scale(1.035);filter:saturate(1.09) contrast(1.09) brightness(.88)}100%{opacity:1;transform:scale(1.005);filter:saturate(1.1) contrast(1.1) brightness(.94)}}
+@keyframes wdcc8arBadge{0%{opacity:0;transform:translate(-50%,-50%) scale(.72)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes wdcc8arDock{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:1;transform:translate3d(calc(-50% + var(--intro-dock-x)),calc(-50% + var(--intro-dock-y)),0) scale(var(--intro-dock-scale))}}
+@keyframes wdcc8arTag{0%{opacity:0;transform:translate(-50%,8px)}100%{opacity:1;transform:translate(-50%,0)}}
+@keyframes wdcc8arSmokeOne{0%{opacity:0;transform:scale(.72) translate3d(0,12%,0)}35%{opacity:.78}100%{opacity:0;transform:scale(1.5) translate3d(8%,-5%,0)}}
+@keyframes wdcc8arSmokeTwo{0%{opacity:0;transform:scale(.68) translate3d(7%,10%,0)}38%{opacity:.72}100%{opacity:0;transform:scale(1.56) translate3d(-5%,-7%,0)}}
+@keyframes wdcc8arCopy{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
+@media(max-width:760px){.wdcc-app .intro-sequence .intro-scene{inset:-1%!important;background-position:73% center!important}.wdcc-app .intro-sequence .intro-badge{width:min(64vw,230px)!important;height:min(64vw,230px)!important}.wdcc-app .intro-sequence .intro-tagline{top:74%!important;font-size:9px!important}.wdcc-app .intro-sequence .intro-skip{bottom:16px!important;right:14px!important}}
+@media(prefers-reduced-motion:reduce){.wdcc-app .intro-sequence{display:none!important}}
