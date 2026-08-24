@@ -1,25 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
+
+const labels:any={new:"New",contacted:"Contacted",engaged:"Engaged",qualified:"Qualified",appointment:"Appointment",showed:"Showed",deal_working:"Deal Working",sold:"Sold",lost:"Lost",nurture:"Nurture"};
+const stages=["new","contacted","engaged","qualified","appointment","showed","deal_working","sold","lost","nurture"];
+const when=(v:any)=>v?new Date(v).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"";
 
 export default function DealerLeads(){
-  const [items,setItems]=useState<any[]>([]);const[message,setMessage]=useState("Loading leads…");
-  useEffect(()=>{fetch("/api/leads",{cache:"no-store"}).then(async response=>{
-    if(response.status===401){location.href="/dealer/login";return;}
-    const json=await response.json();if(!response.ok)throw Error(json.error||"Lead list failed");
-    setItems(json.items||[]);setMessage("");
-  }).catch(error=>setMessage(error.message||"Lead list failed"));},[]);
-  return <main className="dealerShell"><aside className="dealerSidebar">
-    <div className="dealerLogo"><b>WDCC</b><span>DEALER COMMAND</span></div><div className="dealerMenuLabel">OPERATIONS</div>
-    <nav className="dealerMenu"><Link href="/dealer">Dashboard</Link><Link href="/dealer/inventory">All Vehicles</Link><Link href="/dealer/inventory/new">+ Add Vehicle</Link><Link className="active" href="/dealer/leads">Leads</Link><Link href="/">View Website</Link></nav>
-  </aside><section className="dealerMain"><div className="dealerTop"><div><div className="eyebrow">CUSTOMER REQUESTS</div><h1>Lead Inbox</h1></div></div>
-    {message&&<div className="dealerMessage">{message}</div>}
-    <div className="dealerPanel">{items.length?items.map(lead=><div className="leadRow" key={lead.id}>
-      <div><strong>{lead.name}</strong><div className="muted">{lead.email||"No email"} · {lead.phone||"No phone"}</div></div>
-      <span className="dealerStatus published">{lead.kind}</span>
-      <div><b>{lead.vehicleInterest||"General inquiry"}</b><div className="muted">{lead.message||lead.preferredTime||"No note"}</div></div>
-      <time>{lead.createdAt?new Date(lead.createdAt).toLocaleString():""}</time>
-    </div>):!message&&<p>No leads yet.</p>}</div>
+  const[items,setItems]=useState<any[]>([]);const[message,setMessage]=useState("Loading leads…");const[tab,setTab]=useState("active");const[busy,setBusy]=useState("");
+  async function load(){const r=await fetch("/api/crm/dashboard",{cache:"no-store"});if(r.status===401){location.href="/dealer/login";return}const j=await r.json();if(!r.ok)throw Error(j.error||"Lead list failed");setItems(j.leads||[]);setMessage("")}
+  useEffect(()=>{load().catch(e=>setMessage(e.message||"Lead list failed"))},[]);
+  async function update(id:string,status:string){setBusy(id);const r=await fetch(`/api/leads/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});const j=await r.json().catch(()=>({}));if(!r.ok)setMessage(j.error||"Lead update failed");else await load();setBusy("")}
+  const filtered=useMemo(()=>items.filter(x=>tab==="all"?true:tab==="hot"?Number(x.priority||0)>=70&&!['sold','lost'].includes(x.pipelineStage):tab==="appointments"?x.pipelineStage==="appointment":tab==="sold"?x.pipelineStage==="sold":!['sold','lost'].includes(x.pipelineStage)),[items,tab]);
+  return <main className="crmShell"><aside className="crmSidebar"><Link className="crmLogo" href="/dealer"><img src="/wdcc-official-logo.webp" alt="WDCC"/><span>SALES COMMAND</span></Link><nav><Link href="/dealer">Today</Link><Link className="active" href="/dealer/leads">Leads</Link><Link href="/dealer#pipeline">Pipeline</Link><Link href="/dealer#appointments">Appointments</Link><Link href="/dealer/inventory">Inventory</Link><Link href="/dealer/inventory/new">+ Add Vehicle</Link><Link href="/">View Website</Link></nav></aside><section className="crmMain">
+    <div className="leadInboxHeader"><div><span className="crmKicker">CUSTOMER 360 QUEUE</span><h1>Lead Command</h1><p className="muted">Prioritized by intent and recency. Move the buyer through the automotive pipeline without losing the conversation.</p></div><Link className="addVehicleQuick" style={{margin:0,padding:"0 14px"}} href="/dealer">Back to My Day</Link></div>
+    <div className="leadInboxTabs">{[["active","Active"],["hot","Hot"],["appointments","Appointments"],["sold","Sold"],["all","All"]].map(([k,l])=><button key={k} className={tab===k?"active":""} onClick={()=>setTab(k)}>{l} · {k==="all"?items.length:k==="hot"?items.filter(x=>Number(x.priority||0)>=70&&!['sold','lost'].includes(x.pipelineStage)).length:k==="appointments"?items.filter(x=>x.pipelineStage==="appointment").length:k==="sold"?items.filter(x=>x.pipelineStage==="sold").length:items.filter(x=>!['sold','lost'].includes(x.pipelineStage)).length}</button>)}</div>
+    {message&&<div className="crmAlert">{message}</div>}
+    <div className="leadCards">{filtered.map(lead=><article className="leadCardPro" key={lead.id}><div className="leadScore">{Math.round(lead.priority||0)}</div><div><h3>{lead.name||"Unnamed buyer"}</h3><p>{lead.vehicleInterest||"General inquiry"} · {lead.kind||"lead"}</p><div className="leadMeta"><span>{labels[lead.pipelineStage]||lead.pipelineStage}</span>{lead.phone&&<span>{lead.phone}</span>}{lead.email&&<span>{lead.email}</span>}<span>{when(lead.createdAt)}</span></div>{(lead.message||lead.lastNote)&&<p style={{marginTop:8}}>{lead.message||lead.lastNote}</p>}</div><select className="leadStageSelect" value={lead.pipelineStage==="deal"?"deal_working":lead.pipelineStage||"new"} disabled={busy===lead.id} onChange={e=>update(lead.id,e.target.value)}>{stages.map(s=><option value={s} key={s}>{labels[s]}</option>)}</select><div className="leadCardActions">{lead.phone&&<a className="primary" href={`tel:${lead.phone}`}>Call</a>}{lead.phone&&<a href={`sms:${lead.phone}`}>Text</a>}{lead.email&&<a href={`mailto:${lead.email}`}>Email</a>}<button onClick={()=>update(lead.id,"appointment")} disabled={busy===lead.id}>Book / Set</button></div></article>)}{!filtered.length&&!message&&<div className="crmEmpty">No leads in this view.</div>}</div>
   </section></main>;
 }
