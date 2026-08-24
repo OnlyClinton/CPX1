@@ -19,34 +19,16 @@ function leadKind(body:any){
 async function sendNotifications(lead:any){
   const notifications:{email:string;webhook:string}={email:"not_configured",webhook:"not_configured"};
   const resendKey=process.env.RESEND_API_KEY;
-  const recipients=(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||"bigcatscrap@gmail.com")
-    .split(",").map(value=>value.trim()).filter(Boolean);
+  const recipients=(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||"bigcatscrap@gmail.com").split(",").map(value=>value.trim()).filter(Boolean);
   if(resendKey&&recipients.length){
     try{
-      const response=await fetch("https://api.resend.com/emails",{
-        method:"POST",
-        headers:{Authorization:`Bearer ${resendKey}`,"Content-Type":"application/json"},
-        body:JSON.stringify({
-          from:process.env.WDCC_LEAD_FROM_EMAIL||"WDCC Leads <leads@wedontcarecars.com>",
-          to:recipients,
-          subject:`New WDCC ${lead.kind} lead: ${lead.name}`,
-          text:[
-            `Lead type: ${lead.kind}`,`Name: ${lead.name}`,`Phone: ${lead.phone}`,
-            `Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,
-            `Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`
-          ].join("\n")
-        }),
-        signal:AbortSignal.timeout(8000)
-      });
+      const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${resendKey}`,"Content-Type":"application/json"},body:JSON.stringify({from:process.env.WDCC_LEAD_FROM_EMAIL||"WDCC Leads <leads@wedontcarecars.com>",to:recipients,subject:`New WDCC ${lead.kind} lead: ${lead.name}`,text:[`Lead type: ${lead.kind}`,`Name: ${lead.name}`,`Phone: ${lead.phone}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`Created by: ${lead.createdBy||"public"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`].join("\n")}),signal:AbortSignal.timeout(8000)});
       notifications.email=response.ok?"sent":`failed_${response.status}`;
     }catch{notifications.email="failed";}
   }
   if(process.env.WDCC_LEAD_WEBHOOK_URL){
     try{
-      const response=await fetch(process.env.WDCC_LEAD_WEBHOOK_URL,{
-        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"lead.created",lead}),
-        signal:AbortSignal.timeout(8000)
-      });
+      const response=await fetch(process.env.WDCC_LEAD_WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"lead.created",lead}),signal:AbortSignal.timeout(8000)});
       notifications.webhook=response.ok?"sent":`failed_${response.status}`;
     }catch{notifications.webhook="failed";}
   }
@@ -55,23 +37,18 @@ async function sendNotifications(lead:any){
 
 export async function GET(){
   const user=await currentUser();
-  if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
-    return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
-  }
+  if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
   try{
     const state=await readState();
     const tenantId=String(user.tenantId||"wdcc");
-    const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:
-      state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId))
-      .sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+    const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
     return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
-  }catch(error){
-    return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});
-  }
+  }catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}
 }
 
 export async function POST(req:Request){
   try{
+    const actor=await currentUser().catch(()=>null);
     const body=await req.json();
     const kind=leadKind(body);
     const name=text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120);
@@ -88,24 +65,18 @@ export async function POST(req:Request){
 
     const state=await readState();
     const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160);
-    if(idempotencyKey){
-      const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);
-      if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{}},{status:200});
-    }
+    if(idempotencyKey){const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{}},{status:200});}
 
     const now=new Date().toISOString();
-    const lead:any={
-      id:`lead_${crypto.randomUUID()}`,tenantId:"wdcc",kind,name,phone,email,vehicleInterest,message,preferredTime,
-      consent:true,status:"new",source:text(body?.source,80)||"website",idempotencyKey:idempotencyKey||null,
-      requestId:crypto.randomUUID(),createdAt:now,updatedAt:now
-    };
+    const createdBy=actor?.id||"public";
+    const createdByRole=actor?.role||"public";
+    const tenantId=actor?.tenantId||"wdcc";
+    const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,name,phone,email,vehicleInterest,message,preferredTime,consent:true,status:"new",source:text(body?.source,80)||"website",idempotencyKey:idempotencyKey||null,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now};
     state.leads.push(lead);
-    state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:"public",leadId:lead.id,requestId:lead.requestId});
+    state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source});
     const saved=await writeState(state);
     const notifications=await sendNotifications(lead);
     lead.notifications=notifications;
     return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,notifications},{status:201,headers:{"Cache-Control":"no-store"}});
-  }catch(error){
-    return NextResponse.json({ok:false,persisted:false,error:error instanceof Error?error.message:"create_failed"},{status:500});
-  }
+  }catch(error){return NextResponse.json({ok:false,persisted:false,error:error instanceof Error?error.message:"create_failed"},{status:500});}
 }
