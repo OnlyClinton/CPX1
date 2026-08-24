@@ -1,0 +1,6 @@
+status=FAILURE
+source_commit=b600b21ee80443c820e9491754a0302aedf82295
+source_branch=wdcc-release-8ar-working
+production_domain=https://wedontcarecars.com
+failed_at=2026-08-24T10:17:19Z
+note=Release gate stopped before successful completion; production must not be considered validated by this run.
