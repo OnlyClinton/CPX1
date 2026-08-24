@@ -1,38 +1,30 @@
 import {NextResponse} from "next/server";
-import {readState} from "../../../lib/store";
-
+import {backendHealth} from "../../../lib/dealerProxy";
 export const dynamic="force-dynamic";
-
 export async function GET(){
   try{
-    await readState();
-    const blobConfigured=Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-    const authConfigured=Boolean(process.env.SESSION_SECRET&&process.env.SESSION_SECRET.length>=32);
-    const ok=blobConfigured&&authConfigured;
+    const {response,json}=await backendHealth();
+    const ok=response.ok&&json?.ok===true;
     return NextResponse.json({
       ok,
       degraded:!ok,
-      service:"wdcc-unified-platform",
-      release:"WDCC-V50-HARDENED"
+      service:"wdcc-hardened-dealer-facade",
+      release:"WDCC-V51-STATELESS-HARDENED",
+      backend:ok?"healthy":"degraded"
     },{
       status:ok?200:503,
-      headers:{
-        "Cache-Control":"no-store",
-        "X-Robots-Tag":"noindex, nofollow"
-      }
+      headers:{"Cache-Control":"no-store","X-Robots-Tag":"noindex, nofollow"}
     });
   }catch{
     return NextResponse.json({
       ok:false,
       degraded:true,
-      service:"wdcc-unified-platform",
-      release:"WDCC-V50-HARDENED"
+      service:"wdcc-hardened-dealer-facade",
+      release:"WDCC-V51-STATELESS-HARDENED",
+      backend:"unreachable"
     },{
-      status:500,
-      headers:{
-        "Cache-Control":"no-store",
-        "X-Robots-Tag":"noindex, nofollow"
-      }
+      status:503,
+      headers:{"Cache-Control":"no-store","X-Robots-Tag":"noindex, nofollow"}
     });
   }
 }
