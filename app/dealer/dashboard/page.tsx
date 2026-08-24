@@ -1,1 +1,1 @@
-export {default} from "../crm/page";
+export {default} from "../page";
