@@ -15,14 +15,27 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       SOURCE_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
-      STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
       PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      HARDENED_ARTIFACT: wdcc-cpx-launch-g0t1np08g-cpxagency.vercel.app
+      SAFE_FALLBACK: wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+      DEALER_DOMAIN: dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
+
       - name: Require Vercel token
         run: test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN missing" >&2; exit 78; }
+
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@59.3.0
+
+      - name: Verify known-good rollback target
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/fallback-health.json -w '%{http_code}' "https://$SAFE_FALLBACK/api/health")"
+          test "$code" = "200"
+          jq -e '.ok == true' /tmp/fallback-health.json >/dev/null
+
       - name: Pull healthy dealer production environment
         shell: bash
         run: |
@@ -32,37 +45,75 @@ jobs:
           cd /tmp/dealer
           vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
           grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env || { echo 'healthy dealer project has no BLOB_READ_WRITE_TOKEN' >&2; exit 1; }
-      - name: Sync storage and auth bindings to storefront and Phoenix
+          grep -q '^SESSION_SECRET=' /tmp/dealer.env || { echo 'healthy dealer project has no SESSION_SECRET' >&2; exit 1; }
+
+      - name: Sync storage and auth bindings to hardened Phoenix project
         shell: bash
         run: |
           set -euo pipefail
           set -a
           . /tmp/dealer.env
           set +a
-          test -n "${BLOB_READ_WRITE_TOKEN:-}" || { echo 'BLOB_READ_WRITE_TOKEN empty' >&2; exit 1; }
-          for spec in "storefront:$STOREFRONT_PROJECT" "phoenix:$PHOENIX_PROJECT"; do
-            name="${spec%%:*}"; project="${spec#*:}"
-            dir="/tmp/$name"; mkdir -p "$dir/.vercel"
-            printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$project" > "$dir/.vercel/project.json"
-            cd "$dir"
-            printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env update BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
-              vercel env rm BLOB_READ_WRITE_TOKEN production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
-              printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env add BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
-            }
-            if [ -n "${SESSION_SECRET:-}" ]; then
-              printf '%s' "$SESSION_SECRET" | vercel env update SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
-                vercel env rm SESSION_SECRET production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
-                printf '%s' "$SESSION_SECRET" | vercel env add SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
-              }
-            fi
+          test -n "${BLOB_READ_WRITE_TOKEN:-}"
+          test -n "${SESSION_SECRET:-}"
+          mkdir -p /tmp/phoenix/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > /tmp/phoenix/.vercel/project.json
+          cd /tmp/phoenix
+          printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env update BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+            vercel env rm BLOB_READ_WRITE_TOKEN production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+            printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env add BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          }
+          printf '%s' "$SESSION_SECRET" | vercel env update SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+            vercel env rm SESSION_SECRET production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+            printf '%s' "$SESSION_SECRET" | vercel env add SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          }
+
+      - name: Redeploy hardened artifact with repaired bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          npx --yes vercel@59.3.0 redeploy "$HARDENED_ARTIFACT" --target production --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/redeploy.log
+          NEW_URL="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' /tmp/redeploy.log | tail -1)"
+          test -n "$NEW_URL" || { echo 'Could not determine redeployed URL' >&2; exit 1; }
+          echo "NEW_URL=$NEW_URL" >> "$GITHUB_ENV"
+          echo "Redeployed hardened URL: $NEW_URL"
+
+      - name: Verify hardened deployment before cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 20); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$NEW_URL/api/health" || true)"
+            if [ "$code" = "200" ] && jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1; then ok=1; break; fi
+            sleep 3
           done
-      - name: Redeploy current storefront artifact with repaired environment
+          test "$ok" = "1" || { cat /tmp/health.json || true; exit 1; }
+          curl -sSI "$NEW_URL/dealer/login" > /tmp/headers.txt
+          grep -qi '^content-security-policy:' /tmp/headers.txt
+          grep -qi '^access-control-allow-origin: https://dealer\.wedontcarecars\.com' /tmp/headers.txt
+          grep -qi '^strict-transport-security: max-age=63072000; includeSubDomains; preload' /tmp/headers.txt
+          grep -qi '^x-frame-options: DENY' /tmp/headers.txt
+
+      - name: Cut over dealer alias with automatic rollback
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 redeploy wdcc-v32-storefront-p71u8k9zz-cpxagency.vercel.app --target production --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Redeploy current Phoenix artifact with repaired environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes vercel@59.3.0 redeploy wdcc-cpx-launch-8vephfzb4-cpxagency.vercel.app --target production --token="$VERCEL_TOKEN" --scope=cpxagency
+          rollback(){
+            echo 'Cutover verification failed; restoring known-good alias' >&2
+            npx --yes vercel@59.3.0 alias set "$SAFE_FALLBACK" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+          }
+          trap rollback ERR
+          host="${NEW_URL#https://}"
+          npx --yes vercel@59.3.0 alias set "$host" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+          sleep 5
+          code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/health")"
+          test "$code" = "200"
+          jq -e '.ok == true' /tmp/live-health.json >/dev/null
+          curl -sSI "https://$DEALER_DOMAIN/dealer/login" > /tmp/live-headers.txt
+          grep -qi '^content-security-policy:' /tmp/live-headers.txt
+          grep -qi '^access-control-allow-origin: https://dealer\.wedontcarecars\.com' /tmp/live-headers.txt
+          grep -qi '^x-frame-options: DENY' /tmp/live-headers.txt
+          trap - ERR
+          echo "WDCC_HARDENED_CUTOVER=PASS"
