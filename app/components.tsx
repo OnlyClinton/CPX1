@@ -6,20 +6,18 @@ import TrackedCallLink from"./TrackedCallLink";
 export function Intro(){
   const[done,setDone]=useState(false);
   useEffect(()=>{
-    if(sessionStorage.getItem("wdcc_intro_seen")||window.matchMedia("(prefers-reduced-motion: reduce)").matches){setDone(true);return}
-    sessionStorage.setItem("wdcc_intro_seen","1");
-    const t=setTimeout(()=>setDone(true),2600);
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setDone(true);return}
+    const t=setTimeout(()=>setDone(true),3050);
     return()=>clearTimeout(t);
   },[]);
   if(done)return null;
-  return <div className="cinematic cinematic-enter" aria-label="WDCC opening animation">
-    <div className="cinScene" aria-hidden="true"/>
-    <div className="cinVignette" aria-hidden="true"/>
-    <div className="cinSmoke one" aria-hidden="true"/>
-    <div className="cinSmoke two" aria-hidden="true"/>
-    <img className="cinLogo" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/>
-    <p className="cinTagline">Tampa Bay · Drive today</p>
-    <button className="skipIntro" type="button" onClick={()=>setDone(true)}>Skip intro</button>
+  return <div className="intro-sequence intro-reveal" aria-label="WDCC opening animation">
+    <div className="intro-scene" style={{backgroundImage:"url('/wdcc-hero-v2.webp')"}} aria-hidden="true"/>
+    <div className="intro-smoke smoke-one" aria-hidden="true"/>
+    <div className="intro-smoke smoke-two" aria-hidden="true"/>
+    <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
+    <p className="intro-tagline">Tampa Bay · Drive today</p>
+    <button className="intro-skip" type="button" onClick={()=>setDone(true)}>Skip intro</button>
   </div>
 }
 
