@@ -40,7 +40,15 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
         utmMedium:attribution.medium||undefined,
         utmCampaign:attribution.campaign||undefined,
         utmContent:attribution.content||undefined,
+        utmTerm:attribution.term||undefined,
         clickId:attribution.clickId||undefined,
+        firstSource:attribution.firstSource||undefined,
+        firstMedium:attribution.firstMedium||undefined,
+        firstCampaign:attribution.firstCampaign||undefined,
+        firstContent:attribution.firstContent||undefined,
+        firstTerm:attribution.firstTerm||undefined,
+        firstClickId:attribution.firstClickId||undefined,
+        firstReferralCode:attribution.firstReferralCode||undefined,
         idempotencyKey
       };
       trackEvent(`lead.${kind}.submit`,{cta:payload.cta,vehicleId:vehicle||undefined,metadata:{idempotencyKey}});
