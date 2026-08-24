@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {readState} from "../../../../lib/store";
 import {verifyPassword,setSession} from "../../../../lib/auth";
+import {isTrustedWriteRequest,securityError} from "../../../../lib/request-security";
 export const dynamic="force-dynamic";
 
 const norm=(v:unknown)=>String(v??"").trim().toLowerCase();
@@ -14,12 +15,13 @@ function identities(u:any){
 }
 
 export async function POST(req:Request){
+  if(!isTrustedWriteRequest(req))return securityError();
   try{
     const body=await req.json().catch(()=>({}));
     const supplied=norm(body?.email??body?.username??body?.login);
     const password=String(body?.password??"");
     if(!supplied||!password){
-      return NextResponse.json({ok:false,error:"credentials_required"},{status:400});
+      return NextResponse.json({ok:false,error:"credentials_required"},{status:400,headers:{"Cache-Control":"private, no-store"}});
     }
 
     const state=await readState();
@@ -46,7 +48,7 @@ export async function POST(req:Request){
       (user as any)?.passwordDigest;
 
     if(!user||!verifyPassword(password,hash)){
-      return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401});
+      return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"private, no-store"}});
     }
 
     await setSession(user as any);
@@ -67,7 +69,6 @@ export async function POST(req:Request){
     },{headers:{"Cache-Control":"private, no-store"}});
   }catch(error){
     console.error("WDCC_LOGIN_ERROR",error);
-    return NextResponse.json({ok:false,error:"login_failed"},{status:500});
+    return NextResponse.json({ok:false,error:"login_failed"},{status:500,headers:{"Cache-Control":"private, no-store"}});
   }
 }
-
