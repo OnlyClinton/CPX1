@@ -1,0 +1,40 @@
+name: Fix WDCC Dealer Domain Alias
+
+on:
+  push:
+    branches:
+      - fix-dealer-domain-alias
+
+jobs:
+  alias:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TARGET_DEPLOYMENT: wdcc-v32-storefront-f072rkhfx-cpxagency.vercel.app
+      DEALER_DOMAIN: dealer.wedontcarecars.com
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require Vercel token
+        shell: bash
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN GitHub secret is missing" >&2
+            exit 78
+          fi
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Point dealer domain at current WDCC build
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "https://${TARGET_DEPLOYMENT}" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Verify dealer dashboard route
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "https://${DEALER_DOMAIN}/dealer")"
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -qi "Checking secure session\|SALES COMMAND" /tmp/dealer.html
