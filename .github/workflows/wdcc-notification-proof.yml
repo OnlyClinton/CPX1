@@ -1,0 +1,28 @@
+name: WDCC Notification Transport Proof
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-notification-proof.yml'
+  workflow_dispatch:
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: POST a disposable lead to existing notification stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          URL="https://wdcc-lead-email-stage.vercel.app/api/lead"
+          payload="$(jq -nc --arg run "$RUN" '{name:("WDCC NOTIFICATION QA " + $run),phone:"813-555-0199",email:"wdcc-notification-qa@invalid.example",vehicle:"Notification transport proof",message:"Automated WDCC notification transport proof",requestType:"contact",consent:true,source:"notification-proof",idempotencyKey:("wdcc-notification-proof-"+$run)}')"
+          code="$(curl -sS -L -o /tmp/result.json -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$URL" --data "$payload")"
+          echo "HTTP=$code"
+          cat /tmp/result.json || true
+          echo
+          case "$code" in 200|201) ;; *) exit 1;; esac
+          jq -e '.ok == true' /tmp/result.json >/dev/null
+          echo "WDCC_NOTIFICATION_STAGE=PASS"
