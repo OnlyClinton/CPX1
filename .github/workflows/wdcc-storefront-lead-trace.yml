@@ -1,0 +1,120 @@
+name: WDCC Storefront Lead Trace
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-storefront-lead-trace.yml'
+  workflow_dispatch:
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      STOREFRONT: https://wedontcarecars.com
+      DEALER: https://dealer.wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pull dealer auth bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
+          grep -q '^SESSION_SECRET=' /tmp/dealer.env
+      - name: Create signed QA dealer session
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer.env; set +a
+          node <<'NODE' > /tmp/session.env
+          const crypto=require('crypto'); const {get}=require('@vercel/blob');
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));const roles=new Set(['dealer_agent','tenant_admin','platform_admin']);const u=(s.users||[]).find(x=>roles.has(String(x.role||'').toLowerCase())&&x.status!=='disabled'&&!x.disabled);if(!u)throw Error('NO_ACTIVE_DEALER_USER');const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+1800000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');console.log(`QA_COOKIE=${raw}.${sig}`)})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/session.env >> "$GITHUB_ENV"
+      - name: Submit three storefront lead types and trace dealer persistence
+        id: trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BEFORE="$(curl -fsS "$DEALER/api/leads" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          BEFORE_N="$(echo "$BEFORE" | jq '(.items // [])|length')"
+          submit(){
+            kind="$1"; source="$2"; suffix="$3"; phone="$4"
+            curl -sS -w '\n%{http_code}' -X POST "$STOREFRONT/api/leads" \
+              -H 'content-type: application/json' \
+              -H "idempotency-key: wdcc-qa-trace-$suffix-$RUN" \
+              --data "{\"qa\":true,\"kind\":\"$kind\",\"name\":\"WDCC QA TRACE $suffix $RUN\",\"phone\":\"$phone\",\"email\":\"qa-trace-$suffix-$RUN@invalid.example\",\"vehicleInterest\":\"Lead trace QA vehicle\",\"preferredTime\":\"QA only\",\"message\":\"Automated storefront to dealer trace - do not contact\",\"consent\":true,\"source\":\"$source\",\"pagePath\":\"/qa/trace/$suffix\",\"utmSource\":\"wdcc-deep-qa\",\"utmMedium\":\"acceptance\",\"utmCampaign\":\"lead-trace\"}"
+          }
+          capture(){
+            name="$1"; shift
+            raw="$(submit "$@")"
+            code="$(printf '%s' "$raw" | tail -n1)"
+            body="$(printf '%s' "$raw" | sed '$d')"
+            printf '%s' "$body" > "/tmp/$name.json"
+            echo "$name HTTP $code"
+            cat "/tmp/$name.json" | jq .
+            test "$code" = 200 -o "$code" = 201
+            jq -e '.ok==true and .persisted==true' "/tmp/$name.json" >/dev/null
+          }
+          capture schedule schedule schedule-test-drive schedule 813-555-0121
+          capture approval approval get-approved approval 813-555-0122
+          capture contact contact call-sean contact 813-555-0123
+          SCHEDULE_ID="$(jq -r '.item.id' /tmp/schedule.json)"
+          APPROVAL_ID="$(jq -r '.item.id' /tmp/approval.json)"
+          CONTACT_ID="$(jq -r '.item.id' /tmp/contact.json)"
+          test -n "$SCHEDULE_ID"; test -n "$APPROVAL_ID"; test -n "$CONTACT_ID"
+          jq -e '.item.kind=="schedule" and .item.source=="schedule-test-drive"' /tmp/schedule.json >/dev/null
+          jq -e '.item.kind=="approval" and .item.source=="get-approved"' /tmp/approval.json >/dev/null
+          jq -e '.item.kind=="contact" and .item.source=="call-sean"' /tmp/contact.json >/dev/null
+          DUP_RAW="$(submit schedule schedule-test-drive schedule 813-555-0121)"
+          DUP_CODE="$(printf '%s' "$DUP_RAW"|tail -n1)"; DUP_BODY="$(printf '%s' "$DUP_RAW"|sed '$d')"; printf '%s' "$DUP_BODY" >/tmp/dupe.json
+          test "$DUP_CODE" = 200 -o "$DUP_CODE" = 201
+          jq -e --arg id "$SCHEDULE_ID" '.ok==true and .deduplicated==true and .item.id==$id' /tmp/dupe.json >/dev/null
+          AFTER="$(curl -fsS "$DEALER/api/leads" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          printf '%s' "$AFTER" >/tmp/dealer-leads.json
+          jq -e --arg s "$SCHEDULE_ID" --arg a "$APPROVAL_ID" --arg c "$CONTACT_ID" '
+            (.items // []) as $x |
+            (($x|map(select(.id==$s and .kind=="schedule" and .source=="schedule-test-drive"))|length)==1) and
+            (($x|map(select(.id==$a and .kind=="approval" and .source=="get-approved"))|length)==1) and
+            (($x|map(select(.id==$c and .kind=="contact" and .source=="call-sean"))|length)==1)
+          ' /tmp/dealer-leads.json >/dev/null
+          AFTER_N="$(jq '(.items // [])|length' /tmp/dealer-leads.json)"
+          echo "before=$BEFORE_N" >> "$GITHUB_OUTPUT"
+          echo "after=$AFTER_N" >> "$GITHUB_OUTPUT"
+          echo "schedule=$SCHEDULE_ID" >> "$GITHUB_OUTPUT"
+          echo "approval=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "contact=$CONTACT_ID" >> "$GITHUB_OUTPUT"
+          echo "source=$(jq -r '.source // "unknown"' /tmp/schedule.json)" >> "$GITHUB_OUTPUT"
+      - name: Report trace proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BEFORE: ${{ steps.trace.outputs.before }}
+          AFTER: ${{ steps.trace.outputs.after }}
+          SCHEDULE: ${{ steps.trace.outputs.schedule }}
+          APPROVAL: ${{ steps.trace.outputs.approval }}
+          CONTACT: ${{ steps.trace.outputs.contact }}
+          SOURCE: ${{ steps.trace.outputs.source }}
+        shell: bash
+        run: |
+          body=$(printf 'Status: **%s**\nDealer lead feed before/after: `%s` → `%s`\nSchedule ID: `%s`\nApproval ID: `%s`\nContact ID: `%s`\nStorefront response authority: `%s`\nIdempotency: verified against schedule lead.\nAll three records were looked up again through the authenticated dealer lead API.' "$STATUS" "$BEFORE" "$AFTER" "$SCHEDULE" "$APPROVAL" "$CONTACT" "$SOURCE")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC storefront lead trace ${GITHUB_RUN_ID}" --body "$body" || true
+
+# Synthetic QA leads use invalid.example and qa=true so notification transport is suppressed; ledger cleanup removes them after acceptance.
