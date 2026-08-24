@@ -1,0 +1,2 @@
+Deployment trigger only. No application code change.
+Target source: current main including hero contrast correction d5ee2d9ff57c8b6bb64871f3c5162b6bceb46721.
