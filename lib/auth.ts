@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import {cookies} from "next/headers";
 import {readState,type User} from "./store";
 
-const COOKIE="wdcc_session";
+const COOKIE="__Host-wdcc_session";
 
 function secret(){
   const value=process.env.SESSION_SECRET||"";
@@ -26,7 +26,7 @@ function token(user:User){
   const raw=Buffer.from(JSON.stringify({
     id:user.id,
     role:user.role,
-    exp:Date.now()+8*60*60*1000
+    exp:Date.now()+4*60*60*1000
   })).toString("base64url");
   return `${raw}.${sign(raw)}`;
 }
@@ -54,9 +54,9 @@ export async function setSession(user:User){
   jar.set(COOKIE,token(user),{
     httpOnly:true,
     secure:true,
-    sameSite:"lax",
+    sameSite:"strict",
     path:"/",
-    maxAge:8*60*60
+    maxAge:4*60*60
   });
 }
 export async function clearSession(){
