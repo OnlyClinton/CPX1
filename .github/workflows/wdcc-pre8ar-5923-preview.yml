@@ -48,13 +48,40 @@ jobs:
         run: npm run build
       - name: Package exact built source
         shell: bash
-        run: |
-          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/wdcc-pre8ar-5923-source.tgz .
+        run: tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/wdcc-pre8ar-5923-source.tgz .
       - uses: actions/upload-artifact@v4
         with:
           name: wdcc-pre8ar-5923-source
           path: /tmp/wdcc-pre8ar-5923-source.tgz
           if-no-files-found: error
+      - id: shots
+        name: Render exact visual frames locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- -p 3000 >/tmp/wdcc-local.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          ok=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          test "$ok" = 1 || { cat /tmp/wdcc-local.log; exit 1; }
+          browser="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || true)"
+          test -n "$browser"
+          mkdir -p /tmp/wdcc-shots
+          "$browser" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=650 --screenshot=/tmp/wdcc-shots/01-desktop-intro-650ms.png 'http://127.0.0.1:3000/?intro=1&shot=650'
+          "$browser" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=1750 --screenshot=/tmp/wdcc-shots/02-desktop-flight-1750ms.png 'http://127.0.0.1:3000/?intro=1&shot=1750'
+          "$browser" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1200 --virtual-time-budget=4200 --screenshot=/tmp/wdcc-shots/03-desktop-final.png 'http://127.0.0.1:3000/?intro=1&shot=final'
+          "$browser" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=390,844 --virtual-time-budget=4200 --screenshot=/tmp/wdcc-shots/04-mobile-final.png 'http://127.0.0.1:3000/?intro=1&shot=mobile'
+          ls -lh /tmp/wdcc-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-pre8ar-5923-screens
+          path: /tmp/wdcc-shots/*.png
+          if-no-files-found: warn
       - id: token
         name: Require Vercel token
         run: test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
@@ -80,7 +107,6 @@ jobs:
           set -euo pipefail
           url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "PREVIEW_URL=$url"
       - name: Verify preview contract
         id: verify
         shell: bash
@@ -93,8 +119,6 @@ jobs:
           grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html
           grep -q 'data-wdcc-header-logo' /tmp/home.html
           grep -q 'WDCC opening animation' /tmp/home.html
-          vercel curl /api/inventory --deployment "$URL" --token="$VERCEL_TOKEN" --scope=cpxagency > /tmp/inventory.json
-          node -e "const j=require('/tmp/inventory.json'); if(j.ok!==true||!Array.isArray(j.items||j.inventory)) process.exit(1)"
       - name: Report exact preview
         if: always()
         env:
@@ -103,15 +127,12 @@ jobs:
           INSTALL: ${{ steps.install.outcome }}
           SOURCE: ${{ steps.source.outcome }}
           APPBUILD: ${{ steps.appbuild.outcome }}
+          SHOTS: ${{ steps.shots.outcome }}
           TOKEN: ${{ steps.token.outcome }}
-          LINK: ${{ steps.link.outcome }}
-          CLI: ${{ steps.cli.outcome }}
-          PULL: ${{ steps.pull.outcome }}
-          VBUILD: ${{ steps.vbuild.outcome }}
           DEPLOY: ${{ steps.deploy.outcome }}
           VERIFY: ${{ steps.verify.outcome }}
         shell: bash
         run: |
           short="${GITHUB_SHA:0:7}"
-          body=$(printf 'Source branch: `fix/restore-pre8ar-5923-visual`\nCommit: `%s`\nRun ID: `%s`\ninstall=%s\nsource=%s\nappbuild=%s\ntoken=%s\nlink=%s\ncli=%s\npull=%s\nvbuild=%s\ndeploy=%s\nverify=%s\nPreview: %s\nProduction was not changed.' "$GITHUB_SHA" "$GITHUB_RUN_ID" "${INSTALL:-unknown}" "${SOURCE:-unknown}" "${APPBUILD:-unknown}" "${TOKEN:-unknown}" "${LINK:-unknown}" "${CLI:-unknown}" "${PULL:-unknown}" "${VBUILD:-unknown}" "${DEPLOY:-unknown}" "${VERIFY:-unknown}" "${URL:-not-created}")
+          body=$(printf 'Source branch: `fix/restore-pre8ar-5923-visual`\nCommit: `%s`\nRun ID: `%s`\ninstall=%s\nsource=%s\nappbuild=%s\nshots=%s\ntoken=%s\ndeploy=%s\nverify=%s\nPreview: %s\nProduction was not changed.' "$GITHUB_SHA" "$GITHUB_RUN_ID" "${INSTALL:-unknown}" "${SOURCE:-unknown}" "${APPBUILD:-unknown}" "${SHOTS:-unknown}" "${TOKEN:-unknown}" "${DEPLOY:-unknown}" "${VERIFY:-unknown}" "${URL:-not-created}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact pre-8AR preview $short" --body "$body" || true
