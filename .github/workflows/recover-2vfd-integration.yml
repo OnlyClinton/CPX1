@@ -1,0 +1,81 @@
+name: Recover 2vfD Into Integration Branch
+on:
+  push:
+    branches: [wdcc-2vfd-integration]
+
+concurrency:
+  group: recover-2vfd-integration
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: ${{ !contains(github.event.head_commit.message, '[2vfd-recovered]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wdcc-2vfd-integration
+          fetch-depth: 0
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN missing" >&2; exit 78; }
+      - name: Recover exact 2vfD source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/recovered && mkdir -p /tmp/recovered
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments/$DEPLOYMENT_ID/files?teamId=$VERCEL_TEAM_ID" > /tmp/files.json
+          cat > /tmp/recover.mjs <<'EOF'
+          import fs from 'node:fs/promises';
+          import path from 'node:path';
+          const token=process.env.VERCEL_TOKEN, team=process.env.VERCEL_TEAM_ID, dep=process.env.DEPLOYMENT_ID;
+          const tree=JSON.parse(await fs.readFile('/tmp/files.json','utf8'));
+          const files=[];
+          function walk(nodes,prefix=''){
+            for(const n of nodes||[]){
+              const p=prefix?`${prefix}/${n.name}`:n.name;
+              if(n.type==='directory') walk(n.children||[],p);
+              else if(n.type==='file'&&n.uid) files.push({...n,path:p});
+            }
+          }
+          walk(tree);
+          for(const f of files){
+            const u=`https://api.vercel.com/v8/deployments/${dep}/files/${f.uid}?teamId=${encodeURIComponent(team)}`;
+            const r=await fetch(u,{headers:{Authorization:`Bearer ${token}`}});
+            if(!r.ok) throw new Error(`${f.path}: ${r.status}`);
+            const txt=await r.text();
+            let parsed; try{parsed=JSON.parse(txt)}catch{parsed=txt}
+            let b64=typeof parsed==='string'?parsed:(parsed?.data??parsed?.content??parsed?.file??parsed?.value);
+            if(typeof b64!=='string') throw new Error(`${f.path}: unknown content response`);
+            const out=path.join('/tmp/recovered',f.path);
+            await fs.mkdir(path.dirname(out),{recursive:true});
+            await fs.writeFile(out,Buffer.from(b64,'base64'));
+          }
+          console.log(`Recovered ${files.length} files`);
+          EOF
+          node /tmp/recover.mjs
+      - name: Replace application source with exact donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
+          cp -a /tmp/recovered/. ./
+          mkdir -p .github/workflows
+          cp "$GITHUB_WORKSPACE/.github/workflows/recover-2vfd-integration.yml" /tmp/recover-workflow.yml || true
+          cp /tmp/recover-workflow.yml .github/workflows/recover-2vfd-integration.yml || true
+          printf '%s\n' 'dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp' > .wdcc-visual-donor
+      - name: Commit exact recovered donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "WDCC Recovery Bot"
+          git config user.email "wdcc-recovery@users.noreply.github.com"
+          git add -A
+          git commit -m "[2vfd-recovered] Restore exact 2vfD source" || exit 0
+          git push origin HEAD:wdcc-2vfd-integration
