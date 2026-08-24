@@ -1,0 +1,68 @@
+name: WDCC Repair Storage Bindings
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-repair-storage-bindings.yml'
+  workflow_dispatch:
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      SOURCE_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN missing" >&2; exit 78; }
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Pull healthy dealer production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$SOURCE_PROJECT" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env || { echo 'healthy dealer project has no BLOB_READ_WRITE_TOKEN' >&2; exit 1; }
+      - name: Sync storage and auth bindings to storefront and Phoenix
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          . /tmp/dealer.env
+          set +a
+          test -n "${BLOB_READ_WRITE_TOKEN:-}" || { echo 'BLOB_READ_WRITE_TOKEN empty' >&2; exit 1; }
+          for spec in "storefront:$STOREFRONT_PROJECT" "phoenix:$PHOENIX_PROJECT"; do
+            name="${spec%%:*}"; project="${spec#*:}"
+            dir="/tmp/$name"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$project" > "$dir/.vercel/project.json"
+            cd "$dir"
+            printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env update BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+              vercel env rm BLOB_READ_WRITE_TOKEN production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+              printf '%s' "$BLOB_READ_WRITE_TOKEN" | vercel env add BLOB_READ_WRITE_TOKEN production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+            }
+            if [ -n "${SESSION_SECRET:-}" ]; then
+              printf '%s' "$SESSION_SECRET" | vercel env update SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+                vercel env rm SESSION_SECRET production --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+                printf '%s' "$SESSION_SECRET" | vercel env add SESSION_SECRET production --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+              }
+            fi
+          done
+      - name: Redeploy current storefront artifact with repaired environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 redeploy wdcc-v32-storefront-p71u8k9zz-cpxagency.vercel.app --target production --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Redeploy current Phoenix artifact with repaired environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@59.3.0 redeploy wdcc-cpx-launch-8vephfzb4-cpxagency.vercel.app --target production --token="$VERCEL_TOKEN" --scope=cpxagency
