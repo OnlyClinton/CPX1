@@ -47,6 +47,7 @@ export function Header(){
       <TrackedCallLink className="mobileCallButton" source="header-mobile-phone" label="Call Sean">☎</TrackedCallLink>
       <div className="navlinks">
         <Link href="/inventory">INVENTORY</Link>
+        <Link href="/schedule-test-drive?source=header-test-drive">TEST DRIVE</Link>
         <Link href="/get-approved?source=header-financing">FINANCING</Link>
         <Link href="/#how-it-works">HOW IT WORKS</Link>
         <Link href="/dealer/login">DEALER PORTAL</Link>
@@ -57,6 +58,7 @@ export function Header(){
     </div>
     {open&&<nav id="mobileHeaderMenu" className="mobileHeaderMenu">
       <Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link>
+      <Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link>
       <Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link>
       <Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link>
       <Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link>
@@ -64,10 +66,9 @@ export function Header(){
     </nav>}
     </header>
     <nav className="stickyCtaBar" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean"><span>CALL</span></TrackedCallLink>
-      <a className="stickySecondary" href="sms:+18135164752"><span>TEXT</span></a>
-      <Link className="stickyCars" href="/inventory"><span>CARS</span></Link>
-      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply"><span>APPLY</span></Link>
+      <Link className="stickyPrimary" href="/schedule-test-drive?source=sticky-test-drive"><span>TEST DRIVE</span></Link>
+      <Link className="stickySecondary" href="/get-approved?source=sticky-get-approved"><span>GET APPROVED</span></Link>
+      <TrackedCallLink className="stickyContact" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink>
     </nav>
   </>
 }
