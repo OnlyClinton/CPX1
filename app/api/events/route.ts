@@ -39,6 +39,7 @@ export async function POST(request:Request){
       leadId:text(body?.leadId,160)||null,vehicleId:text(body?.vehicleId,160)||null,
       source:text(body?.source,120)||null,medium:text(body?.medium,120)||null,
       campaign:text(body?.campaign,160)||null,content:text(body?.content,160)||null,
+      term:text(body?.term,160)||null,clickId:text(body?.clickId,220)||null,
       referralCode:text(body?.referralCode,160)||null,pagePath:text(body?.pagePath??body?.path,300)||null,
       landingPath:text(body?.landingPath,300)||null,referrer:text(body?.referrer,700)||null,
       channel:text(body?.channel,80)||null,cta:text(body?.cta,100)||null,
