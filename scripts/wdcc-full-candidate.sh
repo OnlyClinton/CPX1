@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-git fetch origin qa/wdcc-canonical-hardening release/8ar-on-exact-2vfd wdcc-auth-live-fix wdcc-admin-dealer-final-candidate
+git fetch origin qa/wdcc-canonical-hardening release/8ar-on-exact-2vfd recovered-2vfd-source wdcc-auth-live-fix wdcc-admin-dealer-final-candidate
 git checkout -B qa/wdcc-full-candidate-v1 origin/main
 
 git show origin/qa/wdcc-canonical-hardening:app/Exact2vfDHome.tsx > app/Exact2vfDHome.tsx
@@ -8,8 +8,9 @@ mkdir -p app/privacy app/terms
 git show origin/qa/wdcc-canonical-hardening:app/privacy/page.tsx > app/privacy/page.tsx
 git show origin/qa/wdcc-canonical-hardening:app/terms/page.tsx > app/terms/page.tsx
 git show origin/release/8ar-on-exact-2vfd:app/exact2vfd.css > app/exact2vfd.css
-curl -fsSL 'https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/_next/static/chunks/0_a.-rzdmu95t.css' -o app/exact2vfd-base.css
-test "$(wc -c < app/exact2vfd-base.css)" -gt 10000
+# Use exact recovered 2vfD source CSS, not a runtime _next URL.
+git show origin/recovered-2vfd-source:src/app/globals.css > app/exact2vfd-base.css
+test "$(wc -c < app/exact2vfd-base.css)" -gt 90000
 sed -i '1{/^@import url(/d;}' app/exact2vfd.css
 cat > app/page.tsx <<'EOF'
 import Exact2vfDHome from "./Exact2vfDHome";
@@ -70,7 +71,6 @@ s=s.replace('https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app','https://wd
 p.write_text(s)
 
 p=Path('lib/dealerProxy.ts');p.write_text(p.read_text().replace('https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app','https://wdcc-cpx-launch.vercel.app'))
-
 p=Path('app/api/media/route.ts');s=p.read_text();s='import {isDealerRuntime} from "../../../lib/dealerRuntime";import {proxyDealer} from "../../../lib/dealerProxy";'+s;s=s.replace('export async function GET(req:Request){','export async function GET(req:Request){if(!isDealerRuntime(req))return proxyDealer(req,"/api/media");');p.write_text(s)
 
 s=Path('/tmp/leadid.ts').read_text();s=base+s
@@ -105,8 +105,25 @@ export async function POST(request:Request){
 }
 EOF
 
+# High-impact lint/a11y fixes only; no broad formatter rewrite.
+python3 <<'PY'
+from pathlib import Path
+p=Path('app/LeadForm.tsx')
+if p.exists():
+    s=p.read_text().replace('const body:any=Object.fromEntries(form.entries());','const body:Record<string,FormDataEntryValue>=Object.fromEntries(form.entries());')
+    s=s.replace('{message&&<div className="leadMessage" role="status" aria-live="polite">{message}</div>}','{message&&<output className="leadMessage" aria-live="polite">{message}</output>}')
+    p.write_text(s)
+p=Path('app/admin/login/page.tsx')
+if p.exists():
+    s=p.read_text().replace('import { FormEvent, useState } from "react";','import { type FormEvent, useState } from "react";')
+    s=s.replace('}catch(x:any){setMsg(x?.message||"Sign-in failed"); setBusy(false)}','}catch(x:unknown){setMsg(x instanceof Error?x.message:"Sign-in failed"); setBusy(false)}')
+    s=s.replace('<label style={lab}>Username</label>\n      <input autoComplete="username"','<label htmlFor="admin-username" style={lab}>Username</label>\n      <input id="admin-username" autoComplete="username"')
+    s=s.replace('<label style={lab}>Password</label>\n      <input type="password"','<label htmlFor="admin-password" style={lab}>Password</label>\n      <input id="admin-password" type="password"')
+    s=s.replace('<button disabled={busy} style={btn}>','<button type="submit" disabled={busy} style={btn}>')
+    p.write_text(s)
+PY
+
 npm ci
-npx --yes @biomejs/biome@1.9.4 check --write app lib scripts || true
 npx tsc --noEmit
 npm run build
 set +e
