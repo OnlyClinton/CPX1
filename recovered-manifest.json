@@ -1,0 +1,320 @@
+[
+  {
+    "path": "src/README.md",
+    "uid": "1d099727be9757597a4e66228c678f46c69e3028",
+    "size": 662,
+    "contentType": null
+  },
+  {
+    "path": "src/app/about/page.tsx",
+    "uid": "8b6d520fd6a8973d02a9443683c9d307e63665f9",
+    "size": 1557,
+    "contentType": null
+  },
+  {
+    "path": "src/app/api/events/route.ts",
+    "uid": "134c8e73f01d0f6e9f8170dd6d584cbbb15c1a2d",
+    "size": 2091,
+    "contentType": null
+  },
+  {
+    "path": "src/app/components/LeadRequestForm.tsx",
+    "uid": "12b42bdb6d78fa949c2c6005e0c98f8b80e4516a",
+    "size": 3222,
+    "contentType": null
+  },
+  {
+    "path": "src/app/components/PublicPage.tsx",
+    "uid": "2316fe09eac5da3ea3f505663559908944c2e9c0",
+    "size": 3416,
+    "contentType": null
+  },
+  {
+    "path": "src/app/components/TrackedLink.tsx",
+    "uid": "e0a8bf204746629e66f8a2a2d3ca51c19556165a",
+    "size": 600,
+    "contentType": null
+  },
+  {
+    "path": "src/app/components/WDCCApp.tsx",
+    "uid": "4f82c770d68ff3b509a230e733af503099740869",
+    "size": 24989,
+    "contentType": null
+  },
+  {
+    "path": "src/app/contact/page.tsx",
+    "uid": "fcb34bf4d00009fd698aed27731e54be1aaa1ab6",
+    "size": 1738,
+    "contentType": null
+  },
+  {
+    "path": "src/app/data.ts",
+    "uid": "54a56056ea56d209c50f4975876ac9f68f46dd57",
+    "size": 5302,
+    "contentType": null
+  },
+  {
+    "path": "src/app/dealer/page.tsx",
+    "uid": "e3f28a5de02073d6896dd63ff17acd97eff72773",
+    "size": 153,
+    "contentType": null
+  },
+  {
+    "path": "src/app/financing/page.tsx",
+    "uid": "6acfa99d41c5d54600ce335595de1020559abdea",
+    "size": 2762,
+    "contentType": null
+  },
+  {
+    "path": "src/app/get-approved/page.tsx",
+    "uid": "61c59580f3bb10703c101d2d2941ee3b9117ec1e",
+    "size": 2035,
+    "contentType": null
+  },
+  {
+    "path": "src/app/globals.css",
+    "uid": "1cfe1bc422b552474b17c90d198c225acb602e3c",
+    "size": 98975,
+    "contentType": null
+  },
+  {
+    "path": "src/app/home/page.tsx",
+    "uid": "7e470967c8fcfd82147041b9fca9d9b27580e54a",
+    "size": 124,
+    "contentType": null
+  },
+  {
+    "path": "src/app/inventory/[slug]/page.tsx",
+    "uid": "e64fe123aa19b88e0febd34ffdd29d34400c71a9",
+    "size": 3426,
+    "contentType": null
+  },
+  {
+    "path": "src/app/inventory/page.tsx",
+    "uid": "dcf98c584ed0ace4006d3fa5ad418291ffafdf4d",
+    "size": 1871,
+    "contentType": null
+  },
+  {
+    "path": "src/app/layout.tsx",
+    "uid": "59db70781e1a2a5e574105f5b1ad9f3a92a8872f",
+    "size": 2815,
+    "contentType": null
+  },
+  {
+    "path": "src/app/legal/privacy-policy/page.tsx",
+    "uid": "be00418c2988df5073b26ce225ebdb2a612d67b0",
+    "size": 135,
+    "contentType": null
+  },
+  {
+    "path": "src/app/lib/analytics.ts",
+    "uid": "fa45746c5450375c5a3279aee58182a6f835f712",
+    "size": 2924,
+    "contentType": null
+  },
+  {
+    "path": "src/app/manifest.ts",
+    "uid": "aa64c3ed3ab92538d6df1eaf605537981ce1c336",
+    "size": 471,
+    "contentType": null
+  },
+  {
+    "path": "src/app/not-found.tsx",
+    "uid": "c97ccde29d2ada0d0b0764b77b00dadb5801ee16",
+    "size": 441,
+    "contentType": null
+  },
+  {
+    "path": "src/app/page.tsx",
+    "uid": "b6c2cfbad41eb43af5e0af20160b7b942b55e201",
+    "size": 126,
+    "contentType": null
+  },
+  {
+    "path": "src/app/privacy/page.tsx",
+    "uid": "0b349f4474dbbf86c9790516c0ab6f2e04428724",
+    "size": 2068,
+    "contentType": null
+  },
+  {
+    "path": "src/app/reviews/page.tsx",
+    "uid": "41a6be33f15fd67b1153c642f65a860985c1e20c",
+    "size": 1612,
+    "contentType": null
+  },
+  {
+    "path": "src/app/robots.ts",
+    "uid": "bf7288dad74f767448b8820383b6904f070c704d",
+    "size": 312,
+    "contentType": null
+  },
+  {
+    "path": "src/app/sitemap.ts",
+    "uid": "4ba4f6f5cb226e31aefb96989bfe25c105b632f7",
+    "size": 1012,
+    "contentType": null
+  },
+  {
+    "path": "src/app/terms/page.tsx",
+    "uid": "46c6d534c3270e95a892077465a343516a5a96bc",
+    "size": 1777,
+    "contentType": null
+  },
+  {
+    "path": "src/eslint.config.mjs",
+    "uid": "44d5bed565a8dd284af3e17f3b16a1c752008d0e",
+    "size": 465,
+    "contentType": null
+  },
+  {
+    "path": "src/inventory-photo-manifest.json",
+    "uid": "97d5517ff86dedd8220e313d7e2bd7038e5fc88b",
+    "size": 853,
+    "contentType": null
+  },
+  {
+    "path": "src/next-env.d.ts",
+    "uid": "9bfff799abb9a4d30186f7a8b68f91ac35157611",
+    "size": 247,
+    "contentType": null
+  },
+  {
+    "path": "src/next.config.ts",
+    "uid": "89327ac52fc9a00fb8b885afd6654f18e58b3156",
+    "size": 133,
+    "contentType": null
+  },
+  {
+    "path": "src/package-lock.json",
+    "uid": "c919643016788c79613e0f92d518533114f956ed",
+    "size": 234560,
+    "contentType": null
+  },
+  {
+    "path": "src/package.json",
+    "uid": "3eb9fa7f9801284fcce5c6aed0763b2a54d0ec5b",
+    "size": 683,
+    "contentType": null
+  },
+  {
+    "path": "src/postcss.config.mjs",
+    "uid": "8f8be689e9af58f80351df6e6b551146822f42a4",
+    "size": 94,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2004-nissan-350z-1.webp",
+    "uid": "13bbeeab9a5c1a951ca0115b36e3b184558b2412",
+    "size": 198848,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2004-nissan-350z-2.webp",
+    "uid": "c0505077166fc8cc0017040b346c407095125be2",
+    "size": 93490,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2004-nissan-350z-3.webp",
+    "uid": "f20f304d6d0cf685cb05d1a6601c9ed629a919b2",
+    "size": 110372,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2004-nissan-350z-4.webp",
+    "uid": "7b64031528a1ec82f064dcf910dd7f4d925a9702",
+    "size": 67802,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-1.webp",
+    "uid": "c08079709c65925e0bd1bce045ee2e3c475d1dde",
+    "size": 104188,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-2.webp",
+    "uid": "f32bc39c51e913c7b833abb3a97576e0f5749ead",
+    "size": 62202,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-3.webp",
+    "uid": "686852e8cf3035236bdd721f3d53c98df45358ff",
+    "size": 185444,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-4.webp",
+    "uid": "00656d13849dbb2377b143abd78e3c3de01a2d3e",
+    "size": 42054,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-5.webp",
+    "uid": "957446853300301ad94d5c6d303a5937b88811ff",
+    "size": 154176,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-6.webp",
+    "uid": "e0436317d0c30e1b5354f62222750ec98c70f04b",
+    "size": 153986,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2016-ford-f150-limited-7.webp",
+    "uid": "9d0c4dae16f39752f290c322a1523a2f16546b69",
+    "size": 68074,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2019-honda-pilot-1.webp",
+    "uid": "15c7c2f83b9b7ceedcad5c5361341b0c48912d3a",
+    "size": 125672,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2019-kia-sportage-1.webp",
+    "uid": "8d62503f9f8bf775c0daefb954330861f2caedf9",
+    "size": 164060,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2019-toyota-rav4-1.webp",
+    "uid": "3a45d7ee0d4708307dd2b22b1a78001451c0176f",
+    "size": 71738,
+    "contentType": null
+  },
+  {
+    "path": "src/public/assets/cars/2019-toyota-rav4-2.webp",
+    "uid": "fdc77b9f0bfaeaa6f1a8f63652ddfe3e71b54b44",
+    "size": 66358,
+    "contentType": null
+  },
+  {
+    "path": "src/public/wdcc-hero-v2.webp",
+    "uid": "678689ccc8a15d6269aef5bf0387fc308793c1ff",
+    "size": 145504,
+    "contentType": null
+  },
+  {
+    "path": "src/public/wdcc-logo-transparent.webp",
+    "uid": "653b1eecec04453d06e3874c38a07a6f118c142f",
+    "size": 47594,
+    "contentType": null
+  },
+  {
+    "path": "src/tsconfig.json",
+    "uid": "3cce6f8b2540d983756b909e9e5c181034da4c38",
+    "size": 666,
+    "contentType": null
+  },
+  {
+    "path": "src/vercel.json",
+    "uid": "762dd025f875bba201bc8536ad5a39895a2344a1",
+    "size": 147,
+    "contentType": null
+  }
+]

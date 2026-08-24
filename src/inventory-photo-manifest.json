@@ -1,0 +1,27 @@
+{
+  "2004-nissan-350z": [
+    "/assets/cars/2004-nissan-350z-1.webp",
+    "/assets/cars/2004-nissan-350z-2.webp",
+    "/assets/cars/2004-nissan-350z-3.webp",
+    "/assets/cars/2004-nissan-350z-4.webp"
+  ],
+  "2016-ford-f150-limited": [
+    "/assets/cars/2016-ford-f150-limited-1.webp",
+    "/assets/cars/2016-ford-f150-limited-2.webp",
+    "/assets/cars/2016-ford-f150-limited-3.webp",
+    "/assets/cars/2016-ford-f150-limited-4.webp",
+    "/assets/cars/2016-ford-f150-limited-5.webp",
+    "/assets/cars/2016-ford-f150-limited-6.webp",
+    "/assets/cars/2016-ford-f150-limited-7.webp"
+  ],
+  "2019-honda-pilot": [
+    "/assets/cars/2019-honda-pilot-1.webp"
+  ],
+  "2019-kia-sportage": [
+    "/assets/cars/2019-kia-sportage-1.webp"
+  ],
+  "2019-toyota-rav4": [
+    "/assets/cars/2019-toyota-rav4-1.webp",
+    "/assets/cars/2019-toyota-rav4-2.webp"
+  ]
+}
