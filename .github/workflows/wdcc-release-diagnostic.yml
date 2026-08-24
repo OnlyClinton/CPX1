@@ -1,0 +1,94 @@
+name: WDCC Release Diagnostic
+on:
+  push:
+    branches: [wdcc-release-8ar-working]
+    paths-ignore:
+      - 'release/WDCC-DIAGNOSTIC.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  VERCEL_SCOPE: cpxagency
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wdcc-release-8ar-working
+      - name: Diagnose and attempt preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set +e
+          mkdir -p release
+          RESULT=release/WDCC-DIAGNOSTIC.txt
+          : > "$RESULT"
+          echo "source_commit=$GITHUB_SHA" >> "$RESULT"
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RESULT"
+
+          npm ci >/tmp/npm-ci.log 2>&1
+          CI_RC=$?
+          echo "npm_ci_rc=$CI_RC" >> "$RESULT"
+
+          BUILD_RC=99
+          if [ "$CI_RC" -eq 0 ]; then
+            npm run build >/tmp/npm-build.log 2>&1
+            BUILD_RC=$?
+          fi
+          echo "source_build_rc=$BUILD_RC" >> "$RESULT"
+
+          if [ -n "${VERCEL_TOKEN:-}" ]; then TOKEN_STATE=present; else TOKEN_STATE=missing; fi
+          echo "vercel_token=$TOKEN_STATE" >> "$RESULT"
+
+          CLI_RC=99; WHOAMI_RC=99; PULL_RC=99; VBUILD_RC=99; DEPLOY_RC=99; PREVIEW=''
+          if [ "$CI_RC" -eq 0 ] && [ "$BUILD_RC" -eq 0 ] && [ "$TOKEN_STATE" = present ]; then
+            npm install --global vercel@59.3.0 >/tmp/vercel-install.log 2>&1
+            CLI_RC=$?
+            if [ "$CLI_RC" -eq 0 ]; then
+              mkdir -p .vercel
+              printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+              vercel whoami --token="$VERCEL_TOKEN" >/tmp/vercel-whoami.log 2>&1
+              WHOAMI_RC=$?
+              if [ "$WHOAMI_RC" -eq 0 ]; then
+                vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/tmp/vercel-pull.log 2>&1
+                PULL_RC=$?
+                if [ "$PULL_RC" -eq 0 ]; then
+                  vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/tmp/vercel-build.log 2>&1
+                  VBUILD_RC=$?
+                  if [ "$VBUILD_RC" -eq 0 ]; then
+                    vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/tmp/vercel-deploy.log 2>&1
+                    DEPLOY_RC=$?
+                    PREVIEW="$(grep -Eo 'https://[^ ]+\.vercel\.app' /tmp/vercel-deploy.log | tail -1)"
+                  fi
+                fi
+              fi
+            fi
+          fi
+          echo "vercel_cli_install_rc=$CLI_RC" >> "$RESULT"
+          echo "vercel_whoami_rc=$WHOAMI_RC" >> "$RESULT"
+          echo "vercel_pull_preview_rc=$PULL_RC" >> "$RESULT"
+          echo "vercel_build_preview_rc=$VBUILD_RC" >> "$RESULT"
+          echo "vercel_deploy_preview_rc=$DEPLOY_RC" >> "$RESULT"
+          echo "preview_url=$PREVIEW" >> "$RESULT"
+          echo "completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$RESULT"
+
+          for f in /tmp/npm-ci.log /tmp/npm-build.log /tmp/vercel-install.log /tmp/vercel-whoami.log /tmp/vercel-pull.log /tmp/vercel-build.log /tmp/vercel-deploy.log; do
+            if [ -f "$f" ]; then
+              echo "--- $(basename "$f") tail ---" >> "$RESULT"
+              tail -n 12 "$f" | sed -E 's/(token|authorization|bearer)[=: ]+[^ ]+/\1=<redacted>/Ig' >> "$RESULT"
+            fi
+          done
+
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$RESULT"
+          git commit -m 'Record WDCC release diagnostic' || true
+          git push origin HEAD:wdcc-release-8ar-working
