@@ -5,22 +5,35 @@ import TrackedCallLink from"./TrackedCallLink";
 
 export function Intro(){
   const[done,setDone]=useState(false);
+  const[leaving,setLeaving]=useState(false);
   useEffect(()=>{
     const forceReplay=new URLSearchParams(window.location.search).get("intro")==="1";
     const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reduced){setDone(true);return;}
     sessionStorage.setItem("wdcc_intro_seen","1");
-    const t=window.setTimeout(()=>setDone(true),3000);
-    return()=>window.clearTimeout(t);
+    const flight=window.setTimeout(()=>{
+      const introLogo=document.querySelector<HTMLElement>("[data-v43-intro-logo]");
+      const headerLogo=document.querySelector<HTMLElement>("[data-v43-header-logo]");
+      if(!introLogo||!headerLogo)return;
+      const a=introLogo.getBoundingClientRect(),b=headerLogo.getBoundingClientRect();
+      introLogo.animate([
+        {left:`${a.left}px`,top:`${a.top}px`,width:`${a.width}px`,transform:"none",opacity:1},
+        {left:`${b.left}px`,top:`${b.top}px`,width:`${b.width}px`,transform:"none",opacity:.08}
+      ],{duration:850,easing:"cubic-bezier(.16,1,.3,1)",fill:"forwards"});
+    },1450);
+    const exit=window.setTimeout(()=>setLeaving(true),2750);
+    const remove=window.setTimeout(()=>setDone(true),3250);
+    return()=>{window.clearTimeout(flight);window.clearTimeout(exit);window.clearTimeout(remove)};
   },[]);
   if(done)return null;
-  return <div className="intro-sequence intro-reveal" aria-label="WDCC opening animation">
-    <div className="intro-scene" style={{"--hero-image":"url(/wdcc-hero-v2.webp)"} as React.CSSProperties}/>
-    <div className="intro-smoke smoke-one"/>
-    <div className="intro-smoke smoke-two"/>
-    <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
-    <p className="intro-tagline">Tampa Bay · Drive today</p>
-    <button className="intro-skip" onClick={()=>setDone(true)}>Skip intro</button>
+  const finish=()=>{setLeaving(true);window.setTimeout(()=>setDone(true),430)};
+  return <div className={`v43Intro${leaving?" out":""}`} aria-label="WDCC opening animation">
+    <div className="v43IntroBg" aria-hidden="true"/>
+    <div className="v43IntroSmoke" aria-hidden="true"/>
+    <div className="v43IntroCar" aria-hidden="true"/>
+    <div className="v43Flare" aria-hidden="true"/>
+    <img data-v43-intro-logo className="v43IntroLogo" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/>
+    <button className="v43Skip" type="button" onClick={finish}>Skip</button>
   </div>;
 }
 
@@ -29,7 +42,7 @@ export function Header(){
   return <>
     <div className="commandStrip"><div className="wrap"><span>● TAMPA BAY</span><span>IN-HOUSE FINANCING</span><span>SEAN · <b>813-516-4752</b></span></div></div>
     <header className="premiumHeader"><div className="wrap nav">
-      <Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
+      <Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img data-v43-header-logo src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
       <button className="mobileMenuButton" type="button" aria-expanded={open} aria-controls="mobileHeaderMenu" onClick={()=>setOpen(v=>!v)}>{open?"CLOSE":"☰"}</button>
       <TrackedCallLink className="mobileCallButton" source="header-mobile-phone" label="Call Sean">☎</TrackedCallLink>
       <div className="navlinks">
@@ -50,11 +63,12 @@ export function Header(){
       <Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
     </nav>}
     </header>
-    <div className="stickyCtaBar" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean">☎<span>CALL</span></TrackedCallLink>
-      <a className="stickySecondary" href="sms:+18135164752">▰<span>TEXT</span></a>
-      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply">▣<span>APPLY NOW</span></Link>
-    </div>
+    <nav className="stickyCtaBar" aria-label="Quick actions">
+      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean"><span>CALL</span></TrackedCallLink>
+      <a className="stickySecondary" href="sms:+18135164752"><span>TEXT</span></a>
+      <Link className="stickyCars" href="/inventory"><span>CARS</span></Link>
+      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply"><span>APPLY</span></Link>
+    </nav>
   </>
 }
 
