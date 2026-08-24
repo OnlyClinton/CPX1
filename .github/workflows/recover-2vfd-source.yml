@@ -1,8 +1,7 @@
 name: Recover WDCC 2vfD Source
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+
 jobs:
   recover:
     runs-on: ubuntu-latest
@@ -70,3 +69,5 @@ jobs:
           git add -A
           git commit -m "Recovered exact WDCC 2vfD source"
           git push --force origin HEAD:recovered-2vfd-source
+
+# Recovery is intentionally manual-only. Normal main pushes must never rewrite recovery branches.
