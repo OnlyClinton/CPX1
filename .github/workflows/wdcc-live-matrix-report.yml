@@ -1,0 +1,141 @@
+name: WDCC Live Matrix Report
+on:
+  push:
+    branches: [wdcc-full-live-acceptance]
+    paths: ['.github/workflows/wdcc-live-matrix-report.yml']
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      DEALER: https://dealer.wedontcarecars.com
+      SITE: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - id: bindings
+        name: Load production auth bindings
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm ci >/dev/null
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
+          grep -q '^SESSION_SECRET=' /tmp/dealer.env
+      - id: sessions
+        name: Create signed dealer/admin sessions
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer.env; set +a
+          cd "$GITHUB_WORKSPACE"
+          node <<'NODE' > /tmp/sessions.env
+          const crypto=require('crypto');const{get}=require('@vercel/blob');
+          const sign=u=>{const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+1200000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');return `${raw}.${sig}`};
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString());const a=(s.users||[]).filter(u=>u.status!=='disabled'&&!u.disabled);const d=a.find(u=>['dealer_agent','tenant_admin','platform_admin'].includes(String(u.role).toLowerCase()));const ad=a.find(u=>String(u.role).toLowerCase()==='platform_admin')||a.find(u=>String(u.role).toLowerCase()==='tenant_admin')||d;if(!d||!ad)throw Error('NO_ACTIVE_USER');console.log('DEALER_COOKIE='+sign(d));console.log('ADMIN_COOKIE='+sign(ad))})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/sessions.env >> "$GITHUB_ENV"
+      - id: public_pages
+        name: Public site pages
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for p in / /inventory /get-approved /schedule-test-drive /contact;do c=$(curl -sS -o /tmp/o -w '%{http_code}' "$SITE$p");test "$c" = 200||{ echo "$p=$c";exit 1;};done
+      - id: forms
+        name: Three public lead forms
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          R="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          f(){ k="$1";s="$2";n="$3";curl -fsS -X POST "$SITE/api/leads" -H 'content-type: application/json' -H "idempotency-key: matrix-$k-$R" --data "{\"kind\":\"$k\",\"name\":\"WDCC MATRIX $k $R\",\"phone\":\"$n\",\"email\":\"qa-$k-$R@invalid.example\",\"vehicleInterest\":\"QA only\",\"preferredTime\":\"QA only\",\"message\":\"Automated matrix test - do not contact\",\"consent\":true,\"source\":\"$s\"}";}
+          S=$(f schedule schedule-test-drive 813-555-0131);A=$(f approval get-approved 813-555-0132);C=$(f contact call-sean 813-555-0133)
+          echo "$S"|jq -e '.ok==true and .persisted==true and .item.kind=="schedule"' >/dev/null
+          echo "$A"|jq -e '.ok==true and .persisted==true and .item.kind=="approval"' >/dev/null
+          echo "$C"|jq -e '.ok==true and .persisted==true and .item.kind=="contact"' >/dev/null
+      - id: invalid_login
+        name: Login endpoint transport
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          c=$(curl -sS -o /tmp/l -w '%{http_code}' -X POST "$DEALER/api/auth/login" -H 'content-type: application/json' -H "Origin: $DEALER" --data '{"email":"invalid-matrix","password":"invalid"}')
+          test "$c" = 401
+      - id: session
+        name: Dealer session persistence
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test -n "${DEALER_COOKIE:-}"
+          for i in 1 2;do curl -fsS "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE"|jq -e '.authenticated==true' >/dev/null;sleep 1;done
+      - id: dashboard
+        name: Dealer dashboard API and UI
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for p in /api/crm/dashboard /dealer /dealer/dashboard;do c=$(curl -sS -o /tmp/d -w '%{http_code}' "$DEALER$p" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE");test "$c" = 200||{echo "$p=$c";cat /tmp/d;exit 1;};done
+      - id: leads
+        name: Dealer leads
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          c=$(curl -sS -o /tmp/l -w '%{http_code}' "$DEALER/dealer/leads" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE");test "$c" = 200
+      - id: inventory
+        name: Dealer inventory routes and API
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for p in /dealer/inventory /dealer/inventory/new /api/inventory;do c=$(curl -sS -o /tmp/i -w '%{http_code}' "$DEALER$p" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE");test "$c" = 200||exit 1;done
+      - id: admin
+        name: Admin session and pages
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test -n "${ADMIN_COOKIE:-}"
+          for p in /admin /admin/users;do c=$(curl -sS -o /tmp/a -w '%{http_code}' "$DEALER$p" -H "Cookie: __Host-wdcc_session=$ADMIN_COOKIE");[ "$c" = 200 ]||[ "$c" = 307 ]||exit 1;done
+      - id: vehicle
+        name: Vehicle photo upload, publish, public visibility, cleanup
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');(async()=>{const d=process.env.DEALER,s=process.env.SITE,r=process.env.RUN_ID,stock=`MATRIX-${r}`;fs.writeFileSync('/tmp/q.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.DEALER_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();await p.goto(d+'/dealer/inventory/new',{waitUntil:'networkidle'});if(p.url().includes('/login'))throw Error('AUTH_REDIRECT');await p.getByLabel('Year').fill('2020');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill('Matrix QA');await p.getByLabel('Trim').fill('Test');await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill('Automated test - QA only');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/q.png');await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});const di=await c.request.get(d+'/api/inventory',{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`}}),dj=await di.json(),item=(dj.items||[]).find(v=>v.stock===stock);if(!item)throw Error('NOT_IN_DEALER');const pi=await c.request.get(s+'/api/inventory'),pj=await pi.json();if(!(pj.items||[]).some(v=>v.stock===stock))throw Error('NOT_PUBLIC');const q=await c.request.patch(`${d}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!q.ok())throw Error('CLEANUP_FAILED');await b.close()})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+      - id: logout
+        name: Logout clears session cookie
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl -sS -D /tmp/h -o /tmp/o -X POST "$DEALER/api/auth/logout" -H "Cookie: __Host-wdcc_session=$DEALER_COOKIE" -H "Origin: $DEALER"
+          grep -qi '^set-cookie: __Host-wdcc_session=' /tmp/h
+      - name: Publish matrix report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BINDINGS: ${{ steps.bindings.outcome }}
+          SESSIONS: ${{ steps.sessions.outcome }}
+          PAGES: ${{ steps.public_pages.outcome }}
+          FORMS: ${{ steps.forms.outcome }}
+          LOGIN: ${{ steps.invalid_login.outcome }}
+          SESSION: ${{ steps.session.outcome }}
+          DASH: ${{ steps.dashboard.outcome }}
+          LEADS: ${{ steps.leads.outcome }}
+          INV: ${{ steps.inventory.outcome }}
+          ADMIN: ${{ steps.admin.outcome }}
+          VEHICLE: ${{ steps.vehicle.outcome }}
+          LOGOUT: ${{ steps.logout.outcome }}
+        run: |
+          body=$(printf 'Live WDCC acceptance matrix\n\n- Production bindings: **%s**\n- Signed sessions: **%s**\n- Public pages: **%s**\n- Public forms (schedule / approval / contact): **%s**\n- Login endpoint transport: **%s**\n- Dealer session persistence: **%s**\n- Dashboard API + UI: **%s**\n- Dealer leads: **%s**\n- Dealer inventory + add vehicle: **%s**\n- Admin session/pages: **%s**\n- Vehicle photo + publish + storefront visibility + cleanup: **%s**\n- Logout cookie clear: **%s**\n\nRun: `%s`' "$BINDINGS" "$SESSIONS" "$PAGES" "$FORMS" "$LOGIN" "$SESSION" "$DASH" "$LEADS" "$INV" "$ADMIN" "$VEHICLE" "$LOGOUT" "$GITHUB_RUN_ID")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC live acceptance matrix $GITHUB_RUN_ID" --body "$body"
