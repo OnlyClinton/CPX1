@@ -1,0 +1,186 @@
+name: WDCC Canonical Deep E2E
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-canonical-deep-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      BACKEND_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STOREFRONT: https://wedontcarecars.com
+      DEALER: https://dealer.wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Pull canonical backend production bindings
+        id: bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/backend/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$BACKEND_PROJECT_ID" > /tmp/backend/.vercel/project.json
+          cd /tmp/backend
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/backend.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/backend.env
+          grep -q '^SESSION_SECRET=' /tmp/backend.env
+
+      - name: Verify canonical ledger binding and create pre-QA backup
+        id: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/backend.env; set +a
+          node --input-type=module <<'NODE' > /tmp/ledger.json
+          import crypto from 'node:crypto';
+          import {get,put} from '@vercel/blob';
+          const token=process.env.BLOB_READ_WRITE_TOKEN;
+          const path='private/state/platform-v3.json';
+          async function read(){const r=await get(path,{access:'private',useCache:false,token});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);return JSON.parse(Buffer.concat(chunks).toString('utf8'))}
+          const state=await read();
+          const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+          const backup=`private/state/backups/platform-v3-pre-deep-e2e-${stamp}-${crypto.randomUUID()}.json`;
+          await put(backup,JSON.stringify(state,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',token});
+          console.log(JSON.stringify({ok:true,backup,revision:Number(state.revision||0),vehicles:(state.vehicles||[]).length,leads:(state.leads||[]).length},null,2));
+          NODE
+          cat /tmp/ledger.json
+          echo "backup=$(jq -r '.backup' /tmp/ledger.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Clean stale synthetic public records before acceptance
+        id: cleanbefore
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/backend.env; set +a
+          node --input-type=module <<'NODE' > /tmp/clean-before.json
+          import crypto from 'node:crypto'; import {get,put} from '@vercel/blob';
+          const token=process.env.BLOB_READ_WRITE_TOKEN,path='private/state/platform-v3.json';
+          async function read(){const r=await get(path,{access:'private',useCache:false,token});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);return JSON.parse(Buffer.concat(c).toString('utf8'))}
+          const s=await read(),now=new Date().toISOString();
+          const bad=v=>{const status=String(v?.status||'').toLowerCase(),stock=String(v?.stock||'').toUpperCase(),badges=Array.isArray(v?.badges)?v.badges.map(x=>String(x).toUpperCase()):[];const invalid=Number(v?.year)<=1900||!String(v?.make||'').trim()||!String(v?.model||'').trim()||Number(v?.price||0)<=0;const qa=stock.startsWith('R36TEST-')||stock.startsWith('WDCC-QA-')||badges.includes('R36-TEST')||badges.includes('QA');return status==='published'&&(invalid||qa)};
+          const ids=(s.vehicles||[]).filter(bad).map(v=>v.id);
+          if(ids.length){s.vehicles=s.vehicles.map(v=>ids.includes(v.id)?{...v,status:'archived',updatedAt:now,qaCleanupAt:now}:v);s.audit=Array.isArray(s.audit)?s.audit:[];for(const id of ids)s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.cleanup.vehicle_archive',actor:'wdcc-canonical-deep-e2e',vehicleId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=now;await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token});}
+          console.log(JSON.stringify({ok:true,archived:ids.length,ids},null,2));
+          NODE
+          cat /tmp/clean-before.json
+          echo "archived=$(jq -r '.archived' /tmp/clean-before.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create short-lived canonical signed session
+        id: session
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/backend.env; set +a
+          node <<'NODE' > /tmp/session.env
+          const crypto=require('crypto'); const {get}=require('@vercel/blob');
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));const roles=new Set(['dealer_agent','tenant_admin','platform_admin']);const u=(s.users||[]).find(x=>roles.has(String(x.role||'').toLowerCase())&&x.status!=='disabled'&&!x.disabled);if(!u)throw Error('NO_ACTIVE_DEALER_USER');if(String(process.env.SESSION_SECRET||'').length<32)throw Error('SESSION_SECRET_NOT_CONFIGURED');const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+1800000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');console.log(`QA_COOKIE=${raw}.${sig}`);console.log(`QA_USER_ID=${u.id}`)})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/session.env >> "$GITHUB_ENV"
+
+      - name: Verify dealer authenticated session
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          cat /tmp/session.json | jq .
+          test "$code" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Trace schedule approval and contact leads storefront to dealer
+        id: leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BEFORE="$(curl -fsS "$DEALER/api/leads" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          BEFORE_N="$(echo "$BEFORE"|jq '(.items//[])|length')"
+          post(){ kind="$1"; source="$2"; suffix="$3"; phone="$4"; curl -fsS -X POST "$STOREFRONT/api/leads" -H 'content-type: application/json' -H "idempotency-key: wdcc-qa-canonical-$suffix-$RUN" --data "{\"qa\":true,\"kind\":\"$kind\",\"name\":\"WDCC QA CANONICAL $suffix $RUN\",\"phone\":\"$phone\",\"email\":\"qa-canonical-$suffix-$RUN@invalid.example\",\"vehicleInterest\":\"Canonical QA Vehicle\",\"preferredTime\":\"QA only\",\"message\":\"Automated canonical deep E2E - do not contact\",\"consent\":true,\"source\":\"$source\",\"pagePath\":\"/qa/$suffix\",\"utmSource\":\"wdcc-deep-qa\",\"utmMedium\":\"acceptance\",\"utmCampaign\":\"canonical\"}"; }
+          S="$(post schedule schedule-test-drive schedule 813-555-0131)"; A="$(post approval get-approved approval 813-555-0132)"; C="$(post contact call-sean contact 813-555-0133)"
+          printf '%s' "$S" >/tmp/s.json; printf '%s' "$A" >/tmp/a.json; printf '%s' "$C" >/tmp/c.json
+          jq -e '.ok==true and .persisted==true and .item.kind=="schedule" and .item.source=="schedule-test-drive"' /tmp/s.json >/dev/null
+          jq -e '.ok==true and .persisted==true and .item.kind=="approval" and .item.source=="get-approved"' /tmp/a.json >/dev/null
+          jq -e '.ok==true and .persisted==true and .item.kind=="contact" and .item.source=="call-sean"' /tmp/c.json >/dev/null
+          SID="$(jq -r '.item.id' /tmp/s.json)"; AID="$(jq -r '.item.id' /tmp/a.json)"; CID="$(jq -r '.item.id' /tmp/c.json)"
+          D="$(post schedule schedule-test-drive schedule 813-555-0131)"; printf '%s' "$D" >/tmp/d.json
+          jq -e --arg id "$SID" '.ok==true and .deduplicated==true and .item.id==$id' /tmp/d.json >/dev/null
+          AFTER="$(curl -fsS "$DEALER/api/leads" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"; printf '%s' "$AFTER" >/tmp/leads.json
+          jq -e --arg s "$SID" --arg a "$AID" --arg c "$CID" '(.items//[]) as $x | (($x|map(select(.id==$s and .kind=="schedule" and .source=="schedule-test-drive"))|length)==1) and (($x|map(select(.id==$a and .kind=="approval" and .source=="get-approved"))|length)==1) and (($x|map(select(.id==$c and .kind=="contact" and .source=="call-sean"))|length)==1)' /tmp/leads.json >/dev/null
+          echo "before=$BEFORE_N" >> "$GITHUB_OUTPUT"; echo "after=$(jq '(.items//[])|length' /tmp/leads.json)" >> "$GITHUB_OUTPUT"; echo "schedule=$SID" >> "$GITHUB_OUTPUT"; echo "approval=$AID" >> "$GITHUB_OUTPUT"; echo "contact=$CID" >> "$GITHUB_OUTPUT"
+
+      - name: Install browser for real dealer upload flow
+        run: |
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Dealer UI create photo upload publish storefront verify and hide
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          (async()=>{const run=process.env.RUN_ID,dealer=process.env.DEALER,storefront=process.env.STOREFRONT,stock=`WDCC-QA-${run}`;fs.writeFileSync('/tmp/wdcc-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.QA_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();const errors=[];p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});p.on('pageerror',e=>errors.push(String(e)));await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('SESSION_REDIRECTED_TO_LOGIN');await p.getByLabel('Year').fill('2019');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill(`E2E-${run}`);await p.getByLabel('Trim').fill('WDCC QA');await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill('Automated WDCC production dealer upload verification. QA only.');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/wdcc-qa.png');await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});const r=await c.request.get(`${dealer}/api/inventory`,{headers:{Cookie:`__Host-wdcc_session=${process.env.QA_COOKIE}`}});const j=await r.json();const item=(j.items||[]).find(v=>v.stock===stock);if(!item)throw Error('PUBLISHED_VEHICLE_NOT_IN_DEALER_INVENTORY');if(!(item.photoPathnames||[]).length)throw Error('PUBLISHED_VEHICLE_HAS_NO_PHOTO');const pi=await c.request.get(`${storefront}/api/inventory?accept=${Date.now()}`);const pj=await pi.json();if(!(pj.items||[]).some(v=>v.id===item.id||v.stock===stock))throw Error('PUBLISHED_VEHICLE_NOT_VISIBLE_ON_STOREFRONT');const h=await c.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.QA_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!h.ok())throw Error(`QA_HIDE_FAILED_${h.status()}`);fs.writeFileSync('/tmp/upload.json',JSON.stringify({ok:true,id:item.id,photoCount:item.photoPathnames.length,publicVisible:true,consoleErrors:errors},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/upload.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/upload.json
+          echo "vehicle=$(jq -r '.id // ""' /tmp/upload.json)" >> "$GITHUB_OUTPUT"; echo "photos=$(jq -r '.photoCount // 0' /tmp/upload.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Remove synthetic QA leads and verify public inventory cleanliness
+        id: cleanup
+        if: always() && steps.ledger.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/backend.env; set +a
+          node --input-type=module <<'NODE' > /tmp/final-clean.json
+          import crypto from 'node:crypto';import {get,put} from '@vercel/blob';const token=process.env.BLOB_READ_WRITE_TOKEN,path='private/state/platform-v3.json';async function read(){const r=await get(path,{access:'private',useCache:false,token});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);return JSON.parse(Buffer.concat(c).toString('utf8'))}const s=await read(),now=new Date().toISOString();const q=l=>l?.qa===true||String(l?.status||'').toLowerCase()==='test'||String(l?.email||'').toLowerCase().endsWith('@invalid.example')||String(l?.name||'').toUpperCase().startsWith('WDCC QA ');const ids=(s.leads||[]).filter(q).map(l=>l.id);s.leads=(s.leads||[]).filter(l=>!ids.includes(l.id));s.audit=Array.isArray(s.audit)?s.audit:[];for(const id of ids)s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.cleanup.lead_remove',actor:'wdcc-canonical-deep-e2e',leadId:id});if(ids.length){s.revision=Number(s.revision||0)+1;s.updatedAt=now;await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token})}console.log(JSON.stringify({ok:true,removed:ids.length},null,2));
+          NODE
+          curl -fsS "$STOREFRONT/api/inventory?final=${GITHUB_RUN_ID}" -o /tmp/public.json
+          jq -e '.ok==true and ((.items//[])|type)=="array"' /tmp/public.json >/dev/null
+          jq -e 'all((.items//[])[]; ((.status|ascii_downcase)=="published") and (.year>1900) and ((.make|length)>0) and ((.model|length)>0) and (.price>0) and (((.stock//"")|ascii_upcase|startswith("R36TEST-"))|not) and (((.stock//"")|ascii_upcase|startswith("WDCC-QA-"))|not))' /tmp/public.json >/dev/null
+          echo "public_count=$(jq '(.items//[])|length' /tmp/public.json)" >> "$GITHUB_OUTPUT"; echo "qa_leads_removed=$(jq -r '.removed' /tmp/final-clean.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Report canonical acceptance
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BINDINGS: ${{ steps.bindings.outcome }}
+          LEDGER: ${{ steps.ledger.outcome }}
+          BACKUP: ${{ steps.ledger.outputs.backup }}
+          STALE: ${{ steps.cleanbefore.outputs.archived }}
+          AUTH: ${{ steps.auth.outcome }}
+          AUTHCODE: ${{ steps.auth.outputs.code }}
+          LEADS: ${{ steps.leads.outcome }}
+          SCHEDULE: ${{ steps.leads.outputs.schedule }}
+          APPROVAL: ${{ steps.leads.outputs.approval }}
+          CONTACT: ${{ steps.leads.outputs.contact }}
+          UPLOAD: ${{ steps.upload.outcome }}
+          VEHICLE: ${{ steps.upload.outputs.vehicle }}
+          PHOTOS: ${{ steps.upload.outputs.photos }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
+          PUBLIC_COUNT: ${{ steps.cleanup.outputs.public_count }}
+          QA_REMOVED: ${{ steps.cleanup.outputs.qa_leads_removed }}
+        shell: bash
+        run: |
+          body=$(printf 'Status: **%s**\nCanonical bindings: `%s`\nLedger/backup: `%s` — `%s`\nStale synthetic/invalid published vehicles archived before test: `%s`\nDealer auth: `%s` HTTP `%s`\nThree storefront→dealer lead traces: `%s`\n- schedule `%s`\n- approval `%s`\n- contact `%s`\nDealer create→photo→publish→public→hide: `%s` vehicle `%s` photos `%s`\nFinal cleanup/public inventory: `%s` public count `%s`, QA leads removed `%s`' "$STATUS" "$BINDINGS" "$LEDGER" "$BACKUP" "$STALE" "$AUTH" "$AUTHCODE" "$LEADS" "$SCHEDULE" "$APPROVAL" "$CONTACT" "$UPLOAD" "$VEHICLE" "$PHOTOS" "$CLEANUP" "$PUBLIC_COUNT" "$QA_REMOVED")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical deep E2E ${GITHUB_RUN_ID}" --body "$body" || true
+
+# No application deployment. Uses canonical backend authority for signing and ledger access, then exercises the public storefront and real dealer UI.
