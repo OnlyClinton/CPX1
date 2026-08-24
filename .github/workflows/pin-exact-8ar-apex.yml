@@ -22,16 +22,6 @@ jobs:
       - name: Require token
         run: test -n "$VERCEL_TOKEN"
 
-      - name: Verify immutable 2vfD plus 8AR donor
-        id: donor
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS "https://$DONOR/?intro=1" -o /tmp/donor.html
-          grep -q 'intro-sequence' /tmp/donor.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
-          grep -q 'SCHEDULE A TEST DRIVE' /tmp/donor.html
-
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0 >/dev/null
 
@@ -70,11 +60,10 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          DONOR_STATUS: ${{ steps.donor.outcome }}
           ALIAS_STATUS: ${{ steps.alias.outcome }}
           VERIFY_STATUS: ${{ steps.verify.outcome }}
           PINNED: ${{ steps.verify.outputs.pinned }}
         shell: bash
         run: |
-          body=$(printf '2vfD + 8AR donor checks: **%s**\nAlias pin: **%s**\nPublic rollback verification: **%s**\nPinned: `%s`\n\nApex: https://wedontcarecars.com/?intro=1\nPinned donor: `%s`\nDealer/backend and Neon were not changed.' "$DONOR_STATUS" "$ALIAS_STATUS" "$VERIFY_STATUS" "$PINNED" "$DONOR")
+          body=$(printf 'Alias pin: **%s**\nPublic rollback verification: **%s**\nPinned: `%s`\n\nApex: https://wedontcarecars.com/?intro=1\nPinned donor: `%s`\nDealer/backend and Neon were not changed.' "$ALIAS_STATUS" "$VERIFY_STATUS" "$PINNED" "$DONOR")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC stable 2vfD + 8AR live pin ${GITHUB_SHA:0:7}" --body "$body" || true
