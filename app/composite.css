@@ -1,0 +1,9 @@
+/* Best-of WDCC composite presentation. */
+.homeComposite .heroPhoto{background-image:url('/wdcc-hero-v2.webp')!important;background-position:68% center!important;background-size:cover!important}
+.compositeHeroActions{display:grid!important;grid-template-columns:1.2fr 1fr 1fr!important;max-width:780px!important;gap:10px!important}
+.compositeHeroActions .cta{width:100%;min-height:52px}
+.compositeHeroActions .tertiary{color:#fff;background:#071522;border:1px solid #52697d;box-shadow:0 10px 24px #0006}
+.compositeHeroActions .tertiary:hover{background:#10283d;border-color:#7b96ad}
+.wdcc-intro-active .homeComposite .logoBrand{opacity:.05}.homeComposite .logoBrand{transition:opacity .3s ease}
+.compositeMobileDock{grid-template-columns:1fr 1.2fr!important}.compositeMobileDock a:last-child{background:#ef202f;color:#fff}
+@media(max-width:900px){.compositeHeroActions{grid-template-columns:1fr!important;max-width:none!important}.compositeHeroActions .cta{min-height:50px}.compositeMobileDock{grid-template-columns:1fr 1.25fr!important}}
