@@ -1,4 +1,4 @@
-name: Finalize WDCC 2vfD Production
+name: Promote WDCC canonical production
 on:
   push:
     branches: [main]
@@ -14,11 +14,17 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: test -n "$VERCEL_TOKEN"
-      - name: Allow Git-triggered production build to settle
-        run: sleep 45
-      - name: Promote exact 2vfD deployment last
+      - name: Promote validated 2vfD plus 8AR artifact
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx --yes vercel@latest promote wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app --yes --token "$VERCEL_TOKEN" --scope cpxagency
+        run: npx --yes vercel@59.3.0 promote wdcc-v32-storefront-dt496r4il-cpxagency.vercel.app --yes --token "$VERCEL_TOKEN" --scope cpxagency
+      - name: Verify public apex
+        run: |
+          set -euo pipefail
+          curl -fsS https://wedontcarecars.com/ -o /tmp/home.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
+          grep -q 'intro-sequence' /tmp/home.html
+          grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html
+          curl -fsS https://wedontcarecars.com/api/health | grep -q '"ok":true'
 
-# exact 2vfD baseline repin; path-scoped so future main improvements are not auto-overwritten
+# canonical production promotion uses an existing READY artifact; no application rebuild
