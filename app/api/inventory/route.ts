@@ -8,17 +8,21 @@ export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const PHOENIX_BASE=(process.env.WDCC_PHOENIX_BASE_URL||"https://wdcc-cpx-launch.vercel.app").replace(/\/$/,"");
+const DEALER_FACADE=(process.env.WDCC_DEALER_FACADE_URL||"https://wdcc-dealer-portal.vercel.app").replace(/\/$/,"");
 
-async function phoenixPublicInventory(){
-  const response=await fetch(`${PHOENIX_BASE}/api/inventory?storefront_fallback=${Date.now()}`,{
+function normalizePublic(raw:any){
+  const list=Array.isArray(raw)?raw:(raw?.items||raw?.inventory||raw?.vehicles||[]);
+  const state:any={revision:0,tenants:[],users:[],vehicles:Array.isArray(list)?list:[],leads:[],audit:[]};
+  return publicVehicles(state);
+}
+
+async function remotePublicInventory(base:string,label:string){
+  const response=await fetch(`${base}/api/inventory?storefront_fallback=${Date.now()}`,{
     cache:"no-store",
     signal:AbortSignal.timeout(8000)
   });
-  if(!response.ok)throw Error(`PHOENIX_INVENTORY_${response.status}`);
-  const json=await response.json();
-  const raw=Array.isArray(json)?json:(json?.items||json?.inventory||json?.vehicles||[]);
-  const state:any={revision:0,tenants:[],users:[],vehicles:Array.isArray(raw)?raw:[],leads:[],audit:[]};
-  return publicVehicles(state);
+  if(!response.ok)throw Error(`${label}_INVENTORY_${response.status}`);
+  return normalizePublic(await response.json());
 }
 
 export async function GET(){
@@ -36,14 +40,20 @@ export async function GET(){
     return NextResponse.json({ok:true,count:items.length,items,source:"local-ledger"},{headers:{"Cache-Control":"private, no-store"}});
   }catch(localError){
     try{
-      const items=await phoenixPublicInventory();
-      return NextResponse.json({ok:true,count:items.length,items,source:"phoenix-fallback"},{headers:{"Cache-Control":"private, no-store"}});
-    }catch(fallbackError){
-      return NextResponse.json({
-        ok:false,items:[],error:"inventory_unavailable",
-        localError:localError instanceof Error?localError.message:"local_read_failed",
-        fallbackError:fallbackError instanceof Error?fallbackError.message:"phoenix_read_failed"
-      },{status:503,headers:{"Cache-Control":"no-store"}});
+      const items=await remotePublicInventory(DEALER_FACADE,"DEALER");
+      return NextResponse.json({ok:true,count:items.length,items,source:"dealer-facade"},{headers:{"Cache-Control":"private, no-store"}});
+    }catch(dealerError){
+      try{
+        const items=await remotePublicInventory(PHOENIX_BASE,"PHOENIX");
+        return NextResponse.json({ok:true,count:items.length,items,source:"phoenix-fallback"},{headers:{"Cache-Control":"private, no-store"}});
+      }catch(fallbackError){
+        return NextResponse.json({
+          ok:false,items:[],error:"inventory_unavailable",
+          localError:localError instanceof Error?localError.message:"local_read_failed",
+          dealerError:dealerError instanceof Error?dealerError.message:"dealer_read_failed",
+          fallbackError:fallbackError instanceof Error?fallbackError.message:"phoenix_read_failed"
+        },{status:503,headers:{"Cache-Control":"no-store"}});
+      }
     }
   }
 }
