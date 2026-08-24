@@ -1,9 +1,5 @@
 name: Promote WDCC canonical production
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/finalize-2vfd-production.yml'
   workflow_dispatch:
 
 jobs:
@@ -27,4 +23,4 @@ jobs:
           grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html
           curl -fsS https://wedontcarecars.com/api/health | grep -q '"ok":true'
 
-# canonical production promotion uses an existing READY artifact; no application rebuild
+# Existing READY artifact only. Manual dispatch prevents quota churn.
