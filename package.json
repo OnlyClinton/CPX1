@@ -1,0 +1,8 @@
+{
+  "name": "wdcc-dealer-portal-final",
+  "private": true,
+  "version": "1.0.2",
+  "dependencies": {
+    "@vercel/blob": "latest"
+  }
+}
