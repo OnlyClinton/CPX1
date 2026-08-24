@@ -4,23 +4,26 @@ import{useEffect,useState}from"react";
 import TrackedCallLink from"./TrackedCallLink";
 
 export function Intro(){
-  const[done,setDone]=useState(false);
+  const[phase,setPhase]=useState<"reveal"|"dock"|"exit"|"done">("reveal");
   useEffect(()=>{
     const forceReplay=new URLSearchParams(window.location.search).get("intro")==="1";
     const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reduced){setDone(true);return;}
+    if((!forceReplay&&sessionStorage.getItem("wdcc_intro_seen"))||reduced){setPhase("done");return}
     sessionStorage.setItem("wdcc_intro_seen","1");
-    const t=window.setTimeout(()=>setDone(true),3000);
-    return()=>window.clearTimeout(t);
+    const dock=window.setTimeout(()=>setPhase(p=>p==="reveal"?"dock":p),1850);
+    const exit=window.setTimeout(()=>setPhase(p=>p==="done"?p:"exit"),2500);
+    const done=window.setTimeout(()=>setPhase("done"),3000);
+    return()=>{window.clearTimeout(dock);window.clearTimeout(exit);window.clearTimeout(done)};
   },[]);
-  if(done)return null;
-  return <div className="intro-sequence intro-reveal" aria-label="WDCC opening animation">
+  const dismiss=()=>{setPhase(p=>p==="done"?p:"exit");window.setTimeout(()=>setPhase("done"),420)};
+  if(phase==="done")return null;
+  return <div className={`intro-sequence intro-${phase}`} aria-label="WDCC opening animation" onWheel={dismiss} onTouchMove={dismiss}>
     <div className="intro-scene" style={{"--hero-image":"url(/wdcc-hero-v2.webp)"} as React.CSSProperties}/>
     <div className="intro-smoke smoke-one"/>
     <div className="intro-smoke smoke-two"/>
     <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
     <p className="intro-tagline">Tampa Bay · Drive today</p>
-    <button className="intro-skip" onClick={()=>setDone(true)}>Skip intro</button>
+    <button className="intro-skip" type="button" onClick={dismiss}>Skip intro</button>
   </div>;
 }
 
@@ -34,6 +37,7 @@ export function Header(){
       <TrackedCallLink className="mobileCallButton" source="header-mobile-phone" label="Call Sean">☎</TrackedCallLink>
       <div className="navlinks">
         <Link href="/inventory">INVENTORY</Link>
+        <Link href="/schedule-test-drive?source=header-test-drive">TEST DRIVE</Link>
         <Link href="/get-approved?source=header-financing">FINANCING</Link>
         <Link href="/#how-it-works">HOW IT WORKS</Link>
         <Link href="/dealer/login">DEALER PORTAL</Link>
@@ -44,6 +48,7 @@ export function Header(){
     </div>
     {open&&<nav id="mobileHeaderMenu" className="mobileHeaderMenu">
       <Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link>
+      <Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link>
       <Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link>
       <Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link>
       <Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link>
@@ -51,9 +56,9 @@ export function Header(){
     </nav>}
     </header>
     <div className="stickyCtaBar" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="mobile-bottom-call" label="Call Sean">☎<span>CALL</span></TrackedCallLink>
-      <a className="stickySecondary" href="sms:+18135164752">▰<span>TEXT</span></a>
-      <Link className="stickyContact" href="/get-approved?source=mobile-bottom-apply">▣<span>APPLY NOW</span></Link>
+      <Link className="stickyPrimary" href="/schedule-test-drive?source=sticky-test-drive">TEST DRIVE</Link>
+      <Link className="stickySecondary" href="/get-approved?source=sticky-get-approved">GET APPROVED</Link>
+      <TrackedCallLink className="stickyContact" source="sticky-call-sean" label="Call Sean">CALL SEAN</TrackedCallLink>
     </div>
   </>
 }
