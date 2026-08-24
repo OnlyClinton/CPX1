@@ -27,7 +27,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
       - name: Require Vercel token
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
