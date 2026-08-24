@@ -1,4 +1,4 @@
-name: Restore exact 2vfD storefront apex
+name: Restore functional 8AR storefront apex
 on:
   push:
     branches: [main]
@@ -15,7 +15,7 @@ jobs:
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TEAM: cpxagency
-      DONOR: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
+      DONOR: wdcc-v32-storefront-grwygu1ip-cpxagency.vercel.app
       APEX: wedontcarecars.com
       WWW: www.wedontcarecars.com
     steps:
@@ -23,7 +23,7 @@ jobs:
         run: test -n "$VERCEL_TOKEN"
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0 >/dev/null
-      - name: Restore exact 2vfD to apex and www
+      - name: Restore functional 8AR to apex and www
         shell: bash
         run: |
           set -euo pipefail
@@ -51,4 +51,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ steps.verify.outputs.restored }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact 2vfD apex restore ${GITHUB_SHA:0:7}" --body "Exact donor: \`$DONOR\`\nApex restore verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC functional 8AR apex restore ${GITHUB_SHA:0:7}" --body "Functional donor: \`$DONOR\`\nApex restore verified: \`${RESULT:-false}\`\nApex: https://wedontcarecars.com/" || true
