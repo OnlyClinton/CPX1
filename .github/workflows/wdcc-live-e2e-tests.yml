@@ -1,11 +1,5 @@
 name: WDCC Live E2E Tests
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'lib/**'
-      - '.github/workflows/wdcc-live-e2e-tests.yml'
   workflow_dispatch:
 
 concurrency:
@@ -21,21 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Wait for hardened production to reach this commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="https://wdcc-cpx-launch.vercel.app"
-          for i in $(seq 1 60); do
-            body="$(curl -fsS "$BASE/api/health" || true)"
-            if [ "$(echo "$body" | jq -r '.ok // false')" = "true" ] && [ "$(echo "$body" | jq -r '.commit // ""')" = "$GITHUB_SHA" ]; then
-              echo "$body" | jq .
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Hardened production did not reach $GITHUB_SHA" >&2
-          exit 1
       - name: Run live WDCC contract tests
         shell: bash
         run: |
@@ -96,3 +75,5 @@ jobs:
           git add qa-results/latest.json
           git commit -m "WDCC live E2E proof ${GITHUB_RUN_ID}" || true
           git push --force origin HEAD:wdcc-qa-results
+
+# Manual-only because production deployment is manual. Do not wait for every main commit to deploy.
