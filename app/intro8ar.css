@@ -1,0 +1,17 @@
+/* Exact 8AR intro visual structure override. Loaded last so later recovery layers cannot replace the opening sequence. */
+.intro-sequence{position:fixed;inset:0;z-index:9999;overflow:hidden;background:#020305;opacity:1;visibility:visible;animation:intro8arExit .52s 2.48s cubic-bezier(.22,1,.36,1) forwards}
+.intro-scene{position:absolute;inset:-3%;background-image:var(--hero-image);background-position:68% center;background-size:cover;background-repeat:no-repeat;filter:saturate(1.08) contrast(1.08) brightness(.83);transform:scale(1.09);animation:intro8arScene 2.65s cubic-bezier(.16,1,.3,1) forwards}
+.intro-sequence:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,#020509e9 0,#020509b4 31%,#02050945 62%,#02050910 78%),radial-gradient(circle at 68% 55%,transparent 0,#02050930 56%,#020509c9 100%)}
+.intro-smoke{position:absolute;z-index:2;border-radius:50%;filter:blur(36px);opacity:0;pointer-events:none}.intro-smoke.smoke-one{left:8%;bottom:2%;width:58%;height:38%;background:radial-gradient(circle,#ffffff2c,transparent 66%);animation:intro8arSmokeOne 2.45s .14s ease-out both}.intro-smoke.smoke-two{right:0;bottom:4%;width:48%;height:36%;background:radial-gradient(circle,#168af438,transparent 66%);animation:intro8arSmokeTwo 2.6s .28s ease-out both}
+.intro-badge{position:absolute;z-index:5;left:50%;top:49%;transform:translate(-50%,-50%);width:min(28vw,300px);opacity:0;animation:intro8arBadge .72s .12s cubic-bezier(.16,1,.3,1) forwards}.intro-badge .brand-logo{display:block;width:100%}.intro-badge img{display:block;width:100%;height:auto;object-fit:contain;filter:drop-shadow(0 14px 32px #000a) drop-shadow(0 0 30px #168af43c)}
+.intro-tagline{position:absolute;z-index:6;left:50%;top:69%;transform:translateX(-50%);margin:0;color:#e8edf2;font-size:11px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;white-space:nowrap;opacity:0;animation:intro8arTag .72s .38s ease forwards}
+.intro-skip{position:absolute;right:18px;bottom:18px;z-index:8;background:#02050999;border:1px solid #ffffff42;color:#d8e0e7;border-radius:999px;min-height:38px;padding:0 14px;font-size:10px;font-weight:900;text-transform:uppercase;backdrop-filter:blur(8px)}
+@keyframes intro8arScene{0%{transform:scale(1.09);filter:saturate(1.05) contrast(1.06) brightness(.78)}55%{transform:scale(1.035);filter:saturate(1.09) contrast(1.09) brightness(.88)}100%{transform:scale(1.005);filter:saturate(1.1) contrast(1.1) brightness(.92)}}
+@keyframes intro8arBadge{0%{opacity:0;transform:translate(-50%,-50%) scale(.78)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes intro8arTag{0%{opacity:0;transform:translate(-50%,8px)}100%{opacity:1;transform:translate(-50%,0)}}
+@keyframes intro8arSmokeOne{0%{opacity:0;transform:scale(.72) translate3d(0,12%,0)}35%{opacity:.78}100%{opacity:0;transform:scale(1.5) translate3d(8%,-5%,0)}}
+@keyframes intro8arSmokeTwo{0%{opacity:0;transform:scale(.68) translate3d(7%,10%,0)}38%{opacity:.72}100%{opacity:0;transform:scale(1.56) translate3d(-5%,-7%,0)}}
+@keyframes intro8arExit{0%{opacity:1;visibility:visible}100%{opacity:0;visibility:hidden;pointer-events:none}}
+@media(max-width:900px){.intro-scene{background-position:69% center}.intro-badge{width:min(54vw,230px)}.intro-tagline{top:73%}}
+@media(max-width:560px){.intro-scene{inset:-1%;background-position:71% center}.intro-badge{width:min(64vw,230px)}.intro-tagline{top:76%;font-size:9px}}
+@media(prefers-reduced-motion:reduce){.intro-sequence{display:none!important}}
