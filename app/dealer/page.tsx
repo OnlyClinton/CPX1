@@ -1,71 +1,129 @@
 "use client";
+
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
 
 const LOGO="https://wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app/wdcc-logo-transparent.webp";
-const sameDay=(v:any)=>{if(!v)return false;const d=new Date(v),n=new Date();return !Number.isNaN(d.getTime())&&d.getFullYear()===n.getFullYear()&&d.getMonth()===n.getMonth()&&d.getDate()===n.getDate()};
-const txt=(v:any)=>String(v||"").toLowerCase();
+const stageLabels:any={new:"New",contacted:"Contacted",engaged:"Engaged",qualified:"Qualified",appointment:"Appointment",showed:"Showed",deal:"Deal Working",deal_working:"Deal Working",sold:"Sold",lost:"Lost"};
+const stageOrder=["new","contacted","engaged","qualified","appointment","showed","deal","sold"];
+const money=(v:any)=>Number(v||0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0});
 const when=(v:any)=>{if(!v)return "";const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})};
 
-export default function DealerHome(){
+export default function Dealer(){
   const[session,setSession]=useState<any>();
   const[data,setData]=useState<any>();
-  const[message,setMessage]=useState("Loading Dealer Command…");
+  const[message,setMessage]=useState("Loading sales command…");
+  const[busy,setBusy]=useState("");
 
-  useEffect(()=>{
-    fetch("/api/auth/session",{cache:"no-store"}).then(r=>r.json()).then(async s=>{
-      setSession(s);
-      if(!s.authenticated){location.href="/dealer/login";return;}
-      const r=await fetch("/api/crm/dashboard",{cache:"no-store"});
-      if(r.status===401){location.href="/dealer/login";return;}
-      const j=await r.json();
-      if(!r.ok)throw Error(j.error||"Dealer Command could not be loaded");
-      setData(j);setMessage("");
-    }).catch(e=>setMessage(e?.message||"Dealer Command could not be loaded"));
-  },[]);
+  async function load(){
+    const r=await fetch("/api/crm/dashboard",{cache:"no-store"});
+    if(r.status===401){location.href="/dealer/login";return;}
+    const j=await r.json();
+    if(!r.ok)throw Error(j.error||"CRM could not be loaded");
+    setData(j);setMessage("");
+  }
+
+  useEffect(()=>{fetch("/api/auth/session",{cache:"no-store"}).then(r=>r.json()).then(v=>{setSession(v);if(!v.authenticated){location.href="/dealer/login";return}return load()}).catch(()=>location.href="/dealer/login")},[]);
+
+  async function moveLead(id:string,status:string){
+    setBusy(id+status);
+    const r=await fetch(`/api/leads/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)setMessage(j.error||"Lead could not be updated");else await load();
+    setBusy("");
+  }
+
+  async function logout(){await fetch("/api/auth/logout",{method:"POST"});location.href="/dealer/login"}
 
   const summary=data?.summary||{};
   const leads=data?.leads||[];
-  const latest=leads[0];
-  const newToday=Number(summary.newToday||0);
-  const hot=Number(summary.hotLeads||0);
-  const appointmentsToday=useMemo(()=>leads.filter((l:any)=>sameDay(l.appointmentAt||l.appointment_at||l.scheduledAt||l.scheduled_at||l.testDriveAt||l.test_drive_at)).length,[leads]);
-  const testDrives=useMemo(()=>leads.filter((l:any)=>{const s=[l.kind,l.source,l.message,l.vehicleInterest].map(txt).join(" ");return (s.includes("test drive")||s.includes("test-drive")||s.includes("schedule-test-drive"))&&!['sold','lost'].includes(l.pipelineStage)}).length,[leads]);
-  const attention=[newToday,appointmentsToday,testDrives,hot].filter(v=>v>0).length;
+  const hot=data?.hotLeads||[];
+  const inventory=data?.inventory||[];
+  const next=hot[0];
+  const pipeline=data?.pipeline||{};
+  const active=useMemo(()=>leads.filter((x:any)=>!["sold","lost"].includes(x.pipelineStage)),[leads]);
+  const responseSla=useMemo(()=>{const responded=active.filter((x:any)=>x.dealerFirstResponseAt||x.dealer_first_response_at||["contacted","engaged","qualified","appointment","showed","deal","sold"].includes(x.pipelineStage)).length;return active.length?Math.round(responded/active.length*100):0},[active]);
+  const xp=(summary.sold||0)*150+(pipeline.appointment||0)*30+(pipeline.showed||0)*50+(pipeline.qualified||0)*15;
 
-  if(!session?.authenticated)return <main className="dealerLaunchShell"><div className="dealerLaunchLoading">Checking secure session…</div></main>;
+  if(!session?.authenticated)return <main className="portal"><div className="wrap">Checking secure session…</div></main>;
 
-  return <main className="dealerLaunchShell">
-    <header className="dealerLaunchHeader">
-      <img src={LOGO} alt="We Don't Care Cars"/>
-      <div><span>DEALER COMMAND</span><strong>{session?.user?.displayName||session?.user?.username||"Dealer"}</strong></div>
-      <Link className="dealerBell" href="/dealer/leads" aria-label="Notifications"><span>●</span><b>{attention}</b></Link>
-    </header>
+  return <main className="crmShell">
+    <aside className="crmSidebar">
+      <Link className="crmLogo" href="/dealer"><img src={LOGO} alt="WDCC"/><span>SALES COMMAND</span></Link>
+      <nav>
+        <Link className="active" href="/dealer">Today</Link>
+        <Link href="/dealer/leads">Leads</Link>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#appointments">Appointments</a>
+        <Link href="/dealer/inventory">Inventory</Link>
+        <Link href="/dealer/inventory/new">+ Add Vehicle</Link>
+        <Link href="/">View Website</Link>
+      </nav>
+      <button className="crmLogout" onClick={logout}>Log out</button>
+    </aside>
 
-    <section className="dealerLaunchHero">
-      <span className="dealerLaunchKicker">WHAT DO YOU NEED TO DO?</span>
-      <h1>Keep it simple.</h1>
-      <p>Post a vehicle fast or open the full dashboard. Anything that needs attention is right below.</p>
-    </section>
+    <section className="crmMain">
+      <header className="crmTopbar">
+        <div><span className="crmKicker">WDCC DEALER COMMAND</span><h1>My Day</h1><p>{session?.user?.displayName||session?.user?.username||"Sales"} · focus on the buyers closest to action.</p></div>
+        <div className="momentum"><span>Momentum</span><strong>{xp} XP</strong><small>{responseSla}% response coverage</small></div>
+      </header>
 
-    <section className="dealerPrimaryActions">
-      <Link className="dealerPrimaryCard post" href="/dealer/inventory/new"><div className="dealerActionIcon">＋</div><div><small>INVENTORY</small><h2>Post a Car</h2><p>Take photos, enter details, save a draft or publish it live.</p></div><b>START →</b></Link>
-      <Link className="dealerPrimaryCard dashboard" href="/dealer/dashboard"><div className="dealerActionIcon">▦</div><div><small>SALES COMMAND</small><h2>Dashboard</h2><p>Leads, appointments, pipeline, hot buyers, inventory and follow-up.</p></div><b>OPEN →</b></Link>
-    </section>
+      <div className="dealerCommandShortcuts">
+        <Link className="dealerShortcutPrimary" href="/dealer/inventory/new"><b>＋</b><span><strong>Post a Car</strong><small>Photos + listing</small></span></Link>
+        <Link href="/dealer/leads"><b>●</b><span><strong>Notifications</strong><small>{summary.newToday||0} new · {summary.hotLeads||0} hot</small></span></Link>
+        <Link href="/dealer/leads"><b>☷</b><span><strong>Leads</strong><small>Open lead queue</small></span></Link>
+      </div>
 
-    <section className="dealerAttention">
-      <div className="dealerAttentionHead"><div><span>NOTIFICATIONS</span><h2>Needs Attention</h2></div><Link href="/dealer/leads">View leads →</Link></div>
-      <div className="dealerNoticeGrid">
-        <Link className={`dealerNotice ${newToday?"live":"quiet"}`} href="/dealer/leads"><i>NEW</i><strong>{newToday}</strong><div><b>New leads today</b><span>{newToday?"Fresh customer requests are waiting.":"No new leads yet today."}</span></div></Link>
-        <Link className={`dealerNotice ${appointmentsToday?"live":"quiet"}`} href="/dealer/dashboard"><i>CAL</i><strong>{appointmentsToday}</strong><div><b>Appointments today</b><span>{appointmentsToday?"Protect the appointment and show rate.":"Nothing scheduled for today yet."}</span></div></Link>
-        <Link className={`dealerNotice ${testDrives?"live":"quiet"}`} href="/dealer/leads"><i>DRIVE</i><strong>{testDrives}</strong><div><b>Test drive requests</b><span>{testDrives?"Confirm time, vehicle and customer.":"No open test-drive requests."}</span></div></Link>
-        <Link className={`dealerNotice ${hot?"hot":"quiet"}`} href="/dealer/leads"><i>HOT</i><strong>{hot}</strong><div><b>Hot buyers</b><span>{hot?"High-intent buyers need a response.":"No high-priority buyers waiting."}</span></div></Link>
+      {message&&<div className="crmAlert">{message}</div>}
+
+      <section className="crmKpis" id="appointments">
+        <article><span>New today</span><strong>{summary.newToday||0}</strong><small>fresh opportunities</small></article>
+        <article><span>Hot buyers</span><strong>{summary.hotLeads||0}</strong><small>priority 70+</small></article>
+        <article><span>Appointments</span><strong>{summary.appointments||0}</strong><small>protect the show rate</small></article>
+        <article><span>Live inventory</span><strong>{summary.publishedInventory||0}</strong><small>customer-visible cars</small></article>
+        <article><span>Sold</span><strong>{summary.sold||0}</strong><small>closed opportunities</small></article>
+      </section>
+
+      <div className="crmHeroGrid">
+        <section className="nextBestCard">
+          <div className="crmSectionHead"><div><span>DO THIS NOW</span><h2>Next Best Move</h2></div>{next&&<b>{Math.round(next.priority||0)} PRIORITY</b>}</div>
+          {next?<div className="nextLead">
+            <div className="nextIdentity"><span className="hotDot">HOT</span><div><h3>{next.name||"Unnamed buyer"}</h3><p>{next.vehicleInterest||"General vehicle inquiry"}</p></div></div>
+            <div className="nextSignals"><span>{next.kind||"lead"}</span><span>{stageLabels[next.pipelineStage]||next.pipelineStage}</span><span>{when(next.createdAt)}</span></div>
+            <div className="nextAction"><small>WDCC recommends</small><strong>{next.nextAction||"Make contact"}</strong><p>{next.phone?"Reach the buyer while intent is still fresh.":"Follow up through the available contact channel."}</p></div>
+            <div className="nextButtons">{next.phone&&<a className="crmPrimary" href={`tel:${next.phone}`}>Call now</a>}{next.phone&&<a href={`sms:${next.phone}`}>Text</a>}<Link href="/dealer/leads">Open lead</Link></div>
+          </div>:<div className="crmEmpty">No active leads yet. New website requests will appear here automatically.</div>}
+        </section>
+
+        <section className="scoreCard">
+          <div className="crmSectionHead"><div><span>TODAY'S SCORE</span><h2>Sales Momentum</h2></div></div>
+          <div className="scoreRing"><div><strong>{Math.min(100,responseSla)}</strong><span>coverage</span></div></div>
+          <div className="scoreRows"><div><span>Follow-up coverage</span><b>{responseSla}%</b></div><div><span>Qualified</span><b>{pipeline.qualified||0}</b></div><div><span>Shows</span><b>{pipeline.showed||0}</b></div><div><span>Deals working</span><b>{pipeline.deal||0}</b></div></div>
+          <p className="scoreNote">XP rewards appointments, shows and sold outcomes — not spam activity.</p>
+        </section>
+      </div>
+
+      <section className="pipelinePanel" id="pipeline">
+        <div className="crmSectionHead"><div><span>LEAD TO CLOSE</span><h2>Automotive Pipeline</h2></div><Link href="/dealer/leads">View all leads →</Link></div>
+        <div className="pipelineStages">{stageOrder.map(stage=><div key={stage}><strong>{pipeline[stage]||0}</strong><span>{stageLabels[stage]}</span><i style={{width:`${Math.min(100,(pipeline[stage]||0)*18)}%`}}/></div>)}</div>
+      </section>
+
+      <div className="crmLowerGrid">
+        <section className="crmPanel">
+          <div className="crmSectionHead"><div><span>PRIORITY QUEUE</span><h2>Hot Buyers</h2></div><Link href="/dealer/leads">All leads</Link></div>
+          <div className="hotList">{hot.slice(0,6).map((lead:any)=><article key={lead.id}>
+            <div className="leadScore">{Math.round(lead.priority||0)}</div>
+            <div className="hotPerson"><strong>{lead.name||"Unnamed buyer"}</strong><span>{lead.vehicleInterest||"General inquiry"}</span><small>{when(lead.createdAt)}</small></div>
+            <div className="hotAction"><b>{lead.nextAction}</b><select value={lead.pipelineStage||"new"} onChange={e=>moveLead(lead.id,e.target.value)} disabled={busy.startsWith(lead.id)}>{stageOrder.filter(s=>s!=="deal").concat(["deal_working","lost"]).map(s=><option key={s} value={s}>{stageLabels[s]||s}</option>)}</select></div>
+          </article>)}{!hot.length&&<div className="crmEmpty">No hot leads yet.</div>}</div>
+        </section>
+
+        <section className="crmPanel inventoryPulse">
+          <div className="crmSectionHead"><div><span>SELL WHAT IS LIVE</span><h2>Inventory Pulse</h2></div><Link href="/dealer/inventory">Manage →</Link></div>
+          <div className="inventoryPulseList">{inventory.slice(0,5).map((v:any)=><Link href={`/vehicle/${v.id}`} key={v.id}><div><strong>{v.year} {v.make} {v.model}</strong><span>{money(v.price)} · {Number(v.mileage||0).toLocaleString()} mi</span></div><b>LIVE</b></Link>)}{!inventory.length&&<div className="crmEmpty">No published inventory.</div>}</div>
+          <Link className="addVehicleQuick" href="/dealer/inventory/new">+ Add a vehicle</Link>
+        </section>
       </div>
     </section>
-
-    {latest&&<section className="dealerLatestLead"><div><span>LATEST LEAD</span><h3>{latest.name||"Unnamed buyer"}</h3><p>{latest.vehicleInterest||latest.kind||"General vehicle inquiry"}</p><small>{when(latest.createdAt)}</small></div><div className="dealerLatestActions">{latest.phone&&<a href={`tel:${latest.phone}`}>Call</a>}{latest.phone&&<a href={`sms:${latest.phone}`}>Text</a>}<Link href="/dealer/leads">Open Lead</Link></div></section>}
-    {message&&<div className="dealerLaunchMessage">{message}</div>}
-
-    <nav className="dealerQuickNav"><Link href="/dealer">Home</Link><Link href="/dealer/leads">Leads</Link><Link href="/dealer/inventory">Inventory</Link><Link href="/">Website</Link></nav>
   </main>;
 }
