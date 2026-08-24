@@ -1,0 +1,2 @@
+Force production deployment of current main after hero contrast correction.
+Expected source includes commit d5ee2d9ff57c8b6bb64871f3c5162b6bceb46721 and all later main commits.
