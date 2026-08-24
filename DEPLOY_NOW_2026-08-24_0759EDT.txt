@@ -1,0 +1,3 @@
+WDCC production deployment trigger.
+Purpose: deploy latest main containing the V52 lead/inventory contract, hardened dealer facade, restored 8AR visual baseline, and production QA fixes.
+Requested: 2026-08-24 07:59 America/New_York.
