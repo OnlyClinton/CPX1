@@ -2,6 +2,10 @@ name: Finalize WDCC 2vfD Production
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/finalize-2vfd-production.yml'
+  workflow_dispatch:
+
 jobs:
   promote:
     runs-on: ubuntu-latest
@@ -17,4 +21,4 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@latest promote wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app --yes --token "$VERCEL_TOKEN" --scope cpxagency
 
-# visual baseline repin: 2026-08-24T17:53-04:00
+# exact 2vfD baseline repin; path-scoped so future main improvements are not auto-overwritten
