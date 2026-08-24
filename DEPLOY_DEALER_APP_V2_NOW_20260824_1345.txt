@@ -1,0 +1,1 @@
+Deploy current main dealer app V2. Required acceptance: /dealer home contains Post a Car, Dashboard, Notifications/Needs Attention, and uses wdcc-logo-transparent.webp.
