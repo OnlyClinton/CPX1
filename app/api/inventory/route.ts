@@ -42,6 +42,7 @@ export async function POST(req:Request){
     const mileage=Math.trunc(Number(body?.mileage||0));
     const stock=text(body?.stock,80);
     const description=text(body?.description,3000);
+    const visibility=body?.internalOnly===true||String(body?.visibility||"").toLowerCase()==="internal"?"internal":"public";
     const maxYear=new Date().getUTCFullYear()+1;
 
     if(!Number.isInteger(year)||year<1901||year>maxYear)return NextResponse.json({ok:false,error:"valid_year_required"},{status:400});
@@ -61,10 +62,10 @@ export async function POST(req:Request){
 
     const item={
       id:crypto.randomUUID(),tenantId,year,make,model,trim,price,downPayment,mileage,stock,description,
-      status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now
+      visibility,internalOnly:visibility==="internal",status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now
     };
     state.vehicles.push(item);
-    state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,vehicleId:item.id});
+    state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,vehicleId:item.id,visibility});
     await writeState(state);
     return NextResponse.json({ok:true,item},{status:201});
   }catch(error){
