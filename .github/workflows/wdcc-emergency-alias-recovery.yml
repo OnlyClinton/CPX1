@@ -56,3 +56,5 @@ jobs:
           curl -fsS "https://$DEALER_DOMAIN/api/inventory" | jq -e '.ok == true' >/dev/null
           curl -fsSI "https://$DEALER_DOMAIN/dealer/login" >/dev/null
           echo 'WDCC_DEALER_ALIAS_RECOVERY=PASS'
+
+# recovery trigger: 2026-08-24T12:30Z
