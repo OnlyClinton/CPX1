@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 
 export function isDealerRuntime(request?:Request){
@@ -13,5 +15,3 @@ export function requestId(request:Request){
   const supplied=String(request.headers.get("x-wdcc-request-id")||request.headers.get("x-request-id")||"").trim().slice(0,160);
   return supplied||crypto.randomUUID();
 }
-
-import crypto from "node:crypto";
