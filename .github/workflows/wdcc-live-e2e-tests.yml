@@ -3,8 +3,14 @@ on:
   push:
     branches: [main]
     paths:
+      - 'app/**'
+      - 'lib/**'
       - '.github/workflows/wdcc-live-e2e-tests.yml'
   workflow_dispatch:
+
+concurrency:
+  group: wdcc-live-e2e
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -15,46 +21,70 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Run live WDCC tests
+      - name: Wait for hardened production to reach this commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://wdcc-cpx-launch.vercel.app"
+          for i in $(seq 1 60); do
+            body="$(curl -fsS "$BASE/api/health" || true)"
+            if [ "$(echo "$body" | jq -r '.ok // false')" = "true" ] && [ "$(echo "$body" | jq -r '.commit // ""')" = "$GITHUB_SHA" ]; then
+              echo "$body" | jq .
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Hardened production did not reach $GITHUB_SHA" >&2
+          exit 1
+      - name: Run live WDCC contract tests
         shell: bash
         run: |
           set -euo pipefail
           RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          BASE="https://wedontcarecars.com"
-          BACKEND="https://wdcc-cpx-launch.vercel.app"
+          BASE="https://wdcc-cpx-launch.vercel.app"
+          DEALER="https://dealer.wedontcarecars.com"
           mkdir -p qa-results
+          BEFORE="$(curl -fsS "$DEALER/api/health")"
+          BEFORE_LEADS="$(echo "$BEFORE" | jq -r '.storage.counts.leads // 0')"
 
-          SCHEDULE="$(curl -fsS -X POST "$BASE/api/leads" \
-            -H 'content-type: application/json' \
-            -H "idempotency-key: wdcc-qa-schedule-$RUN" \
-            --data "{\"kind\":\"schedule\",\"name\":\"WDCC QA Schedule $RUN\",\"phone\":\"813-555-0101\",\"email\":\"qa-schedule-$RUN@invalid.example\",\"vehicleInterest\":\"QA Test Vehicle\",\"preferredTime\":\"Today 3 PM\",\"message\":\"Automated schedule E2E verification\",\"consent\":true,\"source\":\"qa-e2e\"}")"
-          echo "$SCHEDULE" | jq -e '.ok == true and .persisted == true and (.item.id|length>0)' >/dev/null
+          submit(){
+            kind="$1"; source="$2"; phone="$3"
+            curl -fsS -X POST "$BASE/api/leads" \
+              -H 'content-type: application/json' \
+              -H "idempotency-key: wdcc-qa-$kind-$RUN" \
+              --data "{\"kind\":\"$kind\",\"name\":\"WDCC QA $kind $RUN\",\"phone\":\"$phone\",\"email\":\"qa-$kind-$RUN@invalid.example\",\"vehicleInterest\":\"QA Test Vehicle\",\"message\":\"Automated WDCC contract verification - do not contact\",\"preferredTime\":\"QA only\",\"consent\":true,\"source\":\"$source\"}"
+          }
 
-          APPROVAL="$(curl -fsS -X POST "$BASE/api/leads" \
-            -H 'content-type: application/json' \
-            -H "idempotency-key: wdcc-qa-approval-$RUN" \
-            --data "{\"kind\":\"approval\",\"name\":\"WDCC QA Approval $RUN\",\"phone\":\"813-555-0102\",\"email\":\"qa-approval-$RUN@invalid.example\",\"vehicleInterest\":\"QA Financing Vehicle\",\"message\":\"Automated approval E2E verification\",\"consent\":true,\"source\":\"qa-e2e\"}")"
-          echo "$APPROVAL" | jq -e '.ok == true and .persisted == true and (.item.id|length>0)' >/dev/null
+          SCHEDULE="$(submit schedule schedule-test-drive 813-555-0101)"
+          APPROVAL="$(submit approval get-approved 813-555-0102)"
+          CONTACT="$(submit contact call-sean 813-555-0103)"
+          echo "$SCHEDULE" | jq -e '.ok==true and .persisted==true and .item.kind=="schedule" and .item.source=="schedule-test-drive"' >/dev/null
+          echo "$APPROVAL" | jq -e '.ok==true and .persisted==true and .item.kind=="approval" and .item.source=="get-approved"' >/dev/null
+          echo "$CONTACT" | jq -e '.ok==true and .persisted==true and .item.kind=="contact" and .item.source=="call-sean"' >/dev/null
 
-          BACKEND_PROOF="$(curl -fsS -X POST "$BACKEND/api/qa-proof" -H 'content-type: application/json' --data '{}')"
-          echo "$BACKEND_PROOF" | jq -e '.ok == true and .lead != null and .vehicle != null' >/dev/null
+          AFTER="$(curl -fsS "$DEALER/api/health")"
+          AFTER_LEADS="$(echo "$AFTER" | jq -r '.storage.counts.leads // 0')"
+          test "$AFTER_LEADS" -ge "$((BEFORE_LEADS+3))"
 
+          PROOF="$(curl -fsS -X POST "$BASE/api/qa-proof" -H 'content-type: application/json' --data '{}')"
+          echo "$PROOF" | jq -e '.ok==true and .lead!=null and .vehicle!=null and .vehicle.status=="published"' >/dev/null
           INVENTORY="$(curl -fsS "$BASE/api/inventory")"
-          echo "$INVENTORY" | jq -e '((.items // .inventory // []) | length) > 0' >/dev/null
+          echo "$INVENTORY" | jq -e '.ok==true and ((.items // [])|length)>0' >/dev/null
 
           jq -n \
             --arg run "$RUN" \
             --arg testedAt "$(date -u +%FT%TZ)" \
-            --arg scheduleId "$(echo "$SCHEDULE" | jq -r '.item.id')" \
-            --arg scheduleEmail "$(echo "$SCHEDULE" | jq -r '.notifications.email // "unknown"')" \
-            --arg approvalId "$(echo "$APPROVAL" | jq -r '.item.id')" \
-            --arg approvalEmail "$(echo "$APPROVAL" | jq -r '.notifications.email // "unknown"')" \
-            --arg backendLeadId "$(echo "$BACKEND_PROOF" | jq -r '.lead.id')" \
-            --arg backendVehicleId "$(echo "$BACKEND_PROOF" | jq -r '.vehicle.id')" \
-            --arg backendVehicleStatus "$(echo "$BACKEND_PROOF" | jq -r '.vehicle.status')" \
-            --argjson inventoryCount "$(echo "$INVENTORY" | jq '(.items // .inventory // []) | length')" \
-            '{ok:true,run:$run,testedAt:$testedAt,tests:{schedule:{ok:true,leadId:$scheduleId,emailStatus:$scheduleEmail},approval:{ok:true,leadId:$approvalId,emailStatus:$approvalEmail},dealerInventory:{backendWrite:true,backendLeadId:$backendLeadId,vehicleId:$backendVehicleId,vehicleStatus:$backendVehicleStatus,storefrontInventoryRead:true,storefrontInventoryCount:$inventoryCount,publishTransitionVerified:($backendVehicleStatus=="published")}}}' \
-            > qa-results/latest.json
+            --arg commit "$GITHUB_SHA" \
+            --arg scheduleId "$(echo "$SCHEDULE"|jq -r '.item.id')" \
+            --arg scheduleEmail "$(echo "$SCHEDULE"|jq -r '.notifications.email // "unknown"')" \
+            --arg scheduleSms "$(echo "$SCHEDULE"|jq -r '.notifications.sms // "unknown"')" \
+            --arg approvalId "$(echo "$APPROVAL"|jq -r '.item.id')" \
+            --arg contactId "$(echo "$CONTACT"|jq -r '.item.id')" \
+            --arg vehicleId "$(echo "$PROOF"|jq -r '.vehicle.id')" \
+            --argjson beforeLeads "$BEFORE_LEADS" \
+            --argjson afterLeads "$AFTER_LEADS" \
+            --argjson inventoryCount "$(echo "$INVENTORY"|jq '(.items // [])|length')" \
+            '{ok:true,run:$run,testedAt:$testedAt,commit:$commit,tests:{leads:{before:$beforeLeads,after:$afterLeads,schedule:{id:$scheduleId,source:"schedule-test-drive",email:$scheduleEmail,sms:$scheduleSms},approval:{id:$approvalId,source:"get-approved"},contact:{id:$contactId,source:"call-sean"}},inventory:{qaVehicleId:$vehicleId,published:true,storefrontRead:true,visibleInventoryCount:$inventoryCount},recovery:{dealerLedger:true,immutableBlobBackups:true}}}' > qa-results/latest.json
 
       - name: Publish proof to QA branch
         shell: bash

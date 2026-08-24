@@ -8,114 +8,34 @@ const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
+const DEALER_BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
+const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 
-function leadKind(body:any){
-  const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();
-  if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";
-  if(["contact","call","call-or-contact","general"].includes(raw))return "contact";
-  if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";
-  return raw;
-}
-
-function upstreamRequestType(kind:string){
-  if(kind==="schedule")return "test-drive";
-  if(kind==="approval")return "pre-approval";
-  return "contact";
-}
+function leadKind(body:any){const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";if(["contact","call","call-or-contact","general"].includes(raw))return "contact";if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";return raw;}
+function upstreamRequestType(kind:string){if(kind==="schedule")return "test-drive";if(kind==="approval")return "pre-approval";return "contact";}
+function notificationText(lead:any){return [`New WDCC ${lead.kind} lead`,`Name: ${lead.name}`,`Phone: ${lead.phone||"Not provided"}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`].join("\n");}
 
 async function sendNotifications(lead:any){
-  const notifications:{email:string;webhook:string}={email:"not_configured",webhook:"not_configured"};
-  const resendKey=process.env.RESEND_API_KEY;
-  const recipients=(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||"bigcatscrap@gmail.com").split(",").map(value=>value.trim()).filter(Boolean);
-  if(resendKey&&recipients.length){
-    try{
-      const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${resendKey}`,"Content-Type":"application/json"},body:JSON.stringify({from:process.env.WDCC_LEAD_FROM_EMAIL||"WDCC Leads <leads@wedontcarecars.com>",to:recipients,subject:`New WDCC ${lead.kind} lead: ${lead.name}`,text:[`Lead type: ${lead.kind}`,`Name: ${lead.name}`,`Phone: ${lead.phone}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`Created by: ${lead.createdBy||"public"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`].join("\n")}),signal:AbortSignal.timeout(8000)});
-      notifications.email=response.ok?"sent":`failed_${response.status}`;
-    }catch{notifications.email="failed";}
-  }
-  if(process.env.WDCC_LEAD_WEBHOOK_URL){
-    try{
-      const response=await fetch(process.env.WDCC_LEAD_WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"lead.created",lead}),signal:AbortSignal.timeout(8000)});
-      notifications.webhook=response.ok?"sent":`failed_${response.status}`;
-    }catch{notifications.webhook="failed";}
-  }
+  const notifications:{email:string;sms:string;webhook:string}={email:"not_configured",sms:"not_configured",webhook:"not_configured"};
+  const resendKey=process.env.RESEND_API_KEY;const recipients=(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||"bigcatscrap@gmail.com").split(",").map(value=>value.trim()).filter(Boolean);
+  if(resendKey&&recipients.length){try{const response=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${resendKey}`,"Content-Type":"application/json"},body:JSON.stringify({from:process.env.WDCC_LEAD_FROM_EMAIL||"WDCC Leads <leads@wedontcarecars.com>",to:recipients,subject:`New WDCC ${lead.kind} lead: ${lead.name}`,text:notificationText(lead)}),signal:AbortSignal.timeout(8000)});notifications.email=response.ok?"sent":`failed_${response.status}`;}catch{notifications.email="failed";}}
+  const twilioSid=process.env.TWILIO_ACCOUNT_SID;const twilioToken=process.env.TWILIO_AUTH_TOKEN;const twilioFrom=process.env.TWILIO_FROM_NUMBER;const smsTo=process.env.WDCC_LEAD_NOTIFICATION_PHONE;
+  if(twilioSid&&twilioToken&&twilioFrom&&smsTo){try{const form=new URLSearchParams({From:twilioFrom,To:smsTo,Body:notificationText(lead).slice(0,1400)});const response=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(twilioSid)}/Messages.json`,{method:"POST",headers:{Authorization:`Basic ${Buffer.from(`${twilioSid}:${twilioToken}`).toString("base64")}`,"Content-Type":"application/x-www-form-urlencoded"},body:form.toString(),signal:AbortSignal.timeout(8000)});notifications.sms=response.ok?"sent":`failed_${response.status}`;}catch{notifications.sms="failed";}}
+  if(process.env.WDCC_LEAD_WEBHOOK_URL){try{const response=await fetch(process.env.WDCC_LEAD_WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"lead.created",lead}),signal:AbortSignal.timeout(8000)});notifications.webhook=response.ok?"sent":`failed_${response.status}`;}catch{notifications.webhook="failed";}}
   return notifications;
 }
 
-async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
-  const payload={
-    name:body.name,
-    phone:body.phone,
-    email:body.email,
-    vehicle:body.vehicleInterest,
-    message:[body.preferredTime?`Preferred time: ${body.preferredTime}`:"",body.message||""].filter(Boolean).join(" | "),
-    requestType:upstreamRequestType(kind),
-    consent:true,
-    source:body.source||"wedontcarecars.com",
-    idempotencyKey:idempotencyKey||undefined
-  };
-  const response=await fetch(LEAD_UPSTREAM,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});
-  const json=await response.json().catch(()=>({}));
-  if(!response.ok||!json?.ok||!json?.leadId)throw Error(json?.error||`LEAD_UPSTREAM_${response.status}`);
-  const item={
-    id:String(json.leadId),kind,name:body.name,phone:body.phone,email:body.email,
-    vehicleInterest:body.vehicleInterest,message:body.message,preferredTime:body.preferredTime,
-    consent:true,status:"new",source:body.source||"website",idempotencyKey:idempotencyKey||null,
-    createdBy:"public",createdByRole:"public",createdAt:new Date().toISOString(),transport:"lead-upstream"
-  };
-  return {item,notifications:{email:json.emailStatus||json.email||"upstream",webhook:"upstream"},mailto:json.mailto||null};
-}
+async function persistViaDealer(body:any,kind:string,idempotencyKey:string){const payload={...body,kind,consent:true,idempotencyKey:idempotencyKey||undefined};const response=await fetch(`${DEALER_BACKEND}/api/leads`,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});const json=await response.json().catch(()=>({}));if(!response.ok||!json?.ok||!json?.item?.id)throw Error(json?.error||`DEALER_LEAD_${response.status}`);return json;}
+async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){const payload={name:body.name,phone:body.phone,email:body.email,vehicle:body.vehicleInterest,message:[body.preferredTime?`Preferred time: ${body.preferredTime}`:"",body.message||""].filter(Boolean).join(" | "),requestType:upstreamRequestType(kind),consent:true,source:body.source||"wedontcarecars.com",idempotencyKey:idempotencyKey||undefined};const response=await fetch(LEAD_UPSTREAM,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});const json=await response.json().catch(()=>({}));if(!response.ok||!json?.ok||!json?.leadId)throw Error(json?.error||`LEAD_UPSTREAM_${response.status}`);const item={id:String(json.leadId),kind,name:body.name,phone:body.phone,email:body.email,vehicleInterest:body.vehicleInterest,message:body.message,preferredTime:body.preferredTime,consent:true,status:"new",source:body.source||"website",idempotencyKey:idempotencyKey||null,createdBy:"public",createdByRole:"public",createdAt:new Date().toISOString(),transport:"lead-upstream"};return {item,notifications:{email:json.emailStatus||json.email||"upstream",sms:json.smsStatus||json.sms||"upstream",webhook:"upstream"},mailto:json.mailto||null};}
 
-export async function GET(){
-  const user=await currentUser();
-  if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
-  try{
-    const state=await readState();
-    const tenantId=String(user.tenantId||"wdcc");
-    const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
-    return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
-  }catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}
-}
+export async function GET(){const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
 
 export async function POST(req:Request){
   try{
-    const actor=await currentUser().catch(()=>null);
-    const body=await req.json();
-    const kind=leadKind(body);
-    const normalized={
-      name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),
-      phone:text(body?.phone,40),
-      email:text(body?.email,160).toLowerCase(),
-      vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),
-      message:text(body?.message??body?.notes,2000),
-      preferredTime:text(body?.preferredTime??body?.appointmentTime,120),
-      source:text(body?.source,80)||"website"
-    };
-    const consent=body?.consent===true||String(body?.consent||"").toLowerCase()==="true"||body?.consent==="on";
-    if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});
-    if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});
-    if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});
-    if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
-
-    const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160);
-    try{
-      const state=await readState();
-      if(idempotencyKey){const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{},source:"local-ledger"},{status:200});}
-
-      const now=new Date().toISOString();
-      const createdBy=actor?.id||"public";
-      const createdByRole=actor?.role||"public";
-      const tenantId=actor?.tenantId||"wdcc";
-      const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,status:"new",idempotencyKey:idempotencyKey||null,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now};
-      state.leads.push(lead);
-      state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source});
-      const saved=await writeState(state);
-      const notifications=await sendNotifications(lead);
-      lead.notifications=notifications;
-      return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});
-    }catch(localError){
-      const upstream=await persistViaUpstream(normalized,kind,idempotencyKey);
-      return NextResponse.json({ok:true,persisted:true,item:upstream.item,notifications:upstream.notifications,mailto:upstream.mailto,source:"lead-upstream",localError:localError instanceof Error?localError.message:"local_persistence_failed"},{status:201,headers:{"Cache-Control":"no-store"}});
-    }
+    const actor=await currentUser().catch(()=>null);const body=await req.json();const kind=leadKind(body);const normalized={name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),source:text(body?.source,80)||`cta-${kind||"unknown"}`};const consent=body?.consent===true||String(body?.consent||"").toLowerCase()==="true"||body?.consent==="on";
+    if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
+    const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160);const host=new URL(req.url).host.toLowerCase();const isCanonicalDealer=process.env.VERCEL_PROJECT_ID===DEALER_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.startsWith("wdcc-dealer-portal");
+    if(!isCanonicalDealer){try{const dealer=await persistViaDealer(normalized,kind,idempotencyKey);return NextResponse.json({...dealer,source:"dealer-ledger"},{status:dealer?.deduplicated?200:201,headers:{"Cache-Control":"no-store"}});}catch{}}
+    try{const state=await readState();if(idempotencyKey){const existing=state.leads.find(lead=>lead.idempotencyKey===idempotencyKey);if(existing)return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:existing,notifications:existing.notifications||{},source:"local-ledger"},{status:200});}const now=new Date().toISOString();const createdBy=actor?.id||"public";const createdByRole=actor?.role||"public";const tenantId=actor?.tenantId||"wdcc";const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,status:"new",idempotencyKey:idempotencyKey||null,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now};state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source});const saved=await writeState(state);const notifications=await sendNotifications(lead);lead.notifications=notifications;return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});}catch(localError){const upstream=await persistViaUpstream(normalized,kind,idempotencyKey);return NextResponse.json({ok:true,persisted:true,item:upstream.item,notifications:upstream.notifications,mailto:upstream.mailto,source:"lead-upstream",localError:localError instanceof Error?localError.message:"local_persistence_failed"},{status:201,headers:{"Cache-Control":"no-store"}});}
   }catch(error){return NextResponse.json({ok:false,persisted:false,error:error instanceof Error?error.message:"create_failed"},{status:500});}
 }

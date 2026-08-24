@@ -2,7 +2,7 @@
 
 import {useState} from "react";
 
-export default function LeadForm({kind}:{kind:"schedule"|"contact"|"approval"}){
+export default function LeadForm({kind,source}:{kind:"schedule"|"contact"|"approval";source?:string}){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   async function submit(event:React.FormEvent<HTMLFormElement>){
@@ -10,9 +10,13 @@ export default function LeadForm({kind}:{kind:"schedule"|"contact"|"approval"}){
     setBusy(true);setMessage("Sending…");
     const form=new FormData(event.currentTarget);
     const body=Object.fromEntries(form.entries());
+    const querySource=typeof window!=="undefined"?new URLSearchParams(window.location.search).get("source"):null;
+    const vehicle=typeof window!=="undefined"?new URLSearchParams(window.location.search).get("vehicle"):null;
+    const leadSource=(querySource||source||`cta-${kind}`).slice(0,80);
+    if(vehicle&&!body.vehicleInterest)body.vehicleInterest=vehicle;
     const response=await fetch("/api/leads",{
       method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":crypto.randomUUID()},
-      body:JSON.stringify({...body,kind,consent:form.get("consent")==="on",source:"website"})
+      body:JSON.stringify({...body,kind,consent:form.get("consent")==="on",source:leadSource})
     });
     const json=await response.json().catch(()=>({}));
     if(response.ok){event.currentTarget.reset();setMessage("Received. Sean's team will follow up shortly.");}
@@ -27,7 +31,7 @@ export default function LeadForm({kind}:{kind:"schedule"|"contact"|"approval"}){
       {kind!=="contact"&&<label>Vehicle of interest<input name="vehicleInterest" maxLength={240}/></label>}
       {kind==="schedule"&&<label>Preferred date or time<input name="preferredTime" maxLength={120}/></label>}
       <label className="wide">Message<textarea name="message" maxLength={2000}/></label>
-      <label className="consent wide"><input name="consent" type="checkbox" required/> I agree that WDCC may contact me about this request.</label>
+      <label className="consent wide"><input name="consent" type="checkbox" required/> I agree that WDCC may contact me by phone, text, or email about this request.</label>
     </div>
     <button className="cta red" disabled={busy} type="submit">{busy?"SENDING…":"SEND REQUEST"}</button>
     {message&&<div className="leadMessage" role="status" aria-live="polite">{message}</div>}
