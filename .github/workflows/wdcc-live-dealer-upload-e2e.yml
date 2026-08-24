@@ -99,3 +99,5 @@ jobs:
           [ -f /tmp/result.json ] && err="$(jq -r '.error // ""' /tmp/result.json)"
           body=$(printf 'Status: **%s**\nDependencies: `%s`\nBindings: `%s`\nSigned-session creation: `%s`\nLive auth check: `%s` HTTP `%s`\nBrowser install: `%s`\nDealer UI publish flow: `%s`\nVehicle: `%s`\nPhotos: `%s`\nPublic visible: `%s`\nError: `%s`' "$STATUS" "$DEPS" "$BINDINGS" "$SESSION" "$AUTH" "$AUTH_CODE" "$BROWSERDEPS" "$BROWSER" "$VEHICLE" "$PHOTOS" "$PUBLIC" "$err")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer upload diagnostic ${GITHUB_SHA:0:7}" --body "$body" || true
+
+# Deep-QA acceptance trigger: 2026-08-24. This workflow does not deploy application code.
