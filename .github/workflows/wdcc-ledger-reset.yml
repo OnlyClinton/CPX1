@@ -32,7 +32,7 @@ jobs:
           mkdir -p /tmp/dealer/.vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json
           cd /tmp/dealer
-          vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
           grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
       - name: Back up and clean synthetic ledger records
         id: clean
