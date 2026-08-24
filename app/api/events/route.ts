@@ -39,8 +39,9 @@ export async function POST(request:Request){
     if(!event||!allowedEvent.test(event))return NextResponse.json({ok:false,error:"invalid_event"},{status:400});
     const metadata=body?.metadata&&typeof body.metadata==="object"?body.metadata:null;
     if(metadata&&JSON.stringify(metadata).length>8192)return NextResponse.json({ok:false,error:"metadata_too_large"},{status:413});
+    const eventId=text(body?.eventId??request.headers.get("x-wdcc-event-id"),160);
     const record=await recordAnalyticsEvent({
-      tenantId:"wdcc",
+      tenantId:"wdcc",dedupeKey:eventId?`client:${eventId}`:null,
       event,at:text(body?.at,80)||undefined,
       sessionId:text(body?.sessionId,160)||null,anonymousUserId:text(body?.anonymousUserId,160)||null,
       leadId:text(body?.leadId,160)||null,vehicleId:text(body?.vehicleId,160)||null,
@@ -50,7 +51,7 @@ export async function POST(request:Request){
       referralCode:text(body?.referralCode,160)||null,pagePath:text(body?.pagePath??body?.path,300)||null,
       landingPath:text(body?.landingPath,300)||null,referrer:text(body?.referrer,700)||null,
       channel:text(body?.channel,80)||null,cta:text(body?.cta,100)||null,
-      metadata
+      metadata:{...(metadata||{}),...(eventId?{eventId}:{})}
     });
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-WDCC-Event-ID":record.id}});
   }catch(error){
