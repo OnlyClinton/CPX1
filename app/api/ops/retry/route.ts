@@ -8,6 +8,8 @@ export const dynamic="force-dynamic";
 const roles=new Set(["tenant_admin","platform_admin"]);
 const UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
 const text=(v:unknown,max:number)=>String(v??"").trim().slice(0,max);
+const nowIso=()=>new Date().toISOString();
+const backoffMs=(attempt:number)=>Math.min(24*60*60_000,15*60_000*Math.pow(2,Math.max(0,Math.min(attempt-1,8))));
 
 function notificationText(lead:any){return [`New WDCC ${lead.kind||"lead"} lead`,`Name: ${lead.name}`,`Phone: ${lead.phone||"Not provided"}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`].join("\n")}
 async function retryUpstream(lead:any){
@@ -23,24 +25,40 @@ async function retryNotifications(lead:any){
   return current;
 }
 function authorizedCron(request:Request){const secret=process.env.CRON_SECRET;return Boolean(secret&&request.headers.get("authorization")===`Bearer ${secret}`)}
+function ensureCircuit(state:any){state.ops=state.ops&&typeof state.ops==="object"?state.ops:{};state.ops.circuits=state.ops.circuits&&typeof state.ops.circuits==="object"?state.ops.circuits:{};state.ops.circuits.leadUpstream=state.ops.circuits.leadUpstream&&typeof state.ops.circuits.leadUpstream==="object"?state.ops.circuits.leadUpstream:{failures:0,state:"closed",openUntil:null};return state.ops.circuits.leadUpstream}
+function circuitOpen(c:any){return c?.state==="open"&&c?.openUntil&&Date.parse(c.openUntil)>Date.now()}
+function circuitSuccess(c:any){c.failures=0;c.state="closed";c.openUntil=null;c.lastSuccessAt=nowIso();c.lastError=null}
+function circuitFailure(c:any,error:string){c.failures=Number(c.failures||0)+1;c.lastFailureAt=nowIso();c.lastError=text(error,500);if(c.failures>=3){const cool=Math.min(6*60*60_000,30*60_000*Math.pow(2,Math.min(c.failures-3,4)));c.state="open";c.openUntil=new Date(Date.now()+cool).toISOString()}}
+
 async function runWorker(){
-  const state=await readState();let changed=false;let attempted=0;let recovered=0;let failed=0;
+  const state:any=await readState();const circuit=ensureCircuit(state);let changed=false;let attempted=0;let recovered=0;let failed=0;let skippedBackoff=0;let skippedCircuit=0;
+  if(circuit?.state==="open"&&circuit?.openUntil&&Date.parse(circuit.openUntil)<=Date.now()){circuit.state="half_open";changed=true}
   for(const lead of state.leads as any[]){
     if(lead?.qa===true||String(lead?.status||"").toLowerCase()==="test")continue;
     const needsSync=String(lead?.sync?.upstream||"")!=="synced";
     const needsNotify=Object.values(lead?.notifications||{}).some(v=>String(v||"").startsWith("failed"));
-    if(!needsSync&&!needsNotify)continue;attempted++;
+    if(!needsSync&&!needsNotify)continue;
+    const nextRetryAt=String(lead?.sync?.nextRetryAt||"");if(nextRetryAt&&Date.parse(nextRetryAt)>Date.now()){skippedBackoff++;continue}
+    attempted++;let upstreamFailed=false;let upstreamError="";
     try{
-      if(needsSync){const upstreamLeadId=await retryUpstream(lead);lead.upstreamLeadId=upstreamLeadId;lead.sync={...(lead.sync||{}),upstream:"synced",upstreamLeadId,syncedAt:new Date().toISOString(),lastError:null};changed=true;}
+      if(needsSync){
+        if(circuitOpen(circuit)){skippedCircuit++;throw Error("lead_upstream_circuit_open")}
+        try{const upstreamLeadId=await retryUpstream(lead);lead.upstreamLeadId=upstreamLeadId;lead.sync={...(lead.sync||{}),upstream:"synced",upstreamLeadId,syncedAt:nowIso(),lastError:null};circuitSuccess(circuit);changed=true;}catch(error){upstreamFailed=true;upstreamError=error instanceof Error?error.message:"upstream_retry_failed";circuitFailure(circuit,upstreamError);changed=true;throw error}
+      }
       if(needsNotify){lead.notifications=await retryNotifications(lead);changed=true;}
       const stillBroken=String(lead?.sync?.upstream||"")!=="synced"||Object.values(lead?.notifications||{}).some(v=>String(v||"").startsWith("failed"));
       if(stillBroken)throw Error("delivery_still_degraded");
-      recovered++;lead.updatedAt=new Date().toISOString();
+      recovered++;lead.updatedAt=nowIso();lead.sync={...(lead.sync||{}),retryAttempts:0,nextRetryAt:null,lastRetryAt:nowIso()};
       await resolveDeadLettersForEntity("lead",lead.id,lead.tenantId||"wdcc","lead delivery recovered").catch(()=>{});
-      await recordAnalyticsEvent({event:"lead.retry.recovered",tenantId:String(lead.tenantId||"wdcc"),leadId:lead.id,channel:"ops",metadata:{upstream:lead?.sync?.upstream,notifications:lead.notifications}}).catch(()=>{});
-    }catch(error){failed++;lead.updatedAt=new Date().toISOString();changed=true;await recordDeadLetter({category:"lead_delivery",stage:"retry",entityType:"lead",entityId:text(lead.id,180),tenantId:text(lead.tenantId||"wdcc",180),requestId:text(lead.requestId,180),retryable:true,attempts:Number(lead?.sync?.retryAttempts||0)+1,error:error instanceof Error?error.message:"retry_failed",nextAttemptAt:new Date(Date.now()+60*60*1000).toISOString(),context:{upstream:lead?.sync?.upstream||null,notifications:lead?.notifications||null}}).catch(()=>{});lead.sync={...(lead.sync||{}),retryAttempts:Number(lead?.sync?.retryAttempts||0)+1,lastRetryAt:new Date().toISOString()};}
+      await recordAnalyticsEvent({event:"lead.retry.recovered",tenantId:String(lead.tenantId||"wdcc"),leadId:lead.id,channel:"ops",metadata:{upstream:lead?.sync?.upstream,notifications:lead.notifications,circuitState:circuit.state}}).catch(()=>{});
+    }catch(error){
+      failed++;const attempts=Number(lead?.sync?.retryAttempts||0)+1;const delay=backoffMs(attempts);lead.updatedAt=nowIso();changed=true;
+      const reason=error instanceof Error?error.message:"retry_failed";const nextAttemptAt=new Date(Date.now()+delay).toISOString();
+      await recordDeadLetter({category:"lead_delivery",stage:"retry",entityType:"lead",entityId:text(lead.id,180),tenantId:text(lead.tenantId||"wdcc",180),requestId:text(lead.requestId,180),retryable:true,attempts,error:reason,nextAttemptAt,context:{upstream:lead?.sync?.upstream||null,notifications:lead?.notifications||null,circuitState:circuit.state,circuitOpenUntil:circuit.openUntil||null,upstreamFailed,upstreamError:upstreamError||null}}).catch(()=>{});
+      lead.sync={...(lead.sync||{}),retryAttempts:attempts,lastRetryAt:nowIso(),nextRetryAt,lastError:reason};
+    }
   }
-  if(changed)await writeState(state);return {attempted,recovered,failed};
+  if(changed)await writeState(state);return {attempted,recovered,failed,skippedBackoff,skippedCircuit,circuit:{state:circuit.state,failures:Number(circuit.failures||0),openUntil:circuit.openUntil||null,lastError:circuit.lastError||null}};
 }
 export async function GET(request:Request){if(!authorizedCron(request))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{return NextResponse.json({ok:true,...await runWorker()},{headers:{"Cache-Control":"no-store"}})}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"retry_worker_failed"},{status:500})}}
 export async function POST(){const user=await currentUser().catch(()=>null);if(!user||!roles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{return NextResponse.json({ok:true,...await runWorker()},{headers:{"Cache-Control":"private, no-store"}})}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"retry_worker_failed"},{status:500})}}
