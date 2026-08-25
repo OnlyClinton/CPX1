@@ -2,14 +2,15 @@ import crypto from "node:crypto";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readState,writeState} from "../../../lib/store";
-import {canonicalDealerBackend,WDCC_DEALER_PROJECT_ID,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
-const DEALER_BACKEND=canonicalDealerBackend();
+const DEALER_BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch.vercel.app").replace(/\/$/,"");
 
 function leadKind(body:any){const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";if(["contact","call","call-or-contact","general"].includes(raw))return "contact";if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";return raw;}
 function upstreamRequestType(kind:string){if(kind==="schedule")return "test-drive";if(kind==="approval")return "pre-approval";return "contact";}
@@ -39,11 +40,19 @@ async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
   return {leadId:String(json.leadId),emailStatus:json.emailStatus||json.email||"upstream",smsStatus:json.smsStatus||json.sms||"upstream",mailto:json.mailto||null};
 }
 
-function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===WDCC_DEALER_PROJECT_ID||project===WDCC_PHOENIX_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
-
-export async function GET(){const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/leads");
+  const user=await currentUser();
+  if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
+  try{
+    const state=await readState();const tenantId=String(user.tenantId||"wdcc");
+    const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+    return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});
+  }catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}
+}
 
 export async function POST(req:Request){
+  if(!isDealerRuntime(req))return proxyDealer(req,"/api/leads");
   try{
     const actor=await currentUser().catch(()=>null);const body=await req.json();const kind=leadKind(body);
     const normalized={name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),vehicleId:text(body?.vehicleId,160),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),source:text(body?.source,80)||`cta-${kind||"unknown"}`,pagePath:text(body?.pagePath,240),referrer:text(body?.referrer,500),utmSource:text(body?.utmSource,120),utmMedium:text(body?.utmMedium,120),utmCampaign:text(body?.utmCampaign,160),utmContent:text(body?.utmContent,160),clickId:text(body?.clickId,220)};
@@ -51,25 +60,13 @@ export async function POST(req:Request){
     if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
     const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160)||crypto.randomUUID();
     const qa=isQaLead(body,normalized,idempotencyKey);
-
-    if(!canonicalHost(req)){
-      try{const dealer=await persistViaDealer(normalized,kind,idempotencyKey,qa);return NextResponse.json({...dealer,source:"dealer-ledger"},{status:dealer?.deduplicated?200:201,headers:{"Cache-Control":"no-store"}});}catch(dealerError){
-        if(qa)return NextResponse.json({ok:false,persisted:false,qa:true,error:"qa_dealer_persistence_failed",dealerError:dealerError instanceof Error?dealerError.message:"dealer_persistence_failed"},{status:503,headers:{"Cache-Control":"no-store"}});
-        const upstream=await persistViaUpstream(normalized,kind,idempotencyKey);
-        return NextResponse.json({ok:true,persisted:true,item:{id:upstream.leadId,kind,...normalized,consent:true,status:"new",idempotencyKey,transport:"lead-upstream"},sync:{dealer:"failed",upstream:"synced",upstreamLeadId:upstream.leadId},notifications:{email:upstream.emailStatus,sms:upstream.smsStatus,webhook:"upstream"},source:"lead-upstream",dealerError:dealerError instanceof Error?dealerError.message:"dealer_persistence_failed"},{status:201,headers:{"Cache-Control":"no-store"}});
-      }
-    }
-
     const state=await readState();
     if(idempotencyKey){const existing:any=state.leads.find((lead:any)=>lead.idempotencyKey===idempotencyKey);if(existing){const existingQa=existing.qa===true||existing.status==="test"||isQaLead(existing,existing,idempotencyKey);if(!existingQa&&existing?.sync?.upstream!=="synced"){try{const up=await persistViaUpstream(existing,existing.kind||kind,idempotencyKey);existing.upstreamLeadId=up.leadId;existing.sync={...(existing.sync||{}),upstream:"synced",upstreamLeadId:up.leadId,syncedAt:new Date().toISOString()};existing.updatedAt=new Date().toISOString();await writeState(state);}catch{}}return NextResponse.json({ok:true,persisted:true,deduplicated:true,qa:existingQa,item:existing,sync:existing.sync||{},notifications:existing.notifications||{},source:"local-ledger"},{status:200});}}
-
     const now=new Date().toISOString();const createdBy=actor?.id||"public";const createdByRole=actor?.role||"public";const tenantId=actor?.tenantId||"wdcc";
     const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,consentVersion:"wdcc-request-v1",qa,status:qa?"test":"new",idempotencyKey,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now,sync:{dealer:"saved",upstream:qa?"suppressed_qa":"pending"}};
     state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${qa?"qa.":""}${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source,idempotencyKey,qa});
     let saved=await writeState(state);
-
     if(qa){lead.notifications={email:"suppressed_qa",sms:"suppressed_qa",webhook:"suppressed_qa"};lead.updatedAt=new Date().toISOString();saved=await writeState(state);return NextResponse.json({ok:true,persisted:true,qa:true,revision:saved.revision,item:lead,sync:lead.sync,notifications:lead.notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});}
-
     try{const up=await persistViaUpstream(normalized,kind,idempotencyKey);lead.upstreamLeadId=up.leadId;lead.sync={dealer:"saved",upstream:"synced",upstreamLeadId:up.leadId,syncedAt:new Date().toISOString()};}catch(error){lead.sync={dealer:"saved",upstream:"pending",lastError:error instanceof Error?error.message:"upstream_sync_failed"};}
     const notifications=await sendNotifications(lead);lead.notifications=notifications;lead.updatedAt=new Date().toISOString();saved=await writeState(state);
     return NextResponse.json({ok:true,persisted:true,revision:saved.revision,item:lead,sync:lead.sync,notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});
