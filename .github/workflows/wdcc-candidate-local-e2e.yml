@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Preserve E2E harness then checkout exact candidate
+      - name: Preserve and harden E2E harness then checkout exact candidate
         shell: bash
         run: |
           cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
@@ -32,6 +32,18 @@ jobs:
           s=s.replace("page.getByLabel('Email').fill", "page.locator('input[name=\"email\"]').fill")
           s=s.replace("page.getByLabel('Name').fill", "page.locator('input[name=\"name\"]').fill")
           s=s.replace("page.getByLabel('Phone').fill", "page.locator('input[name=\"phone\"]').fill")
+          old="const qVehicle=v=>String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-');"
+          new="const qVehicle=v=>String(v?.status||'').toLowerCase()!=='archived'&&(String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-'));"
+          if old not in s: raise SystemExit('cleanup matcher patch target missing')
+          s=s.replace(old,new)
+          old='test "$ready" = 1'
+          new='''if [ "$ready" != 1 ]; then\n  python3 - <<'PY2'\nimport json, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"health_readiness","health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
+          if old not in s: raise SystemExit('health patch target missing')
+          s=s.replace(old,new)
+          old='test "$AUTH_CODE" = 200\njq -e \'.authenticated==true\' /tmp/wdcc-auth.json >/dev/null'
+          new='''if [ "$AUTH_CODE" != 200 ] || ! jq -e '.authenticated==true' /tmp/wdcc-auth.json >/dev/null 2>&1; then\n  export AUTH_CODE\n  python3 - <<'PY2'\nimport json, os, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"auth_session","authHttpCode":os.environ.get("AUTH_CODE"),"auth":parsed("/tmp/wdcc-auth.json"),"health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
+          if old not in s: raise SystemExit('auth patch target missing')
+          s=s.replace(old,new)
           p.write_text(s)
           PY
           git checkout --detach "$CANDIDATE_SHA"
@@ -48,14 +60,33 @@ jobs:
         run: |
           result='not captured'; [ -f /tmp/wdcc-result.json ] && result="$(cat /tmp/wdcc-result.json)"
           cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
+          health='not captured'; [ -f /tmp/wdcc-health.json ] && health="$(cat /tmp/wdcc-health.json)"
+          auth='not captured'; [ -f /tmp/wdcc-auth.json ] && auth="$(cat /tmp/wdcc-auth.json)"
+          server='not captured'; [ -f /tmp/wdcc-server.log ] && server="$(tail -80 /tmp/wdcc-server.log)"
           body=$(cat <<EOF
           Candidate: \`$CANDIDATE_SHA\`
           Status: **$STATUS**
 
           Candidate was built and started locally in GitHub using the canonical Phoenix OIDC/Blob store. No Vercel application deployment was created.
 
+          Result:
           \`\`\`json
           $result
+          \`\`\`
+
+          Health:
+          \`\`\`json
+          $health
+          \`\`\`
+
+          Auth:
+          \`\`\`json
+          $auth
+          \`\`\`
+
+          Server tail:
+          \`\`\`
+          $server
           \`\`\`
 
           Cleanup:
