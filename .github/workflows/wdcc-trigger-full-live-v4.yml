@@ -18,3 +18,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run wdcc-full-live-acceptance-v4.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+# acceptance-trigger: dealer-ready-pass-1-20260825T1636Z
