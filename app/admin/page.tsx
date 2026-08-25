@@ -1,2 +1,5 @@
-import { redirect } from "next/navigation";
-export default function AdminHome(){ redirect("/admin/login"); }
+import PortalExperience from "../PortalExperience";
+
+export default function Admin(){
+  return <PortalExperience mode="admin"/>;
+}
