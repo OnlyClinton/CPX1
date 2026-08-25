@@ -1,0 +1,45 @@
+name: WDCC My Day Clickthrough Preview
+on:
+  push:
+    branches:
+      - fix/wdcc-myday-clickthrough-thumbnails
+  workflow_dispatch:
+concurrency:
+  group: wdcc-myday-clickfix-preview
+  cancel-in-progress: true
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --global vercel@59.3.0
+      - name: Bind preview to current WDCC project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+      - name: Deploy preview only
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --yes --token="$VERCEL_TOKEN" --scope="$TEAM")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "WDCC_MYDAY_PREVIEW=$url"
+          printf '### WDCC My Day Clickthrough Preview\n\n%s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
