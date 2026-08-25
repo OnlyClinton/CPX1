@@ -1,181 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {upload} from "@vercel/blob/client";
 
 const allowedTypes=new Set(["image/jpeg","image/png","image/webp","image/avif"]);
-const norm=(v:any)=>String(v??"").trim();
+const clean=(v:any)=>String(v??"").trim();
+type FormState={year:string;make:string;model:string;trim:string;price:string;downPayment:string;mileage:string;stock:string;description:string};
+const seed:FormState={year:"2020",make:"Dodge",model:"Challenger",trim:"SXT",price:"24995",downPayment:"2000",mileage:"41000",stock:"",description:"Clean title. Runs and drives great. Well maintained inside and out."};
 
 export default function NewVehicle(){
-  const router=useRouter();
-  const [ready,setReady]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [photos,setPhotos]=useState<File[]>([]);
-  const [message,setMessage]=useState("");
-
-  useEffect(()=>{
-    fetch("/api/auth/session",{cache:"no-store"})
-      .then(response=>response.json())
-      .then(session=>{
-        if(!session.authenticated)location.href="/dealer/login";
-        else setReady(true);
-      })
-      .catch(()=>location.href="/dealer/login");
-  },[]);
-
-  function addPhotos(files:File[]){
-    const accepted=files.filter(file=>allowedTypes.has(file.type)&&file.size<=15*1024*1024);
-    const rejected=files.length-accepted.length;
-    setPhotos(current=>[...current,...accepted].slice(0,30));
-    setMessage(rejected?`${rejected} file${rejected===1?" was":"s were"} skipped. Use JPG, PNG, WEBP or AVIF under 15 MB.`:"");
-  }
-
-  async function submit(event:React.FormEvent<HTMLFormElement>){
-    event.preventDefault();
-    if(busy)return;
-    const submitter=(event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement|null;
-    const intent=submitter?.value==="draft"?"draft":"published";
-    if(intent==="published"&&photos.length===0){
-      setMessage("Add at least one vehicle photo before publishing. You can save a draft without photos.");
-      return;
+ const router=useRouter();
+ const cameraRef=useRef<HTMLInputElement|null>(null),filesRef=useRef<HTMLInputElement|null>(null);
+ const[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[step,setStep]=useState(1),[photos,setPhotos]=useState<File[]>([]),[primary,setPrimary]=useState(0),[message,setMessage]=useState(""),[form,setForm]=useState<FormState>(seed);
+ useEffect(()=>{fetch("/api/auth/session",{cache:"no-store",credentials:"include"}).then(r=>r.json()).then(s=>{if(!s?.authenticated)location.href="/login";else setReady(true)}).catch(()=>location.href="/login")},[]);
+ const previews=useMemo(()=>photos.map(f=>URL.createObjectURL(f)),[photos]);
+ useEffect(()=>()=>previews.forEach(URL.revokeObjectURL),[previews]);
+ const hero=previews[primary]||previews[0]||"/wdcc-hero-v2.webp";
+ const setField=(name:keyof FormState,value:string)=>setForm(v=>({...v,[name]:value}));
+ function addPhotos(list:File[]){const good=list.filter(f=>allowedTypes.has(f.type)&&f.size<=15*1024*1024);setPhotos(v=>[...v,...good].slice(0,10));if(good.length!==list.length)setMessage("Some files were skipped. Use JPG, PNG, WEBP or AVIF under 15 MB.");}
+ const infoOk=Number(form.year)>1900&&!!form.make&&!!form.model&&Number(form.mileage)>=0;
+ const pricingOk=Number(form.price)>0&&Number(form.downPayment)>=0&&Number(form.downPayment)<=Number(form.price);
+ const photoOk=photos.length>0;
+ const detailsOk=!!form.description.trim();
+ const readiness=[infoOk,pricingOk,photoOk,detailsOk].filter(Boolean).length*25;
+ function next(){if(step===1&&!infoOk)return setMessage("Complete year, make, model and mileage first.");if(step===2&&!pricingOk)return setMessage("Enter a valid price and down payment first.");if(step===3&&!photoOk)return setMessage("Add at least one photo before Verify.");setMessage("");setStep(v=>Math.min(5,v+1));}
+ function back(){setMessage("");setStep(v=>Math.max(1,v-1));}
+ async function save(intent:"draft"|"published"){
+   if(busy)return;if(intent==="published"&&(!infoOk||!pricingOk||!photoOk||!detailsOk)){setMessage("Complete all listing requirements before publishing.");return;}
+   setBusy(true);const requestId=crypto.randomUUID();let draftId="";setMessage(`Saving recoverable draft… Trace ${requestId}`);
+   try{
+    const body={year:Number(form.year),make:clean(form.make),model:clean(form.model),trim:clean(form.trim),price:Number(form.price),downPayment:Number(form.downPayment||0),mileage:Number(form.mileage||0),stock:clean(form.stock),description:clean(form.description)};
+    const headers={"Content-Type":"application/json","X-WDCC-Request-ID":requestId};
+    const created=await fetch("/api/inventory",{method:"POST",credentials:"include",cache:"no-store",headers,body:JSON.stringify(body)});const cj=await created.json().catch(()=>({}));if(!created.ok||!cj?.item?.id)throw Error(cj?.error||"Vehicle draft could not be created");draftId=String(cj.item.id);
+    const readback=await fetch(`/api/inventory/${encodeURIComponent(draftId)}?verify=${Date.now()}`,{credentials:"include",cache:"no-store",headers:{"X-WDCC-Request-ID":requestId}});const rj=await readback.json().catch(()=>({}));if(!readback.ok||String(rj?.item?.id||"")!==draftId)throw Error("Draft verification failed");
+    const ordered=photos.length?[photos[primary],...photos.filter((_,i)=>i!==primary)]:[];const paths:string[]=[];
+    for(let i=0;i<ordered.length;i++){
+      const file=ordered[i];setMessage(`Uploading photo ${i+1} of ${ordered.length}…`);const safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-120)||`photo-${i+1}.jpg`;
+      const blob=await upload(`media/wdcc/${draftId}/${safe}`,file,{access:"private",handleUploadUrl:"/api/upload",clientPayload:JSON.stringify({vehicleId:draftId,requestId}),contentType:file.type});if(!blob?.pathname)throw Error(`Photo ${i+1} upload failed`);paths.push(blob.pathname);
+      const checkpoint=await fetch(`/api/inventory/${encodeURIComponent(draftId)}`,{method:"PATCH",credentials:"include",cache:"no-store",headers,body:JSON.stringify({photoPathnames:paths,primaryPhotoPathname:paths[0]})});const pj=await checkpoint.json().catch(()=>({}));if(!checkpoint.ok)throw Error(pj?.error||`Photo ${i+1} checkpoint failed`);
     }
-
-    setBusy(true);
-    const requestId=crypto.randomUUID();
-    setMessage(`Saving a recoverable draft… Trace ${requestId}`);
-    let draftId="";
-
-    try{
-      const form=new FormData(event.currentTarget);
-      const body={
-        year:Number(form.get("year")),
-        make:norm(form.get("make")),
-        model:norm(form.get("model")),
-        trim:norm(form.get("trim")),
-        price:Number(form.get("price")),
-        downPayment:Number(form.get("downPayment")||0),
-        mileage:Number(form.get("mileage")||0),
-        stock:norm(form.get("stock")),
-        description:norm(form.get("description"))
-      };
-      const headers={"Content-Type":"application/json","X-WDCC-Request-ID":requestId};
-
-      const created=await fetch("/api/inventory",{method:"POST",headers,body:JSON.stringify(body)});
-      const createdJson=await created.json().catch(()=>({}));
-      if(!created.ok||!createdJson?.item?.id)throw new Error(createdJson.error||"Vehicle draft could not be created");
-      draftId=String(createdJson.item.id);
-
-      setMessage(`Draft saved. Verifying vehicle details… Trace ${requestId}`);
-      const readback=await fetch(`/api/inventory/${encodeURIComponent(draftId)}?verify=${Date.now()}`,{cache:"no-store",headers:{"X-WDCC-Request-ID":requestId}});
-      const readbackJson=await readback.json().catch(()=>({}));
-      const saved=readbackJson?.item||{};
-      if(!readback.ok||Number(saved.year)!==body.year||norm(saved.make)!==body.make||norm(saved.model)!==body.model||Number(saved.mileage||0)!==body.mileage||norm(saved.stock)!==body.stock||String(saved.status||"").toLowerCase()!=="draft"){
-        throw new Error("Draft readback did not match the vehicle you entered");
-      }
-
-      const paths:string[]=[];
-      for(let index=0;index<photos.length;index++){
-        const file=photos[index];
-        setMessage(`Draft verified. Uploading photo ${index+1} of ${photos.length}… Trace ${requestId}`);
-        const safeName=file.name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-120)||`photo-${index+1}.jpg`;
-        const blob=await upload(`media/wdcc/${draftId}/${safeName}`,file,{
-          access:"private",
-          handleUploadUrl:"/api/upload",
-          clientPayload:JSON.stringify({vehicleId:draftId,requestId}),
-          contentType:file.type
-        });
-        if(!blob?.pathname)throw new Error(`Photo ${index+1} did not return a stored path`);
-        paths.push(blob.pathname);
-
-        const checkpoint=await fetch(`/api/inventory/${encodeURIComponent(draftId)}`,{
-          method:"PATCH",headers,body:JSON.stringify({photoPathnames:paths,primaryPhotoPathname:paths[0]})
-        });
-        const checkpointJson=await checkpoint.json().catch(()=>({}));
-        if(!checkpoint.ok)throw new Error(checkpointJson.error||`Photo ${index+1} checkpoint failed`);
-        const checkpointPaths=Array.isArray(checkpointJson?.item?.photoPathnames)?checkpointJson.item.photoPathnames:[];
-        if(!checkpointPaths.includes(blob.pathname))throw new Error(`Photo ${index+1} was uploaded but not checkpointed to the vehicle`);
-      }
-
-      if(intent==="published"){
-        setMessage(`Photos verified. Publishing and checking the storefront… Trace ${requestId}`);
-        const published=await fetch(`/api/inventory/${encodeURIComponent(draftId)}`,{
-          method:"PATCH",headers,body:JSON.stringify({status:"published"})
-        });
-        const publishedJson=await published.json().catch(()=>({}));
-        if(!published.ok)throw new Error(publishedJson.error||"Publish failed");
-        if(String(publishedJson?.item?.status||"").toLowerCase()!=="published")throw new Error("Publish response did not confirm published status");
-        if(publishedJson?.storefront?.visible!==true){
-          const verification=publishedJson?.storefront?.verification||"not verified";
-          setMessage(`Vehicle is safely PUBLISHED in dealer inventory, but storefront verification is ${verification}. Do not re-enter it. Trace ${requestId}. Check Vehicle Logs.`);
-          setBusy(false);
-          return;
-        }
-        setMessage(`Published and verified on the storefront. Trace ${requestId}`);
-      }else{
-        setMessage(`Draft saved and verified. Trace ${requestId}`);
-      }
-
-      router.push(`/dealer/inventory?saved=${intent}&trace=${encodeURIComponent(requestId)}`);
-      router.refresh();
-    }catch(error){
-      const reason=error instanceof Error?error.message:"Vehicle upload failed";
-      setMessage(draftId?`The vehicle is safe as draft ${draftId}. ${reason}. Trace ${requestId}. Open Vehicle Logs before retrying.`:`${reason}. Trace ${requestId}.`);
-      setBusy(false);
+    if(intent==="published"){
+      setMessage("Publishing and verifying storefront…");const pub=await fetch(`/api/inventory/${encodeURIComponent(draftId)}`,{method:"PATCH",credentials:"include",cache:"no-store",headers,body:JSON.stringify({status:"published"})});const pj=await pub.json().catch(()=>({}));if(!pub.ok)throw Error(pj?.error||"Publish failed");if(String(pj?.item?.status||"").toLowerCase()!=="published")throw Error("Publish did not confirm published status");if(pj?.storefront&&pj.storefront.verified===false){setMessage(`Published in dealer inventory, storefront verification: ${pj.storefront.verification}. Trace ${requestId}`);setBusy(false);return;}
     }
-  }
-
-  if(!ready)return <main className="portal"><div className="wrap">Checking secure session…</div></main>;
-
-  return (
-    <main className="dealerShell">
-      <aside className="dealerSidebar">
-        <div className="dealerLogo"><b>WDCC</b><span>DEALER COMMAND</span></div>
-        <div className="dealerMenuLabel">INVENTORY</div>
-        <nav className="dealerMenu">
-          <Link href="/dealer">Dashboard</Link>
-          <Link href="/dealer/inventory">All Vehicles</Link>
-          <Link className="active" href="/dealer/inventory/new">+ Add Vehicle</Link>
-          <Link href="/dealer/inventory/logs">Vehicle Logs</Link>
-          <Link href="/dealer/leads">Leads</Link>
-          <Link href="/">View Website</Link>
-        </nav>
-      </aside>
-
-      <section className="dealerMain">
-        <form className="vehicleWizard" onSubmit={submit}>
-          <div className="wizardHeader">
-            <div className="eyebrow">NEW INVENTORY</div>
-            <h1>Add a Vehicle</h1>
-            <p className="muted">A draft is saved and read back first. Every photo is checkpointed. Publish is not reported as complete until storefront verification succeeds.</p>
-            <div className="wizardSteps" aria-label="Listing steps">
-              <div className="wizardStep done"><b>1</b>Info</div><div className="wizardStep done"><b>2</b>Pricing</div><div className="wizardStep active"><b>3</b>Photos</div><div className="wizardStep"><b>4</b>Verify</div><div className="wizardStep"><b>5</b>Publish</div>
-            </div>
-          </div>
-
-          <div className="vehicleFormPanel">
-            <h2>Vehicle Information</h2>
-            <p className="help">Year, make, model and mileage are the primary identity fields. Stock number is the internal cross-check.</p>
-            <div className="vehicleFormGrid">
-              <div className="vehicleField"><label>Year</label><input name="year" type="number" min="1901" max={new Date().getFullYear()+1} placeholder="2020" required/></div>
-              <div className="vehicleField"><label>Make</label><input name="make" maxLength={80} placeholder="Dodge" required/></div>
-              <div className="vehicleField"><label>Model</label><input name="model" maxLength={80} placeholder="Challenger" required/></div>
-              <div className="vehicleField"><label>Trim</label><input name="trim" maxLength={80} placeholder="SXT"/></div>
-              <div className="vehicleField"><label>Cash Price</label><input name="price" type="number" min="1" max="10000000" placeholder="24995" required/></div>
-              <div className="vehicleField"><label>Estimated Down Payment</label><input name="downPayment" type="number" min="0" placeholder="2000"/></div>
-              <div className="vehicleField"><label>Mileage</label><input name="mileage" type="number" min="0" max="2000000" placeholder="62500" required/></div>
-              <div className="vehicleField"><label>Stock #</label><input name="stock" maxLength={80} placeholder="WDCC-1024"/></div>
-              <div className="vehicleField wide"><label>Description</label><textarea name="description" maxLength={3000} placeholder="Condition, equipment, key features and anything the customer should know."/></div>
-              <div className="vehicleField wide"><label>Vehicle Photos</label><div className="photoTools"><label className="photoTool">TAKE PHOTO<input hidden type="file" accept="image/*" capture="environment" onChange={event=>addPhotos(Array.from(event.target.files||[]))}/></label><label className="photoTool">UPLOAD FILES<input hidden type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={event=>addPhotos(Array.from(event.target.files||[]))}/></label><div className="photoTool">{photos.length?`${photos.length} PHOTO${photos.length===1?"":"S"} READY`:"NO PHOTOS YET"}</div></div><label className="photoDrop"><div><b>Select vehicle photos</b><p>JPG, PNG, WEBP or AVIF · up to 15 MB each · first image is primary.</p><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={event=>addPhotos(Array.from(event.target.files||[]))}/></div></label>{photos.length>0&&<div className="photoList">{photos.map((photo,index)=><span key={`${photo.name}-${index}`}>{index+1}. {photo.name}</span>)}</div>}</div>
-            </div>
-
-            <div className="readiness"><div className="readinessTop"><span>LISTING READINESS</span><span>{photos.length?"100%":"70%"}</span></div><div className="readinessTrack"><span style={{width:photos.length?"100%":"70%"}}/></div><div className="muted">Vehicle info ✓ · Pricing ✓ · {photos.length?"Photos ready ✓":"Photos required to publish"} · Server readback required ✓</div></div>
-            {message&&<div className="dealerMessage" role="status" aria-live="polite">{message}</div>}
-            <div className="wizardActions"><button type="button" disabled={busy} onClick={()=>router.push("/dealer/inventory")}>CANCEL</button><Link href="/dealer/inventory/logs">VEHICLE LOGS</Link><button type="submit" name="intent" value="draft" disabled={busy}>SAVE DRAFT</button><button className="publish" type="submit" name="intent" value="published" disabled={busy}>{busy?"VERIFYING…":"PUBLISH VEHICLE"}</button></div>
-          </div>
-        </form>
-      </section>
-    </main>
-  );
+    router.push(`/dealer/inventory?saved=${intent}&trace=${encodeURIComponent(requestId)}`);router.refresh();
+   }catch(e){const reason=e instanceof Error?e.message:"Vehicle upload failed";setMessage(draftId?`Draft ${draftId} is preserved. ${reason}. Trace ${requestId}`:`${reason}. Trace ${requestId}`);setBusy(false);}
+ }
+ if(!ready)return <main className="loading">Checking secure dealer session…</main>;
+ return <main className="shell">
+  <aside className="rail"><Link href="/dealer" className="brand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>WDCC · DEALER PORTAL</b><span>Inventory Operations</span></div></Link><nav><Link href="/dealer">Dashboard</Link><strong>INVENTORY</strong><Link href="/dealer/inventory">All Vehicles</Link><Link className="active" href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link><Link href="/dealer/inventory/logs">Vehicle Logs</Link><strong>OPERATIONS</strong><Link href="/dealer/leads">Leads</Link><Link href="/dealer/leads">Appointments</Link><Link href="/dealer/leads">Applications</Link></nav></aside>
+  <section className="work"><header className="top"><div className="mobileBrand"><img src="/wdcc-logo-transparent.webp" alt=""/><b>WDCC · DEALER PORTAL</b></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span><button onClick={()=>fetch("/api/auth/logout",{method:"POST",credentials:"include"}).finally(()=>location.href="/login")}>Sign Out</button></header>
+   <div className="workspace"><section className="editor"><div className="head"><div><span>ADD / EDIT VEHICLE</span><h1>{["Vehicle Information","Pricing","Photos","Verify Listing","Publish Vehicle"][step-1]}</h1></div><small>Step {step} of 5</small></div><div className="steps">{["Info","Pricing","Photos","Verify","Publish"].map((x,i)=><button type="button" key={x} className={step===i+1?"on":step>i+1?"done":""} onClick={()=>i+1<=step&&setStep(i+1)}><b>{i+1}</b><span>{x}</span></button>)}</div>
+    {step===1&&<div className="panel"><h2>Vehicle information</h2><div className="grid"><label>YEAR<input value={form.year} onChange={e=>setField("year",e.target.value)} inputMode="numeric"/></label><label>MAKE<input value={form.make} onChange={e=>setField("make",e.target.value)}/></label><label>MODEL<input value={form.model} onChange={e=>setField("model",e.target.value)}/></label><label>TRIM<input value={form.trim} onChange={e=>setField("trim",e.target.value)}/></label><label>MILEAGE<input value={form.mileage} onChange={e=>setField("mileage",e.target.value)} inputMode="numeric"/></label><label>STOCK #<input value={form.stock} onChange={e=>setField("stock",e.target.value)}/></label></div></div>}
+    {step===2&&<div className="panel"><h2>Pricing</h2><div className="grid two"><label>CASH PRICE<input value={form.price} onChange={e=>setField("price",e.target.value)} inputMode="numeric"/></label><label>ESTIMATED DOWN PAYMENT<input value={form.downPayment} onChange={e=>setField("downPayment",e.target.value)} inputMode="numeric"/></label></div></div>}
+    {step===3&&<div className="panel"><h2>Photos</h2><p>Add up to 10 photos. First selected primary photo is used on the storefront.</p><div className="photoTools"><button type="button" onClick={()=>cameraRef.current?.click()}>▧<b>Take Photo</b><span>Use camera</span></button><button type="button" onClick={()=>filesRef.current?.click()}>▣<b>Upload Files</b><span>Choose from device</span></button></div><input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>addPhotos(Array.from(e.target.files||[]))}/><input ref={filesRef} hidden type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple onChange={e=>addPhotos(Array.from(e.target.files||[]))}/><div className="thumbs">{previews.map((u,i)=><div className={i===primary?"thumb primary":"thumb"} key={u}><img src={u} alt="Vehicle" onClick={()=>setPrimary(i)}/>{i===primary&&<em>PRIMARY</em>}<button type="button" onClick={()=>{setPhotos(v=>v.filter((_,x)=>x!==i));setPrimary(0)}}>×</button></div>)}{photos.length<10&&<button className="add" type="button" onClick={()=>filesRef.current?.click()}>＋<span>Add Photo</span></button>}</div></div>}
+    {step===4&&<div className="panel"><h2>Verify listing</h2><div className="verify"><div><b>{form.year} {form.make} {form.model} {form.trim}</b><span>{Number(form.mileage||0).toLocaleString()} miles</span></div><div><b>${Number(form.price||0).toLocaleString()}</b><span>${Number(form.downPayment||0).toLocaleString()} down</span></div><div><b>{photos.length} photo{photos.length===1?"":"s"}</b><span>Primary selected</span></div></div><label className="desc">DESCRIPTION<textarea value={form.description} onChange={e=>setField("description",e.target.value)}/></label></div>}
+    {step===5&&<div className="panel publishPanel"><h2>Ready to publish</h2><p>The listing will be saved as a recoverable draft, every photo will be checkpointed, then publication will be verified against the public storefront.</p><button className="publish" type="button" disabled={busy||readiness<100} onClick={()=>save("published")}>{busy?"WORKING…":"PUBLISH / SUBMIT"}</button><button className="draft" type="button" disabled={busy} onClick={()=>save("draft")}>SAVE DRAFT</button></div>}
+    {message&&<div className="message">{message}</div>}<div className="navButtons">{step>1&&<button type="button" onClick={back}>← Back</button>}<span/><>{step<5&&<button type="button" className="next" onClick={next}>Next →</button>}</></div>
+   </section><aside className="preview"><h3>LISTING READINESS</h3><strong>Ready {readiness}%</strong><div className="bar"><i style={{width:`${readiness}%`}}/></div><ul><li>Vehicle information <b>{infoOk?"✓":"—"}</b></li><li>Pricing <b>{pricingOk?"✓":"—"}</b></li><li>Primary photo <b>{photoOk?"✓":"—"}</b></li><li>Description <b>{detailsOk?"✓":"—"}</b></li></ul><div className="vehiclePreview"><img src={hero} alt="Vehicle preview"/><h2>{form.year} {form.make} {form.model} {form.trim}</h2><strong>${Number(form.price||0).toLocaleString()}</strong><span>${Number(form.downPayment||0).toLocaleString()} down · {Number(form.mileage||0).toLocaleString()} miles</span></div></aside></div>
+  </section>
+  <style jsx global>{`.loading{min-height:100svh;background:#06111c;color:white;display:grid;place-items:center}.shell{min-height:100svh;background:#eef1f4;color:#111820;display:grid;grid-template-columns:190px 1fr;font-family:Inter,system-ui}.rail{background:linear-gradient(180deg,#06111c,#0b1b29);color:#d8e1e8;padding:14px 10px}.brand{display:flex;gap:8px;align-items:center;padding-bottom:16px;border-bottom:1px solid #1e3448}.brand img{width:52px;height:45px;object-fit:contain}.brand b,.brand span{display:block}.brand b{font-size:10px;color:#fff}.brand span{font-size:8px;color:#8195a7;margin-top:3px}.rail nav{display:grid;margin-top:10px}.rail nav strong{font-size:8px;padding:16px 8px 6px}.rail nav a{padding:10px 8px;border-radius:5px;font-size:10px}.rail nav .active{background:#ef1f2d;color:#fff}.work{min-width:0}.top{height:68px;background:#06111c;color:#fff;display:flex;align-items:center;justify-content:flex-end;gap:20px;padding:0 22px}.mobileBrand{margin-right:auto;display:flex;align-items:center;gap:8px}.mobileBrand img{width:45px;height:38px;object-fit:contain}.top a{border:1px solid #855d20;padding:9px 14px;border-radius:5px}.top button{background:#0d1b29;color:#fff;border:1px solid #314456;border-radius:5px;padding:9px 14px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 285px;max-width:1280px;margin:auto;min-height:calc(100svh - 68px);background:#fff}.editor{padding:24px 26px;border-right:1px solid #dfe3e7}.head{display:flex;justify-content:space-between;align-items:end}.head span{font-size:10px;font-weight:900;color:#ef1f2d;letter-spacing:.1em}.head h1{margin:4px 0 0;font-size:28px}.steps{display:grid;grid-template-columns:repeat(5,1fr);margin:24px 0;border-bottom:1px solid #ddd;padding-bottom:16px}.steps button{border:0;background:none;display:grid;justify-items:center;gap:6px;color:#7a8590}.steps b{width:28px;height:28px;border:1px solid #b9c0c6;border-radius:50%;display:grid;place-items:center}.steps .on b{background:#ef1f2d;border-color:#ef1f2d;color:white}.steps .done b{background:#0b1b29;color:#fff}.panel{padding:4px 0}.panel h2{margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.grid.two{grid-template-columns:repeat(2,1fr)}label{display:grid;gap:6px;font-size:10px;font-weight:900;color:#495664}input,textarea{box-sizing:border-box;width:100%;border:1px solid #d7dde3;border-radius:6px;padding:12px;font:inherit;font-size:15px;color:#10161c;background:#fff}textarea{min-height:100px}.photoTools{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.photoTools button{height:70px;border:1px solid #d5dce2;background:#fff;border-radius:7px;display:grid;place-items:center}.photoTools b,.photoTools span{display:block}.photoTools span{font-size:10px;color:#75818d}.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}.thumb{position:relative;height:115px;border:2px solid transparent;border-radius:7px;overflow:hidden}.thumb.primary{border-color:#d5aa2d}.thumb img{width:100%;height:100%;object-fit:cover}.thumb em{position:absolute;left:5px;top:5px;background:#d5aa2d;color:#111;padding:3px 6px;border-radius:4px;font-size:9px;font-weight:900}.thumb>button{position:absolute;right:4px;top:4px;border:0;border-radius:50%;background:#ed1c2e;color:#fff}.add{min-height:115px;border:1px dashed #b8c1c9;background:#fff;border-radius:7px;font-size:28px}.add span{display:block;font-size:10px}.verify{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.verify>div{border:1px solid #d8dee4;border-radius:7px;padding:16px}.verify b,.verify span{display:block}.verify span{color:#71808d;font-size:11px;margin-top:6px}.desc{margin-top:16px}.publishPanel{text-align:center;padding:32px 10px}.publishPanel .publish,.publishPanel .draft{display:block;width:min(520px,100%);margin:12px auto 0;height:50px;border:0;border-radius:6px;font-weight:900}.publishPanel .publish{background:#ed1c2e;color:#fff}.publishPanel .draft{background:#0b1b29;color:#fff}.message{margin-top:16px;padding:12px;border-radius:6px;background:#fff2f3;color:#9f1320;border:1px solid #ffd0d4;font-size:12px}.navButtons{display:grid;grid-template-columns:auto 1fr auto;margin-top:22px}.navButtons button{padding:11px 18px;border:1px solid #cfd7de;background:#fff;border-radius:6px}.navButtons .next{background:#ed1c2e;color:#fff;border-color:#ed1c2e}.preview{background:#f7f8fa;padding:24px 18px}.preview h3{font-size:10px;letter-spacing:.1em}.preview>strong{font-size:27px}.bar{height:6px;background:#dde3e8;border-radius:8px;margin:14px 0}.bar i{display:block;height:100%;background:#ed1c2e;border-radius:8px}.preview ul{list-style:none;padding:0;display:grid;gap:9px;font-size:11px}.preview li{display:flex;justify-content:space-between}.vehiclePreview{margin-top:22px;background:#fff;border:1px solid #dde2e7;border-radius:7px;overflow:hidden;padding-bottom:14px}.vehiclePreview img{width:100%;height:160px;object-fit:cover}.vehiclePreview h2,.vehiclePreview>strong,.vehiclePreview>span{display:block;margin:10px 12px 0}.vehiclePreview h2{font-size:16px}.vehiclePreview>strong{font-size:22px}.vehiclePreview>span{font-size:10px;color:#6f7b85}@media(max-width:760px){.shell{display:block;background:#fff}.rail{display:none}.top{height:64px;padding:0 14px;gap:10px}.top>a,.top>span{display:none}.top button{padding:8px 12px}.workspace{display:block;min-height:calc(100svh - 64px)}.editor{padding:18px 16px;border:0}.preview{margin-top:20px;padding:18px 16px}.head h1{font-size:24px}.steps{margin:18px 0}.steps b{width:25px;height:25px}.steps span{font-size:9px}.grid,.grid.two{grid-template-columns:repeat(2,1fr)}.photoTools{grid-template-columns:1fr 1fr}.thumbs{grid-template-columns:repeat(3,1fr)}.thumb,.add{height:100px;min-height:100px}.verify{grid-template-columns:1fr}.vehiclePreview img{height:210px}}`}</style>
+ </main>
 }
