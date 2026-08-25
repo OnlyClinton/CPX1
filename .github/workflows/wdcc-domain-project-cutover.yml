@@ -18,6 +18,7 @@ permissions:
 env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_Ov6OomlySBxvTBf0j5cqcAQHDiPK
   VERCEL_SCOPE: cpxagency
   TARGET_PROJECT_ID: prj_Ov6OomlySBxvTBf0j5cqcAQHDiPK
   RELEASE_REF: release/wdcc-screenshot-contract-20260825
@@ -60,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$TARGET_PROJECT_ID" > .vercel/project.json
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
       - name: Bind domain project to canonical backend
         shell: bash
