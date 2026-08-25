@@ -1,0 +1,28 @@
+name: WDCC DISPATCH UNIFIED AUTH LISTING PROOF
+
+on:
+  push:
+    branches: [release/wdcc-live-screenshot-dealer-20260825]
+    paths:
+      - 'TRIGGER_WDCC_UNIFIED_AUTH_LISTING_PROOF.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm exact live source then dispatch listing E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS 'https://wedontcarecars.com/api/health?unified_listing_dispatch='"$GITHUB_RUN_ID" -o /tmp/health.json
+          jq -e '.ok==true and .degraded==false and .commit=="d49210a02b70411376e1f2506ab67050bf719eb9"' /tmp/health.json >/dev/null
+          curl -fsS 'https://dealer.wedontcarecars.com/api/auth/session?unified_listing_dispatch='"$GITHUB_RUN_ID" -o /tmp/session.json
+          jq -e '.authenticated==false' /tmp/session.json >/dev/null
+          gh workflow run wdcc-listing-only-e2e.yml --repo "$GITHUB_REPOSITORY" --ref main
