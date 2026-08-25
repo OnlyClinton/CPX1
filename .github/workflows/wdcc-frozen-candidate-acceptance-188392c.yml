@@ -46,6 +46,9 @@ jobs:
           npm ci
           npm install --global vercel@59.3.0 >/dev/null
           npm install --no-save playwright@1.55.0 >/dev/null
+          rm -rf /tmp/node_modules
+          ln -s "$PWD/node_modules" /tmp/node_modules
+          test -d /tmp/node_modules/@vercel/blob
           npx playwright install --with-deps chromium >/dev/null
           echo "RUN_TAG=release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
 
