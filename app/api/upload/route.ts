@@ -9,13 +9,23 @@ import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 
+function json(body:any,status:number,rid:string){
+  return NextResponse.json(body,{status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
+}
+
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/upload");
   const rid=requestId(request);
+  const uploadToken=String(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
+  if(!uploadToken){
+    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:"upload_authority_unavailable"});
+    console.error("WDCC_UPLOAD_AUTHORITY_MISSING",JSON.stringify({requestId:rid,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    return json({ok:false,error:"upload_authority_unavailable",requestId:rid},503,rid);
+  }
   try{
     const body=(await request.json())as HandleUploadBody;
     const result=await handleUpload({
-      body,request,token:process.env.BLOB_READ_WRITE_TOKEN,
+      body,request,token:uploadToken,
       onBeforeGenerateToken:async(pathname,clientPayload)=>{
         const user=await currentUser();
         if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
@@ -47,9 +57,11 @@ export async function POST(request:Request){
         await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:String(payload.requestId||rid),vehicleId:payload.vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,year:payload.year,make:payload.make,model:payload.model,mileage:payload.mileage,stock:payload.stock,detail:blob.pathname});
       }
     });
-    return NextResponse.json(result,{headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
+    return json(result,200,rid);
   }catch(error){
-    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:error instanceof Error?error.message:"upload_failed"});
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"upload_failed",requestId:rid},{status:400,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
+    const detail=error instanceof Error?error.message:"upload_failed";
+    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail});
+    const status=detail==="Unauthorized"?401:detail==="Forbidden"?403:400;
+    return json({ok:false,error:detail,requestId:rid},status,rid);
   }
 }
