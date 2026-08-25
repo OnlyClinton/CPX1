@@ -1,4 +1,4 @@
-const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
+const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
 const TRUSTED_ORIGINS=new Set(["https://dealer.wedontcarecars.com","https://wedontcarecars.com","https://www.wedontcarecars.com"]);
 const mutationMethods=new Set(["POST","PUT","PATCH","DELETE"]);
 
@@ -25,7 +25,7 @@ function copyResponseHeaders(upstream:Response){
   headers.set("access-control-allow-origin","https://dealer.wedontcarecars.com");
   headers.set("access-control-allow-credentials","true");
   headers.set("vary","Origin");
-  headers.set("x-wdcc-backend","immutable-healthy-dealer");
+  headers.set("x-wdcc-backend","stable-launch-alias");
   return headers;
 }
 
@@ -38,9 +38,17 @@ export async function proxyDealer(request:Request,path:string){
     const upstream=await fetch(target,init);
     return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:copyResponseHeaders(upstream)});
   }catch(error){
-    console.error("WDCC_DEALER_PROXY_ERROR",{path,error});
+    console.error("WDCC_DEALER_PROXY_ERROR",{path,backend:BACKEND,error});
     return new Response(JSON.stringify({ok:false,error:"dealer_backend_unavailable"}),{status:503,headers:{"content-type":"application/json","cache-control":"no-store","retry-after":"5"}});
   }
 }
 
-export async function backendHealth(){const response=await fetch(`${BACKEND}/api/health?facade=${Date.now()}`,{cache:"no-store",signal:AbortSignal.timeout(8000)});const json=await response.json().catch(()=>({}));return {response,json};}
+export async function backendHealth(){
+  try{
+    const response=await fetch(`${BACKEND}/api/health?facade=${Date.now()}`,{cache:"no-store",signal:AbortSignal.timeout(8000)});
+    const json=await response.json().catch(()=>({}));
+    return {response,json};
+  }catch(error){
+    return {response:new Response(null,{status:503}),json:{ok:false,error:"dealer_backend_unavailable",detail:error instanceof Error?error.message:"unknown"}};
+  }
+}
