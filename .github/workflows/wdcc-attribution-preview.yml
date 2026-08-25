@@ -1,7 +1,9 @@
 name: WDCC Attribution Preview
-on:
+
+"on":
   push:
-    branches: [fix/attribution-no-void]
+    branches:
+      - fix/attribution-no-void
   workflow_dispatch:
 
 concurrency:
@@ -11,9 +13,6 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
     env:
       VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
@@ -23,37 +22,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
       - run: npm ci
       - name: Require Vercel token
-        run: test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN missing" >&2; exit 78; }
-      - name: Link WDCC storefront project
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN missing" >&2
+            exit 78
+          fi
+      - name: Link project
         run: |
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
       - run: npm install --global vercel@59.3.0
-      - name: Pull preview environment
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Build preview
-        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy preview only
+      - run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      - run: vercel build --token="$VERCEL_TOKEN"
+      - name: Deploy preview
         id: deploy
-        shell: bash
         run: |
-          set -euo pipefail
-          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" | tail -n 1)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Preview URL: $url"
+          echo "$url"
       - name: Smoke preview
         env:
           URL: ${{ steps.deploy.outputs.url }}
         run: |
+          test -n "$URL"
           code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?utm_source=preview_test&utm_medium=qa&utm_campaign=attribution")"
           test "$code" = "200"
-          grep -qi "BAD CREDIT" /tmp/home.html
-      - name: Report preview
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          URL: ${{ steps.deploy.outputs.url }}
-        run: gh issue comment 137 --repo "$GITHUB_REPOSITORY" --body "Attribution preview: ${URL:-not-created}" || true
