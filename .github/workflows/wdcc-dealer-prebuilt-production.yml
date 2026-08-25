@@ -1,0 +1,65 @@
+name: WDCC Dealer Prebuilt Production
+on:
+  push:
+    branches: [ops/dealer-prebuilt-production]
+    paths:
+      - '.github/workflows/wdcc-dealer-prebuilt-production.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-dealer-prebuilt-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN"
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Link dealer project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull production environment
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build dealer bundle locally
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy prebuilt dealer bundle
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production URL: $url"
+      - name: Verify live dealer auth routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /login /dealer /admin; do
+            code="$(curl -sS -L -o "/tmp${path//\//-}.html" -w '%{http_code}' "https://dealer.wedontcarecars.com${path}")"
+            echo "$path -> $code"
+            test "$code" = "200"
+          done
+      - name: Report result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer prebuilt deploy ${GITHUB_RUN_ID}" --body "Commit: $GITHUB_SHA\nProduction URL: ${DEPLOY_URL:-not-created}\nDealer: https://dealer.wedontcarecars.com/\nThis path uses a prebuilt bundle to avoid Vercel remote-build quota." || true
