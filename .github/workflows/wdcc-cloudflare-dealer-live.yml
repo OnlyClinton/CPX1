@@ -1,6 +1,6 @@
 name: WDCC CLOUDFLARE DEALER LIVE
 
-# trigger-refresh: 2026-08-25T12:07Z
+# dealer-root-login-cutover: 2026-08-25T13:05Z
 on:
   push:
     branches: [main]
@@ -44,7 +44,7 @@ jobs:
           jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
           curl -fsS "$PRIMARY_ORIGIN/api/inventory?cf_dealer=$GITHUB_RUN_ID" -o /tmp/inventory.json
           jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
-          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path")"
             test "$code" = 200
           done
@@ -101,6 +101,10 @@ jobs:
 
           export default {
             async fetch(request) {
+              const incoming = new URL(request.url);
+              if (incoming.pathname === "/") {
+                return Response.redirect(new URL("/dealer/login", incoming), 302);
+              }
               try {
                 const response = await proxy(request, PRIMARY);
                 if (response.status < 500) return response;
@@ -139,10 +143,13 @@ jobs:
           jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null
           curl -fsS "$URL/api/inventory?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-inventory.json
           jq -e '.ok==true and (.items|type)=="array"' /tmp/cf-inventory.json >/dev/null
-          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$URL$path")"
             test "$code" = 200
           done
+          root_code="$(curl -sS -o /dev/null -D /tmp/root-headers -w '%{http_code}' "$URL/")"
+          test "$root_code" = 302
+          grep -qi '^location: .*/dealer/login' /tmp/root-headers
           echo 'CLOUDFLARE_STAGE=PASS'
 
       - name: Bind dealer.wedontcarecars.com route
@@ -170,8 +177,11 @@ jobs:
           curl -fsS -D /tmp/live-inventory.h -o /tmp/live-inventory.json "https://$DEALER_HOST/api/inventory?cf_live=$GITHUB_RUN_ID"
           jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null
           grep -qi '^x-wdcc-edge: cloudflare-dealer' /tmp/live-inventory.h
-          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEALER_HOST$path")"
             test "$code" = 200
           done
+          root_code="$(curl -sS -o /dev/null -D /tmp/live-root-headers -w '%{http_code}' "https://$DEALER_HOST/")"
+          test "$root_code" = 302
+          grep -qi '^location: https://dealer.wedontcarecars.com/dealer/login' /tmp/live-root-headers
           echo 'WDCC_CLOUDFLARE_DEALER_LIVE=PASS'
