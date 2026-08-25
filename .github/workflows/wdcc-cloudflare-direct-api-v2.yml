@@ -1,0 +1,168 @@
+name: WDCC CLOUDFLARE DIRECT API V2
+
+on:
+  push:
+    branches: [release/wdcc-cloudflare-direct-api-20260825]
+    paths:
+      - 'TRIGGER_WDCC_CLOUDFLARE_DIRECT_API_V2.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-cloudflare-direct-api-v2
+  cancel-in-progress: false
+
+env:
+  UI_ORIGIN: https://www.wedontcarecars.com
+  API_ORIGIN: https://wdcc-cpx-launch-cpxagency.vercel.app
+  STOREFRONT: https://wedontcarecars.com
+  DEALER_HOST: dealer.wedontcarecars.com
+  EXPECTED_UI_SHA: b2d7636e9a026f821b071991fcd42f9bb8586583
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  test-and-cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Preflight providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$VERCEL_TOKEN"
+          curl -fsS "$UI_ORIGIN/api/health?cfv2=$GITHUB_RUN_ID" -o /tmp/ui-health.json
+          jq -e --arg sha "$EXPECTED_UI_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/ui-health.json >/dev/null
+          curl -fsS "$API_ORIGIN/api/health?cfv2=$GITHUB_RUN_ID" -o /tmp/api-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/api-health.json >/dev/null
+
+      - name: Install tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global wrangler@4.90.0 vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Deploy corrected Cloudflare candidate
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-cf-direct-v2
+          cat > /tmp/wdcc-cf-direct-v2/worker.js <<'EOF'
+          const UI='https://www.wedontcarecars.com';
+          const API='https://wdcc-cpx-launch-cpxagency.vercel.app';
+          const DEALER='dealer.wedontcarecars.com';
+          const baseFor=p=>p.startsWith('/api/')?API:UI;
+          function target(request,base){const i=new URL(request.url),t=new URL(base);t.pathname=i.pathname;t.search=i.search;return t}
+          function rewrite(headers,incoming,base){const location=headers.get('location');if(!location)return;try{const loc=new URL(location,base);if([new URL(UI).hostname,new URL(API).hostname].includes(loc.hostname)){loc.protocol='https:';loc.hostname=incoming.hostname;loc.port='';headers.set('location',loc.toString())}}catch{}}
+          async function proxy(request){
+            const incoming=new URL(request.url),base=baseFor(incoming.pathname),to=target(request,base),headers=new Headers(request.headers);
+            headers.set('x-forwarded-host',DEALER);headers.set('x-forwarded-proto','https');headers.set('x-wdcc-frontdoor','cloudflare-direct-api-v2');headers.delete('cf-worker');headers.delete('host');
+            const init={method:request.method,headers,redirect:'manual'};if(!['GET','HEAD'].includes(request.method))init.body=request.body;
+            const response=await fetch(new Request(to.toString(),init)),out=new Headers(response.headers);rewrite(out,incoming,base);out.set('x-wdcc-edge','cloudflare-dealer-direct-api-v2');out.set('x-wdcc-origin',new URL(base).hostname);if(incoming.pathname.startsWith('/api/'))out.set('cache-control','private, no-store, max-age=0');return new Response(response.body,{status:response.status,statusText:response.statusText,headers:out});
+          }
+          export default{async fetch(request){const incoming=new URL(request.url);if(incoming.pathname==='/')return Response.redirect(new URL('/dealer',incoming),302);try{return await proxy(request)}catch(e){return new Response(JSON.stringify({ok:false,error:'cloudflare_direct_v2_failed',detail:String(e)}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store','x-wdcc-edge':'cloudflare-dealer-direct-api-v2'}})}}};
+          EOF
+          cat > /tmp/wdcc-cf-direct-v2/wrangler.jsonc <<'EOF'
+          {"name":"wdcc-dealer-direct-api-v2","main":"worker.js","compatibility_date":"2026-08-25","workers_dev":true,"observability":{"enabled":true}}
+          EOF
+          cd /tmp/wdcc-cf-direct-v2
+          wrangler deploy 2>&1 | tee /tmp/cfv2.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/cfv2.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          for path in '/api/health' '/dealer/login' '/dealer/inventory/new'; do
+            code="$(curl -sS -D /tmp/h -o /tmp/b -w '%{http_code}' "$URL$path?cfv2=$GITHUB_RUN_ID" || true)"
+            echo "$path HTTP $code"
+            if [ "$code" != 200 ]; then cat /tmp/b; exit 1; fi
+          done
+          grep -q 'PORTAL LOGIN' /tmp/b || true
+
+      - name: Create disposable identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .cfv2-identity.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,state:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let attempt=1;attempt<=4;attempt++){const before=await stable(),s=before.state,now=new Date().toISOString(),password=`Cf2-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,dealerId=`cfv2-${crypto.randomUUID()}`,email=`cfv2-${run}@invalid.example`,stock=`R36TEST-CFV2-${run}`,backup=`private/state/backups/platform-v3-pre-cfv2-${run}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id:dealerId,email,username:email,displayName:`WDCC CF V2 ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/cfv2.env',`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${email}\nSTOCK=${stock}\n`);console.log(JSON.stringify({ok:true,dealerId,stock}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .cfv2-identity.mjs
+          set -a; . /tmp/cfv2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Full candidate publish proof
+        id: e2e
+        env:
+          CANDIDATE: ${{ steps.stage.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/cfv2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');const clean=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};async function body(r){try{return(await r.text()).slice(0,2500)}catch{return''}}
+          (async()=>{const base=process.env.CANDIDATE,store=process.env.STOREFRONT,stock=process.env.STOCK,out={ok:false,stock,stages:{},trace:[]};fs.writeFileSync('/tmp/cfv2.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('response',r=>{if(/\/api\/(?:auth|upload|inventory)/.test(r.url()))out.trace.push({m:r.request().method(),u:clean(r.url()),s:r.status()})});await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});await p.locator('input[autocomplete="username"]').fill(process.env.DEALER_EMAIL);await p.locator('input[autocomplete="current-password"]').fill(process.env.QA_PASSWORD);await p.getByRole('button',{name:'SIGN IN'}).click();await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});out.stages.login=true;await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim','Cloudflare V2');await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description','Cloudflare direct API V2 disposable proof');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/cfv2.png');const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first(),draftP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000}),uploadP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000});await publish.click();const draft=await draftP,dt=await body(draft);out.stages.draft={status:draft.status(),body:dt};if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),id=String(dj?.item?.id||'');if(!id)throw Error('DRAFT_ID_MISSING');const up=await uploadP,ut=await body(up);out.stages.upload={status:up.status(),body:ut};if(!up.ok())throw Error(`UPLOAD_${up.status()}_${ut}`);await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:40000});out.stages.navigation=true;const inv=await c.request.get(`${base}/api/inventory?cfv2=${Date.now()}`),it=await inv.text();out.stages.inventory={status:inv.status(),body:it.slice(0,2500)};if(!inv.ok())throw Error(`INVENTORY_${inv.status()}`);const item=(JSON.parse(it).items||[]).find(v=>v.id===id||v.stock===stock);if(!item)throw Error('VEHICLE_NOT_IN_DEALER_INVENTORY');if(String(item.status).toLowerCase()!=='published')throw Error(`STATUS_${item.status}`);if(!(item.photoPathnames||[]).length)throw Error('PHOTO_PATH_MISSING');const pub=await c.request.get(`${store}/api/inventory?cfv2pub=${Date.now()}`),pt=await pub.text();if(!pub.ok())throw Error(`PUBLIC_${pub.status()}`);if((JSON.parse(pt).items||[]).some(v=>v.id===id||v.stock===stock))throw Error('QA_VISIBLE_PUBLIC');out.vehicle={id,stock,status:item.status,photos:item.photoPathnames};out.qaHiddenPublic=true;out.ok=true;fs.writeFileSync('/tmp/cfv2-result.json',JSON.stringify(out,null,2))}catch(e){out.error=String(e?.message||e);fs.writeFileSync('/tmp/cfv2-result.json',JSON.stringify(out,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+
+      - name: Cleanup disposable identity and vehicle
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/cfv2.env || exit 0
+          set -a; . /tmp/cfv2.env; set +a
+          cat > .cfv2-cleanup.mjs <<'NODE'
+          import{get,head,put,del,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',dealerId=process.env.DEALER_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const b=await head(path);if(a.etag===b.etag)return{etag:b.etag,state:JSON.parse(Buffer.concat(c).toString())}}throw Error('STATE_TOO_HOT')}for(let attempt=1;attempt<=4;attempt++){const before=await stable(),s=before.state,vehicles=Array.isArray(s.vehicles)?s.vehicles:[],users=Array.isArray(s.users)?s.users:[],exact=vehicles.filter(v=>String(v.stock||'')===stock),media=[...new Set(exact.flatMap(v=>Array.isArray(v.photoPathnames)?v.photoPathnames:[]).filter(Boolean))];s.vehicles=vehicles.filter(v=>!exact.some(x=>x.id===v.id));s.users=users.filter(u=>u.id!==dealerId);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,removedUsers:users.length-s.users.length,removedVehicles:exact.length,removedMedia:media.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .cfv2-cleanup.mjs | tee /tmp/cfv2-cleanup.json
+
+      - name: Bind live dealer route after candidate PASS
+        if: steps.e2e.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-cf-direct-v2
+          node - <<'NODE'
+          const fs=require('fs'),p='wrangler.jsonc',c=JSON.parse(fs.readFileSync(p));c.routes=[{pattern:'dealer.wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          wrangler deploy
+          sleep 5
+          code="$(curl -sS -D /tmp/live.h -o /tmp/live.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cfv2live=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/live.json >/dev/null
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-direct-api-v2' /tmp/live.h
+          curl -fsS "https://$DEALER_HOST/dealer/login?cfv2live=$GITHUB_RUN_ID" -o /tmp/live-login.html
+          grep -q 'PORTAL LOGIN' /tmp/live-login.html
+          echo 'CLOUDFLARE_DIRECT_API_V2_LIVE=PASS'
+
+      - name: Report evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ steps.stage.outputs.url }}
+          E2E: ${{ steps.e2e.outcome }}
+        shell: bash
+        run: |
+          result='not captured'; [ -f /tmp/cfv2-result.json ] && result="$(cat /tmp/cfv2-result.json)"
+          cleanup='not captured'; [ -f /tmp/cfv2-cleanup.json ] && cleanup="$(tail -1 /tmp/cfv2-cleanup.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Cloudflare direct API v2 $GITHUB_RUN_ID" --body "Candidate: ${CANDIDATE:-none}\nE2E: ${E2E:-unknown}\n${result}\nCleanup: ${cleanup}" || true
