@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: wdcc-dealer-kpi-preview
@@ -53,11 +53,33 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy preview
+      - name: Deploy preview and capture result
+        id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
-          set -euo pipefail
-          URL="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -1)"
-          echo "WDCC_DEALER_KPI_PREVIEW=$URL"
+          set +e
+          mkdir -p ops/qa
+          vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency > ops/qa/dealer-kpi-vercel-deploy.log 2>&1
+          CODE=$?
+          cat ops/qa/dealer-kpi-vercel-deploy.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' ops/qa/dealer-kpi-vercel-deploy.log | tail -1 || true)"
+          echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          if [ -n "$URL" ]; then echo "WDCC_DEALER_KPI_PREVIEW=$URL"; fi
+          exit 0
+      - name: Persist deploy diagnostic on failure
+        if: steps.deploy.outputs.exit_code != '0'
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ops/qa/dealer-kpi-vercel-deploy.log
+          git commit -m 'Record dealer KPI preview deploy failure' || exit 0
+          git push origin HEAD:fix/dealer-kpi-drilldowns-thumbnails
+      - name: Require preview deployment
+        shell: bash
+        run: |
+          test "${{ steps.deploy.outputs.exit_code }}" = "0"
+          test -n "${{ steps.deploy.outputs.url }}"
