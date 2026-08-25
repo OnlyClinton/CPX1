@@ -26,6 +26,13 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
       const vehicle=qs.get("vehicle")||qs.get("vehicleId")||body.vehicleInterest||"";
       if(vehicle&&!body.vehicleInterest)body.vehicleInterest=vehicle;
       const leadSource=(qs.get("source")||qs.get("utm_source")||source||`cta-${kind}`).slice(0,80);
+      const detailParts=[
+        body.incomeRange?`Income range: ${body.incomeRange}`:"",
+        body.availableDownPayment?`Available down payment: ${body.availableDownPayment}`:"",
+        body.preferredDate?`Preferred date: ${body.preferredDate}`:"",
+        body.preferredTime?`Preferred time: ${body.preferredTime}`:""
+      ].filter(Boolean);
+      if(detailParts.length)body.message=[body.message,...detailParts].filter(Boolean).join(" | ");
       const payload={
         ...body,
         kind,
