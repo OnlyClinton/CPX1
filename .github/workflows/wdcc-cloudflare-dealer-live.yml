@@ -1,0 +1,176 @@
+name: WDCC CLOUDFLARE DEALER LIVE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-dealer-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-cloudflare-dealer-live
+  cancel-in-progress: false
+
+env:
+  PRIMARY_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  FALLBACK_ORIGIN: https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+  EXPECTED_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+  DEALER_HOST: dealer.wedontcarecars.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Require Cloudflare authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Prove canonical dealer origin before cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$PRIMARY_ORIGIN/api/health?cf_dealer=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
+          curl -fsS "$PRIMARY_ORIGIN/api/inventory?cf_dealer=$GITHUB_RUN_ID" -o /tmp/inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path")"
+            test "$code" = 200
+          done
+          echo 'ORIGIN_PREFLIGHT=PASS'
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.90.0 >/dev/null
+
+      - name: Build dealer reverse-proxy Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-dealer-cf
+          cat > /tmp/wdcc-dealer-cf/worker.js <<'EOF'
+          const PRIMARY = "https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
+          const FALLBACK = "https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app";
+
+          function targetUrl(request, base) {
+            const incoming = new URL(request.url);
+            const target = new URL(base);
+            target.pathname = incoming.pathname;
+            target.search = incoming.search;
+            return target;
+          }
+
+          async function proxy(request, base) {
+            const incoming = new URL(request.url);
+            const target = targetUrl(request, base);
+            const headers = new Headers(request.headers);
+            headers.set("x-forwarded-host", incoming.host);
+            headers.set("x-forwarded-proto", "https");
+            headers.set("x-wdcc-frontdoor", "cloudflare-dealer");
+            headers.delete("cf-worker");
+            const init = { method: request.method, headers, redirect: "manual" };
+            if (!['GET','HEAD'].includes(request.method)) init.body = request.body;
+            const response = await fetch(new Request(target.toString(), init));
+            const outHeaders = new Headers(response.headers);
+            const location = outHeaders.get("location");
+            if (location) {
+              try {
+                const loc = new URL(location, target);
+                if (loc.hostname === new URL(base).hostname) {
+                  loc.protocol = incoming.protocol;
+                  loc.hostname = incoming.hostname;
+                  loc.port = incoming.port;
+                  outHeaders.set("location", loc.toString());
+                }
+              } catch {}
+            }
+            outHeaders.set("x-wdcc-edge", "cloudflare-dealer");
+            outHeaders.set("x-wdcc-origin", new URL(base).hostname);
+            return new Response(response.body, {status: response.status, statusText: response.statusText, headers: outHeaders});
+          }
+
+          export default {
+            async fetch(request) {
+              try {
+                const response = await proxy(request, PRIMARY);
+                if (response.status < 500) return response;
+              } catch {}
+              try { return await proxy(request, FALLBACK); }
+              catch { return new Response("Dealer portal temporarily unavailable", {status: 503, headers:{"cache-control":"no-store"}}); }
+            }
+          };
+          EOF
+          cat > /tmp/wdcc-dealer-cf/wrangler.jsonc <<'EOF'
+          {
+            "$schema": "node_modules/wrangler/config-schema.json",
+            "name": "wdcc-dealer-frontdoor",
+            "main": "worker.js",
+            "compatibility_date": "2026-08-25",
+            "workers_dev": true,
+            "observability": {"enabled": true}
+          }
+          EOF
+
+      - name: Deploy and verify workers.dev candidate
+        id: stage
+        working-directory: /tmp/wdcc-dealer-cf
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy 2>&1 | tee /tmp/wrangler-stage.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler-stage.log | tail -1 || true)"
+          test -n "$URL" || { echo 'workers.dev URL not found' >&2; exit 1; }
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?cf_stage=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            if [ "$code" = 200 ] && jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null
+          curl -fsS "$URL/api/inventory?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/cf-inventory.json >/dev/null
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$URL$path")"
+            test "$code" = 200
+          done
+          echo 'CLOUDFLARE_STAGE=PASS'
+
+      - name: Bind dealer.wedontcarecars.com route
+        working-directory: /tmp/wdcc-dealer-cf
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='wrangler.jsonc';
+          const c=JSON.parse(fs.readFileSync(p,'utf8'));
+          c.routes=[{pattern:'dealer.wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];
+          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          wrangler deploy
+          sleep 5
+
+      - name: Verify live dealer route
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cf_live=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null
+          curl -fsS -D /tmp/live-inventory.h -o /tmp/live-inventory.json "https://$DEALER_HOST/api/inventory?cf_live=$GITHUB_RUN_ID"
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null
+          grep -qi '^x-wdcc-edge: cloudflare-dealer' /tmp/live-inventory.h
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEALER_HOST$path")"
+            test "$code" = 200
+          done
+          echo 'WDCC_CLOUDFLARE_DEALER_LIVE=PASS'
