@@ -1,0 +1,60 @@
+name: Probe WDCC Signed Blob Bridge
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-signed-blob-bridge.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Issue delegation with Vercel OIDC and read canonical ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > .vercel/project.json
+          cat > /tmp/probe-blob.mjs <<'NODE'
+          import {issueSignedToken,presignUrl} from '@vercel/blob';
+          const pathname='private/state/platform-v3.json';
+          const oidcToken=process.env.VERCEL_OIDC_TOKEN;
+          if(!oidcToken)throw Error('OIDC_TOKEN_MISSING');
+          const signed=await issueSignedToken({
+            pathname:'*',
+            operations:['get','head','put'],
+            validUntil:Date.now()+6*24*60*60*1000,
+            oidcToken,
+            storeId:process.env.STORE_ID
+          });
+          if(!signed?.delegationToken||!signed?.clientSigningToken)throw Error('SIGNED_TOKEN_MISSING');
+          const {presignedUrl}=await presignUrl(signed,{operation:'get',pathname,access:'private',useCache:false,validUntil:Date.now()+5*60*1000});
+          const r=await fetch(presignedUrl,{cache:'no-store'});
+          if(!r.ok)throw Error(`SIGNED_GET_${r.status}`);
+          const state=await r.json();
+          if(!Array.isArray(state.users)||!Array.isArray(state.vehicles)||!Array.isArray(state.leads))throw Error('STATE_SHAPE_INVALID');
+          console.log('SIGNED_BLOB_BRIDGE=PASS');
+          console.log('REVISION='+Number(state.revision||0));
+          console.log('USERS='+state.users.length);
+          console.log('VEHICLES='+state.vehicles.length);
+          console.log('LEADS='+state.leads.length);
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            node /tmp/probe-blob.mjs
