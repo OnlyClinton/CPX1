@@ -39,7 +39,7 @@ async function proxy(request:Request){
 }
 
 export async function GET(request:Request){
-  return isCanonicalRuntime(request)?canonicalGET():proxy(request);
+  return isCanonicalRuntime(request)?canonicalGET(request):proxy(request);
 }
 
 export async function POST(request:Request){
