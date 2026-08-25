@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
 
 const DEALER=process.env.DEALER_URL||'https://dealer.wedontcarecars.com';
+const ORIGIN=process.env.ORIGIN_URL||DEALER;
 const mode=process.argv[2]||'probe';
 const norm=v=>String(v??'').trim().toLowerCase();
 const password=Buffer.from([112,97,115,115,119,111,114,100]).toString();
@@ -25,7 +26,7 @@ function hashPassword(p){const salt=crypto.randomBytes(24);const digest=crypto.s
 function cookieValue(headers){const fn=headers.getSetCookie;if(typeof fn==='function'){const list=fn.call(headers);if(list?.length)return list.map(x=>x.split(';',1)[0]).join('; ')}const h=headers.get('set-cookie');return h?h.split(',').map(x=>x.trim().split(';',1)[0]).join('; '):''}
 
 async function login(name){
-  const r=await fetch(`${DEALER}/api/auth/login`,{method:'POST',headers:{'content-type':'application/json','origin':DEALER},body:JSON.stringify({email:name,password}),redirect:'manual'});
+  const r=await fetch(`${DEALER}/api/auth/login`,{method:'POST',headers:{'content-type':'application/json','origin':ORIGIN},body:JSON.stringify({email:name,password}),redirect:'manual'});
   const body=await r.json().catch(()=>({}));
   const cookie=cookieValue(r.headers);
   let session=null,sessionStatus=null;
@@ -36,9 +37,9 @@ async function login(name){
 async function verify(){
   const dealer=await login('Big Pussy');
   const admin=await login('admin');
-  const result={dealer:{status:dealer.status,ok:dealer.ok,sessionStatus:dealer.sessionStatus,authenticated:dealer.session?.authenticated===true,role:dealer.session?.user?.role||dealer.body?.role||null},admin:{status:admin.status,ok:admin.ok,sessionStatus:admin.sessionStatus,authenticated:admin.session?.authenticated===true,role:admin.session?.user?.role||admin.body?.role||null},apis:{}};
-  if(dealer.cookie&&dealer.session?.authenticated===true){for(const path of ['/api/crm/dashboard','/api/inventory','/api/leads']){const r=await fetch(DEALER+path,{headers:{cookie:dealer.cookie},cache:'no-store'});result.apis[path]=r.status;}}
-  if(admin.cookie&&admin.session?.authenticated===true){const r=await fetch(`${DEALER}/api/admin/users`,{headers:{cookie:admin.cookie},cache:'no-store'});result.apis['/api/admin/users']=r.status;}
+  const result={target:DEALER,origin:ORIGIN,dealer:{status:dealer.status,ok:dealer.ok,sessionStatus:dealer.sessionStatus,authenticated:dealer.session?.authenticated===true,role:dealer.session?.user?.role||dealer.body?.role||null},admin:{status:admin.status,ok:admin.ok,sessionStatus:admin.sessionStatus,authenticated:admin.session?.authenticated===true,role:admin.session?.user?.role||admin.body?.role||null},apis:{}};
+  if(dealer.cookie&&dealer.session?.authenticated===true){for(const path of ['/api/crm/dashboard','/api/inventory','/api/leads']){const r=await fetch(DEALER+path,{headers:{cookie:dealer.cookie,origin:ORIGIN},cache:'no-store'});result.apis[path]=r.status;}}
+  if(admin.cookie&&admin.session?.authenticated===true){const r=await fetch(`${DEALER}/api/admin/users`,{headers:{cookie:admin.cookie,origin:ORIGIN},cache:'no-store'});result.apis['/api/admin/users']=r.status;}
   console.log(JSON.stringify(result,null,2));
   if(!(result.dealer.ok&&result.dealer.authenticated&&result.admin.ok&&result.admin.authenticated&&result.apis['/api/crm/dashboard']===200&&result.apis['/api/inventory']===200&&result.apis['/api/leads']===200&&result.apis['/api/admin/users']===200))process.exit(3);
 }
@@ -46,7 +47,7 @@ async function verify(){
 if(mode==='current'){
   const names=['admin','Big Pussy','BigPussy','bigpussy','bigplussy'];
   const out=[];for(const name of names){const x=await login(name);out.push({name,status:x.status,ok:x.ok,authenticated:x.session?.authenticated===true,role:x.session?.user?.role||x.body?.role||null});}
-  console.log(JSON.stringify(out,null,2));
+  console.log(JSON.stringify({target:DEALER,origin:ORIGIN,logins:out},null,2));
 }else if(mode==='probe'){
   const token=process.env.BLOB_READ_WRITE_TOKEN||'';if(!token)throw Error('BLOB_TOKEN_MISSING');
   const r=await readState(token);if(!Array.isArray(r.state?.users)||!r.state.users.length)throw Error('USERS_MISSING');
