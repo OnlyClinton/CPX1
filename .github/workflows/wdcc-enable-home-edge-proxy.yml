@@ -22,45 +22,76 @@ jobs:
       CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
+      - name: Discover authorized apex record
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/cf-token /tmp/zone-id /tmp/apex-record.json
+          try_token(){
+            local label="$1" token="$2"
+            [ -n "$token" ] || return 1
+            local code zone records_code
+            code="$(curl -sS -o /tmp/zones-$label.json -w '%{http_code}' "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&status=active" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' || true)"
+            echo "$label zone lookup HTTP $code"
+            [ "$code" = 200 ] || return 1
+            zone="$(jq -r '.result[0].id // empty' /tmp/zones-$label.json)"
+            [ -n "$zone" ] || return 1
+            records_code="$(curl -sS -o /tmp/records-$label.json -w '%{http_code}' "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=wedontcarecars.com&per_page=100" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' || true)"
+            echo "$label DNS lookup HTTP $records_code"
+            [ "$records_code" = 200 ] || return 1
+            jq -e '.success==true' /tmp/records-$label.json >/dev/null || return 1
+            jq -c '[.result[] | select(.name=="wedontcarecars.com" and (.type=="CNAME" or .type=="A" or .type=="AAAA"))]' /tmp/records-$label.json > /tmp/candidates-$label.json
+            local count="$(jq 'length' /tmp/candidates-$label.json)"
+            echo "$label apex A/AAAA/CNAME records: $count"
+            [ "$count" -ge 1 ] || return 1
+            local rec
+            rec="$(jq -c '([.[]|select(.type=="CNAME")]|first) // ([.[]|select(.type=="A")]|first) // ([.[]|select(.type=="AAAA")]|first)' /tmp/candidates-$label.json)"
+            [ -n "$rec" ] && [ "$rec" != null ] || return 1
+            printf '%s' "$token" > /tmp/cf-token
+            printf '%s' "$zone" > /tmp/zone-id
+            printf '%s' "$rec" > /tmp/apex-record.json
+            echo "token_label=$label" >> "$GITHUB_OUTPUT"
+            return 0
+          }
+
+          if try_token zone "$CLOUDFLARE_ZONE_API_TOKEN"; then :
+          elif try_token workers "$CLOUDFLARE_API_TOKEN"; then :
+          else
+            echo 'No available Cloudflare credential can read the apex DNS record.' >&2
+            exit 1
+          fi
+
+          jq -r '"Apex record: \(.type) \(.name) -> \(.content) (proxied=\(.proxied), proxiable=\(.proxiable))"' /tmp/apex-record.json
+          jq -e '.proxiable==true' /tmp/apex-record.json >/dev/null
+
       - name: Guarded apex proxy enable with rollback
         shell: bash
         run: |
           set -euo pipefail
-          CF_TOKEN="${CLOUDFLARE_ZONE_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
-          test -n "$CF_TOKEN"
+          CF_TOKEN="$(cat /tmp/cf-token)"
+          ZONE_ID="$(cat /tmp/zone-id)"
+          record="$(cat /tmp/apex-record.json)"
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
-
-          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&status=active" "${auth[@]}" > /tmp/zones.json
-          ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
-          test -n "$ZONE_ID"
-
-          curl -fsS "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=wedontcarecars.com&per_page=100" "${auth[@]}" > /tmp/records.json
-          jq -e '.success==true' /tmp/records.json >/dev/null
-          jq '[.result[] | select(.name=="wedontcarecars.com" and (.type=="CNAME" or .type=="A" or .type=="AAAA"))]' /tmp/records.json > /tmp/apex.json
-          count="$(jq 'length' /tmp/apex.json)"
-          test "$count" -ge 1
-
-          # Prefer the canonical CNAME when present; otherwise require a single apex address record.
-          record="$(jq -c '([.[]|select(.type=="CNAME")]|first) // (if length==1 then .[0] else null end)' /tmp/apex.json)"
-          test "$record" != "null"
           REC_ID="$(jq -r '.id' <<<"$record")"
           REC_TYPE="$(jq -r '.type' <<<"$record")"
           REC_NAME="$(jq -r '.name' <<<"$record")"
           REC_CONTENT="$(jq -r '.content' <<<"$record")"
           REC_TTL="$(jq -r '.ttl' <<<"$record")"
           ORIGINAL_PROXY="$(jq -r '.proxied' <<<"$record")"
-          echo "Apex record: $REC_TYPE $REC_NAME -> $REC_CONTENT (proxied=$ORIGINAL_PROXY)"
 
           make_payload(){ jq -nc --arg type "$REC_TYPE" --arg name "$REC_NAME" --arg content "$REC_CONTENT" --argjson ttl "$REC_TTL" --argjson proxied "$1" '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:$proxied}'; }
           restore(){
             echo "Rolling apex proxy back to proxied=$ORIGINAL_PROXY" >&2
-            curl -fsS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload "$ORIGINAL_PROXY")" >/tmp/rollback.json || true
+            curl -sS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload "$ORIGINAL_PROXY")" >/tmp/rollback.json || true
           }
           committed=0
           trap 'if [ "$committed" != 1 ]; then restore; fi' EXIT
 
           if [ "$ORIGINAL_PROXY" != true ]; then
-            curl -fsS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload true)" > /tmp/update.json
+            code="$(curl -sS -o /tmp/update.json -w '%{http_code}' -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload true)" || true)"
+            echo "Proxy-enable HTTP $code"
+            [ "$code" = 200 ]
             jq -e '.success==true and .result.proxied==true' /tmp/update.json >/dev/null
           fi
 
@@ -82,7 +113,12 @@ jobs:
             fi
             sleep 3
           done
-          test "$ok" = 1
+          if [ "$ok" != 1 ]; then
+            echo 'Live root/API isolation gate did not pass.' >&2
+            echo 'Root headers:' >&2; grep -Ei '^(server|cf-ray|x-wdcc-edge|x-wdcc-origin|location):' /tmp/root.h >&2 || true
+            echo 'Health headers:' >&2; grep -Ei '^(server|cf-ray|x-wdcc-edge|x-wdcc-origin|location):' /tmp/health.h >&2 || true
+            exit 1
+          fi
           committed=1
           trap - EXIT
           echo 'WDCC_HOME_EDGE_PROXY=PASS'
