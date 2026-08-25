@@ -1,0 +1,81 @@
+name: Probe CF Token and Exact 2vfD v1o
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-cf-token-and-2vfd-v1o.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  CUSTOMER_DOMAIN: wedontcarecars.com
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inspect current Cloudflare token authority
+        id: token
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify >/tmp/verify.json
+          TOKEN_ID="$(jq -r '.result.id // empty' /tmp/verify.json)"
+          echo "verify=$(jq -c '{success,result:{id:.result.id,status:.result.status}}' /tmp/verify.json)"
+          test -n "$TOKEN_ID"
+          echo "id=$TOKEN_ID" >> "$GITHUB_OUTPUT"
+
+          code="$(curl -sS -o /tmp/detail.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/user/tokens/$TOKEN_ID")"
+          echo "token_detail_http=$code"
+          if [ "$code" = 200 ]; then
+            jq '{success,result:{id:.result.id,name:.result.name,status:.result.status,policies:[.result.policies[]? | {effect,permission_groups:[.permission_groups[]? | {id,name}],resources}]}}' /tmp/detail.json
+            HAS_WRITE="$(jq -r '[.result.policies[]?.permission_groups[]?.name // empty] | any(. == "API Tokens Write" or . == "API Tokens Edit")' /tmp/detail.json)"
+          else
+            cat /tmp/detail.json | jq . 2>/dev/null || cat /tmp/detail.json
+            HAS_WRITE=false
+          fi
+          echo "detail_http=$code" >> "$GITHUB_OUTPUT"
+          echo "api_tokens_write=$HAS_WRITE" >> "$GITHUB_OUTPUT"
+
+          pcode="$(curl -sS -o /tmp/groups.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/user/tokens/permission_groups")"
+          echo "permission_groups_http=$pcode"
+          echo "permission_groups_http=$pcode" >> "$GITHUB_OUTPUT"
+          if [ "$pcode" = 200 ]; then
+            jq '[.result[]? | select(.name=="Zone Read" or .name=="Zone DNS Read" or .name=="Zone DNS Edit" or .name=="DNS Read" or .name=="DNS Write" or .name=="API Tokens Write") | {id,name,scopes}]' /tmp/groups.json
+          else
+            cat /tmp/groups.json | jq . 2>/dev/null || cat /tmp/groups.json
+          fi
+
+      - name: Independently re-prove exact 2vfD customer storefront
+        id: customer
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L -o /tmp/customer.html -w '%{http_code}' "https://$CUSTOMER_DOMAIN/?v1o-2vfd=$GITHUB_RUN_ID")"
+          echo "customer_http=$code"
+          test "$code" = 200
+          grep -q 'intro-sequence intro-prepare' /tmp/customer.html
+          grep -q 'mobile-dock-drive' /tmp/customer.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOKEN_DETAIL_HTTP: ${{ steps.token.outputs.detail_http }}
+          TOKEN_WRITE: ${{ steps.token.outputs.api_tokens_write }}
+          GROUPS_HTTP: ${{ steps.token.outputs.permission_groups_http }}
+          CUSTOMER: ${{ steps.customer.outcome }}
+          CUSTOMER_VERIFIED: ${{ steps.customer.outputs.verified }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC CF token + 2vfD proof v1o ${GITHUB_RUN_ID}" --body "Cloudflare token detail HTTP: \`$TOKEN_DETAIL_HTTP\`; API Tokens Write: \`$TOKEN_WRITE\`; permission-groups HTTP: \`$GROUPS_HTTP\`. Exact 2vfD storefront verification: **$CUSTOMER** (verified \`$CUSTOMER_VERIFIED\`). Read-only checks; no Cloudflare, Vercel, DNS, Worker route, or storefront mutation." || true
