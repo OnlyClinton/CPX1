@@ -54,8 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" \
-            --token "$VERCEL_TOKEN" --scope cpxagency > /tmp/home.html
+          npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/home.html
           grep -q 'intro-sequence' /tmp/home.html
           grep -q 'intro-smoke' /tmp/home.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
@@ -63,8 +62,7 @@ jobs:
           grep -qi 'schedule a test drive' /tmp/home.html
           grep -qi 'get qualified\|get pre-approved\|get approved' /tmp/home.html
           grep -qi 'contact us\|call sean' /tmp/home.html
-          npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" \
-            --token "$VERCEL_TOKEN" --scope cpxagency > /tmp/health.json
+          npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
           jq -e '.ok == true' /tmp/health.json >/dev/null
 
       - name: Capture current production rollback target
@@ -139,4 +137,4 @@ jobs:
 # Canonical composite: exact 2vfD storefront structure + exact 8AR intro.
 # This workflow validates the immutable candidate before promotion and restores
 # the previous production deployment automatically if post-promotion checks fail.
-# Manual retrigger marker: 2026-08-24 production recovery v2.
+# Harness fix: Vercel curl reads VERCEL_TOKEN from environment; do not forward CLI auth flags to curl.
