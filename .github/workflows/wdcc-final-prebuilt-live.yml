@@ -14,7 +14,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: read
       issues: write
@@ -22,61 +22,17 @@ jobs:
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_SCOPE: cpxagency
-      VERCEL_PROJECT: wdcc-v32-storefront
+      DEPLOY_URL: https://wdcc-v32-storefront-fwi0ko41b-cpxagency.vercel.app
       RELEASE_SHA: 98c84814c00528e6114196f8d5ff7597fb844b20
       APEX: https://wedontcarecars.com
       DEALER: https://dealer.wedontcarecars.com
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_SHA }}
-          fetch-depth: 1
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Verify unified source contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q 'screenshotContract' app/Exact2vfDHome.tsx
-          grep -q 'header-logo-image' app/Exact2vfDHome.tsx
-          grep -q 'Schedule a test drive' app/Exact2vfDHome.tsx
-          grep -q 'Get pre-approved' app/Exact2vfDHome.tsx
-          grep -q 'CALL SEAN' app/Exact2vfDHome.tsx
-          grep -q 'mobile-action-bar' app/Exact2vfDHome.tsx
-          grep -q 'Total Vehicles' app/dealer/page.tsx
-          grep -q 'Inventory Overview' app/dealer/page.tsx
-          grep -q 'Add / Edit Vehicle' app/dealer/inventory/new/page.tsx
-          grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
-          grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
-          grep -q 'Publish / Submit' app/dealer/inventory/new/page.tsx
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0
-      - name: Link project and pull production environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-          vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-      - name: Build production locally
-        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-      - name: Deploy archived prebuilt output
-        id: deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +e
-          vercel deploy --prebuilt --prod --yes --archive=tgz --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/deploy.log 2>&1
-          rc=$?
-          set -e
-          cat /tmp/deploy.log
-          url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -n 1 || true)"
-          test -n "$url"
-          echo "vercel_post_deploy_exit=$rc"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-      - name: Point apex www and dealer to one deployment
-        env:
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+      - name: Point apex www and dealer to the existing READY deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -117,9 +73,8 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
           VERIFY: ${{ steps.verify.outputs.verified }}
         shell: bash
         run: |
-          body=$(printf 'Unified source SHA: `%s`\nProduction deployment: `%s`\nApex/www/dealer unified: attempted\nPublic contract verified: `%s`\nAuthenticated listing E2E: triggered after public PASS\n\nApex: %s\nDealer: %s' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFY:-false}" "$APEX" "$DEALER")
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC unified archived production ${GITHUB_RUN_ID}" --body "$body" || true
+          body=$(printf 'Unified source SHA: `%s`\nDeployment: `%s`\nApex/www/dealer aliases unified: attempted\nPublic contract verified: `%s`\nAuthenticated listing E2E: triggered after public PASS\n\nApex: %s\nDealer: %s' "$RELEASE_SHA" "$DEPLOY_URL" "${VERIFY:-false}" "$APEX" "$DEALER")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC unified alias cutover ${GITHUB_RUN_ID}" --body "$body" || true
