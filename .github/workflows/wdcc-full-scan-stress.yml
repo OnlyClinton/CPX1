@@ -1,0 +1,90 @@
+name: WDCC full scan stress
+
+on:
+  push:
+    branches: [release/wdcc-single-candidate-20260825-control]
+    paths:
+      - '.github/workflows/wdcc-full-scan-stress.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-build-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current main source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Static regression scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+          for pattern in 'url\.parse\(' 'res\.status\(' '/var/task/\.wdcc-local' 'wdcc-cpx-launch-b01un0onc'; do
+            if grep -RInE --exclude-dir=.git --exclude-dir=node_modules "$pattern" app lib next.config.ts 2>/dev/null; then
+              echo "FOUND forbidden runtime pattern: $pattern" >&2
+              bad=1
+            fi
+          done
+          test "$bad" -eq 0
+
+      - name: Install and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+
+      - name: Start local production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm start -- -p 3000 >/tmp/wdcc-server.log 2>&1 &
+          echo $! >/tmp/wdcc-server.pid
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wdcc-server.log
+          exit 1
+
+      - name: Safe route stress
+        shell: bash
+        run: |
+          set -euo pipefail
+          routes=(/ /inventory /dealer /admin /contact /get-approved /schedule-test-drive)
+          for route in "${routes[@]}"; do
+            echo "=== stress $route ==="
+            seq 1 40 | xargs -P8 -I{} curl -sS -o /tmp/body.{}.txt -w '%{http_code} %{time_total}\n' --max-time 10 "http://127.0.0.1:3000$route" > "/tmp/result-$(echo "$route" | tr '/' '_').txt"
+            awk '{c[$1]++;sum+=$2;if($2>max)max=$2} END{for(k in c)print k,c[k];printf "avg=%.3f max=%.3f requests=%d\n",sum/NR,max,NR}' "/tmp/result-$(echo "$route" | tr '/' '_').txt"
+            if grep -Eq ' 5[0-9][0-9] ' <(sed 's/^/ /' "/tmp/result-$(echo "$route" | tr '/' '_').txt"); then exit 1; fi
+          done
+
+      - name: API failure-mode probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for route in /api/health /api/inventory /api/auth/session; do
+            code=$(curl -sS -o /tmp/api.json -w '%{http_code}' --max-time 10 "http://127.0.0.1:3000$route")
+            echo "$route -> $code $(cat /tmp/api.json | head -c 500)"
+            case "$code" in 200|401|403|404|503) ;; *) exit 1;; esac
+          done
+
+      - name: Server error scan
+        if: always()
+        shell: bash
+        run: |
+          echo '--- server log ---'
+          cat /tmp/wdcc-server.log 2>/dev/null || true
+          echo '--- fatal/error lines ---'
+          grep -Ein 'uncaught|unhandled|fatal|TypeError|ReferenceError|EROFS|STATE_READ_FAILED|No blob credentials' /tmp/wdcc-server.log 2>/dev/null || true
