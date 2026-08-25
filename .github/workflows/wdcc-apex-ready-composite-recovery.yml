@@ -1,0 +1,54 @@
+name: WDCC Apex Ready Composite Recovery
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-apex-ready-composite-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_SLUG: cpxagency
+      CANDIDATE: wdcc-v32-storefront-mqfvbvl65-cpxagency.vercel.app
+      APEX: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Capture current apex target
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(vercel inspect "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG" 2>/dev/null | grep -Eo '[A-Za-z0-9.-]+\.vercel\.app' | head -1 || true)"
+          echo "CURRENT=$CURRENT" >> "$GITHUB_ENV"
+          echo "Current apex target: ${CURRENT:-unknown}"
+      - name: Pin READY composite with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){
+            if [ -n "${CURRENT:-}" ]; then
+              vercel alias set "$CURRENT" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG" >/dev/null 2>&1 || true
+              vercel alias set "$CURRENT" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG" >/dev/null 2>&1 || true
+            fi
+          }
+          trap rollback ERR
+          vercel alias set "$CANDIDATE" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG"
+          vercel alias set "$CANDIDATE" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM_SLUG"
+          sleep 5
+          for path in / /dealer /admin; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' "https://$APEX$path" || true)"
+            echo "$path => $code"
+            test "$code" = 200
+          done
+          hcode="$(curl -sS -o /tmp/health.json -w '%{http_code}' "https://$APEX/api/health" || true)"
+          test "$hcode" = 200
+          jq -e '.ok == true' /tmp/health.json >/dev/null
+          trap - ERR
+          echo 'WDCC_APEX_READY_COMPOSITE=PASS'
