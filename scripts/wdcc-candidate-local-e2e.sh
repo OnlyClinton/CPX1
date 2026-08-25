@@ -87,6 +87,7 @@ const fs=require('fs');const{chromium}=require('playwright');const{put}=require(
 const base=process.env.BASE,run=process.env.RUN_ID,cookie=process.env.QA_COOKIE;
 function assert(v,m){if(!v)throw Error(m)}
 async function json(response,label){const text=await response.text();let data;try{data=JSON.parse(text)}catch{throw Error(`${label}_NON_JSON status=${response.status()} contentType=${response.headers()['content-type']||''} body=${text.slice(0,180)}`)}return data}
+let storefrontProof=null;
 (async()=>{
  const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});const page=await ctx.newPage();const consoleErrors=[],notFound=[];
  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});page.on('pageerror',e=>consoleErrors.push(String(e)));page.on('response',r=>{if(r.status()===404)notFound.push(r.url())});
@@ -102,14 +103,14 @@ async function json(response,label){const text=await response.text();let data;tr
  const mediaPath=`media/wdcc/${vehicle.id}/qa-${run}.png`;const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');await put(mediaPath,png,{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'image/png'});
  const photo=await ctx.request.patch(base+'/api/inventory/'+encodeURIComponent(vehicle.id),{headers:{Cookie:`__Host-wdcc_session=${cookie}`,'Content-Type':'application/json'},data:{photoPathnames:[mediaPath],primaryPhotoPathname:mediaPath}});const phj=await json(photo,'VEHICLE_PHOTO');assert(photo.ok()&&phj.ok&&(phj.item.photoPathnames||[]).includes(mediaPath),'VEHICLE_PHOTO_CHECKPOINT');
  const media=await ctx.request.get(base+'/api/media?p='+encodeURIComponent(mediaPath));assert(media.ok()&&(await media.body()).length>0,'MEDIA_READ');
- const publish=await ctx.request.patch(base+'/api/inventory/'+encodeURIComponent(vehicle.id),{headers:{Cookie:`__Host-wdcc_session=${cookie}`,'Content-Type':'application/json'},data:{status:'published'}});const pu=await json(publish,'VEHICLE_PUBLISH');assert(publish.ok()&&pu.ok&&pu.item.status==='published','VEHICLE_PUBLISH');
+ const publish=await ctx.request.patch(base+'/api/inventory/'+encodeURIComponent(vehicle.id),{headers:{Cookie:`__Host-wdcc_session=${cookie}`,'Content-Type':'application/json'},data:{status:'published'}});const pu=await json(publish,'VEHICLE_PUBLISH');storefrontProof=pu.storefront||null;assert(publish.ok()&&pu.ok&&pu.item.status==='published','VEHICLE_PUBLISH');
  const dealerInv=await ctx.request.get(base+'/api/inventory',{headers:{Cookie:`__Host-wdcc_session=${cookie}`}});const dij=await json(dealerInv,'DEALER_INVENTORY');assert((dij.items||[]).some(x=>x.id===vehicle.id&&x.status==='published'&&(x.photoPathnames||[]).length>0),'PUBLISHED_NOT_IN_DEALER_INVENTORY');
  const publicInv=await ctx.request.get(base+'/api/inventory?public='+Date.now());const pub=await json(publicInv,'PUBLIC_INVENTORY');assert(!(pub.items||[]).some(x=>x.id===vehicle.id),'QA_VEHICLE_LEAKED_PUBLICLY');
  const hide=await ctx.request.patch(base+'/api/inventory/'+encodeURIComponent(vehicle.id),{headers:{Cookie:`__Host-wdcc_session=${cookie}`,'Content-Type':'application/json'},data:{status:'draft',stock:`R36TEST-WDCC-QA-LOCAL-${run}`}});assert(hide.ok(),'VEHICLE_HIDE');
  const mobile=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});await mobile.goto(base,{waitUntil:'networkidle'});const quick=mobile.locator('nav.stickyCtaBar[aria-label="Quick actions"]');assert(await quick.count()>0,'MOBILE_QUICK_ACTIONS_MISSING');assert(await quick.locator('a[href^="/schedule-test-drive"]').count()>0,'MOBILE_TEST_DRIVE_MISSING');assert(await quick.locator('a[href^="/get-approved"]').count()>0,'MOBILE_APPROVAL_MISSING');assert(await quick.getByText('CALL SEAN',{exact:true}).count()>0,'MOBILE_CALL_SEAN_MISSING');
  assert(notFound.length===0,'BROWSER_404S:'+notFound.join(','));
- fs.writeFileSync('/tmp/wdcc-result.json',JSON.stringify({ok:true,routeResults,inventoryCount:inv0.items.length,leadIds:{schedule:schedule.id,approval:approval.id,contact:contact.id},vehicleId:vehicle.id,mediaPath,vehiclePublished:true,qaHiddenPublic:true,consoleErrors,browser404s:notFound},null,2));await browser.close();
-})().catch(e=>{fs.writeFileSync('/tmp/wdcc-result.json',JSON.stringify({ok:false,error:String(e?.message||e)},null,2));console.error(e);process.exit(1)})
+ fs.writeFileSync('/tmp/wdcc-result.json',JSON.stringify({ok:true,routeResults,inventoryCount:inv0.items.length,leadIds:{schedule:schedule.id,approval:approval.id,contact:contact.id},vehicleId:vehicle.id,mediaPath,vehiclePublished:true,qaHiddenPublic:true,storefront:storefrontProof,consoleErrors,browser404s:notFound},null,2));await browser.close();
+})().catch(e=>{fs.writeFileSync('/tmp/wdcc-result.json',JSON.stringify({ok:false,error:String(e?.message||e),storefront:storefrontProof},null,2));console.error(e);process.exit(1)})
 NODE
 
 env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-local-browser.cjs
