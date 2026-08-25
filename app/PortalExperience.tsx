@@ -1,3 +1,4 @@
+// WDCC dealer mockup canonical shell.
 "use client";
 
 import Link from "next/link";
