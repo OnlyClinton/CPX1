@@ -16,21 +16,31 @@ jobs:
       issues: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      CANDIDATE_SHA: ${{ github.sha }}
+      CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Preserve current harness then checkout exact candidate
+      - name: Preserve hardened harness and scope cleanup to exact run
         shell: bash
         run: |
           cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
-          # The canonical storefront quick-action control is stickyCtaBar. Normalize
-          # the legacy selector in the preserved harness so this run tests the
-          # actual mobile CTA contract instead of the retired class name.
-          sed -i 's/\.mobile-action-bar/\.stickyCtaBar/g' /tmp/wdcc-candidate-local-e2e.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/wdcc-candidate-local-e2e.sh')
+          s=p.read_text()
+          s=s.replace("const qLead=l=>String(l?.name||'').toUpperCase().startsWith('WDCC QA LOCAL ')||String(l?.email||'').toLowerCase().includes('qa-local-');\nconst qVehicle=v=>String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-');",
+          "const runId=String(process.env.RUN_ID||'').trim();if(!runId)throw Error('RUN_ID_REQUIRED');\nconst qLead=l=>(String(l?.name||'').toUpperCase().startsWith('WDCC QA LOCAL ')&&String(l?.name||'').endsWith(runId))||(String(l?.email||'').toLowerCase().includes('qa-local-')&&String(l?.email||'').includes(`-${runId}@invalid.example`));\nconst qVehicle=v=>{const stock=String(v?.stock||'').toUpperCase();return stock===`WDCC-QA-LOCAL-${runId}`||stock===`R36TEST-WDCC-QA-LOCAL-${runId}`};")
+          s=s.replace("result={ok:true,noOp:true,revision:Number(s.revision||0),leadsRemoved:0,vehiclesArchived:0};break",
+          "result={ok:true,noOp:true,revision:Number(s.revision||0),leadsRemoved:0,vehiclesArchived:0,leadIds:[],vehicleIds:[]};break")
+          s=s.replace("result={ok:true,noOp:false,revision:s.revision,leadsRemoved:lids.length,vehiclesArchived:vids.length,backup};break",
+          "result={ok:true,noOp:false,revision:s.revision,leadsRemoved:lids.length,vehiclesArchived:vids.length,leadIds:lids,vehicleIds:vids,backup};break")
+          if "RUN_ID_REQUIRED" not in s:
+              raise SystemExit('exact-run cleanup patch did not apply')
+          p.write_text(s)
+          PY
           git checkout --detach "$CANDIDATE_SHA"
-      - name: Run candidate locally against canonical services
+      - name: Run frozen candidate locally against canonical services
         id: e2e
         shell: bash
         run: bash /tmp/wdcc-candidate-local-e2e.sh
@@ -59,6 +69,16 @@ jobs:
             echo "final_url=$final_url"
             echo "body_preview=$body_preview"
           } | tee /tmp/wdcc-storefront-transport.txt
+      - name: Enforce exact-run cleanup contract
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/wdcc-cleanup.log
+          line="$(grep 'LOCAL_CLEANUP=' /tmp/wdcc-cleanup.log | tail -1)"
+          json="${line#LOCAL_CLEANUP=}"
+          echo "$json" | jq .
+          echo "$json" | jq -e '.ok==true and (.leadsRemoved <= 3) and (.vehiclesArchived <= 1) and ((.leadIds // [])|length == .leadsRemoved) and ((.vehicleIds // [])|length == .vehiclesArchived)' >/dev/null
       - name: Report candidate E2E
         if: always()
         env:
@@ -75,7 +95,7 @@ jobs:
           Candidate: \`$CANDIDATE_SHA\`
           Status: **$STATUS**
 
-          Candidate was built and started locally against canonical WDCC services. No Vercel application deployment was created.
+          Frozen release candidate was built and started locally against canonical WDCC services using the hardened current harness. No Vercel application deployment was created.
 
           Result:
           \`\`\`json
@@ -97,10 +117,10 @@ jobs:
           $server
           \`\`\`
 
-          Cleanup:
+          Exact-run cleanup:
           \`\`\`
           $cleanup
           \`\`\`
           EOF
           )
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC candidate local E2E ${GITHUB_RUN_ID}" --body "$body" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC frozen candidate E2E ${GITHUB_RUN_ID}" --body "$body" || true
