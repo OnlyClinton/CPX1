@@ -1,0 +1,175 @@
+name: WDCC V53.1 Phoenix Runtime Candidate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v531-phoenix-runtime-candidate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-v531-phoenix-runtime-candidate
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 61a8053c248f731fe1de1c5be1c189607a5abaea
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+  CUSTOMER: https://wedontcarecars.com
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Exact source build and capacity guard
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -n "$VERCEL_TOKEN"
+          npm ci
+          npm run build
+          npm install --global vercel@59.3.0 >/dev/null
+          curl -fsS -L "$CUSTOMER/?v531-phx-before=$GITHUB_RUN_ID" -o /tmp/customer-before.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-before.html
+          grep -q 'mobile-action-bar' /tmp/customer-before.html
+          since="$(( $(date -u +%s) * 1000 - 24*60*60*1000 ))"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&limit=100&since=$since" -o /tmp/capacity.json
+          count="$(jq '.deployments|length' /tmp/capacity.json)"
+          echo "deployment_count_24h=$count"
+          test "$count" -le 97 || { echo "Vercel capacity too close to ceiling: $count" >&2; exit 78; }
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Create temporary canonical dealer identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-v531-phx-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`V531Phx-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`v531-phx-${crypto.randomUUID()}`,email=`v531-phx-${run}@invalid.example`,backup=`private/state/backups/platform-v3-pre-v531-phx-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`V53.1 Phoenix ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.v531_phx.create',actor:'github-actions',run,userId:id,backup});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/v531-phx.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v531-phx-user.mjs
+          set -a; . /tmp/v531-phx.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Deploy exact Phoenix candidate without aliases
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel deploy --prebuilt --prod --skip-domain --archive=tgz --yes \
+            --env BLOB_STORE_ID="$STORE_ID" \
+            --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Require local Phoenix runtime and full protected contract
+        id: contract
+        env:
+          BASE: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=false
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$BASE/api/health?v531-phx=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && jq -e --arg sha "$SOURCE_SHA" '.ok==true and .degraded==false and .backend=="local" and .state=="readable" and .commit==$sha' /tmp/health.json >/dev/null 2>&1; then ok=true; break; fi
+            sleep 2
+          done
+          cat /tmp/health.json
+          test "$ok" = true
+          set -a; . /tmp/v531-phx.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/phx.cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $BASE" -H 'content-type: application/json' -X POST "$BASE/api/auth/login" --data "$payload")"
+          SESSION="$(curl -sS -b /tmp/phx.cookies -o /tmp/session.json -w '%{http_code}' "$BASE/api/auth/session")"
+          DASHBOARD="$(curl -sS -b /tmp/phx.cookies -o /tmp/dashboard.json -w '%{http_code}' "$BASE/api/crm/dashboard")"
+          LEADS="$(curl -sS -b /tmp/phx.cookies -o /tmp/leads.json -w '%{http_code}' "$BASE/api/leads")"
+          INVENTORY="$(curl -sS -b /tmp/phx.cookies -o /tmp/inventory.json -w '%{http_code}' "$BASE/api/inventory")"
+          echo "LOGIN=$LOGIN SESSION=$SESSION DASHBOARD=$DASHBOARD LEADS=$LEADS INVENTORY=$INVENTORY"
+          test "$LOGIN" = 200; test "$SESSION" = 200; test "$DASHBOARD" = 200; test "$LEADS" = 200; test "$INVENTORY" = 200
+          jq -e '.ok==true' /tmp/login.json >/dev/null
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+          jq -e '.ok==true' /tmp/dashboard.json >/dev/null
+          jq -e '.ok==true' /tmp/leads.json >/dev/null
+          jq -e '.ok==true' /tmp/inventory.json >/dev/null
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"; echo "session=$SESSION" >> "$GITHUB_OUTPUT"; echo "dashboard=$DASHBOARD" >> "$GITHUB_OUTPUT"; echo "leads=$LEADS" >> "$GITHUB_OUTPUT"; echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"
+
+      - name: Re-prove customer baseline unchanged
+        id: customer
+        run: |
+          set -euo pipefail
+          curl -fsS -L "$CUSTOMER/?v531-phx-after=$GITHUB_RUN_ID" -o /tmp/customer-after.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-after.html
+          grep -q 'mobile-action-bar' /tmp/customer-after.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
+          echo unchanged=true >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup temporary dealer identity
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f /tmp/v531-phx.env ] || { echo ok=true >> "$GITHUB_OUTPUT"; exit 0; }
+          set -a; . /tmp/v531-phx.env; set +a; export QA_ID RUN_TAG
+          cat > .wdcc-v531-phx-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=Array.isArray(s.users)?s.users:[];s.users=u.filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.v531_phx.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removed:u.length-s.users.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v531-phx-clean.mjs
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Publish immutable candidate evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+          P: ${{ steps.preflight.outcome }}
+          C: ${{ steps.contract.outcome }}
+          L: ${{ steps.contract.outputs.login }}
+          S: ${{ steps.contract.outputs.session }}
+          D: ${{ steps.contract.outputs.dashboard }}
+          E: ${{ steps.contract.outputs.leads }}
+          I: ${{ steps.contract.outputs.inventory }}
+          CUSTOMER_OK: ${{ steps.customer.outputs.unchanged }}
+          CLEAN: ${{ steps.cleanup.outcome }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V53.1 Phoenix runtime candidate $GITHUB_RUN_ID" --body "Exact source: \`$SOURCE_SHA\`
+          Candidate: \`${URL:-not-created}\`
+          Preflight: **$P**
+          Protected contract: **$C**
+          Login/Session/CRM/Leads/Inventory: \`${L:-?}/${S:-?}/${D:-?}/${E:-?}/${I:-?}\`
+          Customer baseline unchanged: **${CUSTOMER_OK:-false}**
+          Temporary identity cleanup: **$CLEAN**
+
+          This workflow creates no customer/dealer alias, DNS, or Cloudflare route mutation." || true
