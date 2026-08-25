@@ -1,8 +1,5 @@
 name: WDCC My Day Clickthrough Preview
 on:
-  push:
-    branches:
-      - fix/wdcc-myday-clickthrough-thumbnails
   workflow_dispatch:
 concurrency:
   group: wdcc-myday-clickfix-preview
