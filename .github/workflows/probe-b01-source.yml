@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments/$DEPLOYMENT_ID/files?teamId=$TEAM_ID" >/tmp/files.json
           cat >/tmp/read.mjs <<'NODE'
-          const fs=require('fs');
+          import fs from 'node:fs';
           const tree=JSON.parse(fs.readFileSync('/tmp/files.json','utf8'));
           const token=process.env.VERCEL_TOKEN, team=process.env.TEAM_ID, dep=process.env.DEPLOYMENT_ID;
           const wanted=new Set(['src/lib/store.ts','src/lib/auth.ts','src/app/api/auth/login/route.ts','src/app/api/events/route.ts','src/app/api/admin/users/route.ts','src/app/api/inventory/route.ts']);
