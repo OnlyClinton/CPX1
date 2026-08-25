@@ -1,0 +1,74 @@
+name: WDCC PROMOTE MERGED READY
+
+on:
+  push:
+    branches: [release/wdcc-live-screenshot-dealer-20260825]
+    paths:
+      - 'TRIGGER_WDCC_PROMOTE_MERGED.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      DEPLOY_URL: https://wdcc-v32-storefront-517ddd9cb-cpxagency.vercel.app
+      APEX: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --global vercel@59.5.0
+      - name: Promote exact READY deployment without rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel promote "$DEPLOY_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+      - name: Verify public apex switched to merged release
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 40); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?merged=da9517c&n=$i" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health?merged=da9517c&n=$i" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory?merged=da9517c&n=$i" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APEX/dealer/login?merged=da9517c&n=$i" || true)"
+            admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "$APEX/admin/login?merged=da9517c&n=$i" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ] && grep -q 'screenshotContract' /tmp/home.html && grep -q 'header-logo-image' /tmp/home.html && grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get pre-approved' /tmp/home.html && grep -qi 'Call Sean' /tmp/home.html && grep -q 'mobile-action-bar' /tmp/home.html && jq -e '.ok==true and .commit=="da9517c2560ecf2d0cdb22ec12c5f9b7da73100a"' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          ! grep -q 'R36TEST-' /tmp/home.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+      - name: Dispatch authenticated dealer listing acceptance
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/wdcc-listing-only-e2e.yml/dispatches" \
+            -d '{"ref":"main"}'
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC merged promotion $GITHUB_RUN_ID" --body "Deployment: $DEPLOY_URL\nApex: $APEX\nVerified: ${VERIFIED:-false}\nSource: da9517c2560ecf2d0cdb22ec12c5f9b7da73100a" || true
