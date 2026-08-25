@@ -101,3 +101,4 @@ jobs:
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer upload diagnostic ${GITHUB_SHA:0:7}" --body "$body" || true
 
 # Deep-QA acceptance trigger: 2026-08-24. This workflow does not deploy application code.
+# Isolated listing acceptance retrigger: 2026-08-25.
