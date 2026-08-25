@@ -1,0 +1,269 @@
+name: WDCC Full Live Acceptance V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-full-live-acceptance-v2.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-full-live-acceptance-v2
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install acceptance dependencies
+        id: deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Pull canonical dealer Blob binding
+        id: bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
+
+      - name: Inject short-lived dealer and admin QA users
+        id: qausers
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer.env; set +a
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import {get,head,put} from '@vercel/blob';
+          const token=process.env.BLOB_READ_WRITE_TOKEN,path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function readStable(){for(let i=0;i<4;i++){const h1=await head(path,{token});const r=await get(path,{access:'private',useCache:false,token});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const raw=Buffer.concat(chunks);const h2=await head(path,{token});if(h1.etag===h2.etag)return{raw,etag:h2.etag,state:JSON.parse(raw.toString('utf8'))}}throw Error('STATE_TOO_HOT')}
+          const before=await readStable(),s=before.state,now=new Date().toISOString();
+          const password=`Wdcc-QA-${crypto.randomBytes(18).toString('base64url')}!`;
+          function hash(value){const salt=crypto.randomBytes(24);const digest=crypto.scryptSync(value,salt,64);return `scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`}
+          const dealerId=`qa-dealer-${crypto.randomUUID()}`,adminId=`qa-admin-${crypto.randomUUID()}`;
+          const dealerEmail=`qa-dealer-${run}@invalid.example`,adminEmail=`qa-admin-${run}@invalid.example`;
+          const passwordHash=hash(password);
+          s.users=Array.isArray(s.users)?s.users:[];
+          s.users.push({id:dealerId,email:dealerEmail,username:dealerEmail,displayName:`WDCC QA Dealer ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});
+          s.users.push({id:adminId,email:adminEmail,username:adminEmail,displayName:`WDCC QA Admin ${run}`,role:'platform_admin',tenantId:'wdcc',status:'active',disabled:false,passwordHash});
+          s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.full_acceptance.users_create',actor:'github-actions',dealerId,adminId,run});
+          s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+          const backup=`private/state/backups/platform-v3-pre-full-acceptance-r${Number(before.state.revision||0)}-${now.replace(/[:.]/g,'-')}-${crypto.randomUUID()}.json`;
+          await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',token});
+          await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag,token});
+          const q=`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${dealerEmail}\nADMIN_ID=${adminId}\nADMIN_EMAIL=${adminEmail}\nBACKUP=${backup}\n`;
+          await import('node:fs').then(fs=>fs.writeFileSync('/tmp/qa.env',q));
+          console.log(JSON.stringify({ok:true,run,dealerId,adminId,backup},null,2));
+          NODE
+          set -a; . /tmp/qa.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Real dealer and admin login through live endpoints
+        id: logins
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/qa.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          login(){
+            label="$1"; base="$2"; origin="$3"; email="$4"; expected_role="$5"
+            payload="$(jq -nc --arg email "$email" --arg password "$QA_PASSWORD" '{email:$email,password:$password}')"
+            code="$(curl -sS -D "/tmp/${label}-login.headers" -c "/tmp/${label}.cookies" -o "/tmp/${label}-login.json" -w '%{http_code}' -H "Origin: $origin" -H 'Content-Type: application/json' -X POST "$base/api/auth/login" --data "$payload")"
+            test "$code" = 200
+            session_code="$(curl -sS -b "/tmp/${label}.cookies" -o "/tmp/${label}-session.json" -w '%{http_code}' "$base/api/auth/session")"
+            test "$session_code" = 200
+            jq -e --arg role "$expected_role" '.authenticated==true and .user!=null and ((.user.role|ascii_downcase)==($role|ascii_downcase))' "/tmp/${label}-session.json" >/dev/null
+            echo "${label}_http=$code" >> "$GITHUB_OUTPUT"
+            echo "${label}_session=$session_code" >> "$GITHUB_OUTPUT"
+          }
+          login dealer "$DEALER" "$DEALER" "$DEALER_EMAIL" dealer_agent
+          login admin "$STOREFRONT" "$STOREFRONT" "$ADMIN_EMAIL" platform_admin
+
+      - name: Create three lead flows and capture notification transport
+        id: leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/qa.env; set +a
+          run="$RUN_TAG"
+          post(){
+            kind="$1"; source="$2"; suffix="$3"; qa="$4"
+            if [ "$qa" = true ]; then
+              name="WDCC QA FULL ${suffix} ${run}"; email="qa-full-${suffix}-${run}@invalid.example"; extra='"qa":true,'
+            else
+              name="WDCC ACCEPTANCE ${suffix} ${run}"; email="acceptance-${suffix}-${run}@example.com"; extra=''
+            fi
+            key="wdcc-full-${suffix}-${run}"
+            body="{${extra}\"kind\":\"$kind\",\"name\":\"$name\",\"phone\":\"813-555-0199\",\"email\":\"$email\",\"vehicleInterest\":\"Full live acceptance vehicle\",\"preferredTime\":\"QA only\",\"message\":\"Automated full live acceptance. Do not contact applicant.\",\"consent\":true,\"source\":\"$source\",\"pagePath\":\"/qa/full-$suffix\"}"
+            code="$(curl -sS -o "/tmp/${suffix}.json" -w '%{http_code}' -H 'Content-Type: application/json' -H "Idempotency-Key: $key" -X POST "$STOREFRONT/api/leads" --data "$body")"
+            case "$code" in 200|201) ;; *) echo "$suffix lead failed HTTP $code" >&2; cat "/tmp/${suffix}.json"; exit 1;; esac
+            jq -e '.ok==true and .persisted==true and .item.id!=null' "/tmp/${suffix}.json" >/dev/null
+          }
+          post schedule schedule-test-drive schedule false
+          post approval get-approved approval true
+          post contact call-sean contact true
+          SCHEDULE_ID="$(jq -r '.item.id' /tmp/schedule.json)"; APPROVAL_ID="$(jq -r '.item.id' /tmp/approval.json)"; CONTACT_ID="$(jq -r '.item.id' /tmp/contact.json)"
+          printf '%s\n%s\n%s\n' "$SCHEDULE_ID" "$APPROVAL_ID" "$CONTACT_ID" > /tmp/lead-ids.txt
+          feed_code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/dealer-leads.json -w '%{http_code}' "$DEALER/api/leads")"
+          test "$feed_code" = 200
+          jq -e --arg s "$SCHEDULE_ID" --arg a "$APPROVAL_ID" --arg c "$CONTACT_ID" '(.items//[]) as $x | any($x[]; .id==$s) and any($x[]; .id==$a) and any($x[]; .id==$c)' /tmp/dealer-leads.json >/dev/null
+          echo "schedule_id=$SCHEDULE_ID" >> "$GITHUB_OUTPUT"
+          echo "approval_id=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "contact_id=$CONTACT_ID" >> "$GITHUB_OUTPUT"
+          echo "schedule_email=$(jq -r '.notifications.email // "unknown"' /tmp/schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "schedule_sms=$(jq -r '.notifications.sms // "unknown"' /tmp/schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "schedule_webhook=$(jq -r '.notifications.webhook // "unknown"' /tmp/schedule.json)" >> "$GITHUB_OUTPUT"
+          echo "feed_http=$feed_code" >> "$GITHUB_OUTPUT"
+
+      - name: Browser dealer listing, lead dashboard, and admin portal acceptance
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/qa.env; set +a
+          export DEALER_COOKIE="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/dealer.cookies | tail -1)"
+          export ADMIN_COOKIE="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/admin.cookies | tail -1)"
+          test -n "$DEALER_COOKIE"; test -n "$ADMIN_COOKIE"
+          printf '::add-mask::%s\n' "$DEALER_COOKIE"; printf '::add-mask::%s\n' "$ADMIN_COOKIE"
+          export SCHEDULE_ID="${{ steps.leads.outputs.schedule_id }}"
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          (async()=>{
+            const run=process.env.RUN_TAG,dealer=process.env.DEALER,store=process.env.STOREFRONT,stock=`WDCC-QA-FULL-${run}`,leadName=`WDCC ACCEPTANCE schedule ${run}`;
+            fs.mkdirSync('/tmp/screens',{recursive:true});fs.writeFileSync('/tmp/wdcc-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+            const b=await chromium.launch({headless:true});
+            const dealerCtx=await b.newContext({viewport:{width:1440,height:1000}});await dealerCtx.addCookies([{name:'__Host-wdcc_session',value:process.env.DEALER_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await dealerCtx.newPage();
+            await p.goto(`${dealer}/dealer`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('DEALER_DASHBOARD_REDIRECTED_TO_LOGIN');await p.screenshot({path:'/tmp/screens/dealer-dashboard.png',fullPage:true});
+            await p.goto(`${dealer}/dealer/leads`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('DEALER_LEADS_REDIRECTED_TO_LOGIN');const leadBody=(await p.locator('body').innerText()).toLowerCase();if(!leadBody.includes('wdcc acceptance')&&!leadBody.includes(String(process.env.SCHEDULE_ID).toLowerCase()))throw Error('LEAD_NOT_VISIBLE_ON_DEALER_DASHBOARD');await p.screenshot({path:'/tmp/screens/dealer-leads.png',fullPage:true});
+            await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('DEALER_INVENTORY_NEW_REDIRECTED_TO_LOGIN');
+            await p.getByLabel('Year').fill('2019');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill(`FULL-E2E-${run}`);await p.getByLabel('Trim').fill('WDCC QA');await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill('Automated dealer full live acceptance vehicle. QA only.');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/wdcc-qa.png');await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});
+            const di=await dealerCtx.request.get(`${dealer}/api/inventory`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`}});if(!di.ok())throw Error(`DEALER_INVENTORY_FEED_${di.status()}`);const dij=await di.json();const item=(dij.items||[]).find(v=>v.stock===stock);if(!item)throw Error('PUBLISHED_VEHICLE_NOT_IN_DEALER_INVENTORY');if(!(item.photoPathnames||[]).length)throw Error('PUBLISHED_VEHICLE_HAS_NO_PHOTO');
+            const pub=await dealerCtx.request.get(`${store}/api/inventory?full=${Date.now()}`);if(!pub.ok())throw Error(`PUBLIC_INVENTORY_${pub.status()}`);const pj=await pub.json();if(!(pj.items||[]).some(v=>v.id===item.id||v.stock===stock))throw Error('PUBLISHED_VEHICLE_NOT_VISIBLE_PUBLICLY');
+            await p.goto(`${dealer}/dealer/inventory`,{waitUntil:'networkidle'});await p.screenshot({path:'/tmp/screens/dealer-inventory.png',fullPage:true});
+            const hide=await dealerCtx.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!hide.ok())throw Error(`QA_VEHICLE_HIDE_${hide.status()}`);
+            const adminCtx=await b.newContext({viewport:{width:1440,height:1000}});await adminCtx.addCookies([{name:'__Host-wdcc_session',value:process.env.ADMIN_COOKIE,domain:'wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const a=await adminCtx.newPage();
+            await a.goto(`${store}/admin`,{waitUntil:'networkidle'});if(a.url().includes('/admin/login'))throw Error('ADMIN_DASHBOARD_REDIRECTED_TO_LOGIN');await a.screenshot({path:'/tmp/screens/admin-dashboard.png',fullPage:true});
+            await a.goto(`${store}/admin/users`,{waitUntil:'networkidle'});if(a.url().includes('/admin/login'))throw Error('ADMIN_USERS_REDIRECTED_TO_LOGIN');await a.screenshot({path:'/tmp/screens/admin-users.png',fullPage:true});
+            fs.writeFileSync('/tmp/browser-result.json',JSON.stringify({ok:true,vehicleId:item.id,stock,photoCount:item.photoPathnames.length,publicVisible:true,dealerDashboard:true,leadDashboard:true,adminDashboard:true,adminUsers:true},null,2));await b.close();
+          })().catch(e=>{fs.writeFileSync('/tmp/browser-result.json',JSON.stringify({ok:false,error:String(e?.message||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/browser-result.json
+          echo "vehicle_id=$(jq -r '.vehicleId // ""' /tmp/browser-result.json)" >> "$GITHUB_OUTPUT"
+          echo "photo_count=$(jq -r '.photoCount // 0' /tmp/browser-result.json)" >> "$GITHUB_OUTPUT"
+          echo "public_visible=$(jq -r '.publicVisible // false' /tmp/browser-result.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload portal screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-full-live-acceptance-screens-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup acceptance users, leads, listing, and media
+        id: cleanup
+        if: always() && steps.qausers.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -a; . /tmp/dealer.env; . /tmp/qa.env; set +a
+          export VEHICLE_ID="$(jq -r '.vehicleId // ""' /tmp/browser-result.json 2>/dev/null)"
+          node --input-type=module <<'NODE' > /tmp/cleanup.json
+          import crypto from 'node:crypto';import {del,get,head,put} from '@vercel/blob';
+          const token=process.env.BLOB_READ_WRITE_TOKEN,path='private/state/platform-v3.json',dealerId=process.env.DEALER_ID,adminId=process.env.ADMIN_ID,run=process.env.RUN_TAG,vehicleId=process.env.VEHICLE_ID;
+          async function readStable(){for(let i=0;i<4;i++){const h1=await head(path,{token});const r=await get(path,{access:'private',useCache:false,token});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c);const h2=await head(path,{token});if(h1.etag===h2.etag)return{raw,etag:h2.etag,state:JSON.parse(raw.toString('utf8'))}}throw Error('STATE_TOO_HOT')}
+          const before=await readStable(),s=before.state,now=new Date().toISOString();const userIds=new Set([dealerId,adminId]);const leadMatch=x=>String(x?.name||'').includes(run)||String(x?.email||'').includes(run);const leadIds=(s.leads||[]).filter(leadMatch).map(x=>x.id);const v=(s.vehicles||[]).find(x=>x.id===vehicleId||String(x.stock||'').includes(`WDCC-QA-FULL-${run}`));const media=[...(v?.photoPathnames||[])];
+          s.users=(s.users||[]).filter(x=>!userIds.has(x.id));s.leads=(s.leads||[]).filter(x=>!leadIds.includes(x.id));if(v)s.vehicles=(s.vehicles||[]).map(x=>x.id===v.id?{...x,status:'archived',updatedAt:now,qaCleanupAt:now}:x);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.full_acceptance.cleanup',actor:'github-actions',run,usersRemoved:[dealerId,adminId],leadsRemoved:leadIds,vehicleArchived:v?.id||null});s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+          const backup=`private/state/backups/platform-v3-pre-full-clean-r${Number(before.state.revision||0)}-${now.replace(/[:.]/g,'-')}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',token});await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag,token});for(const p of media){try{await del(p,{token})}catch{}}
+          console.log(JSON.stringify({ok:true,usersRemoved:2,leadsRemoved:leadIds.length,vehicleArchived:v?.id||null,mediaDeleted:media.length,backup},null,2));
+          NODE
+          cat /tmp/cleanup.json
+
+      - name: Publish full acceptance evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          DEPS: ${{ steps.deps.outcome }}
+          BINDINGS: ${{ steps.bindings.outcome }}
+          QAUSERS: ${{ steps.qausers.outcome }}
+          LOGINS: ${{ steps.logins.outcome }}
+          DEALER_LOGIN: ${{ steps.logins.outputs.dealer_http }}
+          DEALER_SESSION: ${{ steps.logins.outputs.dealer_session }}
+          ADMIN_LOGIN: ${{ steps.logins.outputs.admin_http }}
+          ADMIN_SESSION: ${{ steps.logins.outputs.admin_session }}
+          LEADS: ${{ steps.leads.outcome }}
+          SCHEDULE_ID: ${{ steps.leads.outputs.schedule_id }}
+          APPROVAL_ID: ${{ steps.leads.outputs.approval_id }}
+          CONTACT_ID: ${{ steps.leads.outputs.contact_id }}
+          EMAIL_STATUS: ${{ steps.leads.outputs.schedule_email }}
+          SMS_STATUS: ${{ steps.leads.outputs.schedule_sms }}
+          WEBHOOK_STATUS: ${{ steps.leads.outputs.schedule_webhook }}
+          FEED_HTTP: ${{ steps.leads.outputs.feed_http }}
+          BROWSER: ${{ steps.browser.outcome }}
+          VEHICLE_ID: ${{ steps.browser.outputs.vehicle_id }}
+          PHOTOS: ${{ steps.browser.outputs.photo_count }}
+          PUBLIC_VISIBLE: ${{ steps.browser.outputs.public_visible }}
+          CLEANUP: ${{ steps.cleanup.outcome }}
+        shell: bash
+        run: |
+          err=''; [ -f /tmp/browser-result.json ] && err="$(jq -r '.error // ""' /tmp/browser-result.json)"
+          body=$(cat <<EOF
+          ## WDCC full live acceptance
+
+          - Overall: **$STATUS**
+          - Dependencies: **$DEPS**
+          - Canonical Blob binding: **$BINDINGS**
+          - Temporary QA identities: **$QAUSERS**
+          - Real dealer/admin logins: **$LOGINS**
+            - dealer login/session: ${DEALER_LOGIN:-n/a}/${DEALER_SESSION:-n/a}
+            - admin login/session: ${ADMIN_LOGIN:-n/a}/${ADMIN_SESSION:-n/a}
+          - Three lead flows: **$LEADS**
+            - schedule: ${SCHEDULE_ID:-n/a}
+            - approval: ${APPROVAL_ID:-n/a}
+            - contact: ${CONTACT_ID:-n/a}
+            - dealer feed HTTP: ${FEED_HTTP:-n/a}
+            - schedule notification email: ${EMAIL_STATUS:-n/a}
+            - schedule notification SMS: ${SMS_STATUS:-n/a}
+            - schedule notification webhook: ${WEBHOOK_STATUS:-n/a}
+          - Dealer/admin rendered acceptance + listing publish: **$BROWSER**
+            - vehicle: ${VEHICLE_ID:-n/a}
+            - photo count: ${PHOTOS:-n/a}
+            - public visible before QA hide: ${PUBLIC_VISIBLE:-n/a}
+            - browser error: ${err:-none}
+          - Cleanup: **$CLEANUP**
+
+          Screenshots are attached to the workflow run as the wdcc-full-live-acceptance-screens artifact.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC full live acceptance ${GITHUB_RUN_ID}" --body "$body" || true
