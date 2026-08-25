@@ -5,10 +5,11 @@ set -euo pipefail
 TEAM="cpxagency"
 ORG_ID="team_G6jmETRRl8fV3KfivPOdj8JM"
 PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR"
+STORE_ID="store_cNUyQRVlXtyvZQ5N"
 BASE="http://127.0.0.1:3200"
 BACKEND="https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app"
 RUN_ID="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
-export BASE BACKEND RUN_ID
+export BASE BACKEND RUN_ID PROJECT_ID STORE_ID
 
 npm ci
 npm install --global vercel@59.3.0 >/dev/null
@@ -46,7 +47,7 @@ trap cleanup EXIT
 LOCAL_SESSION_SECRET="$(openssl rand -base64 72 | tr -d '\n')"
 export LOCAL_SESSION_SECRET
 printf '::add-mask::%s\n' "$LOCAL_SESSION_SECRET"
-env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -c 'export SESSION_SECRET="$LOCAL_SESSION_SECRET"; export PORT=3200; npm start' > /tmp/wdcc-server.log 2>&1 &
+env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -c 'export SESSION_SECRET="$LOCAL_SESSION_SECRET"; export VERCEL_PROJECT_ID="$PROJECT_ID"; export BLOB_STORE_ID="$STORE_ID"; export PORT=3200; npm start' > /tmp/wdcc-server.log 2>&1 &
 SERVER_PID=$!
 export SERVER_PID
 
@@ -78,7 +79,7 @@ function assert(v,m){if(!v)throw Error(m)}
  const routes=['/','/inventory','/schedule-test-drive?source=qa-local','/get-approved?source=qa-local','/contact?source=qa-local','/dealer','/dealer/login','/dealer/leads','/dealer/inventory','/dealer/inventory/new','/dealer/inventory/logs','/dealer/crm','/admin','/admin/login','/admin/users','/privacy','/terms'];
  const routeResults=[];for(const path of routes){const r=await ctx.request.get(base+path);routeResults.push({path,status:r.status()});assert(r.status()!==404&&r.status()<500,`ROUTE_${path}_${r.status()}`)}
  const inv0=await (await ctx.request.get(base+'/api/inventory?before='+Date.now())).json();assert(inv0.ok&&Array.isArray(inv0.items),'INVENTORY_CONTRACT');assert(inv0.items.every(v=>Number(v.year)>1900&&String(v.make||'').trim()&&String(v.model||'').trim()&&Number(v.price)>0&&!String(v.stock||'').toUpperCase().startsWith('R36TEST-')),'INVENTORY_PUBLIC_FILTER');
- async function lead(kind,path,source,phone){await page.goto(base+path+'?source='+encodeURIComponent(source),{waitUntil:'networkidle'});await page.locator('input[name="name"]').fill(`WDCC QA LOCAL ${kind} ${run}`);await page.locator('input[name="phone"]').fill(phone);await page.locator('input[name="email"]').fill(`qa-local-${kind}-${run}@invalid.example`);const vi=page.locator('input[name="vehicleInterest"],textarea[name="vehicleInterest"]');if(await vi.count())await vi.first().fill('Local candidate QA vehicle');await page.locator('input[name="consent"]').check();const pending=page.waitForResponse(r=>r.url().includes('/api/leads')&&r.request().method()==='POST');await page.getByRole('button',{name:'SEND REQUEST'}).click();const response=await pending,j=await response.json();assert(response.ok()&&j.ok&&j.persisted,`LEAD_${kind}_FAILED`);assert(j.item.kind===kind&&j.item.source===source,`LEAD_${kind}_ATTRIBUTION`);return j.item}
+ async function lead(kind,path,source,phone){await page.goto(base+path+'?source='+encodeURIComponent(source),{waitUntil:'networkidle'});await page.locator('input[name="name"]').fill(`WDCC QA LOCAL ${kind} ${run}`);await page.locator('input[name="phone"]').fill(phone);await page.locator('input[name="email"]').fill(`qa-local-${kind}-${run}@invalid.example`);const vi=page.locator('input[name="vehicleInterest"],textarea[name="vehicleInterest"]');if(await vi.count())await vi.first().fill('Local candidate QA vehicle');await page.locator('input[name="consent"]').check();const pending=page.waitForResponse(r=>r.url().includes('/api/leads')&&r.request().method()==='POST');await page.getByRole('button',{name:'SEND REQUEST'}).click();const response=await pending;let j={};try{j=await response.json()}catch{};if(!(response.ok()&&j.ok&&j.persisted)){throw Error(`LEAD_${kind}_FAILED status=${response.status()} body=${JSON.stringify(j)}`)}assert(j.item.kind===kind&&j.item.source===source,`LEAD_${kind}_ATTRIBUTION`);return j.item}
  const schedule=await lead('schedule','/schedule-test-drive','schedule-test-drive','813-555-0181');const approval=await lead('approval','/get-approved','get-approved','813-555-0182');const contact=await lead('contact','/contact','call-sean','813-555-0183');
  const dedupe=await ctx.request.post(base+'/api/leads',{headers:{'Content-Type':'application/json','Idempotency-Key':schedule.idempotencyKey},data:{qa:true,kind:'schedule',name:schedule.name,phone:schedule.phone,email:schedule.email,vehicleInterest:schedule.vehicleInterest||'Local candidate QA vehicle',message:'duplicate contract check',consent:true,source:'schedule-test-drive',idempotencyKey:schedule.idempotencyKey}});const dj=await dedupe.json();assert(dedupe.ok()&&dj.deduplicated===true,'LEAD_IDEMPOTENCY');
  const proof=await ctx.request.post(backend+'/api/qa-proof',{headers:{'Content-Type':'application/json'},data:{}});const pj=await proof.json();assert(proof.ok()&&pj.ok&&pj.vehicle&&pj.vehicle.status==='published'&&pj.vehicle.stock==='R36TEST-QA-PROOF-20260824','VEHICLE_QA_PROOF');
