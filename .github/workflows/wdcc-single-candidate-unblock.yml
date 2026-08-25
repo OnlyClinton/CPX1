@@ -1,0 +1,105 @@
+name: WDCC single candidate unblock
+
+on:
+  push:
+    branches:
+      - release/wdcc-single-candidate-20260825-control
+    paths:
+      - '.github/workflows/wdcc-single-candidate-unblock.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-single-candidate-unblock
+  cancel-in-progress: false
+
+jobs:
+  unblock-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      PROJECT_NAME: wdcc-v32-storefront
+      CANDIDATE_REF: release/wdcc-single-candidate-20260825
+      CANDIDATE_SHA: 25c2f42f9f12943be7f5fcd0fa03e1d769dbfa7a
+    steps:
+      - name: Require token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Clear storefront Ignored Build Step
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -X PATCH \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data '{"commandForIgnoringBuildStep":null}' \
+            -o /tmp/project.json
+          jq -e '.id == env.PROJECT_ID and .commandForIgnoringBuildStep == null' /tmp/project.json >/dev/null
+          echo "Ignored Build Step cleared for storefront only."
+
+      - name: Create one pinned storefront preview deployment
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -nc \
+            --arg name "$PROJECT_NAME" \
+            --arg project "$PROJECT_ID" \
+            --arg org "OnlyClinton" \
+            --arg repo "CPX1" \
+            --arg ref "$CANDIDATE_REF" \
+            --arg sha "$CANDIDATE_SHA" \
+            '{name:$name,project:$project,gitSource:{type:"github",org:$org,repo:$repo,ref:$ref,sha:$sha}}' > /tmp/deploy-request.json
+          curl -fsSL -X POST \
+            "https://api.vercel.com/v13/deployments?teamId=$TEAM_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/deploy-request.json \
+            -o /tmp/deploy.json
+          jq . /tmp/deploy.json
+          ID="$(jq -r '.id // empty' /tmp/deploy.json)"
+          URL="$(jq -r '.url // empty' /tmp/deploy.json)"
+          test -n "$ID" && test -n "$URL"
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for terminal deployment state
+        id: wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          ID='${{ steps.deploy.outputs.id }}'
+          for i in $(seq 1 60); do
+            curl -fsSL \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$ID?teamId=$TEAM_ID" \
+              -o /tmp/status.json
+            STATE="$(jq -r '.readyState // .state // empty' /tmp/status.json)"
+            echo "deployment=$ID state=$STATE"
+            case "$STATE" in
+              READY) exit 0 ;;
+              ERROR|CANCELED) jq . /tmp/status.json; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo 'Timed out waiting for deployment' >&2
+          exit 1
+
+      - name: Publish result issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.deploy.outputs.id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          WAIT_OUTCOME: ${{ steps.wait.outcome }}
+        shell: bash
+        run: |
+          title="WDCC single storefront candidate: $WAIT_OUTCOME"
+          body="Pinned source: \`$CANDIDATE_SHA\` on \`$CANDIDATE_REF\`\nDeployment: \`$DEPLOYMENT_ID\`\nURL: \`$DEPLOYMENT_URL\`\nIgnored Build Step was cleared on storefront only. Dealer and launch remain frozen."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" || true
