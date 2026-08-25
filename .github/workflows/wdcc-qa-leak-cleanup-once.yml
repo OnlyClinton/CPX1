@@ -1,0 +1,182 @@
+name: WDCC QA Leak Cleanup Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-qa-leak-cleanup-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-qa-leak-cleanup-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+  CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+  CANONICAL_API: https://wdcc-cpx-launch-cpxagency.vercel.app
+  QA_STOCK_1: QA-LOAD-32819132897-1
+  QA_STOCK_2: QA-LOAD-32819198581-1
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout frozen candidate tooling
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install pinned tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -n "$VERCEL_TOKEN"
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+
+      - name: Prove leak exists before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CANONICAL_API/api/inventory?qa_cleanup_pre=$GITHUB_RUN_ID" -o /tmp/public-before.json
+          jq -e '.ok==true and (.items|type=="array")' /tmp/public-before.json >/dev/null
+          jq -e --arg a "$QA_STOCK_1" --arg b "$QA_STOCK_2" '[.items[].stock] | (index($a)!=null) and (index($b)!=null)' /tmp/public-before.json >/dev/null
+          echo 'QA_LEAK_PRECHECK=CONFIRMED'
+
+      - name: Archive only the two leaked rows with immutable backup and CAS
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-qa-cleanup.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+
+          const path='private/state/platform-v3.json';
+          const storeId=String(process.env.STORE_ID||'').trim();
+          const oidcToken=String(process.env.VERCEL_OIDC_TOKEN||'').trim();
+          const targets=new Set([process.env.QA_STOCK_1,process.env.QA_STOCK_2].filter(Boolean));
+          if(!storeId||!oidcToken||targets.size!==2)throw Error('OIDC_AUTHORITY_OR_TARGETS_MISSING');
+          const opt={oidcToken,storeId};
+
+          async function readStable(){
+            for(let i=0;i<3;i++){
+              const before=await head(path,opt);
+              const r=await get(path,{access:'private',useCache:false,...opt});
+              if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+              const chunks=[];for await(const c of r.stream)chunks.push(c);
+              const raw=Buffer.concat(chunks);
+              const after=await head(path,opt);
+              if(before.etag===after.etag)return {raw,etag:after.etag,state:JSON.parse(raw.toString('utf8'))};
+            }
+            throw Error('STATE_TOO_HOT');
+          }
+
+          let result;
+          for(let attempt=1;attempt<=3;attempt++){
+            const before=await readStable();
+            const s=before.state;
+            s.vehicles=Array.isArray(s.vehicles)?s.vehicles:[];
+            const matched=s.vehicles.filter(v=>targets.has(String(v?.stock||'')));
+            const stocks=[...new Set(matched.map(v=>String(v.stock)))];
+            const missing=[...targets].filter(stock=>!stocks.includes(stock));
+            if(missing.length)throw Error('TARGET_QA_ROWS_MISSING:'+missing.join(','));
+            const published=matched.filter(v=>String(v.status||'').toLowerCase()==='published');
+            if(!published.length){
+              result={ok:true,noOp:true,revision:Number(s.revision||0),archived:[],alreadyNonPublic:stocks};
+              break;
+            }
+            const now=new Date().toISOString();
+            const backup=`private/state/backups/platform-v3-pre-qa-leak-cleanup-r${Number(s.revision||0)}-${now.replace(/[:.]/g,'-')}-${crypto.randomUUID()}.json`;
+            await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',...opt});
+            const archived=[];
+            s.vehicles=s.vehicles.map(v=>{
+              if(!targets.has(String(v?.stock||'')))return v;
+              archived.push(String(v.stock));
+              return {...v,status:'archived',updatedAt:now,qaCleanupAt:now,qaCleanupReason:'release-blocking-public-qa-exposure'};
+            });
+            s.audit=Array.isArray(s.audit)?s.audit:[];
+            s.audit.push({id:crypto.randomUUID(),at:now,action:'release.qa_inventory.archive_exact',actor:'github-actions',run:process.env.GITHUB_RUN_ID,stocks:archived,backup});
+            s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{
+              await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag,...opt});
+              result={ok:true,noOp:false,revision:s.revision,archived,backup};
+              break;
+            }catch(e){
+              if(e instanceof BlobPreconditionFailedError&&attempt<3)continue;
+              throw e;
+            }
+          }
+          if(!result)throw Error('CLEANUP_NO_RESULT');
+          const verify=await readStable();
+          const leaked=(verify.state.vehicles||[]).filter(v=>targets.has(String(v?.stock||''))&&String(v?.status||'').toLowerCase()==='published').map(v=>v.stock);
+          if(leaked.length)throw Error('QA_ROWS_STILL_PUBLISHED:'+leaked.join(','));
+          fs.writeFileSync('/tmp/qa-cleanup.json',JSON.stringify({...result,verifiedRevision:Number(verify.state.revision||0)},null,2));
+          console.log(JSON.stringify({...result,verifiedRevision:Number(verify.state.revision||0)}));
+          NODE
+
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            env -u BLOB_READ_WRITE_TOKEN STORE_ID="$STORE_ID" QA_STOCK_1="$QA_STOCK_1" QA_STOCK_2="$QA_STOCK_2" node .wdcc-qa-cleanup.mjs
+
+      - name: Prove public API no longer exposes either QA row
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 10); do
+            curl -fsS "$CANONICAL_API/api/inventory?qa_cleanup_post=$GITHUB_RUN_ID-$i" -o /tmp/public-after.json
+            if jq -e --arg a "$QA_STOCK_1" --arg b "$QA_STOCK_2" '.ok==true and ([.items[].stock] | (index($a)==null) and (index($b)==null))' /tmp/public-after.json >/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+          echo 'QA_PUBLIC_EXPOSURE=CLOSED'
+
+      - name: Report exact cleanup evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          cleanup='not captured'; [ -f /tmp/qa-cleanup.json ] && cleanup="$(cat /tmp/qa-cleanup.json)"
+          after='not captured'; [ -f /tmp/public-after.json ] && after="$(cat /tmp/public-after.json | jq -c '{ok,count:(.items|length),qa:[.items[]|select((.stock==env.QA_STOCK_1) or (.stock==env.QA_STOCK_2))|{id,stock,status}]}')"
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Exact stocks: \`$QA_STOCK_1\`, \`$QA_STOCK_2\`
+          Frozen tooling SHA: \`$CANDIDATE_SHA\`
+
+          Cleanup result:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+
+          Public API verification:
+          \`\`\`json
+          $after
+          \`\`\`
+
+          No Vercel deployment, production alias, DNS record, Cloudflare route, storefront domain, or dealer domain is changed by this workflow.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact QA leak cleanup ${GITHUB_RUN_ID}" --body "$body" || true
