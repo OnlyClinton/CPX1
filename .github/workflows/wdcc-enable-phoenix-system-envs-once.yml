@@ -1,0 +1,53 @@
+name: WDCC Enable Phoenix System Envs Once
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-enable-phoenix-system-envs-once.yml']
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  expose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - name: Inspect and enable automatic system environment exposure
+        id: expose
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.vercel.com/v9/projects/$PHOENIX_ID?teamId=$TEAM_ID"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "$api" -o /tmp/before.json
+          before="$(jq -r '.autoExposeSystemEnvs // false' /tmp/before.json)"
+          echo "before=$before" >> "$GITHUB_OUTPUT"
+          if [ "$before" != true ]; then
+            curl -fsS -X PATCH \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data '{"autoExposeSystemEnvs":true}' \
+              "$api" -o /tmp/patch.json
+          fi
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "$api" -o /tmp/after.json
+          after="$(jq -r '.autoExposeSystemEnvs // false' /tmp/after.json)"
+          test "$after" = true
+          echo "after=$after" >> "$GITHUB_OUTPUT"
+          echo "PHOENIX_SYSTEM_ENVS=PASS before=$before after=$after"
+
+      - name: Report system environment configuration
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BEFORE: ${{ steps.expose.outputs.before }}
+          AFTER: ${{ steps.expose.outputs.after }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC Phoenix system env exposure ${GITHUB_RUN_ID}" \
+            --body "Status: **$STATUS**\nPhoenix project: \`$PHOENIX_ID\`\nBefore autoExposeSystemEnvs: \`${BEFORE:-unknown}\`\nAfter autoExposeSystemEnvs: \`${AFTER:-unknown}\`\nNo deployment, environment secret, alias, DNS record or Cloudflare route was changed. This setting exposes Vercel system variables such as runtime OIDC to future deployments."
