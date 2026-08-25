@@ -1,0 +1,21 @@
+name: WDCC Five Record Proof Dispatch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ops/wdcc-five-record-dashboard-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch production five-record proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run wdcc-five-record-dashboard-proof.yml --repo "$GITHUB_REPOSITORY" --ref main
