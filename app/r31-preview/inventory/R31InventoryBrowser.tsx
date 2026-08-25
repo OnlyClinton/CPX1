@@ -74,7 +74,7 @@ export default function R31InventoryBrowser(){
         const down=v.downPayment??v.down_payment;
         const photo=photoFor(v);
         return <article className={styles.card} key={v.id}>
-          <Link className={styles.photo} href={`/vehicle/${encodeURIComponent(v.id)}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>
+          <Link className={styles.photo} href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-inventory-image`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>
             {photo?<img src={photo} alt={`${v.year} ${v.make} ${v.model}`}/>:<div className={styles.noPhoto}><b>PHOTO NEEDED</b><span>Vehicle details are still available.</span></div>}
             <span className={styles.available}>AVAILABLE</span>
           </Link>
@@ -83,7 +83,7 @@ export default function R31InventoryBrowser(){
             <div className={styles.price}>{money(v.price)}</div>
             {down!=null&&<div className={styles.down}>{money(Number(down))} DOWN</div>}
             <div className={styles.meta}><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div>
-            <div className={styles.actions}><Link href={`/vehicle/${encodeURIComponent(v.id)}`}>VIEW DETAILS</Link><Link href={`/r31-preview/get-approved?vehicle=${encodeURIComponent(v.id)}`}>GET PRE-APPROVED</Link></div>
+            <div className={styles.actions}><Link href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-inventory-details`}>VIEW DETAILS</Link><Link href={`/r31-preview/get-approved?source=r31-inventory-approved&vehicle=${encodeURIComponent(v.id)}`}>GET PRE-APPROVED</Link></div>
           </div>
         </article>;
       }):<div className={styles.empty}><h2>No vehicles match those filters.</h2><p>Clear a filter or call Sean for vehicles being prepared now.</p></div>}
