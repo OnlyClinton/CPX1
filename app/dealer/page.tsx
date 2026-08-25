@@ -13,12 +13,12 @@ export default function Dealer(){
  const[session,setSession]=useState<any>();
  const[data,setData]=useState<any>();
  const[msg,setMsg]=useState("Loading dashboard…");
- async function load(){const r=await fetch("/api/crm/dashboard",{cache:"no-store"});if(r.status===401){location.href="/dealer/login";return}const j=await r.json();if(!r.ok)throw Error(j.error||"Dashboard failed");setData(j);setMsg("")}
- useEffect(()=>{fetch("/api/auth/session",{cache:"no-store"}).then(r=>r.json()).then(s=>{setSession(s);if(!s.authenticated){location.href="/dealer/login";return}return load()}).catch(()=>location.href="/dealer/login")},[]);
- async function logout(){await fetch("/api/auth/logout",{method:"POST"});location.href="/dealer/login"}
+ async function load(){const r=await fetch("/api/crm/dashboard",{cache:"no-store"});if(r.status===401){location.href="/login";return}const j=await r.json();if(!r.ok)throw Error(j.error||"Dashboard failed");setData(j);setMsg("")}
+ useEffect(()=>{fetch("/api/auth/session",{cache:"no-store"}).then(r=>r.json()).then(s=>{setSession(s);if(!s.authenticated){location.href="/login";return}return load()}).catch(()=>location.href="/login")},[]);
+ async function logout(){await fetch("/api/auth/logout",{method:"POST"});location.href="/login"}
  const leads=useMemo(()=>Array.isArray(data?.leads)?data.leads:[],[data]);
  const inventory=useMemo(()=>Array.isArray(data?.inventory)?data.inventory:[],[data]);
- const pipeline=data?.pipeline||{};const summary=data?.summary||{};
+ const summary=data?.summary||{};
  const derived=useMemo(()=>{
   const now=new Date();const today=dayKey(now);const weekStart=new Date(now);weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-6);
   const newToday=Number(summary.newToday??leads.filter((l:any)=>dayKey(l.createdAt||l.created_at)===today).length);
@@ -33,7 +33,7 @@ export default function Dealer(){
   const sources=["Website","Phone","Walk-in","Referral"].map(name=>({name,count:sourceCounts.get(name)||0}));const totalSources=Math.max(1,sources.reduce((a,b)=>a+b.count,0));
   const colors=["#168af4","#ef2029","#14b86d","#f5a000"];let cursor=0;const stops=sources.map((x,i)=>{const start=cursor;cursor+=x.count/totalSources*100;return`${colors[i]} ${start}% ${cursor}%`});const donut=leads.length?`conic-gradient(${stops.join(",")})`:"conic-gradient(#1b3042 0 100%)";
   const startLabel=weekStart.toLocaleDateString(undefined,{month:"short",day:"numeric"});const endLabel=now.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
-  return{newToday,applications,approved,soldWeek,days,newSeries,approvedSeries,newPoints:points(newSeries),approvedPoints:points(approvedSeries),sources,totalSources:leads.length,donut,dateLabel:`${startLabel} – ${endLabel}`};
+  return{newToday,applications,approved,soldWeek,days,newPoints:points(newSeries),approvedPoints:points(approvedSeries),sources,totalSources:leads.length,donut,dateLabel:`${startLabel} – ${endLabel}`};
  },[leads,summary]);
  const rankedVehicles=useMemo(()=>inventory.map((v:any)=>{const related=leads.filter((l:any)=>vehicleMatchesLead(v,l));return{...v,leadCount:related.length,testDrives:related.filter((l:any)=>String(l.kind||"").toLowerCase()==="schedule").length}}).sort((a:any,b:any)=>b.leadCount-a.leadCount||b.testDrives-a.testDrives).slice(0,5),[inventory,leads]);
  if(!session?.authenticated)return <main className="portal"><div className="wrap">Checking secure session…</div></main>;
