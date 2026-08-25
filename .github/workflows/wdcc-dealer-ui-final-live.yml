@@ -1,0 +1,110 @@
+name: WDCC DEALER UI FINAL LIVE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TRIGGER_WDCC_DEALER_UI_FINAL.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-dealer-ui-final-live
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      VERCEL_PROJECT: wdcc-v32-storefront
+      RELEASE_SHA: 7fb3d68c42d7a6627fb323c0462556c55d9f9484
+      APEX: https://wedontcarecars.com
+    steps:
+      - name: Checkout frozen dealer UI release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify screenshot contract exists in frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'Total Vehicles' app/dealer/page.tsx
+          grep -q 'Inventory Overview' app/dealer/page.tsx
+          grep -q 'Recent Vehicles' app/dealer/page.tsx
+          grep -q 'Add / Edit Vehicle' app/dealer/inventory/new/page.tsx
+          grep -q 'Vehicle Information' app/dealer/inventory/new/page.tsx
+          grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
+          grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
+          grep -q 'Publish / Submit' app/dealer/inventory/new/page.tsx
+          grep -q 'Vehicle Details Preview' app/dealer/inventory/new/page.tsx || true
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Link exact storefront project
+        run: vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Pull production environment
+        run: vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Build production locally
+        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt output to production
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" | tail -n 1 | tr -d '\r')"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url"
+
+      - name: Verify public production contract
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?intro=1&release=${GITHUB_RUN_ID}" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APEX/dealer" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ]; then
+              if jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok == true' /tmp/inventory.json >/dev/null 2>&1; then
+                if grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get pre-approved' /tmp/home.html && grep -qi 'Call Sean' /tmp/home.html; then ok=1; break; fi
+              fi
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo verified=true >> "$GITHUB_OUTPUT"
+
+      - name: Trigger authenticated dealer listing acceptance
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run wdcc-listing-only-e2e.yml --ref main
+
+      - name: Report release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          VERIFY: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Frozen source SHA: `%s`\nProduction deployment: `%s`\nPublic contract verified: `%s`\nAuthenticated dealer acceptance: triggered after public PASS\n\nApex: %s' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFY:-false}" "$APEX")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer UI final live ${GITHUB_RUN_ID}" --body "$body" || true
