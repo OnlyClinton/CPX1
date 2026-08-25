@@ -157,18 +157,25 @@ jobs:
           curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dnssec-before.json
           jq -e '.success==true' /tmp/dnssec-before.json >/dev/null
           STATUS="$(jq -r '.result.status // "disabled"' /tmp/dnssec-before.json)"
-          if [ "$STATUS" != "active" ]; then
+          if [ "$STATUS" = "disabled" ] || [ "$STATUS" = "pending-disabled" ]; then
             curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dnssec" \
               -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' \
               --data '{"status":"active"}' > /tmp/dnssec-enable.json
             jq -e '.success==true' /tmp/dnssec-enable.json >/dev/null
           fi
           curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dnssec.json
-          jq -e '.success==true and .result.status=="active"' /tmp/dnssec.json >/dev/null
+          jq -e '.success==true and (.result.status=="active" or .result.status=="pending") and (.result.ds|type=="string") and (.result.ds|length>0)' /tmp/dnssec.json >/dev/null
+          DNSSEC_STATUS="$(jq -r '.result.status' /tmp/dnssec.json)"
+          echo "status=$DNSSEC_STATUS" >> "$GITHUB_OUTPUT"
           echo '### DNSSEC — install this DS at the registrar if the parent DS is absent' >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           jq '.result | {status,key_tag,algorithm,digest_algorithm,digest,ds}' /tmp/dnssec.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DNSSEC_STATUS" = "pending" ]; then
+            echo 'DNSSEC is correctly pending parent DS installation.'
+          else
+            echo 'DNSSEC is active end-to-end.'
+          fi
 
       - name: Live gate dealer and customer storefront
         id: live
@@ -200,9 +207,10 @@ jobs:
           DEALER='${{ steps.live.outputs.dealer_ok }}'
           STOREFRONT='${{ steps.live.outputs.storefront_ok }}'
           DKIM='${{ steps.mail.outputs.dkim_count }}'
+          DNSSEC_STATUS='${{ steps.dnssec.outputs.status }}'
           DS='unavailable'
-          [ -f /tmp/dnssec.json ] && DS="$(jq -c '.result | {key_tag,algorithm,digest_algorithm,digest,ds}' /tmp/dnssec.json)"
+          [ -f /tmp/dnssec.json ] && DS="$(jq -c '.result | {status,key_tag,algorithm,digest_algorithm,digest,ds}' /tmp/dnssec.json)"
           BLOCKERS='none'
           [ -s /tmp/mail-blockers.txt ] && BLOCKERS="$(sed ':a;N;$!ba;s/\n/; /g' /tmp/mail-blockers.txt)"
-          BODY=$(printf 'Dealer live gate: **%s**\nStorefront live gate: **%s**\nDKIM selectors found: `%s`\nDNSSEC DS: `%s`\nMail blockers: `%s`\n\nRemaining external closeout after this workflow: install the exact DS at the registrar if parent DS is absent; create/enable `sean@wedontcarecars.com` in Proton if it still returns 550; copy Proton DKIM selectors only if the audit reports them missing.' "$DEALER" "$STOREFRONT" "$DKIM" "$DS" "$BLOCKERS")
+          BODY=$(printf 'Dealer live gate: **%s**\nStorefront live gate: **%s**\nDKIM selectors found: `%s`\nDNSSEC status: `%s`\nDNSSEC DS: `%s`\nMail blockers: `%s`\n\nRemaining external closeout after this workflow: install the exact DS at the registrar if DNSSEC is pending; create/enable `sean@wedontcarecars.com` in Proton if it still returns 550; copy Proton DKIM selectors only if the audit reports them missing.' "$DEALER" "$STOREFRONT" "$DKIM" "$DNSSEC_STATUS" "$DS" "$BLOCKERS")
           gh issue comment 317 --repo "$GITHUB_REPOSITORY" --body "$BODY" || true
