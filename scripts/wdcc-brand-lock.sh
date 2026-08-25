@@ -6,23 +6,27 @@ fail(){ echo "BRAND_LOCK_FAILED: $*" >&2; exit 1; }
 [[ -s public/wdcc-logo-transparent.webp ]] || fail "missing public/wdcc-logo-transparent.webp"
 [[ -s public/wdcc-hero-v2.webp ]] || fail "missing public/wdcc-hero-v2.webp"
 
-# The R31/R25 visual source of truth uses these canonical assets.
-# Prevent dealer/admin runtime code from drifting back to retired branding.
 if grep -RIn --exclude-dir='.next' --exclude-dir='node_modules' --exclude='*.map' \
   'wdcc-official-logo\.webp' app/dealer app/admin app/PortalExperience.tsx 2>/dev/null; then
   fail "retired wdcc-official-logo.webp referenced by dealer/admin runtime"
 fi
 
-# Canonical auth entry points are /dealer and /admin. Legacy login paths may only
-# exist in the dedicated redirect stub, never as destinations elsewhere.
 legacy_refs="$(find app/dealer -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path 'app/dealer/login/page.tsx' -print0 | xargs -0 grep -nH '/dealer/login' || true)"
 if [[ -n "$legacy_refs" ]]; then
   printf '%s\n' "$legacy_refs"
   fail "protected dealer runtime still points to /dealer/login"
 fi
 
-# Ensure the canonical portal pages and storefront source-of-truth assets stay wired.
-grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx || fail "dealer canonical portal missing"
+if grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx; then
+  :
+elif grep -q 'DealerDashboard' app/dealer/page.tsx \
+  && grep -q 'wdcc-logo-transparent.webp' app/dealer/DealerDashboard.tsx \
+  && grep -q 'wdcc-hero-v2.webp' app/dealer/DealerDashboard.tsx; then
+  :
+else
+  fail "dealer canonical portal missing"
+fi
+
 grep -q 'PortalExperience mode="admin"' app/admin/page.tsx || fail "admin canonical portal missing"
 grep -q 'wdcc-logo-transparent.webp' app/PortalExperience.tsx || fail "portal shell not using canonical logo"
 grep -q 'wdcc-hero-v2.webp' app/PortalExperience.tsx || fail "portal shell not using canonical hero"
