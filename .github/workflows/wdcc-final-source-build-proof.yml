@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      FINAL_SHA: d0b119aa00e75f392c46194480471e9a39790701
+      FINAL_SHA: d7b56f3e67a971ffd10ca7189a86a5850f8f21af
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +39,9 @@ jobs:
           grep -q 'canonicalDealerBackend' lib/legacyAuthProxy.ts
           grep -q 'proxyDealer(request,"/api/leads")' app/api/leads/route.ts
           grep -q 'canonicalGET(request)' app/api/lead/route.ts
+          grep -q 'handleUploadPresigned' app/api/upload/route.ts
+          grep -q 'issueSignedToken' app/api/upload/route.ts
+          grep -q 'uploadPresigned' app/dealer/inventory/new/page.tsx
           echo 'WDCC_FINAL_SOURCE_CONTRACT=PASS'
       - name: Report source proof
         if: always()
