@@ -36,6 +36,10 @@ jobs:
           new="const qVehicle=v=>String(v?.status||'').toLowerCase()!=='archived'&&(String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-'));"
           if old not in s: raise SystemExit('cleanup matcher patch target missing')
           s=s.replace(old,new)
+          old='.ok==true and .degraded==false and .service=="wdcc-canonical-authority"'
+          new='.ok==true and .degraded==false and (.backend=="healthy" or .backend==null) and (.service=="wdcc-canonical-authority" or .service=="wdcc-hardened-dealer-facade")'
+          if old not in s: raise SystemExit('health identity patch target missing')
+          s=s.replace(old,new)
           old='test "$ready" = 1'
           new='''if [ "$ready" != 1 ]; then\n  python3 - <<'PY2'\nimport json, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"health_readiness","health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
           if old not in s: raise SystemExit('health patch target missing')
