@@ -1,0 +1,174 @@
+/* WDCC layered cinematic opener v2: preserves approved Tampa/Challenger art while adding independent motion. */
+.cinematic-v2{
+  --dock-x:max(82px,calc((100vw - 1180px)/2 + 66px));
+  --dock-y:73px;
+  --dock-w:132px;
+  isolation:isolate;
+  animation:wdccV2Exit .48s 2.88s cubic-bezier(.22,1,.36,1) forwards;
+}
+.cinematic-v2 .cinScene{
+  inset:-3%;
+  overflow:hidden;
+  background:url('/wdcc-hero-v2.webp') 67% center/cover no-repeat;
+  filter:saturate(1.08) contrast(1.08) brightness(.64);
+  transform:scale(1.035);
+  animation:wdccV2Backdrop 3.15s cubic-bezier(.16,1,.3,1) both;
+}
+/* Darken the car's static location until the moving duplicate lands there. */
+.cinematic-v2 .cinScene::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:radial-gradient(ellipse 44% 31% at 73% 66%,rgba(2,5,9,.96) 0 31%,rgba(2,5,9,.86) 43%,rgba(2,5,9,.28) 61%,transparent 76%);
+  animation:wdccV2CarOcclusion 1.52s .38s ease-out both;
+}
+/* Independent Challenger layer cut from the exact approved hero image. */
+.cinematic-v2 .cinScene::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:2;
+  pointer-events:none;
+  background:url('/wdcc-hero-v2.webp') 67% center/cover no-repeat;
+  clip-path:polygon(40% 43%,53% 34%,79% 35%,96% 45%,100% 66%,93% 82%,76% 91%,49% 88%,39% 73%);
+  -webkit-mask-image:radial-gradient(ellipse 42% 31% at 73% 65%,#000 0 61%,rgba(0,0,0,.95) 69%,transparent 88%);
+  mask-image:radial-gradient(ellipse 42% 31% at 73% 65%,#000 0 61%,rgba(0,0,0,.95) 69%,transparent 88%);
+  transform:translate3d(46vw,3.5vh,0) scale(.86) rotate(-1.2deg);
+  transform-origin:73% 68%;
+  filter:saturate(1.18) contrast(1.12) brightness(1.05) drop-shadow(-28px 28px 28px rgba(0,0,0,.48));
+  will-change:transform,filter,opacity;
+  animation:wdccV2CarSweep 1.48s .48s cubic-bezier(.14,.88,.22,1) both;
+}
+.cinematic-v2 .cinVignette{
+  z-index:3;
+  background:linear-gradient(90deg,#020509e8 0,#020509ad 28%,#02050938 61%,#02050928 100%),radial-gradient(circle at 70% 53%,transparent,#020509b8 100%);
+  animation:wdccV2Vignette 3s ease both;
+}
+.cinematic-v2 .cinVignette::before{
+  content:"";
+  position:absolute;
+  left:50%;top:48%;
+  width:min(42vw,520px);aspect-ratio:1;
+  transform:translate(-50%,-50%) scale(.3);
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,.62);
+  box-shadow:0 0 34px rgba(22,138,244,.42),0 0 70px rgba(239,32,47,.25);
+  opacity:0;
+  animation:wdccV2Impact .56s 1.16s cubic-bezier(.16,1,.3,1) both;
+}
+.cinematic-v2 .cinSmoke{z-index:4;mix-blend-mode:screen}
+.cinematic-v2 .cinSmoke.one{
+  left:-4%;bottom:-2%;width:70%;height:48%;
+  background:radial-gradient(circle,rgba(255,255,255,.34),rgba(180,205,225,.14) 36%,transparent 69%);
+  animation:wdccV2SmokeOne 2.55s .08s ease-out both;
+}
+.cinematic-v2 .cinSmoke.two{
+  right:-8%;bottom:-5%;width:64%;height:44%;
+  background:radial-gradient(circle,rgba(22,138,244,.34),rgba(239,32,47,.12) 42%,transparent 70%);
+  animation:wdccV2SmokeTwo 2.7s .22s ease-out both;
+}
+.cinematic-v2 .cinLogo{
+  z-index:6;
+  left:50%;top:48%;
+  width:min(34vw,400px);
+  max-height:42vh;
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.66);
+  transform-origin:center;
+  filter:drop-shadow(0 18px 38px rgba(0,0,0,.78)) drop-shadow(0 0 34px rgba(22,138,244,.42));
+  will-change:left,top,width,transform,opacity,filter;
+  animation:wdccV2LogoFlight 2.62s .06s cubic-bezier(.16,1,.3,1) both;
+}
+.cinematic-v2 .cinTagline{
+  z-index:7;
+  top:69%;
+  opacity:0;
+  animation:wdccV2Tag 1.92s .35s ease both;
+}
+.cinematic-v2 .skipIntro{z-index:9}
+
+@keyframes wdccV2CarSweep{
+  0%{opacity:0;transform:translate3d(46vw,3.5vh,0) scale(.84) rotate(-1.4deg);filter:saturate(1.05) contrast(1.08) brightness(.78) blur(2px) drop-shadow(-28px 28px 28px rgba(0,0,0,.4))}
+  12%{opacity:1}
+  62%{transform:translate3d(8vw,.6vh,0) scale(.975) rotate(-.25deg);filter:saturate(1.2) contrast(1.14) brightness(1.08) blur(.35px) drop-shadow(-24px 24px 26px rgba(0,0,0,.48))}
+  82%{transform:translate3d(-1.2vw,0,0) scale(1.012) rotate(.08deg)}
+  100%{opacity:1;transform:translate3d(0,0,0) scale(1) rotate(0);filter:saturate(1.12) contrast(1.1) brightness(1) drop-shadow(-16px 20px 24px rgba(0,0,0,.38))}
+}
+@keyframes wdccV2CarOcclusion{
+  0%,34%{opacity:1}
+  74%{opacity:.72}
+  100%{opacity:0}
+}
+@keyframes wdccV2LogoFlight{
+  0%{opacity:0;left:50%;top:48%;width:min(34vw,400px);transform:translate(-50%,-50%) scale(.66)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.045)}
+  36%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  47%{transform:translate(-50%,-50%) scale(1)}
+  53%{transform:translate(-50%,-50%) scale(1.115) rotate(-1deg);filter:drop-shadow(0 18px 38px rgba(0,0,0,.78)) drop-shadow(0 0 48px rgba(255,255,255,.72))}
+  61%{transform:translate(-50%,-50%) scale(.97) rotate(.25deg)}
+  70%{left:50%;top:48%;width:min(34vw,400px);transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:1;left:var(--dock-x);top:var(--dock-y);width:var(--dock-w);transform:translate(-50%,-50%) scale(1);filter:drop-shadow(0 6px 16px rgba(0,0,0,.72))}
+}
+@keyframes wdccV2Impact{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.28)}
+  30%{opacity:.8}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1.18)}
+}
+@keyframes wdccV2Backdrop{
+  0%{transform:scale(1.055);filter:saturate(.95) contrast(1.06) brightness(.52)}
+  58%{transform:scale(1.025);filter:saturate(1.05) contrast(1.08) brightness(.68)}
+  100%{transform:scale(1.005);filter:saturate(1.1) contrast(1.09) brightness(.96)}
+}
+@keyframes wdccV2Vignette{
+  0%,50%{opacity:1}
+  88%{opacity:.54}
+  100%{opacity:.28}
+}
+@keyframes wdccV2SmokeOne{
+  0%{opacity:0;transform:scale(.68) translate3d(-10%,12%,0)}
+  26%{opacity:.82}
+  72%{opacity:.42}
+  100%{opacity:0;transform:scale(1.62) translate3d(22%,-9%,0)}
+}
+@keyframes wdccV2SmokeTwo{
+  0%{opacity:0;transform:scale(.7) translate3d(14%,12%,0)}
+  30%{opacity:.78}
+  74%{opacity:.34}
+  100%{opacity:0;transform:scale(1.58) translate3d(-18%,-8%,0)}
+}
+@keyframes wdccV2Tag{
+  0%{opacity:0;transform:translate(-50%,8px)}
+  20%,62%{opacity:1;transform:translate(-50%,0)}
+  100%{opacity:0;transform:translate(-50%,-5px)}
+}
+@keyframes wdccV2Exit{
+  0%{opacity:1;visibility:visible}
+  100%{opacity:0;visibility:hidden;pointer-events:none}
+}
+
+/* Keep the live header position consistent with the landing point of the intro logo. */
+@media(max-width:900px){
+  .cinematic-v2{--dock-x:72px;--dock-y:66px;--dock-w:112px}
+  .cinematic-v2 .cinScene,
+  .cinematic-v2 .cinScene::before{background-position:69% center}
+  .cinematic-v2 .cinScene::before{clip-path:polygon(27% 40%,46% 31%,88% 38%,100% 53%,100% 76%,83% 89%,42% 91%,24% 72%);-webkit-mask-image:radial-gradient(ellipse 50% 30% at 70% 65%,#000 0 62%,rgba(0,0,0,.95) 70%,transparent 90%);mask-image:radial-gradient(ellipse 50% 30% at 70% 65%,#000 0 62%,rgba(0,0,0,.95) 70%,transparent 90%)}
+  .cinematic-v2 .cinLogo{width:min(58vw,278px)}
+  .cinematic-v2 .cinTagline{top:72%}
+  .premiumHeader .nav{grid-template-columns:118px 1fr 48px!important}
+  .premiumHeader .logoBrand{grid-column:1!important;grid-row:1!important;justify-self:start!important;width:112px!important;height:66px!important}
+  .premiumHeader .logoBrand img{width:112px!important;max-height:56px!important}
+  .premiumHeader .mobileMenuButton{grid-column:2!important;grid-row:1!important;justify-self:end!important}
+  .premiumHeader .mobileCallButton{grid-column:3!important;grid-row:1!important}
+}
+@media(max-width:560px){
+  .cinematic-v2{--dock-x:68px;--dock-y:64px;--dock-w:104px}
+  .cinematic-v2 .cinScene,
+  .cinematic-v2 .cinScene::before{background-position:71% center}
+  .cinematic-v2 .cinLogo{width:min(66vw,260px)}
+  .cinematic-v2 .cinTagline{top:75%;font-size:9px}
+  .premiumHeader .nav{grid-template-columns:108px 1fr 46px!important}
+  .premiumHeader .logoBrand,.premiumHeader .logoBrand img{width:104px!important}
+}
+@media(prefers-reduced-motion:reduce){.cinematic-v2{display:none!important}}
