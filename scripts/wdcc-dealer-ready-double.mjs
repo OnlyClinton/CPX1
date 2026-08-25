@@ -1,0 +1,111 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import {get,head,put,del,BlobPreconditionFailedError} from '@vercel/blob';
+
+const STATE='private/state/platform-v3.json';
+const mode=process.argv[2];
+
+async function stable(){
+  for(let i=0;i<6;i++){
+    const a=await head(STATE);
+    const r=await get(STATE,{access:'private',useCache:false});
+    if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+    const chunks=[];for await(const x of r.stream)chunks.push(x);
+    const raw=Buffer.concat(chunks),b=await head(STATE);
+    if(a.etag===b.etag)return{raw,etag:b.etag,state:JSON.parse(raw.toString('utf8'))};
+  }
+  throw Error('STATE_TOO_HOT');
+}
+
+async function createIdentity(){
+  const run=process.env.RUN_TAG;if(!run)throw Error('RUN_TAG_MISSING');
+  for(let attempt=1;attempt<=5;attempt++){
+    const before=await stable(),s=before.state,now=new Date().toISOString();
+    const password=`WdccDealerReady-${crypto.randomBytes(20).toString('base64url')}!`;
+    const salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+    const dealerId=`dealer-ready-${crypto.randomUUID()}`,email=`dealer-ready-${run}@invalid.example`;
+    s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];
+    s.users.push({id:dealerId,email,username:email,displayName:`WDCC Dealer Ready QA ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});
+    const backup=`private/state/backups/platform-v3-pre-dealer-ready-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;
+    await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+    s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.dealer_ready.user_create',actor:'github-actions',run,dealerId,backup});s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+    try{
+      await put(STATE,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});
+      fs.writeFileSync('/tmp/dealer-ready.env',`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${email}\nSTOCK1=WDCC-QA-READY-${run}-1\nSTOCK2=WDCC-QA-READY-${run}-2\nMODEL1=QA-READY-${run}-1\nMODEL2=QA-READY-${run}-2\n`);
+      console.log(JSON.stringify({ok:true,run,dealerId,backup}));return;
+    }catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<5)continue;throw e}
+  }
+  throw Error('USER_CREATE_RETRIES_EXHAUSTED');
+}
+
+async function acceptTwice(){
+  const {chromium}=await import('playwright');
+  const dealer=process.env.DEALER,store=process.env.STOREFRONT,email=process.env.DEALER_EMAIL,password=process.env.QA_PASSWORD,run=process.env.RUN_TAG;
+  if(!dealer||!store||!email||!password||!run)throw Error('ACCEPT_ENV_MISSING');
+  const customer=/Bad credit\?|No credit\?|Vehicles ready now\.|Schedule a test drive/i;
+  const delay=ms=>new Promise(r=>setTimeout(r,ms));
+  const result={ok:false,routes:{},runs:[]};
+  fs.writeFileSync('/tmp/dealer-ready.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+
+  async function apiJson(ctx,method,url,data){const o={method};if(data!==undefined){o.headers={'content-type':'application/json'};o.data=data}const r=await ctx.request.fetch(url,o);let j={};try{j=await r.json()}catch{}return{r,j}}
+  async function findDealer(ctx,stock){const {r,j}=await apiJson(ctx,'GET',`${dealer}/api/inventory?dealer_ready=${Date.now()}`);if(!r.ok())throw Error(`DEALER_INVENTORY_HTTP_${r.status()}`);return(j.items||[]).find(v=>String(v.stock||'')===stock)||null}
+  async function waitDealer(ctx,id,status,label){for(let i=0;i<20;i++){const {r,j}=await apiJson(ctx,'GET',`${dealer}/api/inventory?dealer_ready=${Date.now()}`);if(!r.ok())throw Error(`${label}_DEALER_HTTP_${r.status()}`);const v=(j.items||[]).find(v=>String(v.id)===String(id));if(v&&String(v.status||'').toLowerCase()===status)return v;await delay(1000)}throw Error(`${label}_DEALER_${status}_TIMEOUT`)}
+  async function waitPublicApi(ctx,id,want,label){for(let i=0;i<25;i++){const r=await ctx.request.get(`${store}/api/inventory?dealer_ready=${encodeURIComponent(run)}-${Date.now()}`);if(!r.ok())throw Error(`${label}_PUBLIC_API_HTTP_${r.status()}`);const j=await r.json(),has=(j.items||[]).some(v=>String(v.id)===String(id));if(has===want)return;await delay(1000)}throw Error(`${label}_PUBLIC_API_${want?'PRESENCE':'ABSENCE'}_TIMEOUT`)}
+  async function routeCheck(page,name,path,marker){const join=path.includes('?')?'&':'?';const resp=await page.goto(`${dealer}${path}${join}dealer_ready=${encodeURIComponent(run)}-${name}`,{waitUntil:'networkidle',timeout:60000});if(!resp||resp.status()===404||resp.status()>=500)throw Error(`ROUTE_${name}_HTTP_${resp&&resp.status()}`);if(new URL(page.url()).hostname!=='dealer.wedontcarecars.com')throw Error(`ROUTE_${name}_HOST_${page.url()}`);const text=await page.locator('body').innerText();if(customer.test(text))throw Error(`ROUTE_${name}_CUSTOMER_STOREFRONT_LEAK`);if(marker&&!marker.test(text))throw Error(`ROUTE_${name}_MISSING_DEALER_MARKER`);result.routes[name]={status:resp.status(),url:page.url()};return text}
+  async function setField(page,name,value){const loc=page.locator(`input[name="${name}"]`).first();if(await loc.count()===0)throw Error(`FIELD_${name}_MISSING`);await loc.fill(value)}
+  async function archive(ctx,id,stock,label){const {r,j}=await apiJson(ctx,'PATCH',`${dealer}/api/inventory/${encodeURIComponent(id)}`,{status:'archived',stock:`R36TEST-${stock}`.slice(0,120)});if(!r.ok())throw Error(`${label}_ARCHIVE_HTTP_${r.status()}_${j.error||''}`);await waitDealer(ctx,id,'archived',`${label}_ARCHIVE`);await waitPublicApi(ctx,id,false,`${label}_ARCHIVE`)}
+
+  const browser=await chromium.launch({headless:true});let ctx;
+  try{
+    const anon=await browser.newContext({viewport:{width:390,height:844}}),ap=await anon.newPage();
+    await routeCheck(ap,'LOGIN','/dealer/login',/PORTAL LOGIN|AUTHORIZED ACCESS|Sign In/i);await anon.close();
+    ctx=await browser.newContext({viewport:{width:390,height:844}});const page=await ctx.newPage();
+    await page.goto(`${dealer}/dealer/login?dealer_ready=${encodeURIComponent(run)}`,{waitUntil:'networkidle',timeout:60000});
+    const user=page.locator('input[autocomplete="username"]').first(),pass=page.locator('input[autocomplete="current-password"]').first();if(await user.count()===0||await pass.count()===0)throw Error('LOGIN_FIELDS_MISSING');
+    await user.fill(email);await pass.fill(password);await page.getByRole('button',{name:/SIGN IN/i}).click();
+    await page.waitForURL(/dealer\.wedontcarecars\.com\/dealer(?:\/dashboard)?(?:\?|$|\/)/,{timeout:30000});
+    const session=await ctx.request.get(`${dealer}/api/auth/session?dealer_ready=${Date.now()}`);if(!session.ok())throw Error(`SESSION_HTTP_${session.status()}`);const sj=await session.json();if(!sj.authenticated||String(sj?.user?.role||'').toLowerCase()!=='dealer_agent')throw Error('SESSION_NOT_DEALER_AGENT');
+    await routeCheck(page,'DASHBOARD','/dealer/dashboard',/SALES COMMAND|NEXT BEST MOVE|AUTOMOTIVE PIPELINE|Dashboard/i);
+    await routeCheck(page,'INVENTORY','/dealer/inventory',/All Vehicles|Inventory Operations|Inventory/i);
+    await routeCheck(page,'UPLOAD','/dealer/inventory/new',/Add \/ Edit Vehicle|Photos|Listing Readiness/i);
+
+    for(let n=1;n<=2;n++){
+      const stock=process.env[`STOCK${n}`],model=process.env[`MODEL${n}`],label=`RUN${n}`;let id='';
+      try{
+        await routeCheck(page,`${label}_DASHBOARD`,'/dealer/dashboard',/SALES COMMAND|NEXT BEST MOVE|AUTOMOTIVE PIPELINE|Dashboard/i);
+        await page.goto(`${dealer}/dealer/inventory/new?dealer_ready=${encodeURIComponent(run)}-${n}`,{waitUntil:'networkidle',timeout:60000});if(page.url().includes('/login'))throw Error(`${label}_UPLOAD_AUTH_REDIRECT`);
+        const bodyText=await page.locator('body').innerText();if(customer.test(bodyText)||!/Add \/ Edit Vehicle|Listing Readiness/i.test(bodyText))throw Error(`${label}_UPLOAD_ROUTE_NOT_PORTAL`);
+        await setField(page,'year','2021');await setField(page,'make','Toyota');await setField(page,'model',model);await setField(page,'trim','AUTOMATED QA ONLY');await setField(page,'price','12345');await setField(page,'downPayment','1500');await setField(page,'mileage','54321');await setField(page,'stock',stock);
+        const desc=page.locator('label').filter({hasText:'DESCRIPTION'}).locator('textarea').first();if(await desc.count()===0)throw Error(`${label}_DESCRIPTION_MISSING`);await desc.fill(`Automated WDCC dealer readiness acceptance ${label}. QA ONLY. Archive after verification.`);
+        const file=page.locator('input[type=file][multiple]').first();if(await file.count()===0)throw Error(`${label}_PHOTO_INPUT_MISSING`);await file.setInputFiles('/tmp/dealer-ready.png');
+        await page.getByRole('button',{name:/Save Draft/i}).first().click();await page.waitForURL(/\/dealer\/inventory\?saved=draft/,{timeout:60000});
+        let item=null;for(let i=0;i<15&&!item;i++){item=await findDealer(ctx,stock);if(!item)await delay(1000)}if(!item)throw Error(`${label}_DRAFT_NOT_IN_DEALER_INVENTORY`);id=String(item.id);
+        if(String(item.status||'').toLowerCase()!=='draft')throw Error(`${label}_DRAFT_STATUS_${item.status}`);if(!Array.isArray(item.photoPathnames)||item.photoPathnames.length<1)throw Error(`${label}_PHOTO_NOT_PERSISTED`);await waitPublicApi(ctx,id,false,`${label}_DRAFT`);
+        const pub=await apiJson(ctx,'PATCH',`${dealer}/api/inventory/${encodeURIComponent(id)}`,{status:'published'});if(!pub.r.ok())throw Error(`${label}_PUBLISH_HTTP_${pub.r.status()}_${pub.j.error||''}`);await waitDealer(ctx,id,'published',`${label}_PUBLISH`);await waitPublicApi(ctx,id,true,`${label}_PUBLISH`);
+        const publicPage=await ctx.newPage();await publicPage.goto(`${store}/inventory?dealer_ready=${encodeURIComponent(run)}-${n}-${Date.now()}`,{waitUntil:'networkidle',timeout:60000});if(!(await publicPage.locator('body').innerText()).includes(model))throw Error(`${label}_PUBLIC_STOREFRONT_UI_MISSING`);await publicPage.close();
+        await archive(ctx,id,stock,label);result.runs.push({run:n,id,stock,model,authenticated:true,dashboard:true,draft:true,photo:true,published:true,dealerInventory:true,publicApi:true,publicUi:true,archived:true,publicRemoved:true});
+      }catch(e){if(id){try{await archive(ctx,id,stock,`${label}_FAILSAFE`)}catch(clean){console.error('FAILSAFE_ARCHIVE_FAILED',String(clean&&clean.message||clean))}}throw e}
+    }
+    result.ok=result.runs.length===2&&result.runs.every(r=>r.authenticated&&r.dashboard&&r.draft&&r.photo&&r.published&&r.dealerInventory&&r.publicApi&&r.publicUi&&r.archived&&r.publicRemoved);if(!result.ok)throw Error('DOUBLE_ACCEPTANCE_INCOMPLETE');
+    fs.writeFileSync('/tmp/dealer-ready-result.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+  }catch(e){result.ok=false;result.error=String(e&&e.message||e);fs.writeFileSync('/tmp/dealer-ready-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}
+  finally{if(ctx)await ctx.close().catch(()=>{});await browser.close()}
+}
+
+async function cleanup(){
+  const run=process.env.RUN_TAG,dealerId=process.env.DEALER_ID,stocks=new Set([process.env.STOCK1,process.env.STOCK2,`R36TEST-${process.env.STOCK1}`,`R36TEST-${process.env.STOCK2}`]);
+  for(let attempt=1;attempt<=5;attempt++){
+    const before=await stable(),s=before.state,vehicles=Array.isArray(s.vehicles)?s.vehicles:[],users=Array.isArray(s.users)?s.users:[];
+    const exact=vehicles.filter(v=>stocks.has(String(v.stock||''))),media=[...new Set(exact.flatMap(v=>Array.isArray(v.photoPathnames)?v.photoPathnames:[]).filter(Boolean))];
+    s.vehicles=vehicles.filter(v=>!exact.some(x=>x.id===v.id));s.users=users.filter(u=>u.id!==dealerId);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.dealer_ready.cleanup',actor:'github-actions',run,dealerId,vehicleIds:exact.map(v=>v.id),media});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();
+    try{await put(STATE,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,removedUsers:users.length-s.users.length,removedVehicles:exact.length,removedMedia:media.length}));return}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<5)continue;throw e}
+  }
+  throw Error('CLEANUP_RETRIES_EXHAUSTED');
+}
+
+try{
+  if(mode==='create')await createIdentity();
+  else if(mode==='accept')await acceptTwice();
+  else if(mode==='cleanup')await cleanup();
+  else throw Error('MODE_REQUIRED');
+}catch(e){console.error(e);process.exit(1)}
