@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS https://dealer.wedontcarecars.com/api/health -o /tmp/dealer-health.json
-          jq -e '.ok == true and .backend == "healthy"' /tmp/dealer-health.json >/dev/null
+          jq -e '.ok == true and .degraded == false' /tmp/dealer-health.json >/dev/null
           code="$(curl -sS -L -o /dev/null -w '%{http_code}' https://dealer.wedontcarecars.com/dealer)"
           test "$code" = 200
 
@@ -137,7 +137,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC screenshot-contract production PASS ${GITHUB_RUN_ID}" --body "Exact V32 candidate: \`$CANDIDATE_URL\`\nApex + www screenshot contract: **PASS**\nHealth + inventory + test drive + approval + dealer login + admin login + vehicle upload route: **PASS**\nDealer backend remained healthy: **PASS**" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC screenshot-contract production PASS ${GITHUB_RUN_ID}" --body "Exact V32 candidate: \`$CANDIDATE_URL\`\nApex + www screenshot contract: **PASS**\nHealth + inventory + test drive + approval + dealer login + admin login + vehicle upload route: **PASS**\nDealer canonical health + route: **PASS**" || true
 
       - name: Report fail
         if: failure()
