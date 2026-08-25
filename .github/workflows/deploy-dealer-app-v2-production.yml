@@ -1,17 +1,169 @@
-name: WDCC DEALER PRODUCTION DEPLOY — FROZEN
+name: WDCC DEALER PRODUCTION DEPLOY
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-dealer-app-v2-production.yml'
+
+concurrency:
+  group: wdcc-dealer-production
+  cancel-in-progress: true
 
 permissions:
   contents: read
+  issues: write
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  VERCEL_SCOPE: cpxagency
+  RELEASE_REF: release/dealer-screenshot-ui-20260825
+  ROLLBACK_URL: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  PROJECT_ALIAS: https://wdcc-cpx-launch-cpxagency.vercel.app
+  DEALER_HOST: dealer.wedontcarecars.com
+  CUSTOMER_HOST: www.wedontcarecars.com
 
 jobs:
-  frozen:
+  deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Release-control guard
+      - name: Require Vercel authority
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Checkout approved dealer UI release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install app and Vercel CLI
         run: |
-          echo 'Dealer production deployment is frozen during immutable candidate acceptance.'
-          echo 'This workflow cannot deploy or move dealer.wedontcarecars.com.'
-          echo 'Frozen candidate: 188392c81696da5d0d61f5c6f0bec45f490a232d'
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0
+
+      - name: Verify current canonical backend before deploy
+        run: |
+          set -euo pipefail
+          curl -fsS "$PROJECT_ALIAS/api/health?dealer-preflight=$GITHUB_RUN_ID" -o /tmp/pre-health.json
+          jq -e '.ok == true and .degraded == false' /tmp/pre-health.json >/dev/null
+          curl -fsS "$PROJECT_ALIAS/api/inventory?dealer-preflight=$GITHUB_RUN_ID" -o /tmp/pre-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/pre-inventory.json >/dev/null
+          curl -fsS "https://$CUSTOMER_HOST/api/health?dealer-preflight=$GITHUB_RUN_ID" -o /tmp/customer-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/customer-health.json >/dev/null
+
+      - name: Link canonical cpx-launch project
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Prove dealer-only screenshot patch is present
+        run: |
+          set -euo pipefail
+          grep -q 'Publish Listing' app/dealer/inventory/new/page.tsx
+          grep -q 'CUSTOMER VIEW' app/dealer/inventory/new/page.tsx
+          grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
+          grep -q 'Take Photo' app/dealer/inventory/new/page.tsx
+          grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
+          grep -q 'Drag & Drop' app/dealer/inventory/new/page.tsx
+          grep -q 'Customer CTAs are intentionally hidden while editing' app/dealer/inventory/new/page.tsx
+
+      - name: Build prebuilt production bundle
+        run: |
+          set -euo pipefail
+          npm run build
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Deploy prebuilt to canonical backend project
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Dealer candidate: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify exact protected deployment
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl /api/health --deployment "$DEPLOY_URL" > /tmp/candidate-health.json
+          jq -e '.ok == true and .degraded == false' /tmp/candidate-health.json >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /api/inventory --deployment "$DEPLOY_URL" > /tmp/candidate-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/candidate-inventory.json >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /dealer/login --deployment "$DEPLOY_URL" > /tmp/dealer-login.html
+          test -s /tmp/dealer-login.html
+          vercel --scope "$VERCEL_SCOPE" curl /dealer/inventory/new --deployment "$DEPLOY_URL" > /tmp/dealer-new.html
+          test -s /tmp/dealer-new.html
+
+      - name: Point dealer alias to verified deployment
+        id: alias_cutover
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          vercel alias set "$DEPLOY_URL" "$DEALER_HOST" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Verify live dealer and customer contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dealer_ok=0
+          for i in $(seq 1 30); do
+            health_code="$(curl -sS -L -o /tmp/dealer-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?release=$GITHUB_RUN_ID" || true)"
+            login_code="$(curl -sS -L -o /tmp/dealer-login.html -w '%{http_code}' "https://$DEALER_HOST/dealer/login?release=$GITHUB_RUN_ID" || true)"
+            if [ "$health_code" = 200 ] && [ "$login_code" = 200 ] && jq -e '.ok == true and .degraded == false' /tmp/dealer-health.json >/dev/null 2>&1; then dealer_ok=1; break; fi
+            sleep 2
+          done
+          test "$dealer_ok" = 1
+
+          curl -fsS "https://$DEALER_HOST/api/inventory?release=$GITHUB_RUN_ID" -o /tmp/dealer-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/dealer-inventory.json >/dev/null
+
+          for path in /dealer /dealer/login /dealer/inventory/new; do
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "https://$DEALER_HOST$path")"
+            test "$code" = 200
+          done
+
+          curl -fsS "https://$CUSTOMER_HOST/api/health?dealer-release=$GITHUB_RUN_ID" -o /tmp/customer-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/customer-health.json >/dev/null
+          curl -fsS "https://$CUSTOMER_HOST/api/inventory?dealer-release=$GITHUB_RUN_ID" -o /tmp/customer-inventory.json
+          jq -e '.ok == true and (.items | type == "array") and (.items | length > 0)' /tmp/customer-inventory.json >/dev/null
+          echo 'WDCC_DEALER_LIVE_CONTRACT=PASS'
+
+      - name: Roll back canonical backend and dealer alias on failure
+        if: failure() && steps.deploy.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          vercel promote "$ROLLBACK_URL" --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$ROLLBACK_URL" "$DEALER_HOST" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Report pass
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer screenshot UI PASS ${GITHUB_RUN_ID}" --body "Dealer release: \`$RELEASE_REF\`\nDeployment: \`$DEPLOY_URL\`\nCanonical health + inventory: **PASS**\nDealer routes + alias: **PASS**\nCustomer backend proxy after dealer deploy: **PASS**\nApproved Add/Edit upload UI present: **PASS**" || true
+
+      - name: Report fail
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer screenshot UI FAIL ${GITHUB_RUN_ID}" --body "Dealer release gate failed. Candidate: \`${DEPLOY_URL:-not-created}\`. Canonical backend/dealer alias rollback was attempted when deployment had occurred." || true
