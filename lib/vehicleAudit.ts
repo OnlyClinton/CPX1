@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import {get,list,put} from "@vercel/blob";
 import {recordAnalyticsEvent} from "./analyticsAudit";
+import {recordDeadLetter} from "./deadLetter";
 
 export type VehicleAuditEvent={
   action:string;outcome:"ok"|"failed"|"denied";requestId:string;tenantId?:string|null;listingId?:string|null;listingVersion?:string|number|null;vehicleId?:string|null;actorId?:string|null;actorRole?:string|null;year?:number|null;make?:string|null;model?:string|null;mileage?:number|null;stock?:string|null;status?:string|null;photoCount?:number|null;detail?:string|null;
@@ -10,8 +11,20 @@ export async function recordVehicleAudit(input:VehicleAuditEvent){
   const at=new Date().toISOString();const id=crypto.randomUUID();
   const record={id,at,action:clean(input.action,100),outcome:input.outcome,requestId:clean(input.requestId,160),tenantId:clean(input.tenantId||"wdcc",100)||"wdcc",listingId:input.listingId?clean(input.listingId,160):null,listingVersion:input.listingVersion==null?null:clean(input.listingVersion,80),vehicleId:input.vehicleId?clean(input.vehicleId,160):null,actorId:input.actorId?clean(input.actorId,160):null,actorRole:input.actorRole?clean(input.actorRole,80):null,year:Number.isFinite(Number(input.year))?Number(input.year):null,make:input.make?clean(input.make,80):null,model:input.model?clean(input.model,80):null,mileage:Number.isFinite(Number(input.mileage))?Number(input.mileage):null,stock:input.stock?clean(input.stock,80):null,status:input.status?clean(input.status,40):null,photoCount:Number.isFinite(Number(input.photoCount))?Number(input.photoCount):null,detail:input.detail?clean(input.detail,500):null};
   const pathname=`private/logs/vehicle/${at.slice(0,10)}/${at.replace(/[:.]/g,"-")}-${id}.json`;
-  try{await put(pathname,JSON.stringify(record,null,2)+"\n",{access:"private",addRandomSuffix:false,allowOverwrite:false,contentType:"application/json",...opt()})}catch(error){console.error("WDCC_VEHICLE_AUDIT_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:error instanceof Error?error.message:"unknown"}))}
-  try{await recordAnalyticsEvent({tenantId:record.tenantId,dedupeKey:`vehicle:${record.requestId}:${record.action}:${record.outcome}`,event:record.action,at,vehicleId:record.vehicleId,source:"dealer-portal",medium:"dealer-ui",channel:"inventory",metadata:{outcome:record.outcome,requestId:record.requestId,listingId:record.listingId,listingVersion:record.listingVersion,actorId:record.actorId,actorRole:record.actorRole,year:record.year,make:record.make,model:record.model,mileage:record.mileage,stock:record.stock,status:record.status,photoCount:record.photoCount,detail:record.detail}})}catch(error){console.error("WDCC_VEHICLE_ANALYTICS_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:error instanceof Error?error.message:"unknown"}))}
+  try{
+    await put(pathname,JSON.stringify(record,null,2)+"\n",{access:"private",addRandomSuffix:false,allowOverwrite:false,contentType:"application/json",...opt()});
+  }catch(error){
+    const message=error instanceof Error?error.message:"unknown";
+    console.error("WDCC_VEHICLE_AUDIT_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:message}));
+    try{await recordDeadLetter({category:"vehicle",stage:"audit_write",entityType:"vehicle",entityId:record.vehicleId,tenantId:record.tenantId,requestId:record.requestId,retryable:true,error:message,context:{action:record.action,outcome:record.outcome,listingId:record.listingId,listingVersion:record.listingVersion,status:record.status,stock:record.stock}})}catch(deadError){console.error("WDCC_VEHICLE_AUDIT_DEAD_LETTER_FAILED",deadError)}
+  }
+  try{
+    await recordAnalyticsEvent({tenantId:record.tenantId,dedupeKey:`vehicle:${record.requestId}:${record.action}:${record.outcome}`,event:record.action,at,vehicleId:record.vehicleId,source:"dealer-portal",medium:"dealer-ui",channel:"inventory",metadata:{outcome:record.outcome,requestId:record.requestId,listingId:record.listingId,listingVersion:record.listingVersion,actorId:record.actorId,actorRole:record.actorRole,year:record.year,make:record.make,model:record.model,mileage:record.mileage,stock:record.stock,status:record.status,photoCount:record.photoCount,detail:record.detail}});
+  }catch(error){
+    const message=error instanceof Error?error.message:"unknown";
+    console.error("WDCC_VEHICLE_ANALYTICS_WRITE_FAILED",JSON.stringify({requestId:record.requestId,action:record.action,error:message}));
+    try{await recordDeadLetter({category:"vehicle",stage:"analytics_write",entityType:"vehicle",entityId:record.vehicleId,tenantId:record.tenantId,requestId:record.requestId,retryable:true,error:message,context:{action:record.action,outcome:record.outcome,listingId:record.listingId,listingVersion:record.listingVersion,status:record.status,stock:record.stock}})}catch(deadError){console.error("WDCC_VEHICLE_ANALYTICS_DEAD_LETTER_FAILED",deadError)}
+  }
   console.log("WDCC_VEHICLE_EVENT",JSON.stringify(record));return record;
 }
 export async function readRecentVehicleAudit(max=100){
