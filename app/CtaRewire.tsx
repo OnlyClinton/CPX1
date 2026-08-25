@@ -1,0 +1,3 @@
+"use client";
+import{useEffect}from"react";
+export default function CtaRewire(){useEffect(()=>{const set=(sel:string,text:string,href:string)=>{const a=document.querySelector(sel) as HTMLAnchorElement|null;if(a){a.textContent=text;a.href=href}};set('.r25 .hero .hero-actions a:nth-child(1)','SCHEDULE TEST DRIVE →','/schedule-test-drive?source=hero-test-drive');set('.r25 .hero .hero-actions a:nth-child(2)','GET PRE-APPROVED →','/get-approved?source=hero-get-approved');set('.r25 .close .hero-actions a:nth-child(1)','SCHEDULE TEST DRIVE','/schedule-test-drive?source=close-test-drive');set('.r25 .close .hero-actions a:nth-child(2)','GET PRE-APPROVED','/get-approved?source=close-get-approved')},[]);return null}
