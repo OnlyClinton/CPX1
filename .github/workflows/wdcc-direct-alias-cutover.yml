@@ -1,0 +1,122 @@
+name: WDCC direct alias cutover
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-direct-alias-cutover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-direct-alias-cutover
+  cancel-in-progress: false
+
+env:
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  CANDIDATE_ID: dpl_MPK5UEsE5YN3vupz45Ac8kkBphBu
+  CANDIDATE_URL: wdcc-v32-storefront-dt496r4il-cpxagency.vercel.app
+  EXPECTED_COMMIT: 6baa059e9cedff991c1bcf32dec1ceed40174ddc
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Validate candidate and capture existing apex alias
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$CANDIDATE_ID?teamId=$TEAM_ID" -o /tmp/candidate.json
+          jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '.id==$id and .readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/candidate.json >/dev/null
+          npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/candidate-home.html
+          grep -q 'intro-sequence' /tmp/candidate-home.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/candidate-home.html
+          grep -qi 'schedule a test drive' /tmp/candidate-home.html
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v4/aliases/$APEX?teamId=$TEAM_ID" -o /tmp/old-alias.json || true
+          jq -r '.deployment.id // .deploymentId // empty' /tmp/old-alias.json > /tmp/old-deployment-id || true
+
+      - name: Reassign apex alias to immutable READY candidate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.vercel.com/v2/deployments/$CANDIDATE_ID/aliases?teamId=$TEAM_ID" \
+            --data "{\"alias\":\"$APEX\",\"redirect\":null}" -o /tmp/apex-result.json
+          jq -e --arg a "$APEX" '.alias==$a' /tmp/apex-result.json >/dev/null
+
+      - name: Reassign www alias when configured
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.vercel.com/v2/deployments/$CANDIDATE_ID/aliases?teamId=$TEAM_ID" \
+            --data "{\"alias\":\"$WWW\",\"redirect\":null}" -o /tmp/www-result.json
+          jq -e --arg a "$WWW" '.alias==$a' /tmp/www-result.json >/dev/null
+
+      - name: Verify live apex
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL -H 'Cache-Control: no-cache' "https://$APEX/?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live.html \
+              && grep -q 'intro-sequence' /tmp/live.html \
+              && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
+              && grep -qi 'schedule a test drive' /tmp/live.html \
+              && curl -fsSL "https://$APEX/api/health?cutover=$GITHUB_RUN_ID-$i" -o /tmp/health.json \
+              && jq -e '.ok==true' /tmp/health.json >/dev/null; then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" -eq 1
+
+      - name: Restore old apex alias if verification fails
+        if: steps.verify.outcome != 'success'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD="$(cat /tmp/old-deployment-id 2>/dev/null || true)"
+          if [ -n "$OLD" ]; then
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              "https://api.vercel.com/v2/deployments/$OLD/aliases?teamId=$TEAM_ID" \
+              --data "{\"alias\":\"$APEX\",\"redirect\":null}" >/tmp/rollback.json
+          fi
+          exit 1
+
+      - name: Publish cutover proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          if [ "$OUTCOME" = success ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC direct alias cutover passed' --body "Immutable candidate \`$CANDIDATE_ID\` is serving \`$APEX\`; intro/logo/CTA/API health verification passed." || true
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC direct alias cutover failed safely' --body "Alias cutover did not pass the live gate; rollback was attempted." || true
+          fi
