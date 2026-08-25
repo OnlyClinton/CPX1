@@ -36,7 +36,7 @@ jobs:
           : "${VERCEL_TOKEN:?VERCEL_TOKEN required}"
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
-          cat > /tmp/wdcc-reset-logins.mjs <<'NODE'
+          cat > ./wdcc-reset-logins.mjs <<'NODE'
           import crypto from 'node:crypto';
           import {get,put} from '@vercel/blob';
 
@@ -105,7 +105,7 @@ jobs:
           if(!ok)throw new Error('READBACK_VERIFY_FAILED');
           console.log('RESET_RESULT='+JSON.stringify({ok:true,fromRevision:oldRevision,toRevision:state.revision,adminId:String(a.id),dealerId:String(d.id),adminRole:String(a.role||''),dealerRole:String(d.role||''),preBackup,postBackup}));
           NODE
-          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node /tmp/wdcc-reset-logins.mjs | tee /tmp/wdcc-reset.log
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node ./wdcc-reset-logins.mjs | tee /tmp/wdcc-reset.log
           grep '^RESET_RESULT=' /tmp/wdcc-reset.log | tail -1 | cut -d= -f2- > /tmp/wdcc-reset.json
           jq -e '.ok==true and .adminId=="000" and .dealerId=="002"' /tmp/wdcc-reset.json >/dev/null
           cat /tmp/wdcc-reset.json | jq .
