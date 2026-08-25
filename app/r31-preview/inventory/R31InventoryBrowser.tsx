@@ -10,6 +10,19 @@ type Vehicle={
 };
 
 const money=(n:number)=>`$${Number(n||0).toLocaleString()}`;
+function donorFallback(v:Vehicle){
+  const key=`${v.year} ${String(v.make||"").toLowerCase()} ${String(v.model||"").toLowerCase().replace(/[^a-z0-9]/g,"")}`;
+  if(key.includes("2004 nissan 350z"))return "/assets/cars/2004-nissan-350z-1.webp";
+  if(key.includes("2016 ford f150"))return "/assets/cars/2016-ford-f150-limited-1.webp";
+  if(key.includes("2019 honda pilot"))return "/assets/cars/2019-honda-pilot-1.webp";
+  if(key.includes("2019 kia sportage"))return "/assets/cars/2019-kia-sportage-1.webp";
+  if(key.includes("2019 toyota rav4"))return "/assets/cars/2019-toyota-rav4-1.webp";
+  return "";
+}
+function photoFor(v:Vehicle){
+  if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;
+  return v.primary_image_url||donorFallback(v);
+}
 
 export default function R31InventoryBrowser(){
   const[items,setItems]=useState<Vehicle[]>([]);
@@ -59,7 +72,7 @@ export default function R31InventoryBrowser(){
     <section className={styles.grid} aria-live="polite">
       {shown.length?shown.map(v=>{
         const down=v.downPayment??v.down_payment;
-        const photo=v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:v.primary_image_url||"";
+        const photo=photoFor(v);
         return <article className={styles.card} key={v.id}>
           <Link className={styles.photo} href={`/vehicle/${encodeURIComponent(v.id)}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>
             {photo?<img src={photo} alt={`${v.year} ${v.make} ${v.model}`}/>:<div className={styles.noPhoto}><b>PHOTO NEEDED</b><span>Vehicle details are still available.</span></div>}
