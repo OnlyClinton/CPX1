@@ -40,6 +40,13 @@ jobs:
           new='.ok==true and .degraded==false and (.backend=="healthy" or .backend==null) and (.service=="wdcc-canonical-authority" or .service=="wdcc-hardened-dealer-facade")'
           if old not in s: raise SystemExit('health identity patch target missing')
           s=s.replace(old,new)
+          # This candidate is a facade: auth/inventory mutations are proxied to the immutable dealer backend.
+          # A locally signed SESSION_SECRET cookie cannot authenticate that remote backend. Pull the backend's
+          # real production SESSION_SECRET for signing while keeping the local Phoenix Blob/OIDC binding.
+          old='LOCAL_SESSION_SECRET="$(openssl rand -base64 72 | tr -d \'\\n\')"\nexport LOCAL_SESSION_SECRET\nprintf \'::add-mask::%s\\n\' "$LOCAL_SESSION_SECRET"'
+          new='''LOCAL_SESSION_SECRET="$(env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -c 'printf %s "$SESSION_SECRET"')"\n[ "${#LOCAL_SESSION_SECRET}" -ge 32 ] || { echo "canonical SESSION_SECRET missing" >&2; exit 1; }\nexport LOCAL_SESSION_SECRET\nprintf '::add-mask::%s\\n' "$LOCAL_SESSION_SECRET"'''
+          if old not in s: raise SystemExit('session secret patch target missing')
+          s=s.replace(old,new)
           old='test "$ready" = 1'
           new='''if [ "$ready" != 1 ]; then\n  python3 - <<'PY2'\nimport json, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"health_readiness","health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
           if old not in s: raise SystemExit('health patch target missing')
