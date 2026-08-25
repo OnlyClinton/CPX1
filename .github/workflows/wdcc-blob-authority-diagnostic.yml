@@ -1,0 +1,65 @@
+name: WDCC Blob Authority Diagnostic
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-blob-authority-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install CLI and link Phoenix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+
+      - name: Inspect Blob connection and project OIDC without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- CONNECTED STORES ---'
+          vercel blob list-stores --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | sed -E 's/(token|secret|authorization)[=: ]+[^ ]+/\1=[REDACTED]/Ig' || true
+          echo '--- STORE METADATA ---'
+          vercel blob get-store "$STORE_ID" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | sed -E 's/(token|secret|authorization)[=: ]+[^ ]+/\1=[REDACTED]/Ig' || true
+          echo '--- BLOB HELP ---'
+          vercel blob --help 2>&1 | head -120
+          echo '--- PROJECT SAFE FIELDS ---'
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PHOENIX_PROJECT?teamId=$ORG_ID" \
+            | jq '{id,name,autoExposeSystemEnvs,framework,link,env:(.env//[]|map({key,target,type})|map(select(.key=="BLOB_STORE_ID" or .key=="BLOB_READ_WRITE_TOKEN" or .key=="VERCEL_OIDC_TOKEN")))}'
+          echo '--- GENERATED PROJECT OIDC TOKEN CLAIMS ---'
+          oidc_json="$(curl -fsS -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'content-type: application/json' \
+            "https://api.vercel.com/v1/projects/$PHOENIX_PROJECT/token?teamId=$ORG_ID" --data '{"source":"wdcc-blob-authority-diagnostic"}')"
+          oidc="$(printf '%s' "$oidc_json" | jq -r '.token // empty')"
+          test -n "$oidc"
+          payload="$(printf '%s' "$oidc" | cut -d. -f2 | tr '_-' '/+' | awk '{l=length($0)%4;if(l==2)$0=$0"==";else if(l==3)$0=$0"=";print}' | base64 -d 2>/dev/null || true)"
+          printf '%s\n' "$payload" | jq '{iss,sub,aud,iat,exp,project_id:.project_id,team_id:.team_id,environment:.environment}' || true
+
+      - name: Prove generated OIDC token can read canonical store
+        shell: bash
+        run: |
+          set -euo pipefail
+          oidc_json="$(curl -fsS -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'content-type: application/json' \
+            "https://api.vercel.com/v1/projects/$PHOENIX_PROJECT/token?teamId=$ORG_ID" --data '{"source":"wdcc-blob-authority-diagnostic"}')"
+          oidc="$(printf '%s' "$oidc_json" | jq -r '.token // empty')"
+          test -n "$oidc"
+          npm install --no-save @vercel/blob@2 >/dev/null
+          OIDC="$oidc" STORE="$STORE_ID" node - <<'NODE'
+          const {get}=require('@vercel/blob');
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,oidcToken:process.env.OIDC,storeId:process.env.STORE});if(!r||r.statusCode!==200||!r.stream)throw Error('OIDC_STORE_READ_FAILED');let n=0;for await(const c of r.stream)n+=c.length;console.log(JSON.stringify({ok:true,bytes:n}));})().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
