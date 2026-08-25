@@ -10,7 +10,7 @@ const updatedTime=(v:any)=>{const d=new Date(v.updatedAt||v.updated_at||v.create
 
 export default function DealerInventory(){
  const[items,setItems]=useState<any[]>([]),[filter,setFilter]=useState("all"),[make,setMake]=useState("all"),[readyFilter,setReadyFilter]=useState("all"),[q,setQ]=useState(""),[msg,setMsg]=useState("Loading inventory…");
- async function load(){const r=await fetch("/api/inventory",{cache:"no-store"});if(r.status===401){location.href="/dealer/login";return}const j=await r.json();if(!r.ok)throw Error(j.error||"Inventory list failed");setItems(Array.isArray(j.items)?j.items:[]);setMsg("")}
+ async function load(){const r=await fetch("/api/inventory",{cache:"no-store"});if(r.status===401){location.href="/login";return}const j=await r.json();if(!r.ok)throw Error(j.error||"Inventory list failed");setItems(Array.isArray(j.items)?j.items:[]);setMsg("")}
  useEffect(()=>{load().catch(e=>setMsg(e.message||"Inventory list failed"))},[]);
  const makes=useMemo(()=>Array.from(new Set(items.map(v=>String(v.make||"").trim()).filter(Boolean))).sort(),[items]);
  const shown=useMemo(()=>items.filter(v=>{const r=readiness(v);return(filter==="all"||String(v.status||"").toLowerCase()===filter)&&(make==="all"||String(v.make||"")===make)&&(readyFilter==="all"||(readyFilter==="ready"?r===100:r<100))&&(!q||`${v.year} ${v.make} ${v.model} ${v.trim||""} ${v.stock||v.stock_id||""}`.toLowerCase().includes(q.toLowerCase()))}),[items,filter,make,readyFilter,q]);
