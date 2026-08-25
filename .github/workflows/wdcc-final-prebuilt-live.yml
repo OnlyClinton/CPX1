@@ -1,0 +1,103 @@
+name: WDCC FINAL PREBUILT LIVE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TRIGGER_WDCC_FINAL_PREBUILT.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-final-prebuilt-live
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      VERCEL_PROJECT: wdcc-v32-storefront
+      RELEASE_SHA: d7f76ea60081db88da774bc732a66f0dffd65410
+      APEX: https://wedontcarecars.com
+    steps:
+      - name: Checkout frozen release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Require Vercel token
+        shell: bash
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Link exact storefront project
+        shell: bash
+        run: vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Pull production environment
+        shell: bash
+        run: vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Build production locally
+        shell: bash
+        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt output to production
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" | tail -n 1 | tr -d '\r')"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url"
+
+      - name: Verify public production contract
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?intro=1&release=${GITHUB_RUN_ID}" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory" || true)"
+            test_code="$(curl -sS -L -o /tmp/test-drive.html -w '%{http_code}' "$APEX/schedule-test-drive" || true)"
+            approve_code="$(curl -sS -L -o /tmp/approved.html -w '%{http_code}' "$APEX/get-approved" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APEX/dealer/login" || true)"
+            admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "$APEX/admin/login" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$test_code" = 200 ] && [ "$approve_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ]; then
+              if jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok == true' /tmp/inventory.json >/dev/null 2>&1; then
+                if grep -qi 'intro-sequence' /tmp/home.html && grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get approved' /tmp/home.html && grep -qi 'Call Sean' /tmp/home.html && grep -qi 'mobile-action-bar' /tmp/home.html; then
+                  ok=1
+                  break
+                fi
+              fi
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          ! grep -q 'R36TEST-' /tmp/home.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          VERIFY: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Frozen source SHA: `%s`\nProduction deployment: `%s`\nPublic contract verified: `%s`\n\nApex: %s' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFY:-false}" "$APEX")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final prebuilt production ${GITHUB_SHA:0:7}" --body "$body" || true
