@@ -1,0 +1,5 @@
+Promote exact frozen WDCC deployment.
+Deployment: dpl_4f3bXgSkpMUAgCHceRbhJSrhS714
+Release SHA: d7f76ea60081db88da774bc732a66f0dffd65410
+Target: wedontcarecars.com + www.wedontcarecars.com
+Triggered: 2026-08-25
