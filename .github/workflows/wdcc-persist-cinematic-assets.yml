@@ -1,0 +1,116 @@
+name: WDCC Persist Cinematic Assets
+
+on:
+  push:
+    branches: [wdcc-cinematic-v2-mainline]
+    paths:
+      - '.github/workflows/wdcc-persist-cinematic-assets.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-persist-cinematic-assets
+  cancel-in-progress: false
+
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      DONOR_DEPLOYMENT: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
+      BRANCH: wdcc-cinematic-v2-mainline
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wdcc-cinematic-v2-mainline
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Recover immutable 8AR source art
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$DONOR_DEPLOYMENT" > /tmp/wdcc-hero-v2.webp
+          npx --yes vercel@59.3.0 curl /wdcc-logo-transparent.webp --deployment "$DONOR_DEPLOYMENT" > /tmp/wdcc-logo-transparent.webp
+          file /tmp/wdcc-hero-v2.webp /tmp/wdcc-logo-transparent.webp
+          test "$(stat -c %s /tmp/wdcc-hero-v2.webp)" -gt 100000
+          test "$(stat -c %s /tmp/wdcc-logo-transparent.webp)" -gt 30000
+          cp /tmp/wdcc-hero-v2.webp public/wdcc-hero-v2.webp
+          cp /tmp/wdcc-logo-transparent.webp public/wdcc-logo-transparent.webp
+      - name: Build isolated Challenger and Tampa-only backdrop
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pillow opencv-python-headless numpy
+          python - <<'PY'
+          from PIL import Image, ImageFilter
+          import cv2, numpy as np
+          hero_path='public/wdcc-hero-v2.webp'
+          img=Image.open(hero_path).convert('RGB')
+          rgb=np.array(img); bgr=cv2.cvtColor(rgb,cv2.COLOR_RGB2BGR)
+          mask=np.zeros(bgr.shape[:2],np.uint8)
+          bgd=np.zeros((1,65),np.float64); fgd=np.zeros((1,65),np.float64)
+          cv2.grabCut(bgr,mask,(560,300,1000,450),bgd,fgd,8,cv2.GC_INIT_WITH_RECT)
+          rough=np.where((mask==2)|(mask==0),0,1).astype('uint8')
+          _,labels,stats,_=cv2.connectedComponentsWithStats(rough,8)
+          areas=stats[:,cv2.CC_STAT_AREA]; largest=1+int(np.argmax(areas[1:]))
+          car=(labels==largest).astype(np.uint8)*255
+          h,w=car.shape; ff=car.copy(); flood=np.zeros((h+2,w+2),np.uint8)
+          cv2.floodFill(ff,flood,(0,0),255)
+          car=cv2.bitwise_or(car,cv2.bitwise_not(ff))
+          car=cv2.morphologyEx(car,cv2.MORPH_CLOSE,cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(7,7)),iterations=2)
+          car=cv2.morphologyEx(car,cv2.MORPH_OPEN,cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3)),iterations=1)
+          cv2.ellipse(car,(1190,590),(102,112),0,0,360,255,-1)
+          cv2.ellipse(car,(1475,580),(72,92),0,0,360,255,-1)
+          alpha=cv2.GaussianBlur(car,(0,0),1.4)
+          ys,xs=np.where(alpha>8); x0,y0,x1,y1=int(xs.min()),int(ys.min()),int(xs.max()+1),int(ys.max()+1)
+          rgba=np.dstack([rgb[y0:y1,x0:x1],alpha[y0:y1,x0:x1]])
+          Image.fromarray(rgba,'RGBA').save('public/wdcc-challenger-layer.webp','WEBP',lossless=True,quality=90,method=6)
+          W,H=img.size; arr=np.array(img).astype(np.float32)
+          road=np.array(img.crop((0,540,620,941)).resize((W,H-260),Image.Resampling.LANCZOS)).astype(np.float32)
+          road=np.array(Image.fromarray(np.clip(road*.60,0,255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(5))).astype(np.float32)
+          out=arr.copy(); start=260; blend=90
+          for y in range(start,H):
+              t=min(1,max(0,(y-start)/blend)); out[y]=(1-t)*arr[y]+t*road[y-start]
+          Image.fromarray(np.clip(out,0,255).astype(np.uint8)).save('public/wdcc-tampa-backdrop.webp','WEBP',quality=88,method=6)
+          PY
+      - name: Prove persisted visual assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          file public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-challenger-layer.webp public/wdcc-tampa-backdrop.webp
+          stat -c '%n %s bytes' public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-challenger-layer.webp public/wdcc-tampa-backdrop.webp
+          test "$(stat -c %s public/wdcc-hero-v2.webp)" -gt 100000
+          test "$(stat -c %s public/wdcc-logo-transparent.webp)" -gt 30000
+          test "$(stat -c %s public/wdcc-challenger-layer.webp)" -gt 100000
+          test "$(stat -c %s public/wdcc-tampa-backdrop.webp)" -gt 30000
+      - name: Commit cinematic assets to branch safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'wdcc-ci'
+          git config user.email 'wdcc-ci@users.noreply.github.com'
+          git add public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-challenger-layer.webp public/wdcc-tampa-backdrop.webp
+          if git diff --cached --quiet; then
+            echo 'Assets already persisted.'
+            exit 0
+          fi
+          git commit -m 'Persist recovered WDCC hero and layered Challenger assets'
+          for attempt in 1 2 3 4; do
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Unable to persist assets after concurrency retries.' >&2
+          exit 1
