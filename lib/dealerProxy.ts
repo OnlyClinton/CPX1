@@ -9,7 +9,7 @@ function trustedMutation(request:Request){
   const origin=String(request.headers.get("origin")||"").trim().replace(/\/$/,"").toLowerCase();
   if(!origin)return true;
 
-  // Same-origin mutations are safe for provider previews and alternate frontends.
+  // same-origin mutations are safe for provider previews and alternate frontends.
   try{
     if(origin===new URL(request.url).origin.toLowerCase())return true;
   }catch{}
