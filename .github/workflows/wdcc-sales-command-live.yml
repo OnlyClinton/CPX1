@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          vercel deploy --prebuilt --prod --yes --archive=tgz --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
           url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
