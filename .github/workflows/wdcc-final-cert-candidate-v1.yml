@@ -24,7 +24,7 @@ jobs:
       ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
       STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
-      FINAL_SHA: 2cfb4c42237c49ee7294bb44390c5558ffa9b62f
+      FINAL_SHA: 4d229b6c04c641edc4798285a2fca7ad9cc97274
       AUTHORITY: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
     steps:
       - uses: actions/checkout@v4
