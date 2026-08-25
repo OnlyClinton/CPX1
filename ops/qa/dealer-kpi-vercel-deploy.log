@@ -1,0 +1,9 @@
+Vercel CLI 59.3.0 (Node.js 22.23.2)
+Retrieving project…
+Deploying cpxagency/wdcc-cpx-launch
+Uploading [--------------------] (0.0B/756.3KB)
+Uploading [=====---------------] (190.9KB/756.3KB)
+Uploading [==========----------] (379.3KB/756.3KB)
+Uploading [===============-----] (567.7KB/756.3KB)
+Uploading [====================] (756.3KB/756.3KB)
+Error: Resource is limited - try again in 24 hours (more than 100, code: "api-deployments-free-per-day").
