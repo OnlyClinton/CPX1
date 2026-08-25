@@ -1,0 +1,144 @@
+name: Repair WDCC Phoenix Authority
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/repair-phoenix-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  PROJECT_NAME: wdcc-cpx-launch
+  CANONICAL: https://wdcc-cpx-launch-cpxagency.vercel.app
+  PROVEN_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout proven authority candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PROVEN_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Preflight candidate and Vercel authority
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          test "$(git rev-parse HEAD)" = "$PROVEN_SHA"
+          npm ci
+          npm run build
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > .vercel/project.json
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&target=production&state=READY&limit=20&teamId=$TEAM_ID" >/tmp/prod.json
+          OLD_URL="$(jq -r '.deployments[0].url // empty' /tmp/prod.json)"
+          OLD_ID="$(jq -r '.deployments[0].uid // .deployments[0].id // empty' /tmp/prod.json)"
+          test -n "$OLD_URL"
+          echo "old_url=https://$OLD_URL" >> "$GITHUB_OUTPUT"
+          echo "old_id=$OLD_ID" >> "$GITHUB_OUTPUT"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy proven authority to Phoenix production
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel deploy --prod --yes --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/deploy.log
+          NEW_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
+          test -n "$NEW_URL"
+          echo "url=$NEW_URL" >> "$GITHUB_OUTPUT"
+          echo "Phoenix candidate: $NEW_URL"
+
+      - name: Gate Phoenix authority and rollback on failure
+        id: gate
+        env:
+          OLD_URL: ${{ steps.preflight.outputs.old_url }}
+          NEW_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){
+            echo "PHOENIX GATE FAILED — rolling production back to $OLD_URL"
+            vercel rollback "$OLD_URL" --yes --token="$VERCEL_TOKEN" --scope="$TEAM" || \
+              vercel rollback "$OLD_URL" --token="$VERCEL_TOKEN" --scope="$TEAM" || true
+          }
+          trap rollback ERR
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$CANONICAL/api/health?phoenix-repair=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          echo '--- Phoenix health ---'
+          cat /tmp/health.json | jq . || cat /tmp/health.json
+          test "$ready" = 1
+
+          login(){
+            name="$1" jar="$2"
+            jq -nc --arg login "$name" --arg password "$PW" '{login:$login,password:$password}' >/tmp/payload.json
+            code="$(curl -sS -c "$jar" -o /tmp/login.json -w '%{http_code}' -X POST "$CANONICAL/api/auth/login" -H 'content-type: application/json' --data-binary @/tmp/payload.json)"
+            echo "phoenix login $name=$code"
+            cat /tmp/login.json | jq '{ok,error,role,user:(.user|if type=="object" then {id,role,username,email} else . end)}'
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/login.json >/dev/null
+            scode="$(curl -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$CANONICAL/api/auth/session")"
+            echo "phoenix session $name=$scode"
+            test "$scode" = 200
+            jq -e '.authenticated==true' /tmp/session.json >/dev/null
+          }
+
+          login 'Big Pussy' /tmp/dealer.cookies
+          login admin /tmp/admin.cookies
+
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/check.json -w '%{http_code}' "$CANONICAL$path")"
+            echo "phoenix $path=$code"
+            cat /tmp/check.json | jq '{ok,error,revision,summary,count}' 2>/dev/null || true
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/check.json >/dev/null
+          done
+
+          code="$(curl -sS -b /tmp/admin.cookies -o /tmp/admin-users.json -w '%{http_code}' "$CANONICAL/api/admin/users")"
+          echo "phoenix /api/admin/users=$code"
+          test "$code" = 200
+          jq -e '.ok==true' /tmp/admin-users.json >/dev/null
+
+          trap - ERR
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report Phoenix repair
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          GATE: ${{ steps.gate.outcome }}
+          VERIFIED: ${{ steps.gate.outputs.verified }}
+          NEW_URL: ${{ steps.deploy.outputs.url }}
+          OLD_URL: ${{ steps.preflight.outputs.old_url }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC Phoenix authority repair ${GITHUB_RUN_ID}" \
+            --body "Proven source: \`$PROVEN_SHA\`. Preflight: **$PREFLIGHT**. Deploy: **$DEPLOY**. Protected API gate: **$GATE**. Verified: \`$VERIFIED\`. New deployment: \`$NEW_URL\`. Rollback point: \`$OLD_URL\`. Customer storefront aliases were not targeted." || true
