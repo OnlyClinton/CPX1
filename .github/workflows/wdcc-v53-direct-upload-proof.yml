@@ -1,0 +1,139 @@
+name: WDCC V53 Direct Upload Proof
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-v53-direct-upload-proof.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-v53-direct-upload-proof
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      AUTHORITY: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install proof tooling
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Prove V53 health
+        run: |
+          set -euo pipefail
+          curl -fsS "$AUTHORITY/api/health?v53_upload=$GITHUB_RUN_ID" -o /tmp/v53-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/v53-health.json >/dev/null
+
+      - name: Create disposable V53 dealer identity with backup
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-v53-user.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=4;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`V53Upload-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`v53-upload-${crypto.randomUUID()}`,email=`v53-upload-${run}@invalid.example`,stock=`R36TEST-V53-UPLOAD-${run}`,backup=`private/state/backups/platform-v3-pre-v53-upload-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`V53 Upload Proof ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/v53.env',`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${id}\nDEALER_EMAIL=${email}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,stock,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v53-user.mjs
+          set -a; . /tmp/v53.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Publish one QA-isolated vehicle with a real Blob client upload
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/v53.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          const base=process.env.AUTHORITY,run=process.env.RUN_TAG,stock=process.env.STOCK;
+          const result={ok:false,base,run,stock,trace:[],stages:{}};
+          const short=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};
+          async function text(r){try{return (await r.text()).slice(0,3000)}catch{return ''}}
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('response',r=>{if(/\/api\/(?:auth|inventory|upload)/.test(r.url()))result.trace.push({method:r.request().method(),url:short(r.url()),status:r.status()})});
+          await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const u=p.locator('input[autocomplete="username"]').first(),pw=p.locator('input[autocomplete="current-password"]').first();await u.waitFor({state:'visible',timeout:20000});await u.fill(process.env.DEALER_EMAIL);await pw.fill(process.env.QA_PASSWORD);const loginP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/auth/login'&&r.request().method()==='POST',{timeout:20000});await p.getByRole('button',{name:/sign in/i}).click();const login=await loginP;result.stages.login={status:login.status(),body:await text(login)};if(!login.ok())throw Error(`LOGIN_${login.status()}`);await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
+          await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`V53 Upload ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description',`Automated QA-isolated V53 upload proof ${run}`);fs.writeFileSync('/tmp/v53.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const input=p.locator('input[type=file][multiple]').last();if(!await input.count())throw Error('FILE_INPUT_MISSING');await input.setInputFiles('/tmp/v53.png');
+          const draftP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000}).catch(()=>null);const publish=p.getByRole('button',{name:/publish vehicle/i}).first();await publish.click();const draft=await draftP,dt=await text(draft);result.stages.draft={status:draft.status(),body:dt};if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),vehicleId=String(dj.item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');result.vehicleId=vehicleId;const upload=await uploadP;if(!upload)throw Error(`UPLOAD_REQUEST_NOT_SEEN_${await p.locator('[role=status]').textContent().catch(()=> '')}`);const ut=await text(upload);result.stages.upload={status:upload.status(),body:ut};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);
+          const done=await p.waitForFunction(()=>{const t=document.body.innerText;return t.includes('safely PUBLISHED')||t.includes('Published and verified')||t.includes('PUBLISHED in dealer inventory')},{timeout:50000}).then(()=>true).catch(()=>false);if(!done)throw Error(`PUBLISH_STATUS_TIMEOUT_${await p.locator('[role=status]').textContent().catch(()=> '')}`);result.stages.publishMessage=await p.locator('[role=status]').textContent().catch(()=> '');
+          const inv=await c.request.get(`${base}/api/inventory?dealer_read=${Date.now()}`),it=await text(inv);if(!inv.ok())throw Error(`DEALER_INV_${inv.status()}_${it}`);const ij=JSON.parse(it),item=(ij.items||[]).find(x=>x.id===vehicleId||x.stock===stock);if(!item)throw Error('DEALER_READBACK_MISSING');if(String(item.status).toLowerCase()!=='published')throw Error(`STATUS_${item.status}`);if(!(item.photoPathnames||[]).length)throw Error('PHOTO_PATH_MISSING');result.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames,primaryPhotoPathname:item.primaryPhotoPathname||null};
+          const publicResp=await fetch(`${base}/api/inventory?public_v53=${Date.now()}`,{cache:'no-store'}),publicText=await publicResp.text();if(!publicResp.ok)throw Error(`PUBLIC_INV_${publicResp.status}_${publicText.slice(0,500)}`);const pub=JSON.parse(publicText);if((pub.items||[]).some(x=>x.id===item.id||x.stock===stock))throw Error('QA_VEHICLE_PUBLIC');result.qaHiddenPublic=true;await p.screenshot({path:'/tmp/v53-upload.png',fullPage:true});result.ok=true;fs.writeFileSync('/tmp/v53-result.json',JSON.stringify(result,null,2));}catch(e){result.error=String(e?.message||e);fs.writeFileSync('/tmp/v53-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+
+      - name: Exact cleanup
+        if: always() && steps.identity.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -a; . /tmp/v53.env; set +a
+          export VEHICLE_ID="$(jq -r '.vehicleId // ""' /tmp/v53-result.json 2>/dev/null)"
+          cat > .wdcc-v53-clean.mjs <<'NODE'
+          import crypto from 'node:crypto';import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',user=process.env.DEALER_ID,stock=process.env.STOCK,id=process.env.VEHICLE_ID,run=process.env.RUN_TAG;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=4;n++){const before=await stable(),s=before.s,v=(s.vehicles||[]).find(x=>x.id===id||String(x.stock||'')===stock),media=[...(v?.photoPathnames||[])],backup=`private/state/backups/platform-v3-pre-v53-clean-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=(s.users||[]).filter(x=>x.id!==user);s.vehicles=(s.vehicles||[]).filter(x=>x.id!==v?.id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,userRemoved:1,vehicleRemoved:v?.id||null,mediaRemoved:media.length,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v53-clean.mjs | tee /tmp/v53-clean.json
+
+      - name: Report V53 upload proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          result='not captured'; [ -f /tmp/v53-result.json ] && result="$(cat /tmp/v53-result.json)"
+          cleanup='not captured'; [ -f /tmp/v53-clean.json ] && cleanup="$(tail -1 /tmp/v53-clean.json)"
+          body=$(cat <<EOF
+          Authority: \`$AUTHORITY\`
+          Status: **$STATUS**
+          No Vercel deployment or customer/dealer alias move was performed.
+
+          Result:
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Cleanup:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V53 direct upload proof ${GITHUB_RUN_ID}" --body "$body" || true
+
+      - name: Upload screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-v53-upload-${{ github.run_id }}
+          path: |
+            /tmp/v53-result.json
+            /tmp/v53-upload.png
+          if-no-files-found: ignore
+          retention-days: 3
