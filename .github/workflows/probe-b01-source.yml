@@ -1,0 +1,41 @@
+name: Probe WDCC B01 Source
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-b01-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEPLOYMENT_ID: dpl_xJCdtkRLYRGe7tuZxgBLHTgU7bPi
+    steps:
+      - name: Read selected immutable source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments/$DEPLOYMENT_ID/files?teamId=$TEAM_ID" >/tmp/files.json
+          cat >/tmp/read.mjs <<'NODE'
+          const fs=require('fs');
+          const tree=JSON.parse(fs.readFileSync('/tmp/files.json','utf8'));
+          const token=process.env.VERCEL_TOKEN, team=process.env.TEAM_ID, dep=process.env.DEPLOYMENT_ID;
+          const wanted=new Set(['src/lib/store.ts','src/lib/auth.ts','src/app/api/auth/login/route.ts','src/app/api/events/route.ts','src/app/api/admin/users/route.ts','src/app/api/inventory/route.ts']);
+          const found=new Map();
+          function walk(nodes,p=''){for(const n of nodes||[]){const x=p?`${p}/${n.name}`:n.name;if(n.type==='directory')walk(n.children||[],x);else if(n.uid&&wanted.has(x))found.set(x,n.uid)}}
+          walk(tree);
+          for(const p of wanted){
+            const uid=found.get(p); if(!uid){console.log(`===== ${p} MISSING =====`);continue}
+            const u=`https://api.vercel.com/v8/deployments/${dep}/files/${uid}?teamId=${encodeURIComponent(team)}`;
+            const r=await fetch(u,{headers:{Authorization:`Bearer ${token}`}}); if(!r.ok)throw Error(`${p} ${r.status}`);
+            const raw=await r.text(); let parsed; try{parsed=JSON.parse(raw)}catch{parsed=raw}
+            const b64=typeof parsed==='string'?parsed:(parsed?.data??parsed?.content??parsed?.file??parsed?.value);
+            const text=Buffer.from(b64,'base64').toString('utf8');
+            console.log(`===== ${p} =====`); console.log(text);
+          }
+          NODE
+          node /tmp/read.mjs
