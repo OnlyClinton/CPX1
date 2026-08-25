@@ -100,16 +100,34 @@ export async function writeState(input:State){
   return state;
 }
 
+export function isQaVehicleRecord(vehicle:any){
+  const stock=String(vehicle?.stock||vehicle?.stock_id||"").trim().toUpperCase();
+  const id=String(vehicle?.id||"").trim().toUpperCase();
+  const description=String(vehicle?.description||"").toLowerCase();
+  const badges=Array.isArray(vehicle?.badges)?vehicle.badges.map((value:any)=>String(value||"").toUpperCase()):[];
+  return vehicle?.qa===true||
+    /^R36TEST[-_]/.test(stock)||
+    /^WDCC[-_]QA[-_]/.test(stock)||
+    /^QA[-_]/.test(stock)||
+    /^TEST[-_]/.test(stock)||
+    /^WDCC[-_]QA[-_]/.test(id)||
+    /^QA[-_]/.test(id)||
+    badges.some((badge:string)=>badge==="R36-TEST"||badge==="QA"||badge==="TEST"||badge.includes("CERTIFICATION"))||
+    description.includes("automated temporary qa vehicle")||
+    description.includes("automated dealer workflow certification")||
+    description.includes("automated recovery certification vehicle")||
+    description.includes("synthetic upload acceptance")||
+    description.includes("dealer upload qa");
+}
+
 export function publicVehicles(state:State){
   const nextYear=new Date().getUTCFullYear()+1;
-  return state.vehicles.filter(vehicle=>{
-    const badges=Array.isArray(vehicle.badges)?vehicle.badges.map((value:any)=>String(value).toUpperCase()):[];
-    return String(vehicle.status||"").toLowerCase()==="published"&&
-      Number(vehicle.year)>1900&&Number(vehicle.year)<=nextYear&&
-      Boolean(String(vehicle.make||"").trim())&&
-      Boolean(String(vehicle.model||"").trim())&&
-      Number(vehicle.price||vehicle.cashPrice)>0&&
-      !String(vehicle.stock||"").toUpperCase().startsWith("R36TEST-")&&
-      !badges.includes("R36-TEST");
-  });
+  return state.vehicles.filter(vehicle=>
+    String(vehicle.status||"").toLowerCase()==="published"&&
+    Number(vehicle.year)>1900&&Number(vehicle.year)<=nextYear&&
+    Boolean(String(vehicle.make||"").trim())&&
+    Boolean(String(vehicle.model||"").trim())&&
+    Number(vehicle.price||vehicle.cashPrice)>0&&
+    !isQaVehicleRecord(vehicle)
+  );
 }
