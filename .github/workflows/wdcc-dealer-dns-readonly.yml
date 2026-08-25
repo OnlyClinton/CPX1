@@ -1,0 +1,34 @@
+name: WDCC Dealer DNS Readonly
+
+on:
+  push:
+    branches:
+      - fix/dealer-kpi-drilldowns-thumbnails
+    paths:
+      - '.github/workflows/wdcc-dealer-dns-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect dealer DNS record
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&account.id=$CLOUDFLARE_ACCOUNT_ID" "${auth[@]}" -o /tmp/zones.json
+          ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$ZONE_ID"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=dealer.wedontcarecars.com" "${auth[@]}" -o /tmp/dns.json
+          jq -e '.success==true and (.result|length)>0' /tmp/dns.json >/dev/null
+          echo 'DEALER_DNS_RECORD:'
+          jq -c '.result[] | {id,type,name,content,proxied,proxiable,ttl}' /tmp/dns.json
