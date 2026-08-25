@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DEALER_URL: https://wdcc-cpx-launch.vercel.app
+      ORIGIN_URL: https://dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
