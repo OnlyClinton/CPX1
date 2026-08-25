@@ -1,5 +1,5 @@
-Use the existing READY unified deployment and run instrumented live + authenticated acceptance.
+Use the existing READY unified deployment and dispatch exact Blob upload diagnostic.
 Deployment: https://wdcc-v32-storefront-fwi0ko41b-cpxagency.vercel.app
 Release source: 98c84814c00528e6114196f8d5ff7597fb844b20
-Triggered: 2026-08-25T14:30:30Z
-Contract: apex + www + dealer + V52 API + dealer login + upload trace + publish + storefront visibility + cleanup
+Triggered: 2026-08-25T14:40:30Z
+Contract: live public PASS then capture /api/upload response body and cleanup
