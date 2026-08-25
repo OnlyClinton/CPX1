@@ -37,6 +37,11 @@ jobs:
             fi
           done
           test "$bad" -eq 0
+          grep -q 'wdcc-hero-v2.webp' app/components.tsx
+          grep -q 'wdcc-logo-transparent.webp' app/components.tsx
+          grep -q 'intro-sequence' app/components.tsx
+          grep -q 'upload_authority_unavailable' app/api/upload/route.ts
+          test -f app/login/page.tsx
 
       - name: Install and production build
         shell: bash
@@ -62,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          routes=(/ /inventory /dealer /admin /contact /get-approved /schedule-test-drive)
+          routes=(/ /inventory /dealer /admin /login /contact /get-approved /schedule-test-drive)
           for route in "${routes[@]}"; do
             echo "=== stress $route ==="
             seq 1 40 | xargs -P8 -I{} curl -sS -o /tmp/body.{}.txt -w '%{http_code} %{time_total}\n' --max-time 10 "http://127.0.0.1:3000$route" > "/tmp/result-$(echo "$route" | tr '/' '_').txt"
@@ -79,6 +84,16 @@ jobs:
             echo "$route -> $code $(cat /tmp/api.json | head -c 500)"
             case "$code" in 200|401|403|404|503) ;; *) exit 1;; esac
           done
+
+          upload_code=$(curl -sS -o /tmp/upload.json -w '%{http_code}' --max-time 10 \
+            -H 'Host: dealer.wedontcarecars.com' \
+            -H 'Content-Type: application/json' \
+            -H 'X-WDCC-Request-ID: pre-vercel-upload-authority' \
+            -X POST http://127.0.0.1:3000/api/upload \
+            --data '{}')
+          echo "/api/upload missing authority -> $upload_code $(cat /tmp/upload.json | head -c 500)"
+          test "$upload_code" = 503
+          jq -e '.error=="upload_authority_unavailable" and .requestId=="pre-vercel-upload-authority"' /tmp/upload.json >/dev/null
 
       - name: Server error scan
         if: always()
