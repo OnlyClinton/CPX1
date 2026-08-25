@@ -25,11 +25,40 @@ jobs:
         shell: bash
         run: |
           cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
+          # The canonical storefront quick-action control is stickyCtaBar. Normalize
+          # the legacy selector in the preserved harness so this run tests the
+          # actual mobile CTA contract instead of the retired class name.
+          sed -i 's/\.mobile-action-bar/\.stickyCtaBar/g' /tmp/wdcc-candidate-local-e2e.sh
           git checkout --detach "$CANDIDATE_SHA"
       - name: Run candidate locally against canonical services
         id: e2e
         shell: bash
         run: bash /tmp/wdcc-candidate-local-e2e.sh
+      - name: Capture storefront verification transport
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          url="https://wedontcarecars.com/api/inventory?transport_probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          curl -sS -D /tmp/storefront-initial.headers -o /tmp/storefront-initial.body "$url"
+          initial_code="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}' /tmp/storefront-initial.headers)"
+          initial_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/,""); gsub(/\r/,""); value=$0} END{print value}' /tmp/storefront-initial.headers)"
+          redirect="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/,""); gsub(/\r/,""); value=$0} END{print value}' /tmp/storefront-initial.headers)"
+          final_meta="$(curl -sS -L -o /tmp/storefront-final.body -w '%{http_code}|%{content_type}|%{url_effective}' "$url")"
+          final_code="${final_meta%%|*}"
+          rest="${final_meta#*|}"
+          final_type="${rest%%|*}"
+          final_url="${rest#*|}"
+          body_preview="$(head -c 600 /tmp/storefront-final.body | tr '\n' ' ' | tr '\r' ' ')"
+          {
+            echo "initial_status=$initial_code"
+            echo "initial_content_type=$initial_type"
+            echo "redirect_location=${redirect:-none}"
+            echo "final_status=$final_code"
+            echo "final_content_type=$final_type"
+            echo "final_url=$final_url"
+            echo "body_preview=$body_preview"
+          } | tee /tmp/wdcc-storefront-transport.txt
       - name: Report candidate E2E
         if: always()
         env:
@@ -41,6 +70,7 @@ jobs:
           cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
           health='not captured'; [ -f /tmp/wdcc-health.json ] && health="$(cat /tmp/wdcc-health.json)"
           server='not captured'; [ -f /tmp/wdcc-server.log ] && server="$(tail -80 /tmp/wdcc-server.log)"
+          storefront='not captured'; [ -f /tmp/wdcc-storefront-transport.txt ] && storefront="$(cat /tmp/wdcc-storefront-transport.txt)"
           body=$(cat <<EOF
           Candidate: \`$CANDIDATE_SHA\`
           Status: **$STATUS**
@@ -55,6 +85,11 @@ jobs:
           Health:
           \`\`\`json
           $health
+          \`\`\`
+
+          Storefront verification transport:
+          \`\`\`
+          $storefront
           \`\`\`
 
           Server tail:
