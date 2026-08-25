@@ -21,14 +21,15 @@ if grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx; then
   :
 elif grep -q 'DealerDashboard' app/dealer/page.tsx \
   && grep -q 'wdcc-logo-transparent.webp' app/dealer/DealerDashboard.tsx \
-  && grep -q 'wdcc-hero-v2.webp' app/dealer/DealerDashboard.tsx; then
+  && grep -q 'Inventory Overview' app/dealer/DealerDashboard.tsx \
+  && grep -q 'Add / Edit Vehicle' app/dealer/DealerDashboard.tsx; then
   :
 else
-  fail "dealer canonical portal missing"
+  fail "dealer canonical operations portal missing"
 fi
 
 grep -q 'PortalExperience mode="admin"' app/admin/page.tsx || fail "admin canonical portal missing"
 grep -q 'wdcc-logo-transparent.webp' app/PortalExperience.tsx || fail "portal shell not using canonical logo"
 grep -q 'wdcc-hero-v2.webp' app/PortalExperience.tsx || fail "portal shell not using canonical hero"
 
-echo "BRAND_LOCK_OK: canonical WDCC logo, hero, and portal entry points verified"
+echo "BRAND_LOCK_OK: canonical WDCC branding and dealer operations entry points verified"
