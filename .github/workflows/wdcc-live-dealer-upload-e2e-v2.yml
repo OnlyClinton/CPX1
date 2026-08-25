@@ -1,0 +1,107 @@
+name: WDCC Live Dealer Upload E2E V2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ops/wdcc-live-dealer-upload-e2e-v2-trigger.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DEALER: https://dealer.wedontcarecars.com
+  STOREFRONT: https://wedontcarecars.com
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  PHOENIX_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  STOREFRONT_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Discover canonical authority that authenticates live
+        id: authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          found=''
+          for project in "$DEALER_PROJECT_ID" "$PHOENIX_PROJECT_ID" "$STOREFRONT_PROJECT_ID"; do
+            dir="/tmp/auth-$project"
+            rm -rf "$dir"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$project" > "$dir/.vercel/project.json"
+            if ! (cd "$dir" && env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull "$dir/env" --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1); then continue; fi
+            grep -q '^BLOB_READ_WRITE_TOKEN=' "$dir/env" || continue
+            grep -q '^SESSION_SECRET=' "$dir/env" || continue
+            if ! (
+              set -a; . "$dir/env"; set +a
+              node <<'NODE' > "$dir/session.env"
+          const crypto=require('crypto');const{get}=require('@vercel/blob');
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));const roles=new Set(['dealer_agent','tenant_admin','platform_admin']);const u=(s.users||[]).find(x=>roles.has(String(x.role||'').toLowerCase())&&x.status!=='disabled'&&!x.disabled);if(!u)throw Error('NO_ACTIVE_DEALER_USER');const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+1800000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');console.log(`QA_COOKIE=${raw}.${sig}`);console.log(`QA_USER_ID=${u.id}`)})().catch(()=>process.exit(1));
+          NODE
+            ); then continue; fi
+            . "$dir/session.env"
+            code="$(curl -sS -o "$dir/live-session.json" -w '%{http_code}' "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$QA_COOKIE" || true)"
+            if [ "$code" = 200 ] && jq -e '.authenticated==true' "$dir/live-session.json" >/dev/null 2>&1; then
+              found="$project"
+              cp "$dir/session.env" /tmp/selected-session.env
+              break
+            fi
+          done
+          test -n "$found" || { echo 'NO_LIVE_MATCHING_CANONICAL_AUTHORITY' >&2; exit 1; }
+          . /tmp/selected-session.env
+          echo "::add-mask::$QA_COOKIE"
+          echo "QA_COOKIE=$QA_COOKIE" >> "$GITHUB_ENV"
+          echo "QA_USER_ID=$QA_USER_ID" >> "$GITHUB_ENV"
+          echo "source_project=$found" >> "$GITHUB_OUTPUT"
+          echo "LIVE_AUTHORITY=PASS:$found"
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Run mobile Add Vehicle photo publish flow
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          (async()=>{const run=process.env.RUN_ID,dealer=process.env.DEALER,storefront=process.env.STOREFRONT,stock=`WDCC-QA-${run}`;fs.writeFileSync('/tmp/wdcc-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.QA_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('SESSION_REDIRECTED_TO_LOGIN');await p.getByLabel('Year').fill('2019');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill(`E2E-${run}`);await p.getByLabel('Trim').fill('WDCC QA');await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill('Automated WDCC production dealer upload verification. QA only.');await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/wdcc-qa.png');await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});const r=await c.request.get(`${dealer}/api/inventory`,{headers:{Cookie:`__Host-wdcc_session=${process.env.QA_COOKIE}`}});const j=await r.json();const item=(j.items||[]).find(v=>v.stock===stock);if(!item)throw Error('PUBLISHED_VEHICLE_NOT_IN_DEALER_INVENTORY');const pi=await c.request.get(`${storefront}/api/inventory`);const pj=await pi.json();if(!(pj.items||[]).some(v=>v.stock===stock))throw Error('PUBLISHED_VEHICLE_NOT_VISIBLE_ON_STOREFRONT');const h=await c.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.QA_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!h.ok())throw Error(`QA_HIDE_FAILED_${h.status()}`);fs.writeFileSync('/tmp/result.json',JSON.stringify({ok:true,id:item.id,photoCount:(item.photoPathnames||[]).length||1,publicVisible:true},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)});
+          NODE
+          cat /tmp/result.json
+          echo "vehicle_id=$(jq -r '.id // ""' /tmp/result.json)" >> "$GITHUB_OUTPUT"
+          echo "photo_count=$(jq -r '.photoCount // 0' /tmp/result.json)" >> "$GITHUB_OUTPUT"
+          echo "public_visible=$(jq -r '.publicVisible // false' /tmp/result.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Report E2E evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          SOURCE: ${{ steps.authority.outputs.source_project }}
+          VEHICLE: ${{ steps.browser.outputs.vehicle_id }}
+          PHOTOS: ${{ steps.browser.outputs.photo_count }}
+          PUBLIC: ${{ steps.browser.outputs.public_visible }}
+        shell: bash
+        run: |
+          err=''; [ -f /tmp/result.json ] && err="$(jq -r '.error // ""' /tmp/result.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC live dealer E2E v2 ${GITHUB_RUN_ID}" --body "Status: **$STATUS**\nAuthority: \`${SOURCE:-none}\`\nVehicle: \`${VEHICLE:-none}\`\nPhotos: \`${PHOTOS:-0}\`\nPublic visible before QA hide: \`${PUBLIC:-false}\`\nError: \`$err\`" || true
