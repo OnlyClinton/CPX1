@@ -1,4 +1,4 @@
-name: WDCC Repaired Phoenix Auth Verification
+name: WDCC READY Phoenix Authority Sweep
 on:
   push:
     branches: [ops/reset-wdcc-logins]
@@ -11,10 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  sweep:
     runs-on: ubuntu-latest
     env:
-      DEALER_URL: https://wdcc-cpx-launch-g0t1np08g-cpxagency.vercel.app
       ORIGIN_URL: https://dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
@@ -23,5 +22,37 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify Big Pussy and admin plus CRM leads inventory and admin users
-        run: node scripts/wdcc-temp-login-reset.mjs verify
+      - name: Test every recent READY full-stack Phoenix candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/sweep.txt
+          while read -r id host; do
+            echo "===== $id $host =====" | tee -a /tmp/sweep.txt
+            if DEALER_URL="https://$host" ORIGIN_URL="$ORIGIN_URL" node scripts/wdcc-temp-login-reset.mjs verify > /tmp/out.json 2>&1; then
+              cat /tmp/out.json | tee -a /tmp/sweep.txt
+              echo "PASS $id $host" | tee -a /tmp/sweep.txt
+            else
+              rc=$?
+              cat /tmp/out.json | tee -a /tmp/sweep.txt
+              echo "FAIL rc=$rc $id $host" | tee -a /tmp/sweep.txt
+            fi
+          done <<'CANDIDATES'
+          dpl_EXA1XonkYwKpJmDoEGhnayNnmRYo wdcc-cpx-launch-na1jtupc3-cpxagency.vercel.app
+          dpl_5jcVayEX62F29AWNQ6ykFrcj4RtR wdcc-cpx-launch-3e4jr4xny-cpxagency.vercel.app
+          dpl_9tpgXsft9VjyKXLmdCGj5yHZ7LAz wdcc-cpx-launch-a4bb0pjim-cpxagency.vercel.app
+          dpl_AyDKTZzwoCPbd4HV1zoGAGN5wayL wdcc-cpx-launch-naizcdwo4-cpxagency.vercel.app
+          dpl_2zEDDzLzift3jUtC2aocJVwrkKid wdcc-cpx-launch-p6hluk9ro-cpxagency.vercel.app
+          dpl_2nuY5F67jJsKRZWktY9fFCAqnUJe wdcc-cpx-launch-etokaaqz6-cpxagency.vercel.app
+          dpl_8Sb1XcyAbdiaZ74rU2HTXctpaFW6 wdcc-cpx-launch-bkn908zmv-cpxagency.vercel.app
+          dpl_8fpveRbZKF1PjSttV2hWD9h9gGxE wdcc-cpx-launch-9ro33unqv-cpxagency.vercel.app
+          dpl_98EPzEPL39XFv73spD98hSRrHCKc wdcc-cpx-launch-rgovzhxfa-cpxagency.vercel.app
+          dpl_4JzwENu5NdH8FS1M16nEVE61bu2b wdcc-cpx-launch-hqw7zqgix-cpxagency.vercel.app
+          dpl_DjHSDXrG7voTFZ5XbPs2yuse3nU4 wdcc-cpx-launch-g0t1np08g-cpxagency.vercel.app
+          dpl_8fg3m8ukQv17uUoz9UrdP1ujUoQD wdcc-cpx-launch-duevmhlwo-cpxagency.vercel.app
+          CANDIDATES
+          echo '===== SUMMARY ====='
+          grep -E '^(PASS|FAIL)' /tmp/sweep.txt || true
+          passes="$(grep -c '^PASS ' /tmp/sweep.txt || true)"
+          echo "healthy_candidates=$passes"
+          test "$passes" -gt 0
