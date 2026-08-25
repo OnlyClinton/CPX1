@@ -1,0 +1,36 @@
+name: WDCC Fix Route Pin Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-fix-route-pin-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Replace only stale dealer Worker route pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD_ID: 245de2b4dbe642fbabe5ebe2dc6f7fb5
+          NEW_ID: 06d18f1af00f4c0199a2320f59c80089
+          TARGET: .github/workflows/wdcc-dealer-final-zone-cutover.yml
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY/contents/$TARGET"
+          gh api "$api" > /tmp/file.json
+          sha="$(jq -r '.sha' /tmp/file.json)"
+          jq -r '.content' /tmp/file.json | tr -d '\n' | base64 -d > /tmp/current.yml
+          test "$(grep -c "$OLD_ID" /tmp/current.yml)" = 1
+          test "$(grep -c "$NEW_ID" /tmp/current.yml || true)" = 0
+          sed "s/$OLD_ID/$NEW_ID/" /tmp/current.yml > /tmp/new.yml
+          content="$(base64 -w0 /tmp/new.yml)"
+          jq -nc --arg message 'wdcc: refresh verified dealer Worker route pin' --arg content "$content" --arg sha "$sha" --arg branch main '{message:$message,content:$content,sha:$sha,branch:$branch}' > /tmp/payload.json
+          gh api --method PUT "$api" --input /tmp/payload.json >/tmp/result.json
+          jq -e '.commit.sha and .content.sha' /tmp/result.json >/dev/null
+          echo 'Route pin refreshed from live Cloudflare read-only evidence.'
