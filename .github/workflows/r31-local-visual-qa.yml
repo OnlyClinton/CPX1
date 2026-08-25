@@ -6,6 +6,8 @@ on:
     paths:
       - 'app/r31-preview/**'
       - 'app/components.tsx'
+      - 'app/assets/cars/**'
+      - 'public/assets/cars/**'
       - 'public/wdcc-logo-transparent.webp'
       - 'public/wdcc-hero-v2.webp'
       - 'scripts/r31-local-visual-qa.mjs'
@@ -43,7 +45,7 @@ jobs:
           done
           cat /tmp/r31-next.log
           exit 1
-      - name: Run desktop, tablet and mobile visual QA
+      - name: Run desktop, tablet, mobile and failure-state QA
         run: node scripts/r31-local-visual-qa.mjs
       - name: Print local server log on failure
         if: failure()
