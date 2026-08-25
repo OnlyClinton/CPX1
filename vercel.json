@@ -4,6 +4,6 @@
   "regions": ["iad1"],
   "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
   "git": {
-    "deploymentEnabled": true
+    "deploymentEnabled": false
   }
 }
