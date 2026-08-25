@@ -1,1 +1,1 @@
-export {default} from "../../dealer/page";
+export { default } from "../../dealer/page";

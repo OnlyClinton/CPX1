@@ -1,14 +1,685 @@
 /* WDCC V43 approved visual restoration — exact archived intro choreography, current functional app underneath. */
-:root{--v43-red:#ef202f;--v43-blue:#168af4;--v43-gold:#e0b43b;--v43-navy:#06111b;--v43-paper:#f4f5f6}
-.commandStrip{height:34px;background:#020509;border-bottom:1px solid #17232d;color:#fff;font-size:11px;font-weight:850;letter-spacing:.055em;text-transform:uppercase;display:flex;align-items:center}.commandStrip .wrap{display:flex;justify-content:flex-end;gap:22px}.commandStrip b{color:var(--v43-red)}
-.premiumHeader{height:92px;position:sticky;top:0;z-index:100;background:rgba(5,13,21,.96);backdrop-filter:blur(15px);border-bottom:1px solid #25343f}.premiumHeader .nav{height:92px;border:0;display:grid;grid-template-columns:180px 1fr auto;align-items:center;gap:22px}.logoBrand{display:flex;align-items:center;height:90px;width:180px;overflow:visible}.logoBrand img{max-height:82px;max-width:160px;width:auto;height:auto;object-fit:contain;filter:drop-shadow(0 6px 14px #000)}.premiumHeader .navlinks{display:flex;gap:clamp(16px,2.2vw,34px);justify-content:center;align-items:center;font-size:12px;font-weight:900;text-transform:uppercase}.premiumHeader .premiumApply{min-height:44px;padding:0 18px;border-radius:5px;background:var(--v43-red);color:#fff}.premiumPhone b{color:var(--v43-red)}
-.premiumHero{min-height:590px;position:relative;overflow:hidden;background:#05111b;border-bottom:1px solid #1c2a34}.premiumHero .heroPhoto{position:absolute;inset:0;background:url('https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg') 62% center/cover no-repeat;filter:saturate(1.05) contrast(1.04);transform:none}.premiumHero .heroPhoto:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#03070bef 0,#03070bd9 31%,#03070b69 52%,transparent 72%),linear-gradient(0deg,#03070b42,#03070b0a)}.premiumHero .heroGlow{display:none}.premiumHero .heroContent{position:relative;z-index:2;width:min(620px,48vw);max-width:none;padding:72px 0 66px clamp(22px,4vw,70px);margin:0}.premiumHero .eyebrow{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#62aefe}.premiumHero .eyebrow:before{content:"";display:inline-block;width:42px;height:2px;background:var(--v43-gold);vertical-align:middle;margin-right:10px}.premiumHero h1{font-size:clamp(52px,5.35vw,82px);line-height:.91;letter-spacing:-.052em;text-transform:uppercase;margin:17px 0 15px}.premiumHero h1 .redWord{color:var(--v43-red)}.premiumHero h1 .blueWord{color:var(--v43-blue)}.premiumHero .lede{font-size:17px;line-height:1.52;max-width:540px;margin:0 0 18px;color:#f1f4f6;text-shadow:0 2px 5px #000}.premiumHero .actions{display:flex;gap:10px;flex-wrap:wrap}.premiumHero .cta{min-height:44px;padding:0 18px;border-radius:5px;border:1px solid transparent;background:var(--v43-red);font-size:11px;font-weight:950;text-transform:uppercase}.premiumHero .cta.secondary{background:#091521;border-color:#6a7d8d;color:#fff}.heroCall{margin-top:16px;font-size:12px;font-weight:900}.heroCall b{color:var(--v43-red)}
-.benefitBand,.inventoryPremium{background:var(--v43-paper)!important;color:#111820!important}.benefitGrid{display:grid;grid-template-columns:repeat(4,1fr);transform:translateY(-22px);background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 12px 34px #0003;margin:0 clamp(18px,3vw,48px)}.benefitGrid article{display:grid;grid-template-columns:42px 1fr;gap:11px;align-items:center;padding:18px;border-right:1px solid #dce1e6;text-align:left}.benefitGrid article:last-child{border-right:0}.benefitGrid .benefitIcon{width:34px;height:34px;border:2px solid var(--v43-red);border-radius:50%;display:grid;place-items:center;color:var(--v43-red);font-weight:950}.benefitGrid strong{display:block;font-size:11px;text-transform:uppercase}.benefitGrid span{display:block;color:#66717b;font-size:10px;margin-top:3px}
-.inventoryPremium{padding:18px clamp(18px,3vw,48px) 50px!important}.inventoryPremium .wrap{width:min(1480px,100%);max-width:none}.inventoryPremium .sectionHead{align-items:end;margin-bottom:18px}.inventoryPremium .sectionHead h2{font-size:32px;margin:4px 0}.inventoryViewAll{font-size:11px;font-weight:950;text-transform:uppercase}.inventoryPremium .grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:13px}.inventoryPremium .card{border-radius:8px;border:1px solid #d6dde3;box-shadow:0 5px 16px #0001;background:#fff}.inventoryPremium .photo{height:148px;aspect-ratio:auto;background:#0b1823}.inventoryPremium .cardBody{padding:12px}.inventoryPremium .carTitle{font-size:14px;line-height:1.18;min-height:34px}.inventoryPremium .price{font-size:22px}.inventoryPremium .facts{font-size:9px}.inventoryPremium .down{font-size:10px}.cardButtons{gap:6px}.cardButtons span{min-height:32px;border-radius:4px;font-size:8px}.financePremium{background:#06111d;padding:42px clamp(18px,3vw,48px) 56px}.financePremium .wrap{width:min(1480px,100%)}.financePremium h2{font-size:31px}.financeSteps{gap:12px}.financeSteps article{border-radius:8px;padding:18px}.trustPremium{background:#fff;padding:18px clamp(18px,3vw,48px)}.trustPremium .wrap{width:min(1480px,100%)}.trustPremium .trust{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border:0;box-shadow:none}.trustPremium .trust>div{display:block;padding:18px}.premiumFooter{background:#03070b;padding:25px clamp(18px,3vw,48px) 84px}
-.v43Intro{position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at 58% 46%,#14283d,#020408 70%);overflow:hidden;opacity:1;visibility:visible;transition:opacity .42s,visibility .42s}.v43Intro.out{opacity:0;visibility:hidden}.v43IntroBg{position:absolute;inset:-8%;background:url('https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg') 64% center/cover no-repeat;filter:brightness(.23) blur(1px);animation:v43IntroBg 2.6s both}.v43IntroSmoke{position:absolute;inset:0;background:radial-gradient(ellipse at 55% 72%,#dce9f12b 0,#ffffff12 18%,transparent 54%);filter:blur(18px);animation:v43Smoke 2.4s both}.v43IntroCar{position:absolute;right:-16%;bottom:-4%;width:74%;height:75%;background:url('https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg') 73% 62%/180% auto no-repeat;clip-path:polygon(18% 22%,100% 10%,100% 92%,4% 92%,0 58%);filter:drop-shadow(0 25px 28px #000) saturate(1.14);animation:v43CarSweep 1.72s .18s cubic-bezier(.12,.83,.21,1) both}.v43IntroLogo{position:absolute;left:50%;top:50%;width:190px;transform:translate(-50%,-50%) scale(.82);opacity:0;filter:drop-shadow(0 10px 30px #000) drop-shadow(0 0 18px #168af44f);animation:v43LogoPop .5s .16s forwards;will-change:left,top,width,transform,opacity}.v43Flare{position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 38px 18px #62b5ff80;opacity:0;animation:v43Flare .7s 1.4s both}.v43Skip{position:absolute;right:18px;bottom:18px;border:1px solid #ffffff50;background:#08121dcc;color:#fff;border-radius:999px;padding:10px 14px;font-size:11px;font-weight:850;z-index:4}
-@keyframes v43IntroBg{0%{transform:scale(1.15);opacity:0}30%{opacity:.9}100%{transform:scale(1.02);opacity:.5}}@keyframes v43Smoke{0%{opacity:0;transform:scale(.7)}45%{opacity:1}100%{opacity:.15;transform:scale(1.32)}}@keyframes v43CarSweep{0%{opacity:0;transform:translate3d(46%,10%,0) scale(1.23) rotate(-1deg);filter:blur(5px) saturate(1.1)}35%{opacity:1}72%{transform:translate3d(-16%,-3%,0) scale(1.02)}100%{opacity:.12;transform:translate3d(-78%,-17%,0) scale(.72)}}@keyframes v43LogoPop{to{opacity:1;transform:translate(-50%,-50%) scale(1)}}@keyframes v43Flare{0%{opacity:0;transform:scale(.2)}45%{opacity:1}100%{opacity:0;transform:scale(5)}}
-.stickyCtaBar{display:none}
-@media(max-width:1120px){.inventoryPremium .grid{grid-template-columns:repeat(3,1fr)}.premiumHeader .navlinks{gap:15px}.premiumHeader .navlinks a[href="/dealer/login"]{display:none}}
-@media(max-width:900px){.premiumHeader,.premiumHeader .nav{height:80px}.premiumHeader .nav{grid-template-columns:48px 1fr 48px;padding:0 14px}.premiumHeader .navlinks{display:none}.logoBrand{justify-self:center;height:80px;width:auto}.logoBrand img{max-height:68px;max-width:132px}.mobileMenuButton,.mobileCallButton{display:grid;place-items:center;width:44px;height:44px}.mobileMenuButton{justify-self:end}.mobileCallButton{justify-self:start}.premiumHero{min-height:520px}.premiumHero .heroContent{width:54vw;padding-top:66px;padding-left:22px}.benefitGrid{grid-template-columns:repeat(2,1fr)}.benefitGrid article:nth-child(2){border-right:0}.inventoryPremium .grid{grid-template-columns:repeat(2,1fr)}.financeSteps,.trustPremium .trust{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:620px){body{padding-bottom:58px}.commandStrip{height:28px;font-size:8px}.commandStrip .wrap{justify-content:center;gap:8px}.commandStrip span:nth-child(2){display:none}.premiumHero{min-height:565px}.premiumHero .heroPhoto{height:286px;inset:0 0 auto 0;background-size:142% 112%;background-position:100% center}.premiumHero .heroPhoto:after{background:linear-gradient(180deg,transparent 26%,#03070b 100%)}.premiumHero .heroContent{width:100%;padding:274px 14px 28px;margin:0}.premiumHero h1{font-size:42px}.premiumHero .lede{font-size:14px;line-height:1.42;margin:11px 0}.premiumHero .actions{display:grid}.premiumHero .cta{width:100%}.heroCall{display:none}.benefitGrid{transform:none;margin:0;grid-template-columns:repeat(2,1fr);border-radius:0;box-shadow:none}.benefitGrid article{padding:12px 8px}.benefitGrid strong{font-size:8px}.benefitGrid span{font-size:7px}.inventoryPremium{padding:22px 14px 30px!important}.inventoryPremium .grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px}.inventoryPremium .card{min-width:74%;scroll-snap-align:start}.financePremium{padding:30px 14px 42px}.financeSteps{grid-template-columns:1fr}.trustPremium{padding:14px}.trustPremium .trust{grid-template-columns:1fr 1fr}.stickyCtaBar{display:grid;position:fixed;left:0;right:0;bottom:0;z-index:110;grid-template-columns:repeat(4,1fr);background:#060b11;border-top:1px solid #283844;padding:0;transform:none;width:100%;border-radius:0;box-shadow:none}.stickyCtaBar a{min-height:58px;display:grid;place-items:center;border-right:1px solid #ffffff15;font-size:9px;font-weight:900;text-transform:uppercase}.stickyCtaBar .stickyContact{background:var(--v43-red)}.stickyCtaBar .stickyPrimary,.stickyCtaBar .stickySecondary,.stickyCtaBar .stickyCars{background:#0c1b29;color:#fff}.premiumFooter{padding-bottom:78px}.v43IntroLogo{width:132px}.v43IntroCar{width:132%;right:-55%;bottom:9%;height:58%}}
-@media(prefers-reduced-motion:reduce){.v43Intro{display:none!important}}
+:root {
+	--v43-red: #ef202f;
+	--v43-blue: #168af4;
+	--v43-gold: #e0b43b;
+	--v43-navy: #06111b;
+	--v43-paper: #f4f5f6;
+}
+.commandStrip {
+	height: 34px;
+	background: #020509;
+	border-bottom: 1px solid #17232d;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 850;
+	letter-spacing: .055em;
+	text-transform: uppercase;
+	display: flex;
+	align-items: center;
+}
+.commandStrip .wrap {
+	display: flex;
+	justify-content: flex-end;
+	gap: 22px;
+}
+.commandStrip b {
+	color: var(--v43-red);
+}
+.premiumHeader {
+	height: 92px;
+	position: sticky;
+	top: 0;
+	z-index: 100;
+	background: rgba(5, 13, 21, 0.96);
+	backdrop-filter: blur(15px);
+	border-bottom: 1px solid #25343f;
+}
+.premiumHeader .nav {
+	height: 92px;
+	border: 0;
+	display: grid;
+	grid-template-columns: 180px 1fr auto;
+	align-items: center;
+	gap: 22px;
+}
+.logoBrand {
+	display: flex;
+	align-items: center;
+	height: 90px;
+	width: 180px;
+	overflow: visible;
+}
+.logoBrand img {
+	max-height: 82px;
+	max-width: 160px;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+	filter: drop-shadow(0 6px 14px #000);
+}
+.premiumHeader .navlinks {
+	display: flex;
+	gap: clamp(16px, 2.2vw, 34px);
+	justify-content: center;
+	align-items: center;
+	font-size: 12px;
+	font-weight: 900;
+	text-transform: uppercase;
+}
+.premiumHeader .premiumApply {
+	min-height: 44px;
+	padding: 0 18px;
+	border-radius: 5px;
+	background: var(--v43-red);
+	color: #fff;
+}
+.premiumPhone b {
+	color: var(--v43-red);
+}
+.premiumHero {
+	min-height: 590px;
+	position: relative;
+	overflow: hidden;
+	background: #05111b;
+	border-bottom: 1px solid #1c2a34;
+}
+.premiumHero .heroPhoto {
+	position: absolute;
+	inset: 0;
+	background: url("https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg")
+		62% center / cover no-repeat;
+	filter: saturate(1.05) contrast(1.04);
+	transform: none;
+}
+.premiumHero .heroPhoto:after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+			90deg,
+			#03070bef 0,
+			#03070bd9 31%,
+			#03070b69 52%,
+			transparent 72%
+		), linear-gradient(0deg, #03070b42, #03070b0a);
+}
+.premiumHero .heroGlow {
+	display: none;
+}
+.premiumHero .heroContent {
+	position: relative;
+	z-index: 2;
+	width: min(620px, 48vw);
+	max-width: none;
+	padding: 72px 0 66px clamp(22px, 4vw, 70px);
+	margin: 0;
+}
+.premiumHero .eyebrow {
+	font-size: 11px;
+	font-weight: 900;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	color: #62aefe;
+}
+.premiumHero .eyebrow:before {
+	content: "";
+	display: inline-block;
+	width: 42px;
+	height: 2px;
+	background: var(--v43-gold);
+	vertical-align: middle;
+	margin-right: 10px;
+}
+.premiumHero h1 {
+	font-size: clamp(52px, 5.35vw, 82px);
+	line-height: 0.91;
+	letter-spacing: -.052em;
+	text-transform: uppercase;
+	margin: 17px 0 15px;
+}
+.premiumHero h1 .redWord {
+	color: var(--v43-red);
+}
+.premiumHero h1 .blueWord {
+	color: var(--v43-blue);
+}
+.premiumHero .lede {
+	font-size: 17px;
+	line-height: 1.52;
+	max-width: 540px;
+	margin: 0 0 18px;
+	color: #f1f4f6;
+	text-shadow: 0 2px 5px #000;
+}
+.premiumHero .actions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.premiumHero .cta {
+	min-height: 44px;
+	padding: 0 18px;
+	border-radius: 5px;
+	border: 1px solid transparent;
+	background: var(--v43-red);
+	font-size: 11px;
+	font-weight: 950;
+	text-transform: uppercase;
+}
+.premiumHero .cta.secondary {
+	background: #091521;
+	border-color: #6a7d8d;
+	color: #fff;
+}
+.heroCall {
+	margin-top: 16px;
+	font-size: 12px;
+	font-weight: 900;
+}
+.heroCall b {
+	color: var(--v43-red);
+}
+.benefitBand,
+.inventoryPremium {
+	background: var(--v43-paper) !important;
+	color: #111820 !important;
+}
+.benefitGrid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	transform: translateY(-22px);
+	background: #fff;
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: 0 12px 34px #0003;
+	margin: 0 clamp(18px, 3vw, 48px);
+}
+.benefitGrid article {
+	display: grid;
+	grid-template-columns: 42px 1fr;
+	gap: 11px;
+	align-items: center;
+	padding: 18px;
+	border-right: 1px solid #dce1e6;
+	text-align: left;
+}
+.benefitGrid article:last-child {
+	border-right: 0;
+}
+.benefitGrid .benefitIcon {
+	width: 34px;
+	height: 34px;
+	border: 2px solid var(--v43-red);
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	color: var(--v43-red);
+	font-weight: 950;
+}
+.benefitGrid strong {
+	display: block;
+	font-size: 11px;
+	text-transform: uppercase;
+}
+.benefitGrid span {
+	display: block;
+	color: #66717b;
+	font-size: 10px;
+	margin-top: 3px;
+}
+.inventoryPremium {
+	padding: 18px clamp(18px, 3vw, 48px) 50px !important;
+}
+.inventoryPremium .wrap {
+	width: min(1480px, 100%);
+	max-width: none;
+}
+.inventoryPremium .sectionHead {
+	align-items: end;
+	margin-bottom: 18px;
+}
+.inventoryPremium .sectionHead h2 {
+	font-size: 32px;
+	margin: 4px 0;
+}
+.inventoryViewAll {
+	font-size: 11px;
+	font-weight: 950;
+	text-transform: uppercase;
+}
+.inventoryPremium .grid {
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 13px;
+}
+.inventoryPremium .card {
+	border-radius: 8px;
+	border: 1px solid #d6dde3;
+	box-shadow: 0 5px 16px #0001;
+	background: #fff;
+}
+.inventoryPremium .photo {
+	height: 148px;
+	aspect-ratio: auto;
+	background: #0b1823;
+}
+.inventoryPremium .cardBody {
+	padding: 12px;
+}
+.inventoryPremium .carTitle {
+	font-size: 14px;
+	line-height: 1.18;
+	min-height: 34px;
+}
+.inventoryPremium .price {
+	font-size: 22px;
+}
+.inventoryPremium .facts {
+	font-size: 9px;
+}
+.inventoryPremium .down {
+	font-size: 10px;
+}
+.cardButtons {
+	gap: 6px;
+}
+.cardButtons span {
+	min-height: 32px;
+	border-radius: 4px;
+	font-size: 8px;
+}
+.financePremium {
+	background: #06111d;
+	padding: 42px clamp(18px, 3vw, 48px) 56px;
+}
+.financePremium .wrap {
+	width: min(1480px, 100%);
+}
+.financePremium h2 {
+	font-size: 31px;
+}
+.financeSteps {
+	gap: 12px;
+}
+.financeSteps article {
+	border-radius: 8px;
+	padding: 18px;
+}
+.trustPremium {
+	background: #fff;
+	padding: 18px clamp(18px, 3vw, 48px);
+}
+.trustPremium .wrap {
+	width: min(1480px, 100%);
+}
+.trustPremium .trust {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+	border: 0;
+	box-shadow: none;
+}
+.trustPremium .trust > div {
+	display: block;
+	padding: 18px;
+}
+.premiumFooter {
+	background: #03070b;
+	padding: 25px clamp(18px, 3vw, 48px) 84px;
+}
+.v43Intro {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	background: radial-gradient(circle at 58% 46%, #14283d, #020408 70%);
+	overflow: hidden;
+	opacity: 1;
+	visibility: visible;
+	transition: opacity .42s, visibility .42s;
+}
+.v43Intro.out {
+	opacity: 0;
+	visibility: hidden;
+}
+.v43IntroBg {
+	position: absolute;
+	inset: -8%;
+	background: url("https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg")
+		64% center / cover no-repeat;
+	filter: brightness(0.23) blur(1px);
+	animation: v43IntroBg 2.6s both;
+}
+.v43IntroSmoke {
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(
+		ellipse at 55% 72%,
+		#dce9f12b 0,
+		#ffffff12 18%,
+		transparent 54%
+	);
+	filter: blur(18px);
+	animation: v43Smoke 2.4s both;
+}
+.v43IntroCar {
+	position: absolute;
+	right: -16%;
+	bottom: -4%;
+	width: 74%;
+	height: 75%;
+	background: url("https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg")
+		73% 62% / 180% auto no-repeat;
+	clip-path: polygon(18% 22%, 100% 10%, 100% 92%, 4% 92%, 0 58%);
+	filter: drop-shadow(0 25px 28px #000) saturate(1.14);
+	animation: v43CarSweep 1.72s .18s cubic-bezier(0.12, 0.83, 0.21, 1) both;
+}
+.v43IntroLogo {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 190px;
+	transform: translate(-50%, -50%) scale(0.82);
+	opacity: 0;
+	filter: drop-shadow(0 10px 30px #000) drop-shadow(0 0 18px #168af44f);
+	animation: v43LogoPop .5s .16s forwards;
+	will-change: left, top, width, transform, opacity;
+}
+.v43Flare {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 0 38px 18px #62b5ff80;
+	opacity: 0;
+	animation: v43Flare .7s 1.4s both;
+}
+.v43Skip {
+	position: absolute;
+	right: 18px;
+	bottom: 18px;
+	border: 1px solid #ffffff50;
+	background: #08121dcc;
+	color: #fff;
+	border-radius: 999px;
+	padding: 10px 14px;
+	font-size: 11px;
+	font-weight: 850;
+	z-index: 4;
+}
+@keyframes v43IntroBg {
+	0% {
+		transform: scale(1.15);
+		opacity: 0;
+	}
+	30% {
+		opacity: 0.9;
+	}
+	100% {
+		transform: scale(1.02);
+		opacity: 0.5;
+	}
+}
+@keyframes v43Smoke {
+	0% {
+		opacity: 0;
+		transform: scale(0.7);
+	}
+	45% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0.15;
+		transform: scale(1.32);
+	}
+}
+@keyframes v43CarSweep {
+	0% {
+		opacity: 0;
+		transform: translate3d(46%, 10%, 0) scale(1.23) rotate(-1deg);
+		filter: blur(5px) saturate(1.1);
+	}
+	35% {
+		opacity: 1;
+	}
+	72% {
+		transform: translate3d(-16%, -3%, 0) scale(1.02);
+	}
+	100% {
+		opacity: 0.12;
+		transform: translate3d(-78%, -17%, 0) scale(0.72);
+	}
+}
+@keyframes v43LogoPop {
+	to {
+		opacity: 1;
+		transform: translate(-50%, -50%) scale(1);
+	}
+}
+@keyframes v43Flare {
+	0% {
+		opacity: 0;
+		transform: scale(0.2);
+	}
+	45% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+		transform: scale(5);
+	}
+}
+.stickyCtaBar {
+	display: none;
+}
+@media (max-width: 1120px) {
+	.inventoryPremium .grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+	.premiumHeader .navlinks {
+		gap: 15px;
+	}
+	.premiumHeader .navlinks a[href="/dealer/login"] {
+		display: none;
+	}
+}
+@media (max-width: 900px) {
+	.premiumHeader,
+	.premiumHeader .nav {
+		height: 80px;
+	}
+	.premiumHeader .nav {
+		grid-template-columns: 48px 1fr 48px;
+		padding: 0 14px;
+	}
+	.premiumHeader .navlinks {
+		display: none;
+	}
+	.logoBrand {
+		justify-self: center;
+		height: 80px;
+		width: auto;
+	}
+	.logoBrand img {
+		max-height: 68px;
+		max-width: 132px;
+	}
+	.mobileMenuButton,
+	.mobileCallButton {
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+	}
+	.mobileMenuButton {
+		justify-self: end;
+	}
+	.mobileCallButton {
+		justify-self: start;
+	}
+	.premiumHero {
+		min-height: 520px;
+	}
+	.premiumHero .heroContent {
+		width: 54vw;
+		padding-top: 66px;
+		padding-left: 22px;
+	}
+	.benefitGrid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.benefitGrid article:nth-child(2) {
+		border-right: 0;
+	}
+	.inventoryPremium .grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+	.financeSteps,
+	.trustPremium .trust {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (max-width: 620px) {
+	body {
+		padding-bottom: 58px;
+	}
+	.commandStrip {
+		height: 28px;
+		font-size: 8px;
+	}
+	.commandStrip .wrap {
+		justify-content: center;
+		gap: 8px;
+	}
+	.commandStrip span:nth-child(2) {
+		display: none;
+	}
+	.premiumHero {
+		min-height: 565px;
+	}
+	.premiumHero .heroPhoto {
+		height: 286px;
+		inset: 0 0 auto 0;
+		background-size: 142% 112%;
+		background-position: 100% center;
+	}
+	.premiumHero .heroPhoto:after {
+		background: linear-gradient(180deg, transparent 26%, #03070b 100%);
+	}
+	.premiumHero .heroContent {
+		width: 100%;
+		padding: 274px 14px 28px;
+		margin: 0;
+	}
+	.premiumHero h1 {
+		font-size: 42px;
+	}
+	.premiumHero .lede {
+		font-size: 14px;
+		line-height: 1.42;
+		margin: 11px 0;
+	}
+	.premiumHero .actions {
+		display: grid;
+	}
+	.premiumHero .cta {
+		width: 100%;
+	}
+	.heroCall {
+		display: none;
+	}
+	.benefitGrid {
+		transform: none;
+		margin: 0;
+		grid-template-columns: repeat(2, 1fr);
+		border-radius: 0;
+		box-shadow: none;
+	}
+	.benefitGrid article {
+		padding: 12px 8px;
+	}
+	.benefitGrid strong {
+		font-size: 8px;
+	}
+	.benefitGrid span {
+		font-size: 7px;
+	}
+	.inventoryPremium {
+		padding: 22px 14px 30px !important;
+	}
+	.inventoryPremium .grid {
+		display: flex;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		gap: 12px;
+	}
+	.inventoryPremium .card {
+		min-width: 74%;
+		scroll-snap-align: start;
+	}
+	.financePremium {
+		padding: 30px 14px 42px;
+	}
+	.financeSteps {
+		grid-template-columns: 1fr;
+	}
+	.trustPremium {
+		padding: 14px;
+	}
+	.trustPremium .trust {
+		grid-template-columns: 1fr 1fr;
+	}
+	.stickyCtaBar {
+		display: grid;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 110;
+		grid-template-columns: repeat(4, 1fr);
+		background: #060b11;
+		border-top: 1px solid #283844;
+		padding: 0;
+		transform: none;
+		width: 100%;
+		border-radius: 0;
+		box-shadow: none;
+	}
+	.stickyCtaBar a {
+		min-height: 58px;
+		display: grid;
+		place-items: center;
+		border-right: 1px solid #ffffff15;
+		font-size: 9px;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+	.stickyCtaBar .stickyContact {
+		background: var(--v43-red);
+	}
+	.stickyCtaBar .stickyPrimary,
+	.stickyCtaBar .stickySecondary,
+	.stickyCtaBar .stickyCars {
+		background: #0c1b29;
+		color: #fff;
+	}
+	.premiumFooter {
+		padding-bottom: 78px;
+	}
+	.v43IntroLogo {
+		width: 132px;
+	}
+	.v43IntroCar {
+		width: 132%;
+		right: -55%;
+		bottom: 9%;
+		height: 58%;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.v43Intro {
+		display: none !important;
+	}
+}
