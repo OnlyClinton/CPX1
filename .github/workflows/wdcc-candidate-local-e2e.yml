@@ -25,6 +25,15 @@ jobs:
         shell: bash
         run: |
           cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/wdcc-candidate-local-e2e.sh')
+          s=p.read_text()
+          s=s.replace("page.getByLabel('Email').fill", "page.locator('input[name=\"email\"]').fill")
+          s=s.replace("page.getByLabel('Name').fill", "page.locator('input[name=\"name\"]').fill")
+          s=s.replace("page.getByLabel('Phone').fill", "page.locator('input[name=\"phone\"]').fill")
+          p.write_text(s)
+          PY
           git checkout --detach "$CANDIDATE_SHA"
       - name: Run candidate locally against canonical ledger
         id: e2e
