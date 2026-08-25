@@ -1,0 +1,255 @@
+name: WDCC Dealer Ready Double Acceptance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-ready-double-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-ready-double-acceptance
+  cancel-in-progress: true
+
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Pull dealer production bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/dealer.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env
+          grep -q '^SESSION_SECRET=' /tmp/dealer.env
+
+      - name: Create short-lived authorized dealer session
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer.env; set +a
+          node <<'NODE' > /tmp/session.env
+          const crypto=require('crypto');
+          const {get}=require('@vercel/blob');
+          (async()=>{
+            const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});
+            if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+            const chunks=[];for await(const c of r.stream)chunks.push(c);
+            const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            const roles=new Set(['dealer_agent','tenant_admin','platform_admin']);
+            const u=(s.users||[]).find(x=>roles.has(String(x.role||'').toLowerCase())&&x.status!=='disabled'&&!x.disabled);
+            if(!u)throw Error('NO_ACTIVE_AUTHORIZED_DEALER_USER');
+            const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+30*60*1000})).toString('base64url');
+            const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');
+            console.log(`QA_COOKIE=${raw}.${sig}`);
+            console.log(`QA_USER_ID=${u.id}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          cat /tmp/session.env >> "$GITHUB_ENV"
+
+      - name: Verify live dealer session API
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          test "$code" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Route verification and two complete dealer acceptances
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+
+          const dealer=process.env.DEALER;
+          const storefront=process.env.STOREFRONT;
+          const cookie=process.env.QA_COOKIE;
+          const runId=process.env.RUN_ID;
+          const customerMarkers=/Bad credit\?|No credit\?|Vehicles ready now\.|Schedule a test drive/i;
+          const dealerMarkers=/WDCC\s*[·-]?\s*DEALER PORTAL|Inventory Operations|Dashboard|All Vehicles|Add \/ Edit Vehicle|Secure dealer/i;
+          const delay=ms=>new Promise(r=>setTimeout(r,ms));
+
+          async function requestJson(ctx,method,url,data){
+            const opts={method,headers:{Cookie:`__Host-wdcc_session=${cookie}`}};
+            if(data!==undefined){opts.headers['content-type']='application/json';opts.data=data;}
+            const r=await ctx.request.fetch(url,opts);
+            let j={}; try{j=await r.json()}catch{}
+            return {r,j};
+          }
+
+          async function waitDealerItem(ctx,id,predicate,label){
+            for(let i=0;i<15;i++){
+              const {r,j}=await requestJson(ctx,'GET',`${dealer}/api/inventory`);
+              if(!r.ok())throw Error(`${label}_DEALER_INVENTORY_HTTP_${r.status()}`);
+              const item=(j.items||[]).find(v=>String(v.id)===String(id));
+              if(item&&predicate(item))return item;
+              await delay(1000);
+            }
+            throw Error(`${label}_DEALER_ITEM_TIMEOUT`);
+          }
+
+          async function waitPublic(ctx,id,present,label){
+            for(let i=0;i<20;i++){
+              const r=await ctx.request.get(`${storefront}/api/inventory?qa_ready=${encodeURIComponent(runId)}-${Date.now()}`);
+              if(!r.ok())throw Error(`${label}_PUBLIC_API_HTTP_${r.status()}`);
+              const j=await r.json();
+              const found=(j.items||[]).some(v=>String(v.id)===String(id));
+              if(found===present)return j;
+              await delay(1000);
+            }
+            throw Error(`${label}_PUBLIC_${present?'PRESENCE':'ABSENCE'}_TIMEOUT`);
+          }
+
+          async function cleanup(ctx,id,stock,label){
+            if(!id)return;
+            const hiddenStock=`R36TEST-${stock}`.slice(0,120);
+            const {r,j}=await requestJson(ctx,'PATCH',`${dealer}/api/inventory/${encodeURIComponent(id)}`,{status:'archived',stock:hiddenStock});
+            if(!r.ok())throw Error(`${label}_ARCHIVE_HTTP_${r.status()}_${j.error||''}`);
+            await waitDealerItem(ctx,id,v=>String(v.status||'').toLowerCase()==='archived',`${label}_ARCHIVE`);
+            await waitPublic(ctx,id,false,`${label}_ARCHIVE`);
+          }
+
+          (async()=>{
+            fs.writeFileSync('/tmp/wdcc-qa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+            const browser=await chromium.launch({headless:true});
+            const result={ok:false,routes:{},runs:[]};
+            try{
+              // Unauthenticated domain sanity: dealer host must not serve the customer storefront.
+              const publicCtx=await browser.newContext({viewport:{width:390,height:844}});
+              const pub=await publicCtx.newPage();
+              for(const [name,path] of [['root','/'],['login','/dealer/login']]){
+                const resp=await pub.goto(`${dealer}${path}`,{waitUntil:'domcontentloaded',timeout:60000});
+                if(!resp||resp.status()>=500)throw Error(`ROUTE_${name.toUpperCase()}_HTTP_${resp?.status()}`);
+                if(new URL(pub.url()).hostname!=='dealer.wedontcarecars.com')throw Error(`ROUTE_${name.toUpperCase()}_LEFT_DEALER_HOST_${pub.url()}`);
+                const text=await pub.locator('body').innerText().catch(()=> '');
+                if(customerMarkers.test(text))throw Error(`ROUTE_${name.toUpperCase()}_CUSTOMER_STOREFRONT_LEAK`);
+                result.routes[name]={status:resp.status(),url:pub.url(),dealerText:dealerMarkers.test(text)};
+              }
+              await publicCtx.close();
+
+              const ctx=await browser.newContext({viewport:{width:390,height:844}});
+              await ctx.addCookies([{name:'__Host-wdcc_session',value:cookie,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);
+              const page=await ctx.newPage();
+
+              for(const [name,path] of [['dashboard','/dealer/dashboard'],['inventory','/dealer/inventory'],['upload','/dealer/inventory/new']]){
+                const resp=await page.goto(`${dealer}${path}`,{waitUntil:'networkidle',timeout:60000});
+                if(!resp||resp.status()>=500||resp.status()===404)throw Error(`ROUTE_${name.toUpperCase()}_HTTP_${resp?.status()}`);
+                const host=new URL(page.url()).hostname;
+                if(host!=='dealer.wedontcarecars.com')throw Error(`ROUTE_${name.toUpperCase()}_LEFT_DEALER_HOST_${page.url()}`);
+                if(page.url().includes('/dealer/login'))throw Error(`ROUTE_${name.toUpperCase()}_AUTH_REDIRECT`);
+                const text=await page.locator('body').innerText();
+                if(customerMarkers.test(text))throw Error(`ROUTE_${name.toUpperCase()}_CUSTOMER_STOREFRONT_LEAK`);
+                if(!dealerMarkers.test(text))throw Error(`ROUTE_${name.toUpperCase()}_MISSING_DEALER_PORTAL_MARKER`);
+                result.routes[name]={status:resp.status(),url:page.url(),dealerText:true};
+              }
+
+              for(let n=1;n<=2;n++){
+                const label=`RUN${n}`;
+                const stock=`WDCC-QA-READY-${runId}-${n}`;
+                const model=`QA-READY-${runId}-${n}`;
+                let id='';
+                const run={run:n,stock,model,draft:false,photo:false,published:false,dealerVisible:false,publicVisible:false,archived:false,publicRemoved:false};
+                try{
+                  await page.goto(`${dealer}/dealer/dashboard`,{waitUntil:'networkidle',timeout:60000});
+                  if(page.url().includes('/dealer/login'))throw Error(`${label}_DASHBOARD_AUTH_REDIRECT`);
+                  const dashText=await page.locator('body').innerText();
+                  if(customerMarkers.test(dashText)||!dealerMarkers.test(dashText))throw Error(`${label}_DASHBOARD_NOT_DEALER_PORTAL`);
+
+                  await page.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle',timeout:60000});
+                  if(page.url().includes('/dealer/login'))throw Error(`${label}_UPLOAD_AUTH_REDIRECT`);
+                  await page.getByLabel('YEAR').fill('2021');
+                  await page.getByLabel('MAKE').fill('Toyota');
+                  await page.getByLabel('MODEL').fill(model);
+                  await page.getByLabel('TRIM').fill('AUTOMATED QA ONLY');
+                  await page.getByLabel('PRICE').fill('12345');
+                  await page.getByLabel('DOWN PAYMENT').fill('1500');
+                  await page.getByLabel('MILEAGE').fill('54321');
+                  await page.getByLabel('STOCK #').fill(stock);
+                  await page.getByLabel('DESCRIPTION').fill(`Automated WDCC dealer readiness acceptance ${label}. QA ONLY - archive after verification.`);
+                  await page.locator('input[type=file][multiple]').first().setInputFiles('/tmp/wdcc-qa.png');
+                  await page.getByRole('button',{name:/Save Draft/i}).first().click();
+                  await page.waitForURL(/\/dealer\/inventory\?saved=draft/,{timeout:60000});
+
+                  let inv=await requestJson(ctx,'GET',`${dealer}/api/inventory`);
+                  if(!inv.r.ok())throw Error(`${label}_DEALER_INVENTORY_HTTP_${inv.r.status()}`);
+                  let item=(inv.j.items||[]).find(v=>v.stock===stock);
+                  if(!item)throw Error(`${label}_DRAFT_NOT_IN_DEALER_INVENTORY`);
+                  id=String(item.id);
+                  if(String(item.status||'').toLowerCase()!=='draft')throw Error(`${label}_NOT_DRAFT_${item.status}`);
+                  if(!Array.isArray(item.photoPathnames)||item.photoPathnames.length<1)throw Error(`${label}_PHOTO_NOT_PERSISTED`);
+                  run.draft=true; run.photo=true; run.id=id;
+                  await waitPublic(ctx,id,false,`${label}_DRAFT`);
+
+                  let pub=await requestJson(ctx,'PATCH',`${dealer}/api/inventory/${encodeURIComponent(id)}`,{status:'published'});
+                  if(!pub.r.ok())throw Error(`${label}_PUBLISH_HTTP_${pub.r.status()}_${pub.j.error||''}`);
+                  item=await waitDealerItem(ctx,id,v=>String(v.status||'').toLowerCase()==='published',`${label}_PUBLISH`);
+                  run.published=true; run.dealerVisible=true;
+                  await waitPublic(ctx,id,true,`${label}_PUBLISH`);
+                  run.publicVisible=true;
+
+                  const publicPage=await ctx.newPage();
+                  await publicPage.goto(`${storefront}/inventory?qa_ready=${encodeURIComponent(runId)}-${n}`,{waitUntil:'networkidle',timeout:60000});
+                  const uiText=await publicPage.locator('body').innerText();
+                  if(!uiText.includes(model))throw Error(`${label}_PUBLIC_INVENTORY_UI_MISSING_VEHICLE`);
+                  await publicPage.close();
+
+                  await cleanup(ctx,id,stock,label);
+                  run.archived=true; run.publicRemoved=true;
+                  result.runs.push(run);
+                }catch(e){
+                  try{if(id)await cleanup(ctx,id,stock,`${label}_FAILSAFE`)}catch(cleanErr){console.error('FAILSAFE_CLEANUP_ERROR',cleanErr)}
+                  throw e;
+                }
+              }
+
+              if(result.runs.length!==2||result.runs.some(r=>!r.draft||!r.photo||!r.published||!r.dealerVisible||!r.publicVisible||!r.archived||!r.publicRemoved))throw Error('DOUBLE_ACCEPTANCE_INCOMPLETE');
+              result.ok=true;
+              fs.writeFileSync('/tmp/dealer-ready-result.json',JSON.stringify(result,null,2));
+              await ctx.close();
+            }finally{
+              await browser.close();
+            }
+          })().catch(e=>{
+            const out={ok:false,error:String(e&&e.message||e)};
+            fs.writeFileSync('/tmp/dealer-ready-result.json',JSON.stringify(out,null,2));
+            console.error(e);
+            process.exit(1);
+          });
+          NODE
+          cat /tmp/dealer-ready-result.json
+          jq -e '.ok==true and (.runs|length)==2 and all(.runs[]; .draft and .photo and .published and .dealerVisible and .publicVisible and .archived and .publicRemoved)' /tmp/dealer-ready-result.json >/dev/null
+
+      - name: Final acceptance marker
+        run: echo 'WDCC_DEALER_READY_DOUBLE_ACCEPTANCE=PASS'
