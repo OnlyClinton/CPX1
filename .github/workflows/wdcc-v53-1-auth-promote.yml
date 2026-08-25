@@ -30,7 +30,7 @@ env:
 jobs:
   promote:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
@@ -66,20 +66,40 @@ jobs:
           grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-before.html
           curl -fsS -L "$STAGE/dealer" -o /tmp/stage-dealer.html
           grep -q 'SALES COMMAND' /tmp/stage-dealer.html
-          grep -q 'OVERDUE' /tmp/stage-dealer.html
-          grep -q 'CUSTOMER LIVE' /tmp/stage-dealer.html
-          grep -q 'NOTIFY GAPS' /tmp/stage-dealer.html
           echo 'ok=true' >> "$GITHUB_OUTPUT"
 
-      - name: Install identity and deployment runtime
+      - name: Install identity browser and deployment runtime
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npm install --global vercel@59.3.0 >/dev/null
-          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest >/dev/null
-          mkdir -p .vercel
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/screens
           printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+          cat > /tmp/v531-ui-check.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const base=process.env.BASE,email=process.env.QA_EMAIL,password=process.env.QA_PASSWORD,label=process.env.LABEL||'target';
+          if(!base||!email||!password)throw Error('UI_CHECK_ENV_MISSING');
+          const browser=await chromium.launch({headless:true});
+          try{
+            const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();
+            await page.goto(`${base}/dealer`,{waitUntil:'networkidle'});
+            await page.locator('input[autocomplete="username"]').fill(email);
+            await page.locator('input[autocomplete="current-password"]').fill(password);
+            await page.getByRole('button',{name:/sign in/i}).click();
+            await page.waitForFunction(()=>document.body.innerText.includes('NEXT BEST MOVE')&&document.body.innerText.includes('OVERDUE')&&document.body.innerText.includes('CUSTOMER LIVE')&&document.body.innerText.includes('NOTIFY GAPS'),null,{timeout:30000});
+            await page.screenshot({path:`/tmp/screens/${label}-dashboard.png`,fullPage:true});
+            await page.goto(`${base}/dealer/leads`,{waitUntil:'networkidle'});
+            await page.waitForFunction(()=>document.body.innerText.includes('OVERDUE')&&document.body.innerText.includes('NOTIFY'),null,{timeout:30000});
+            await page.screenshot({path:`/tmp/screens/${label}-leads.png`,fullPage:true});
+            await page.goto(`${base}/dealer/inventory`,{waitUntil:'networkidle'});
+            await page.waitForFunction(()=>document.body.innerText.includes('Customer Live'),null,{timeout:30000});
+            await page.screenshot({path:`/tmp/screens/${label}-inventory.png`,fullPage:true});
+            console.log(JSON.stringify({ok:true,base,label}));
+          }finally{await browser.close()}
+          NODE
 
       - name: Create short-lived dealer acceptance identity
         id: identity
@@ -117,6 +137,7 @@ jobs:
             test "$c" = 200
             jq -e '.ok==true' /tmp/stage-feed.json >/dev/null
           done
+          BASE="$STAGE" LABEL=stage QA_EMAIL="$QA_EMAIL" QA_PASSWORD="$QA_PASSWORD" node /tmp/v531-ui-check.mjs
           echo 'ok=true' >> "$GITHUB_OUTPUT"
 
       - name: Capture live Cloudflare rollback point and route
@@ -133,7 +154,7 @@ jobs:
           jq -e '.success==true and (.result|length)==1 and .result[0].proxied==true' /tmp/dealer-dns.json >/dev/null
           curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$LIVE_WORKER/routes" -o /tmp/routes.json
           jq -e --arg p 'dealer.wedontcarecars.com/*' --arg s "$LIVE_WORKER" '.success==true and any(.result[]?;.pattern==$p and .script==$s)' /tmp/routes.json >/dev/null
-          npx wrangler deployments status --name "$LIVE_WORKER" --json -o /tmp/live-deployments.json 2>/dev/null || npx wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/live-deployments.json
+          npx wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/live-deployments.json
           OLD_VERSION="$(jq -r '[.. | objects | select((.percentage? // 0)==100) | (.version_id? // .versionId? // empty)] | first // empty' /tmp/live-deployments.json)"
           if [ -z "$OLD_VERSION" ]; then OLD_VERSION="$(jq -r '[.. | objects | .version_id? // .versionId? // empty] | map(select(type=="string" and length>0)) | first // empty' /tmp/live-deployments.json)"; fi
           test -n "$OLD_VERSION"
@@ -194,16 +215,22 @@ jobs:
             test "$c" = 200
           done
           jq -e '.authenticated==true' <(curl -sS -b /tmp/live.cookies "$DEALER/api/auth/session") >/dev/null
-          curl -fsS -L "$DEALER/dealer" -o /tmp/live-dealer.html
-          grep -q 'OVERDUE' /tmp/live-dealer.html
-          grep -q 'CUSTOMER LIVE' /tmp/live-dealer.html
-          grep -q 'NOTIFY GAPS' /tmp/live-dealer.html
+          BASE="$DEALER" LABEL=live QA_EMAIL="$QA_EMAIL" QA_PASSWORD="$QA_PASSWORD" node /tmp/v531-ui-check.mjs
           curl -fsS -L "$CUSTOMER/?v531-live-after=$GITHUB_RUN_ID" -o /tmp/customer-after.html
           grep -q 'intro-sequence intro-impact' /tmp/customer-after.html
           grep -q 'mobile-action-bar' /tmp/customer-after.html
           grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
           trap - ERR INT TERM
           echo 'ok=true' >> "$GITHUB_OUTPUT"
+
+      - name: Upload authenticated visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-v53-1-auth-promote-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Remove short-lived dealer acceptance identity
         id: cleanup
