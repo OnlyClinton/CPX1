@@ -24,7 +24,6 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_SCOPE: cpxagency
       VERCEL_PROJECT: wdcc-v32-storefront
-      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       RELEASE_BRANCH: release/wdcc-live-screenshot-dealer-20260825
       APEX: wedontcarecars.com
       WWW: www.wedontcarecars.com
@@ -136,4 +135,9 @@ jobs:
           URL: ${{ steps.deploy.outputs.url }}
           VERIFIED: ${{ steps.verify.outputs.verified }}
         shell: bash
-        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC description live fix $GITHUB_RUN_ID" --body "Source: \`${SOURCE_SHA:-unknown}\`\nDeployment: \`${URL:-not-created}\`\nPublic verification: \`${VERIFIED:-false}\`" || true
+        run: |
+          source_sha="${SOURCE_SHA:-unknown}"
+          deploy_url="${URL:-not-created}"
+          verified="${VERIFIED:-false}"
+          body="Source ${source_sha}; Deployment ${deploy_url}; Public verification ${verified}"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC description live fix $GITHUB_RUN_ID" --body "$body" || true
