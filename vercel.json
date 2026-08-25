@@ -9,7 +9,7 @@
   "crons": [
     {
       "path": "/api/ops/retry",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
