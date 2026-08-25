@@ -1,0 +1,58 @@
+name: Patch WDCC Full Acceptance Binding
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-full-live-acceptance-binding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebind full acceptance to canonical Phoenix Blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-full-live-acceptance-v2.yml')
+          s=p.read_text()
+          replacements={
+            'DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB':'CANONICAL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR',
+            '- name: Pull canonical dealer Blob binding':'- name: Pull canonical Phoenix Blob binding',
+            'mkdir -p /tmp/dealer/.vercel':'mkdir -p /tmp/canonical/.vercel',
+            '"$DEALER_PROJECT_ID" > /tmp/dealer/.vercel/project.json':'"$CANONICAL_PROJECT_ID" > /tmp/canonical/.vercel/project.json',
+            'cd /tmp/dealer':'cd /tmp/canonical',
+            'vercel env pull /tmp/dealer.env':'vercel env pull /tmp/canonical.env',
+            "grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/dealer.env":"grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/canonical.env",
+            'set -a; . /tmp/dealer.env; set +a':'set -a; . /tmp/canonical.env; set +a',
+            'set -a; . /tmp/dealer.env; . /tmp/qa.env; set +a':'set -a; . /tmp/canonical.env; . /tmp/qa.env; set +a',
+          }
+          for old,new in replacements.items():
+            if old not in s:
+              raise SystemExit(f'patch target missing: {old}')
+            s=s.replace(old,new)
+          if 'DEALER_PROJECT_ID:' in s or '/tmp/dealer.env' in s or '/tmp/dealer/.vercel' in s:
+            raise SystemExit('stale dealer binding reference remains')
+          p.write_text(s)
+          PY
+          git diff --check
+          git diff -- .github/workflows/wdcc-full-live-acceptance-v2.yml
+      - name: Commit binding repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/wdcc-full-live-acceptance-v2.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'Use canonical Phoenix Blob binding for WDCC full acceptance'
+          git push origin HEAD:main
