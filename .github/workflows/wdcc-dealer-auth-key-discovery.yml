@@ -1,0 +1,27 @@
+name: WDCC Dealer Auth Key Discovery
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-dealer-auth-key-discovery.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+    steps:
+      - name: Pull env key names only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          for spec in dealer:prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB storefront:prj_We7xkAkB5Qy31Pt17USSkQFE0u7h auth:prj_a3oclCcy4sbA2tge4BX7VAKXE4KR; do
+            name=${spec%%:*}; id=${spec#*:}; d=/tmp/$name; mkdir -p "$d/.vercel"; printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$id" > "$d/.vercel/project.json"; cd "$d";
+            env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull "/tmp/$name.env" --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null;
+            echo "=== $name ===";
+            sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "/tmp/$name.env" | grep -Ei 'DEALER|ADMIN|USER|PASS|AUTH|LOGIN|TEST|SESSION|BLOB|STATE' | sort -u || true;
+          done
