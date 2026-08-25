@@ -1,3 +1,4 @@
+# emergency rollback trigger 2026-08-25T12:16Z
 name: Pin exact immutable 2vfD apex
 on:
   push:
