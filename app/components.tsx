@@ -55,21 +55,22 @@ export function Header(){
         <Link href="/dealer/login">DEALER PORTAL</Link>
         <Link href="/contact?source=header-contact">CONTACT</Link>
         <TrackedCallLink className="premiumPhone" source="header-phone">☎ <b>813-516-4752</b></TrackedCallLink>
-        <Link className="premiumApply" href="/get-approved?source=header-get-approved">GET PRE-APPROVED</Link>
+        <Link className="premiumApply" href="/get-approved?source=header-preapproval">GET PRE-APPROVED</Link>
       </div>
     </div>
     {open&&<nav id="mobileHeaderMenu" className="mobileHeaderMenu">
       <Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link>
-      <Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link>
-      <Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link>
+      <Link href="/schedule-test-drive?source=mobile-menu-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link>
+      <Link href="/get-approved?source=mobile-menu-preapproval" onClick={()=>setOpen(false)}>GET PRE-APPROVED</Link>
       <Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link>
       <Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link>
-      <Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
+      <Link href="/contact?source=mobile-menu-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
     </nav>}
     </header>
     <nav className="stickyCtaBar compositeMobileDock" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink>
-      <Link className="stickyContact" href="/get-approved?source=sticky-get-approved"><span>GET PRE-APPROVED</span></Link>
+      <Link className="stickyDrive" href="/schedule-test-drive?source=sticky-test-drive"><span>TEST DRIVE</span></Link>
+      <Link className="stickyContact" href="/get-approved?source=sticky-preapproval"><span>GET PRE-APPROVED</span></Link>
+      <TrackedCallLink className="stickyCall" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink>
     </nav>
   </>
 }
@@ -85,21 +86,28 @@ function customerVisible(v:any){
   const status=String(v?.status||"").toLowerCase();
   const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x).toUpperCase());
   const stock=String(v?.stock||v?.stock_id||"").toUpperCase();
-  return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST");
+  const trace=`${stock} ${v?.make||""} ${v?.model||""}`.toUpperCase();
+  return status==="published"&&v?.archived!==true&&v?.qa!==true&&v?.customerVisible!==false&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST")&&!/(^|[\s_-])(QA|TEST)([\s_-]|$)/.test(trace);
+}
+
+function fallbackPhoto(v:any){
+  const slug=`${v?.year||""}-${v?.make||""}-${v?.model||""}`.toLowerCase();
+  if(slug.includes("350z"))return "/wdcc-hero-v2.webp";
+  return "/assets/hero-car.webp";
 }
 
 export function VehicleGrid({limit}:{limit?:number}){
   const[items,setItems]=useState<any[]>([]),[loading,setLoading]=useState(true);
-  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>setItems((j.items||j.inventory||[]).filter(customerVisible))).catch(()=>{}).finally(()=>setLoading(false))},[]);
+  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>{if(!r.ok)throw Error(`inventory_${r.status}`);return r.json()}).then(j=>setItems((j.items||j.inventory||[]).filter(customerVisible))).catch(()=>{}).finally(()=>setLoading(false))},[]);
   const shown=limit?items.slice(0,limit):items;
-  if(loading)return <div className="grid">{[1,2,3,4,5].map(i=><div className="card" key={i}><div className="photo">LOADING VEHICLE…</div><div className="cardBody"><div className="carTitle">Inventory loading</div></div></div>)}</div>;
+  if(loading)return <div className="grid">{[1,2,3,4,5].map(i=><div className="card" key={i}><div className="photo skeletonPhoto"/><div className="cardBody"><div className="carTitle">Loading inventory…</div></div></div>)}</div>;
   return <div className="grid">{shown.length?shown.map(v=><article className="card" key={v.id}>
-    <Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{v.primaryPhotoPathname?<img src={`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`} alt={`${v.year} ${v.make} ${v.model}`}/>:v.primary_image_url?<img src={v.primary_image_url} alt={`${v.year} ${v.make} ${v.model}`}/>:"PHOTOS COMING"}</Link>
+    <Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}><img src={v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:v.primary_image_url||v.photoUrl||v.image||fallbackPhoto(v)} alt={`${v.year} ${v.make} ${v.model}`}/></Link>
     <div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div>
       <div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div>
       <div className="price">${Number(v.price||0).toLocaleString()}</div>
       {(v.downPayment??v.down_payment)!=null&&<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>}
-      <div className="cardButtons"><Link href={`/vehicle/${v.id}`}><span>VIEW VEHICLE</span></Link><Link href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(v.id)}`}><span>GET APPROVED</span></Link></div>
+      <div className="cardButtons"><Link href={`/vehicle/${v.id}`}><span>VIEW DETAILS</span></Link><Link href={`/schedule-test-drive?source=inventory-card&vehicle=${encodeURIComponent(v.id)}`}><span>TEST DRIVE</span></Link></div>
     </div>
-  </article>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
+  </article>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call Sean for vehicles being prepared now.</p><TrackedCallLink source="inventory-empty-call">813-516-4752</TrackedCallLink></div>}</div>
 }
