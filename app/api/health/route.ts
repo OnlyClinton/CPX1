@@ -11,6 +11,12 @@ function canonicalRuntime(){
   return process.env.VERCEL_PROJECT_ID===WDCC_PHOENIX_PROJECT_ID||role==="backend"||role==="api"||role==="canonical";
 }
 
+function provider(){
+  if(process.env.RAILWAY_DEPLOYMENT_ID||process.env.RAILWAY_GIT_COMMIT_SHA)return "railway";
+  if(process.env.VERCEL_PROJECT_ID)return "vercel";
+  return "portable";
+}
+
 export async function GET(){
   const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
 
@@ -18,13 +24,13 @@ export async function GET(){
     const storage=blobAuthority();
     const session=Boolean((process.env.SESSION_SECRET||"").trim());
     if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",provider:process.env.RAILWAY_ENVIRONMENT?"railway":"vercel",commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",provider:provider(),commit},{status:503,headers});
     }
     try{
       const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,provider:process.env.RAILWAY_ENVIRONMENT?"railway":"vercel",commit},{status:200,headers});
+      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,provider:provider(),commit},{status:200,headers});
     }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",error:error instanceof Error?error.message:"state_read_failed",provider:process.env.RAILWAY_ENVIRONMENT?"railway":"vercel",commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
     }
   }
 
