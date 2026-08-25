@@ -17,11 +17,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ROOT='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/?_vercel_share=PIW8cpsl8kxqAlPKDqKSqvPK4kuGiRFg'
-          HOST='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app'
-          curl -fsSL -L -c /tmp/vcookie "$ROOT" -o /tmp/root.html
-          curl -fsSL -b /tmp/vcookie "$HOST/wdcc-logo-transparent.webp" -o public/wdcc-logo-transparent.webp
-          curl -fsSL -b /tmp/vcookie "$HOST/wdcc-hero-v2.webp" -o public/wdcc-hero-v2.webp
+          LOGO='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/wdcc-logo-transparent.webp?_vercel_share=gUOAh4QairMdJ6YTeFedOO5kP2sx8iRx'
+          HERO='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/wdcc-hero-v2.webp?_vercel_share=9m1F1wTisGT95EXbSclUAqTGEuZu8TIX'
+          curl -fsSL -L "$LOGO" -o public/wdcc-logo-transparent.webp
+          curl -fsSL -L "$HERO" -o public/wdcc-hero-v2.webp
+          echo "logo_bytes=$(stat -c '%s' public/wdcc-logo-transparent.webp)"
+          echo "hero_bytes=$(stat -c '%s' public/wdcc-hero-v2.webp)"
           test "$(stat -c '%s' public/wdcc-logo-transparent.webp)" = '47594'
           test "$(head -c 4 public/wdcc-logo-transparent.webp)" = 'RIFF'
           test "$(head -c 4 public/wdcc-hero-v2.webp)" = 'RIFF'
