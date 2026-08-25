@@ -1,0 +1,71 @@
+name: WDCC Promote Existing Dealer Candidate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-promote-existing-dealer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-existing-candidate-promotion
+  cancel-in-progress: false
+
+env:
+  CANDIDATE: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  SAFE_FALLBACK: wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  EXPECTED_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Preflight exact immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "https://$CANDIDATE/api/health?promote=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
+          curl -fsS "https://$CANDIDATE/api/inventory?promote=$GITHUB_RUN_ID" -o /tmp/inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
+          curl -sSI "https://$CANDIDATE/dealer" -o /tmp/dealer-headers.txt
+          grep -qi '^content-security-policy:' /tmp/dealer-headers.txt
+          grep -qi '^strict-transport-security: max-age=63072000; includeSubDomains; preload' /tmp/dealer-headers.txt
+          grep -qi '^x-frame-options: DENY' /tmp/dealer-headers.txt
+          echo 'EXISTING_CANDIDATE_PREFLIGHT=PASS'
+
+      - name: Promote dealer alias with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){
+            echo 'Dealer promotion failed; restoring safe fallback' >&2
+            vercel alias set "$SAFE_FALLBACK" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+          }
+          trap rollback ERR
+          vercel alias set "$CANDIDATE" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+          sleep 5
+          code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/health?promoted=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null
+          curl -fsS "https://$DEALER_DOMAIN/api/inventory?promoted=$GITHUB_RUN_ID" -o /tmp/live-inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null
+          curl -sSI "https://$DEALER_DOMAIN/dealer" -o /tmp/live-dealer-headers.txt
+          grep -qi '^content-security-policy:' /tmp/live-dealer-headers.txt
+          grep -qi '^strict-transport-security: max-age=63072000; includeSubDomains; preload' /tmp/live-dealer-headers.txt
+          grep -qi '^x-frame-options: DENY' /tmp/live-dealer-headers.txt
+          trap - ERR
+          echo 'WDCC_DEALER_EXISTING_CANDIDATE_PROMOTED=PASS'
