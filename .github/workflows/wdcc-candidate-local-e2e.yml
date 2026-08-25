@@ -21,42 +21,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Preserve and harden E2E harness then checkout exact candidate
+      - name: Preserve current harness then checkout exact candidate
         shell: bash
         run: |
           cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
-          python3 <<'PY'
-          from pathlib import Path
-          p=Path('/tmp/wdcc-candidate-local-e2e.sh')
-          s=p.read_text()
-          s=s.replace("page.getByLabel('Email').fill", "page.locator('input[name=\"email\"]').fill")
-          s=s.replace("page.getByLabel('Name').fill", "page.locator('input[name=\"name\"]').fill")
-          s=s.replace("page.getByLabel('Phone').fill", "page.locator('input[name=\"phone\"]').fill")
-          old="const qVehicle=v=>String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-');"
-          new="const qVehicle=v=>String(v?.status||'').toLowerCase()!=='archived'&&(String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-'));"
-          if old not in s: raise SystemExit('cleanup matcher patch target missing')
-          s=s.replace(old,new)
-          old='.ok==true and .degraded==false and .service=="wdcc-canonical-authority"'
-          new='.ok==true and .degraded==false and (.backend=="healthy" or .backend==null) and (.service=="wdcc-canonical-authority" or .service=="wdcc-hardened-dealer-facade")'
-          if old not in s: raise SystemExit('health identity patch target missing')
-          s=s.replace(old,new)
-          # Pull the signing secret from the canonical backend project explicitly.
-          old='LOCAL_SESSION_SECRET="$(openssl rand -base64 72 | tr -d \'\\n\')"\nexport LOCAL_SESSION_SECRET\nprintf \'::add-mask::%s\\n\' "$LOCAL_SESSION_SECRET"'
-          new='''mkdir -p /tmp/wdcc-backend/.vercel\nprintf '{"orgId":"%s","projectId":"%s"}\\n' "$ORG_ID" "$PHOENIX_ID" > /tmp/wdcc-backend/.vercel/project.json\n( cd /tmp/wdcc-backend && env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/wdcc-backend.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null )\nLOCAL_SESSION_SECRET="$(set -a; . /tmp/wdcc-backend.env; set +a; printf %s "$SESSION_SECRET")"\n[ "${#LOCAL_SESSION_SECRET}" -ge 32 ] || { echo "canonical SESSION_SECRET missing from backend project" >&2; exit 1; }\nexport LOCAL_SESSION_SECRET\nprintf '::add-mask::%s\\n' "$LOCAL_SESSION_SECRET"'''
-          if old not in s: raise SystemExit('session secret patch target missing')
-          s=s.replace(old,new)
-          old='test "$ready" = 1'
-          new='''if [ "$ready" != 1 ]; then\n  python3 - <<'PY2'\nimport json, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"health_readiness","health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
-          if old not in s: raise SystemExit('health patch target missing')
-          s=s.replace(old,new)
-          old='test "$AUTH_CODE" = 200\njq -e \'.authenticated==true\' /tmp/wdcc-auth.json >/dev/null'
-          new='''if [ "$AUTH_CODE" != 200 ] || ! jq -e '.authenticated==true' /tmp/wdcc-auth.json >/dev/null 2>&1; then\n  export AUTH_CODE\n  python3 - <<'PY2'\nimport json, os, pathlib\ndef text(path, limit=12000):\n    p=pathlib.Path(path)\n    return p.read_text(errors="replace")[-limit:] if p.exists() else None\ndef parsed(path):\n    p=pathlib.Path(path)\n    if not p.exists(): return None\n    try: return json.loads(p.read_text())\n    except Exception: return {"raw": text(path,4000)}\nout={"ok":False,"failedStage":"auth_session","authHttpCode":os.environ.get("AUTH_CODE"),"auth":parsed("/tmp/wdcc-auth.json"),"health":parsed("/tmp/wdcc-health.json"),"serverLogTail":text("/tmp/wdcc-server.log")}\npathlib.Path("/tmp/wdcc-result.json").write_text(json.dumps(out,indent=2))\nPY2\n  exit 1\nfi'''
-          if old not in s: raise SystemExit('auth patch target missing')
-          s=s.replace(old,new)
-          p.write_text(s)
-          PY
           git checkout --detach "$CANDIDATE_SHA"
-      - name: Run candidate locally against canonical ledger
+      - name: Run candidate locally against canonical services
         id: e2e
         shell: bash
         run: bash /tmp/wdcc-candidate-local-e2e.sh
@@ -70,13 +40,12 @@ jobs:
           result='not captured'; [ -f /tmp/wdcc-result.json ] && result="$(cat /tmp/wdcc-result.json)"
           cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
           health='not captured'; [ -f /tmp/wdcc-health.json ] && health="$(cat /tmp/wdcc-health.json)"
-          auth='not captured'; [ -f /tmp/wdcc-auth.json ] && auth="$(cat /tmp/wdcc-auth.json)"
           server='not captured'; [ -f /tmp/wdcc-server.log ] && server="$(tail -80 /tmp/wdcc-server.log)"
           body=$(cat <<EOF
           Candidate: \`$CANDIDATE_SHA\`
           Status: **$STATUS**
 
-          Candidate was built and started locally in GitHub using the canonical Phoenix OIDC/Blob store. No Vercel application deployment was created.
+          Candidate was built and started locally against canonical WDCC services. No Vercel application deployment was created.
 
           Result:
           \`\`\`json
@@ -86,11 +55,6 @@ jobs:
           Health:
           \`\`\`json
           $health
-          \`\`\`
-
-          Auth:
-          \`\`\`json
-          $auth
           \`\`\`
 
           Server tail:
