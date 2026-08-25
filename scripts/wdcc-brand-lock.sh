@@ -21,8 +21,18 @@ if [[ -n "$legacy_refs" ]]; then
   fail "protected dealer runtime still points to /dealer/login"
 fi
 
-# Ensure the canonical portal pages and storefront source-of-truth assets stay wired.
-grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx || fail "dealer canonical portal missing"
+# Dealer may use the legacy shared PortalExperience or the approved dedicated
+# DealerDashboard. Either canonical entry must keep the locked WDCC logo + hero.
+if grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx; then
+  :
+elif grep -q 'DealerDashboard' app/dealer/page.tsx \
+  && grep -q 'wdcc-logo-transparent.webp' app/dealer/DealerDashboard.tsx \
+  && grep -q 'wdcc-hero-v2.webp' app/dealer/DealerDashboard.tsx; then
+  :
+else
+  fail "dealer canonical portal missing"
+fi
+
 grep -q 'PortalExperience mode="admin"' app/admin/page.tsx || fail "admin canonical portal missing"
 grep -q 'wdcc-logo-transparent.webp' app/PortalExperience.tsx || fail "portal shell not using canonical logo"
 grep -q 'wdcc-hero-v2.webp' app/PortalExperience.tsx || fail "portal shell not using canonical hero"
