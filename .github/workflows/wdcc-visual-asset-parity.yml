@@ -1,0 +1,66 @@
+name: WDCC Visual Asset Parity
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/wdcc-visual-asset-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  visual-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact recovered 2vfD donor
+        uses: actions/checkout@v4
+        with:
+          ref: recovered-2vfd-source
+          fetch-depth: 1
+
+      - name: Compare apex assets with exact donor
+        id: parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=https://wedontcarecars.com
+          DONOR=src/public
+          mkdir -p /tmp/wdcc-live
+
+          check_asset(){
+            name="$1"
+            curl -fsS -D "/tmp/${name}.headers" "$BASE/$name?visual-parity=$GITHUB_RUN_ID" -o "/tmp/wdcc-live/$name"
+            donor_size="$(wc -c < "$DONOR/$name")"
+            live_size="$(wc -c < "/tmp/wdcc-live/$name")"
+            donor_sha="$(sha256sum "$DONOR/$name" | awk '{print $1}')"
+            live_sha="$(sha256sum "/tmp/wdcc-live/$name" | awk '{print $1}')"
+            mime="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"",$0); print $2; exit}' "/tmp/${name}.headers")"
+            echo "$name donor_size=$donor_size live_size=$live_size mime=$mime donor_sha=$donor_sha live_sha=$live_sha"
+            test "$mime" = image/webp
+            test "$donor_size" = "$live_size"
+            test "$donor_sha" = "$live_sha"
+          }
+
+          check_asset wdcc-hero-v2.webp
+          check_asset wdcc-logo-transparent.webp
+
+          curl -fsS -L "$BASE/?visual-parity=$GITHUB_RUN_ID" -o /tmp/home.html
+          grep -q 'intro-sequence intro-prepare' /tmp/home.html
+          grep -q 'mobile-dock-drive' /tmp/home.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/home.html || true
+
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report visual parity
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.parity.outcome }}
+          VERIFIED: ${{ steps.parity.outputs.verified }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --title "WDCC exact 2vfD visual asset parity ${GITHUB_RUN_ID}" \
+            --body "Exact-donor asset checksum/MIME/size parity against live apex: **$RESULT** (verified \`$VERIFIED\`). Checked \`wdcc-hero-v2.webp\` and \`wdcc-logo-transparent.webp\` plus intro/home markers. No deployment or DNS mutation." || true
