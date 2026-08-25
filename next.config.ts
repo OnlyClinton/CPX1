@@ -48,8 +48,8 @@ const dealerHeaders = [
       "object-src 'none'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
-      "connect-src 'self' https://vercel.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      "img-src 'self' data: blob: https://wedontcarecars.com https://www.wedontcarecars.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      "connect-src 'self' https://wedontcarecars.com https://www.wedontcarecars.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
       "font-src 'self' data:",
       "media-src 'self' blob:",
       "worker-src 'self' blob:",
@@ -76,12 +76,23 @@ const privilegedApiHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async rewrites() {
+    return [{
+      source: "/",
+      has: [{ type: "host", value: "dealer.wedontcarecars.com" }],
+      destination: "/dealer"
+    }];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: storefrontHeaders },
       { source: "/dealer/:path*", headers: dealerHeaders },
+      { source: "/admin/:path*", headers: dealerHeaders },
       { source: "/api/auth/:path*", headers: privilegedApiHeaders },
+      { source: "/api/crm/:path*", headers: privilegedApiHeaders },
+      { source: "/api/leads/:path*", headers: privilegedApiHeaders },
       { source: "/api/inventory/:path*", headers: privilegedApiHeaders },
+      { source: "/api/media/:path*", headers: privilegedApiHeaders },
       { source: "/api/upload", headers: privilegedApiHeaders }
     ];
   }
