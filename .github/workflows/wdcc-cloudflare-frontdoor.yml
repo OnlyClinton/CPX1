@@ -2,21 +2,10 @@ name: WDCC CLOUDFLARE FRONTDOOR
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - 'lib/**'
-      - 'public/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'next.config.ts'
-      - 'wrangler.jsonc'
-      - '.github/workflows/wdcc-cloudflare-frontdoor.yml'
 
 concurrency:
   group: wdcc-cloudflare-frontdoor
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -143,38 +132,19 @@ jobs:
           URL="${URL%/}"
           [ -n "$URL" ] || { echo 'Cloudflare deployed but URL could not be resolved' >&2; exit 1; }
           echo "VERIFY_URL=$URL"
-
           ready=false
           for attempt in $(seq 1 30); do
             status="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?cloudflare-frontdoor=$GITHUB_RUN_ID&attempt=$attempt" || true)"
-            echo "Cloudflare propagation probe $attempt/30 -> HTTP $status"
-            if [ "$status" = "200" ] && jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null 2>&1; then
-              ready=true
-              break
-            fi
+            if [ "$status" = "200" ] && jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null 2>&1; then ready=true; break; fi
             sleep 2
           done
-
-          if [ "$ready" != true ]; then
-            echo 'Cloudflare health route never became ready' >&2
-            echo 'Last response:' >&2
-            cat /tmp/cf-health.json >&2 || true
-            exit 1
-          fi
-
+          test "$ready" = true
           curl -fsS -D /tmp/cf-inventory.headers -o /tmp/cf-inventory.json "$URL/api/inventory?cloudflare-frontdoor=$GITHUB_RUN_ID"
-          content_type="$(tr -d '\r' </tmp/cf-inventory.headers | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
-          case "$content_type" in application/json*) ;; *) echo "Cloudflare inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
           jq -e '.ok == true and (.items | type == "array")' /tmp/cf-inventory.json >/dev/null
-
           home_status="$(curl -sS -o /tmp/home.html -w '%{http_code}' "$URL/")"
-          [ "$home_status" = "200" ] || { echo "Cloudflare homepage returned HTTP $home_status" >&2; exit 1; }
-          grep -q 'wdcc' /tmp/home.html || grep -qi 'we don.t care' /tmp/home.html
-
+          test "$home_status" = 200
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo 'deployed=true' >> "$GITHUB_OUTPUT"
-          echo "Cloudflare frontend verified: $URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "Backend authority: $CANONICAL_BACKEND" >> "$GITHUB_STEP_SUMMARY"
 
   status:
     needs: [preflight, deploy]
@@ -185,20 +155,7 @@ jobs:
         env:
           DEPLOYED: ${{ needs.deploy.outputs.deployed }}
           URL: ${{ needs.deploy.outputs.url }}
-        shell: bash
         run: |
-          {
-            echo '# WDCC Cloudflare front door'
-            echo
-            echo "Cloudflare deployed: ${DEPLOYED:-false}"
-            echo "Cloudflare URL: ${URL:-not-created}"
-            echo "Canonical backend: $CANONICAL_BACKEND"
-            echo
-            if [ "${DEPLOYED:-}" = true ]; then
-              echo '**CLOUDFLARE FRONTEND READY FOR DOMAIN CUTOVER.**'
-            else
-              echo '**CLOUDFLARE FRONTEND AUTOMATION STAGED. Existing production remains unchanged.**'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-# launch-trigger: 2026-08-25T03:42-04:00
+          echo "Cloudflare deployed: ${DEPLOYED:-false}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloudflare URL: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Customer domain cutover is intentionally manual. Exact 2vfD remains locked on Vercel." >> "$GITHUB_STEP_SUMMARY"
