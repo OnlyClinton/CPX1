@@ -2,15 +2,14 @@ import crypto from "node:crypto";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readState,writeState} from "../../../lib/store";
+import {canonicalDealerBackend,WDCC_DEALER_PROJECT_ID,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
-const DEALER_BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app").replace(/\/$/,"");
-const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
-const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
+const DEALER_BACKEND=canonicalDealerBackend();
 
 function leadKind(body:any){const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";if(["contact","call","call-or-contact","general"].includes(raw))return "contact";if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";return raw;}
 function upstreamRequestType(kind:string){if(kind==="schedule")return "test-drive";if(kind==="approval")return "pre-approval";return "contact";}
@@ -40,7 +39,7 @@ async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
   return {leadId:String(json.leadId),emailStatus:json.emailStatus||json.email||"upstream",smsStatus:json.smsStatus||json.sms||"upstream",mailto:json.mailto||null};
 }
 
-function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===DEALER_PROJECT_ID||project===CPX_BACKEND_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
+function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===WDCC_DEALER_PROJECT_ID||project===WDCC_PHOENIX_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
 
 export async function GET(){const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
 
