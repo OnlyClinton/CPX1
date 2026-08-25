@@ -1,3 +1,4 @@
-Execute the frozen WDCC final prebuilt production release.
-Release source: d7f76ea60081db88da774bc732a66f0dffd65410
-Triggered: 2026-08-25
+Execute the unified WDCC final prebuilt production release.
+Release source: 98c84814c00528e6114196f8d5ff7597fb844b20
+Triggered: 2026-08-25T14:07:30Z
+Contract: screenshot storefront + V52 API + dealer dashboard + vehicle editor + authenticated listing E2E
