@@ -45,22 +45,34 @@ jobs:
           done
           cat /tmp/wdcc-next.log
           exit 1
-      - name: Exercise local UI routes
+      - name: Exercise local UI routes and unified-login redirects
         shell: bash
         run: |
           set -euo pipefail
-          check(){
+          check_200(){
             path="$1"
             code="$(curl -sS -o /tmp/page.html -w '%{http_code}' "http://127.0.0.1:3000$path")"
             echo "$path => $code"
             test "$code" = '200'
           }
-          check /login
-          check /admin/login
-          check /dealer/login
-          check /dealer/dashboard
-          check /dealer/inventory
-          check /dealer/inventory/new
+          check_login_redirect(){
+            path="$1"
+            headers="$(mktemp)"
+            code="$(curl -sS -D "$headers" -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000$path")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]+:[[:space:]]*/,""); sub(/\r$/,""); print; exit}' "$headers")"
+            echo "$path => $code location=$location"
+            case "$code" in 307|308) ;; *) exit 1 ;; esac
+            test "$location" = '/login'
+          }
+
+          check_200 /login
+          check_login_redirect /admin/login
+          check_login_redirect /dealer/login
+          check_200 /admin
+          check_200 /dealer
+          check_200 /dealer/dashboard
+          check_200 /dealer/inventory
+          check_200 /dealer/inventory/new
       - name: Verify unified login build artifact
         shell: bash
         run: |
