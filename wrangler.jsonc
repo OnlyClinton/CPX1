@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wdcc-storefront",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "WDCC_RUNTIME_ROLE": "frontend",
+    "WDCC_DEALER_BACKEND_URL": "https://wdcc-cpx-launch-cpxagency.vercel.app"
+  }
+}
