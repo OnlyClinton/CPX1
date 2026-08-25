@@ -26,7 +26,7 @@ export default function CRM(){
   return <main className={styles.shell}>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><b>WDCC</b><span>SALES COMMAND</span></div>
-      <nav><Link href="/dealer">Dashboard</Link><Link className={styles.active} href="/dealer/crm">CRM</Link><Link href="/dealer/leads">Lead Inbox</Link><Link href="/dealer/inventory">Inventory</Link><Link href="/dealer/inventory/new">+ Add Vehicle</Link><Link href="/">View Website</Link></nav>
+      <nav><Link href="/dealer">Dashboard</Link><Link className={styles.active} href="/dealer/crm">CRM</Link><Link href="/dealer/leads">Lead Inbox</Link><Link href="/dealer/inventory">Inventory</Link><Link href="/dealer/inventory/new">+ Add Vehicle</Link><a href="https://wedontcarecars.com/">View Website</a></nav>
     </aside>
     <section className={styles.main}>
       <header className={styles.topbar}><div><span className={styles.kicker}>AUTOMOTIVE SALES CRM</span><h1>My Day</h1><p>Who needs attention, what they want, and what to do next.</p></div><div className={styles.search}><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search customer, phone, vehicle…"/></div></header>
