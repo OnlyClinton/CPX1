@@ -1,73 +1,17 @@
-# emergency rollback trigger 2026-08-25T12:17Z
-name: Pin exact immutable 2vfD apex
+name: WDCC 2VFD APEX PIN — FROZEN
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/pin-exact-2vfd-apex.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  pin:
+  frozen:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      TEAM: cpxagency
-      DONOR: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
-      DONOR_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
-      APEX: wedontcarecars.com
-      WWW: www.wedontcarecars.com
     steps:
-      - name: Require token
-        run: test -n "$VERCEL_TOKEN"
-
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.3.0 >/dev/null
-
-      - name: Pin apex and www to exact 2vfD artifact
-        id: alias
-        shell: bash
+      - name: Release-control guard
         run: |
-          set -euo pipefail
-          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
-          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
-
-      - name: Verify exact 2vfD public render contract
-        id: verify
-        shell: bash
-        run: |
-          set -euo pipefail
-          for host in "$APEX" "$WWW"; do
-            ok=0
-            for i in $(seq 1 20); do
-              curl -sS "https://$host/?pin=${GITHUB_RUN_ID}" -o /tmp/live.html || true
-              if grep -q 'intro-sequence intro-prepare' /tmp/live.html \
-                && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
-                && grep -q 'wdcc-hero-v2.webp' /tmp/live.html \
-                && grep -q 'featured-carousel' /tmp/live.html \
-                && grep -q 'mobile-action-bar' /tmp/live.html \
-                && grep -q 'Schedule a test drive' /tmp/live.html \
-                && grep -q 'Get qualified' /tmp/live.html \
-                && grep -q 'Call Sean' /tmp/live.html; then
-                ok=1; break
-              fi
-              sleep 2
-            done
-            test "$ok" = '1'
-          done
-          echo 'pinned=true' >> "$GITHUB_OUTPUT"
-
-      - name: Report exact 2vfD pin
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ALIAS_STATUS: ${{ steps.alias.outcome }}
-          VERIFY_STATUS: ${{ steps.verify.outcome }}
-          PINNED: ${{ steps.verify.outputs.pinned }}
-        shell: bash
-        run: |
-          body=$(printf 'Alias pin: **%s**\nExact 2vfD render verification: **%s**\nPinned: `%s`\n\nApex: https://wedontcarecars.com/\nPinned donor: `%s` (`%s`)\nNo rebuild was performed. Dealer/backend were not changed.' "$ALIAS_STATUS" "$VERIFY_STATUS" "$PINNED" "$DONOR" "$DONOR_ID")
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC exact 2vfD live pin ${GITHUB_SHA:0:7}" --body "$body" || true
+          echo 'Exact 2vfD apex/www pin is frozen during immutable candidate acceptance.'
+          echo 'No customer alias mutation is permitted from this workflow.'
+          echo 'Current approved storefront donor remains exact 2vfD; no action is taken.'
