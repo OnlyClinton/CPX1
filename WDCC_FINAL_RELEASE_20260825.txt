@@ -1,0 +1,5 @@
+WDCC FINAL RELEASE CANDIDATE
+Frozen from app fix commit: 5519fa000c517ff9d18a1eefc528b2b43e10b1b7
+Purpose: immutable Vercel preview and gated production promotion.
+Required public CTA order: Schedule Test Drive -> Get Approved -> Call Sean.
+Do not use this marker as application configuration.
