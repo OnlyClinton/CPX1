@@ -1,0 +1,20 @@
+name: WDCC Dispatch Safe Repair V2 Once
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-dispatch-safe-repair-v2-once.yml']
+permissions:
+  contents: read
+  actions: write
+  issues: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch exact safe repair lane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-safe-candidate-repair-cleanup-v2.yml --repo "$GITHUB_REPOSITORY" --ref main
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC safe repair v2 dispatched ${GITHUB_RUN_ID}" --body "Dispatched the isolated frozen-candidate repair lane. No deployment or alias mutation is performed by this dispatcher."
