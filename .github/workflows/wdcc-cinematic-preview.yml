@@ -15,30 +15,48 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 14
+    env:
+      DONOR_DEPLOYMENT: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - name: Inspect source assets
+      - name: Prove current repo assets are placeholders
         shell: bash
         run: |
           set -euo pipefail
           file public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
-          sha256sum public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
           stat -c '%n %s bytes' public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+          sha256sum public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+      - name: Recover immutable 8AR hero and logo for render only
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$DONOR_DEPLOYMENT" > /tmp/wdcc-hero-v2-8ar.webp
+          npx --yes vercel@59.3.0 curl /wdcc-logo-transparent.webp --deployment "$DONOR_DEPLOYMENT" > /tmp/wdcc-logo-transparent-8ar.webp
+          npx --yes vercel@59.3.0 curl /wdcc-official-logo.webp --deployment "$DONOR_DEPLOYMENT" > /tmp/wdcc-official-logo-8ar.webp || true
+          file /tmp/wdcc-hero-v2-8ar.webp /tmp/wdcc-logo-transparent-8ar.webp /tmp/wdcc-official-logo-8ar.webp || true
+          stat -c '%n %s bytes' /tmp/wdcc-hero-v2-8ar.webp /tmp/wdcc-logo-transparent-8ar.webp /tmp/wdcc-official-logo-8ar.webp || true
+          test "$(stat -c %s /tmp/wdcc-hero-v2-8ar.webp)" -gt 100000
+          test "$(stat -c %s /tmp/wdcc-logo-transparent-8ar.webp)" -gt 10000
+          cp /tmp/wdcc-hero-v2-8ar.webp public/wdcc-hero-v2.webp
+          cp /tmp/wdcc-logo-transparent-8ar.webp public/wdcc-logo-transparent.webp
+          if [ -s /tmp/wdcc-official-logo-8ar.webp ]; then cp /tmp/wdcc-official-logo-8ar.webp public/wdcc-official-logo.webp; fi
       - name: Install app
         run: npm ci
-      - name: Build app
+      - name: Build app with recovered 8AR visuals
         run: npm run build
       - name: Start production app
         shell: bash
         run: |
           set -euo pipefail
           npm run start -- -p 3000 >/tmp/wdcc-preview-server.log 2>&1 &
-          echo $! >/tmp/wdcc-preview-server.pid
           for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3000/ >/dev/null; then break; fi
             sleep 1
@@ -47,25 +65,30 @@ jobs:
           curl -fsSI http://127.0.0.1:3000/wdcc-logo-transparent.webp
       - name: Install Chromium
         run: npx --yes playwright@1.55.0 install --with-deps chromium
-      - name: Capture cinematic and source frames
+      - name: Capture recovered source and cinematic frames
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/wdcc-preview
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-hero-v2.webp /tmp/wdcc-preview/source-hero.png
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='700,700' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-logo-transparent.webp /tmp/wdcc-preview/source-logo.png
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-0650.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-hero-v2.webp /tmp/wdcc-preview/source-hero-8ar.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='700,700' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-logo-transparent.webp /tmp/wdcc-preview/source-logo-8ar.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=450 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-0450.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=850 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-0850.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-1250.png
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-2200.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=2050 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-2050.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=3300 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-3300.png
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-0650.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=450 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-0450.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=850 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-0850.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-1250.png
-          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-2200.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=2050 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-2050.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=3300 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-3300.png
-      - name: Upload preview frames
+          cp /tmp/wdcc-hero-v2-8ar.webp /tmp/wdcc-preview/wdcc-hero-v2-8ar.webp
+          cp /tmp/wdcc-logo-transparent-8ar.webp /tmp/wdcc-preview/wdcc-logo-transparent-8ar.webp
+          if [ -s /tmp/wdcc-official-logo-8ar.webp ]; then cp /tmp/wdcc-official-logo-8ar.webp /tmp/wdcc-preview/wdcc-official-logo-8ar.webp; fi
+      - name: Upload recovered render package
         uses: actions/upload-artifact@v4
         with:
           name: wdcc-cinematic-preview
-          path: /tmp/wdcc-preview/*.png
+          path: /tmp/wdcc-preview/*
           if-no-files-found: error
           retention-days: 2
