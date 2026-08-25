@@ -1,0 +1,247 @@
+name: WDCC Final Two-Stage Certification V1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-final-two-stage-cert-v1
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
+      LIVE_APEX: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FINAL_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact source and release tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          npm run build
+
+      - name: Capture untouched live rollback baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$LIVE_APEX/api/health?two_stage_baseline=$GITHUB_RUN_ID" -o /tmp/live-before-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-before-health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?two_stage_baseline=$GITHUB_RUN_ID" -o /tmp/live-before-inventory.json
+          jq -e '.ok==true and (.items|type=="array") and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-before-inventory.json >/dev/null
+          echo "LIVE_BASELINE_COMMIT=$(jq -r '.commit // "unknown"' /tmp/live-before-health.json)" >> "$GITHUB_ENV"
+
+      - name: Create exact-run dealer identity with immutable backup
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-cert-user.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=5;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`WdccFinal-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`final-cert-dealer-${crypto.randomUUID()}`,email=`final-cert-${run}@invalid.example`,backup=`private/state/backups/platform-v3-pre-final-two-stage-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Final Certification ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/final-cert.env',`RUN_TAG=${run}\nDEALER_ID=${id}\nDEALER_EMAIL=${email}\nQA_PASSWORD=${password}\nBACKUP=${backup}\nPHX_STOCK=R36TEST-FINAL-PHX-${run}\nSF_STOCK=R36TEST-FINAL-SF-${run}\nMAIL_MARKER=WDCC-LAUNCH-MAILBOX-${run}\n`);console.log(JSON.stringify({ok:true,id,email,backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-cert-user.mjs
+          set -a; . /tmp/final-cert.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Deploy exact Phoenix candidate with OIDC ownership and no aliases
+        id: phoenix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel deploy --prebuilt --prod --skip-domain --archive=tgz --yes \
+            --env WDCC_RUNTIME_ROLE=backend \
+            --env BLOB_STORE_ID="$STORE_ID" \
+            --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/phoenix-deploy.log
+          url="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/phoenix-deploy.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s' "$url" > /tmp/phoenix-url
+
+      - name: Gate exact Phoenix candidate
+        id: phoenix_gate
+        shell: bash
+        env:
+          BASE: ${{ steps.phoenix.outputs.url }}
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/final-cert.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          healthy=false
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/phx-health.json -w '%{http_code}' "$BASE/api/health?attempt=$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .state=="readable"' /tmp/phx-health.json >/dev/null 2>&1; then healthy=true;break;fi
+            sleep 2
+          done
+          test "$healthy" = true
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          const base=process.env.BASE,run=process.env.RUN_TAG,stock=process.env.PHX_STOCK;
+          const out={ok:false,base,run,stock,trace:[],errors:[]};const short=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};
+          async function t(r){try{return(await r.text()).slice(0,2500)}catch{return''}}
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('console',m=>{if(m.type()==='error')out.errors.push(m.text())});p.on('pageerror',e=>out.errors.push(String(e)));p.on('response',r=>{if(/\/api\/(auth|leads|inventory|upload)/.test(r.url()))out.trace.push({method:r.request().method(),url:short(r.url()),status:r.status()})});await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const login=await p.evaluate(async({email,password})=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});return{status:r.status,body:await r.text()}},{email:process.env.DEALER_EMAIL,password:process.env.QA_PASSWORD});if(login.status!==200)throw Error(`LOGIN_${login.status}_${login.body}`);const ses=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(ses.status!==200||!JSON.parse(ses.body).authenticated)throw Error(`SESSION_${ses.status}_${ses.body}`);out.login=true;
+          const leadIds=[];for(const [kind,source] of [['schedule','schedule-test-drive'],['approval','get-approved'],['contact','call-sean']]){const r=await p.evaluate(async({kind,source,run})=>{const x=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':`wdcc-qa-phx-${kind}-${run}`},body:JSON.stringify({qa:true,kind,source,name:`WDCC QA PHX ${kind} ${run}`,phone:'813-555-0197',email:`qa-phx-${kind}-${run}@invalid.example`,vehicleInterest:'Final certification',message:'Automated WDCC contract verification',consent:true})});return{status:x.status,body:await x.text()}},{kind,source,run});if(r.status!==201&&r.status!==200)throw Error(`LEAD_${kind}_${r.status}_${r.body}`);const j=JSON.parse(r.body);if(!j.ok||!j.persisted||!j.item?.id)throw Error(`LEAD_CONTRACT_${r.body}`);leadIds.push(j.item.id)}out.leadIds=leadIds;
+          await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Phoenix Cert ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);const desc=p.locator('textarea').first();if(await desc.count())await desc.fill(`QA-isolated Phoenix final certification ${run}`);fs.writeFileSync('/tmp/phx.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const input=p.locator('input[type=file][multiple]').first();await input.setInputFiles('/tmp/phx.png');const draftP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000}).catch(()=>null);const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();await publish.click();const draft=await draftP,dt=await t(draft);if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),vehicleId=String(dj.item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');out.vehicleId=vehicleId;const upload=await uploadP;if(!upload)throw Error('UPLOAD_NOT_SEEN');const ut=await t(upload);out.upload={status:upload.status(),body:ut};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);const nav=await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:50000}).then(()=>true).catch(()=>false);if(!nav)throw Error(`PUBLISH_NAV_${await p.locator('.statusMessage').first().textContent().catch(()=> '')}`);const inv=await p.evaluate(async()=>{const r=await fetch('/api/inventory',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(inv.status!==200)throw Error(`DEALER_INV_${inv.status}_${inv.body}`);const item=(JSON.parse(inv.body).items||[]).find(x=>x.id===vehicleId||x.stock===stock);if(!item||String(item.status).toLowerCase()!=='published'||!(item.photoPathnames||[]).length)throw Error(`READBACK_${JSON.stringify(item||null)}`);out.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames};const pub=await b.newContext();const pr=await pub.request.get(`${base}/api/inventory?public=${Date.now()}`),pj=await pr.json();await pub.close();if((pj.items||[]).some(x=>x.id===item.id||x.stock===stock))throw Error('QA_PUBLIC');out.qaHidden=true;if(out.errors.length)throw Error(`BROWSER_ERRORS_${out.errors.join(' | ')}`);await p.screenshot({path:'/tmp/phx-final.png',fullPage:true});out.ok=true;fs.writeFileSync('/tmp/phx-result.json',JSON.stringify(out,null,2));}catch(e){out.error=String(e?.message||e);fs.writeFileSync('/tmp/phx-result.json',JSON.stringify(out,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+          jq -e '.ok==true and .qaHidden==true and (.vehicle.photoPathnames|length)>0 and (.leadIds|length)==3' /tmp/phx-result.json >/dev/null
+
+      - name: Deploy same exact source as storefront candidate bound to tested Phoenix
+        id: storefront
+        shell: bash
+        env:
+          PHOENIX_URL: ${{ steps.phoenix.outputs.url }}
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$STOREFRONT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel deploy --prebuilt --prod --skip-domain --archive=tgz --yes \
+            --env WDCC_RUNTIME_ROLE=frontend \
+            --env WDCC_CANONICAL_AUTHORITY_URL="$PHOENIX_URL" \
+            --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/storefront-deploy.log
+          url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/storefront-deploy.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s' "$url" > /tmp/storefront-url
+
+      - name: Gate storefront facade, render contract and mailbox transport
+        id: storefront_gate
+        shell: bash
+        env:
+          BASE: ${{ steps.storefront.outputs.url }}
+          PHOENIX_URL: ${{ steps.phoenix.outputs.url }}
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/final-cert.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          for i in $(seq 1 30); do code="$(curl -sS -o /tmp/sf-health.json -w '%{http_code}' "$BASE/api/health?attempt=$i" || true)"; [ "$code" = 200 ] && jq -e '.ok==true and .backend=="healthy"' /tmp/sf-health.json >/dev/null 2>&1 && break; sleep 2; done
+          jq -e '.ok==true and .backend=="healthy"' /tmp/sf-health.json >/dev/null
+          curl -fsS "$BASE/api/inventory?public=$GITHUB_RUN_ID" -o /tmp/sf-public.json
+          jq -e '.ok==true and (.items|type=="array") and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/sf-public.json >/dev/null
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');const base=process.env.BASE,run=process.env.RUN_TAG,stock=process.env.SF_STOCK,marker=process.env.MAIL_MARKER;const out={ok:false,base,run,stock,marker,errors:[],notFound:[],badResponses:[]};const short=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};async function txt(r){try{return(await r.text()).slice(0,2500)}catch{return''}}
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('console',m=>{if(m.type()==='error')out.errors.push(m.text())});p.on('pageerror',e=>out.errors.push(String(e)));p.on('response',r=>{const path=short(r.url());if(r.status()===404)out.notFound.push(path);if(r.status()>=500)out.badResponses.push({path,status:r.status()})});await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const login=await p.evaluate(async({email,password})=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});return{status:r.status,body:await r.text()}},{email:process.env.DEALER_EMAIL,password:process.env.QA_PASSWORD});if(login.status!==200)throw Error(`LOGIN_${login.status}_${login.body}`);const session=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(session.status!==200||!JSON.parse(session.body).authenticated)throw Error(`SESSION_${session.status}_${session.body}`);out.login=true;
+          const ids=[];for(const [kind,source] of [['schedule','schedule-test-drive'],['approval','get-approved'],['contact','call-sean']]){const r=await p.evaluate(async({kind,source,run})=>{const x=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':`wdcc-qa-sf-${kind}-${run}`},body:JSON.stringify({qa:true,kind,source,name:`WDCC QA SF ${kind} ${run}`,phone:'813-555-0196',email:`qa-sf-${kind}-${run}@invalid.example`,vehicleInterest:'Final storefront certification',message:'Automated WDCC contract verification',consent:true})});return{status:x.status,body:await x.text()}},{kind,source,run});if(r.status!==200&&r.status!==201)throw Error(`LEAD_${kind}_${r.status}_${r.body}`);const j=JSON.parse(r.body);if(!j.ok||!j.persisted||!j.item?.id)throw Error(`LEAD_CONTRACT_${r.body}`);ids.push(j.item.id)}out.leadIds=ids;
+          const feed=await p.evaluate(async()=>{const r=await fetch('/api/leads',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(feed.status!==200)throw Error(`FEED_${feed.status}_${feed.body}`);const fj=JSON.parse(feed.body);for(const id of ids)if(!(fj.items||[]).some(x=>x.id===id))throw Error(`FEED_MISSING_${id}`);out.leads=true;
+          await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Storefront Cert ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);const desc=p.locator('textarea').first();if(await desc.count())await desc.fill(`QA-isolated storefront final certification ${run}`);fs.writeFileSync('/tmp/sf.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/sf.png');const draftP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000}).catch(()=>null);await p.locator('button[type="submit"][name="intent"][value="published"]:visible').first().click();const dr=await draftP,dt=await txt(dr);if(!dr.ok())throw Error(`DRAFT_${dr.status()}_${dt}`);const vehicleId=JSON.parse(dt).item?.id;if(!vehicleId)throw Error('DRAFT_ID');out.vehicleId=vehicleId;const up=await uploadP;if(!up)throw Error('UPLOAD_NOT_SEEN');const ut=await txt(up);out.upload={status:up.status(),body:ut};if(!up.ok())throw Error(`UPLOAD_${up.status()}_${ut}`);if(!await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:50000}).then(()=>true).catch(()=>false))throw Error('PUBLISH_NAV');const inv=await p.evaluate(async()=>{const r=await fetch('/api/inventory',{cache:'no-store'});return{status:r.status,body:await r.text()}});const item=(JSON.parse(inv.body).items||[]).find(x=>x.id===vehicleId||x.stock===stock);if(!item||String(item.status).toLowerCase()!=='published'||!(item.photoPathnames||[]).length)throw Error(`READBACK_${JSON.stringify(item||null)}`);out.vehicle={id:item.id,stock:item.stock,photoPathnames:item.photoPathnames};
+          const anon=await b.newContext();const pub=await anon.request.get(`${base}/api/inventory?qa_check=${Date.now()}`),pj=await pub.json();if((pj.items||[]).some(x=>x.id===item.id||x.stock===stock))throw Error('QA_PUBLIC');await anon.close();out.qaHidden=true;
+          const routes=['/','/inventory','/dealer','/dealer/inventory','/dealer/inventory/new'];for(const path of routes){await p.goto(base+path,{waitUntil:'domcontentloaded',timeout:30000});await p.locator('body').waitFor({state:'visible',timeout:10000});await p.screenshot({path:`/tmp/render-${path.replaceAll('/','_')||'home'}-mobile.png`,fullPage:true})}const desk=await b.newPage({viewport:{width:1440,height:1000}});for(const path of ['/','/inventory','/dealer/inventory','/dealer/inventory/new']){await desk.goto(base+path,{waitUntil:'domcontentloaded',timeout:30000});await desk.screenshot({path:`/tmp/render-${path.replaceAll('/','_')||'home'}-desktop.png`,fullPage:true})}await desk.close();
+          const mail=await p.evaluate(async({marker,run})=>{const r=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':`wdcc-launch-mail-${run}`},body:JSON.stringify({kind:'contact',source:'launch-mailbox-proof',name:marker,phone:'813-555-0195',email:`launch-proof-${run}@example.com`,vehicleInterest:'WDCC launch certification',message:`${marker} independent mailbox delivery acceptance`,consent:true})});return{status:r.status,body:await r.text()}},{marker,run});out.mailTransport={status:mail.status,body:mail.body};if(mail.status!==201&&mail.status!==200)throw Error(`MAIL_LEAD_${mail.status}_${mail.body}`);const mj=JSON.parse(mail.body);out.mailLeadId=mj.item?.id||null;out.mailEmailStatus=mj.notifications?.email||null;if(out.mailEmailStatus!=='sent')throw Error(`MAIL_TRANSPORT_${out.mailEmailStatus}_${mail.body}`);
+          if(out.errors.length||out.notFound.length||out.badResponses.length)throw Error(`BROWSER_CONTRACT errors=${out.errors.length} 404=${out.notFound.length} 5xx=${out.badResponses.length}`);out.ok=true;fs.writeFileSync('/tmp/sf-result.json',JSON.stringify(out,null,2));}catch(e){out.error=String(e?.message||e);fs.writeFileSync('/tmp/sf-result.json',JSON.stringify(out,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+          jq -e '.ok==true and .qaHidden==true and (.leadIds|length)==3 and (.vehicle.photoPathnames|length)>0 and .mailEmailStatus=="sent"' /tmp/sf-result.json >/dev/null
+
+      - name: Exact-run cleanup with backup
+        if: always() && steps.identity.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -a; . /tmp/final-cert.env; set +a
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          cat > .wdcc-final-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG,user=process.env.DEALER_ID;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,leadIds=(s.leads||[]).filter(x=>String(x.name||'').includes(run)||String(x.email||'').includes(run)||String(x.idempotencyKey||'').includes(run)).map(x=>x.id),vehicles=(s.vehicles||[]),targets=vehicles.filter(x=>String(x.stock||'').includes(run)),vehicleIds=targets.map(x=>x.id),media=[...new Set(targets.flatMap(x=>x.photoPathnames||[]).filter(Boolean))],backup=`private/state/backups/platform-v3-pre-final-two-stage-clean-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=(s.users||[]).filter(x=>x.id!==user);s.leads=(s.leads||[]).filter(x=>!leadIds.includes(x.id));s.vehicles=vehicles.filter(x=>!vehicleIds.includes(x.id));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,userRemoved:1,leadsRemoved:leadIds,vehiclesRemoved:vehicleIds,mediaRemoved:media,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-final-clean.mjs | tee /tmp/final-cleanup.json
+
+      - name: Prove live baseline remained untouched
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          curl -fsS "$LIVE_APEX/api/health?two_stage_after=$GITHUB_RUN_ID" -o /tmp/live-after-health.json
+          curl -fsS "$LIVE_APEX/api/inventory?two_stage_after=$GITHUB_RUN_ID" -o /tmp/live-after-inventory.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-after-health.json >/dev/null
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-after-inventory.json >/dev/null
+
+      - name: Report exact certification evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          PHOENIX_URL: ${{ steps.phoenix.outputs.url }}
+          STOREFRONT_URL: ${{ steps.storefront.outputs.url }}
+        shell: bash
+        run: |
+          set -a; [ -f /tmp/final-cert.env ] && . /tmp/final-cert.env; set +a
+          phx='not captured'; [ -f /tmp/phx-result.json ] && phx="$(cat /tmp/phx-result.json)"
+          sf='not captured'; [ -f /tmp/sf-result.json ] && sf="$(cat /tmp/sf-result.json)"
+          clean='not captured'; [ -f /tmp/final-cleanup.json ] && clean="$(tail -1 /tmp/final-cleanup.json)"
+          body=$(cat <<EOF
+          Exact SHA: \`$FINAL_SHA\`
+          Status: **$STATUS**
+          Phoenix candidate: \`${PHOENIX_URL:-not-created}\`
+          Storefront candidate: \`${STOREFRONT_URL:-not-created}\`
+          Live baseline commit before: \`${LIVE_BASELINE_COMMIT:-unknown}\`
+          Mailbox marker: \`${MAIL_MARKER:-not-created}\`
+
+          No apex/www/dealer alias, DNS record or Cloudflare route is moved by this workflow.
+
+          Phoenix gate:
+          \`\`\`json
+          $phx
+          \`\`\`
+
+          Storefront + mailbox transport gate:
+          \`\`\`json
+          $sf
+          \`\`\`
+
+          Exact cleanup:
+          \`\`\`json
+          $clean
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final two-stage cert ${GITHUB_RUN_ID}" --body "$body" || true
+
+      - name: Upload rendered certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-final-two-stage-${{ github.run_id }}
+          path: |
+            /tmp/phx-result.json
+            /tmp/sf-result.json
+            /tmp/phx-final.png
+            /tmp/render-*.png
+            /tmp/live-before-health.json
+            /tmp/live-after-health.json
+          if-no-files-found: ignore
+          retention-days: 7
