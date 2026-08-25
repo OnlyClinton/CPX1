@@ -1,4 +1,4 @@
-name: WDCC Unified Phoenix Auth Verification
+name: WDCC Repaired Phoenix Auth Verification
 on:
   push:
     branches: [ops/reset-wdcc-logins]
@@ -14,7 +14,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      DEALER_URL: https://wdcc-cpx-launch-duevmhlwo-cpxagency.vercel.app
+      DEALER_URL: https://wdcc-cpx-launch-g0t1np08g-cpxagency.vercel.app
       ORIGIN_URL: https://dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
@@ -23,5 +23,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify Big Pussy and admin on unified Phoenix authority
+      - name: Verify Big Pussy and admin plus CRM leads inventory and admin users
         run: node scripts/wdcc-temp-login-reset.mjs verify
