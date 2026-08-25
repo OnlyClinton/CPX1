@@ -16,20 +16,46 @@ export function Intro(){
       const badge=document.querySelector(".intro-badge") as HTMLElement|null;
       if(!target||!badge)return;
       const tr=target.getBoundingClientRect();
-      const bw=badge.offsetWidth||300;
-      const originY=window.innerHeight*.49;
-      setLanding({x:tr.left+tr.width/2-window.innerWidth/2,y:tr.top+tr.height/2-originY,scale:Math.max(.2,Math.min(.72,tr.width/bw))});
+      const br=badge.getBoundingClientRect();
+      const bw=br.width||Math.min(window.innerWidth*.56,360);
+      const originX=window.innerWidth/2;
+      const originY=window.innerHeight*.43;
+      setLanding({
+        x:tr.left+tr.width/2-originX,
+        y:tr.top+tr.height/2-originY,
+        scale:Math.max(.18,Math.min(.58,tr.width/bw))
+      });
     };
-    const raf=requestAnimationFrame(measure);
+    const raf=requestAnimationFrame(()=>requestAnimationFrame(measure));
     window.addEventListener("resize",measure);
-    const dockTimer=window.setTimeout(()=>setPhase("dock"),1550);
-    const doneTimer=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2850);
+    const dockTimer=window.setTimeout(()=>setPhase("dock"),1650);
+    const doneTimer=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2950);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",measure);window.clearTimeout(dockTimer);window.clearTimeout(doneTimer);document.documentElement.classList.remove("wdcc-intro-active")};
   },[]);
   const finish=()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")};
   if(phase==="done")return null;
   const style={"--intro-dock-x":`${landing.x}px`,"--intro-dock-y":`${landing.y}px`,"--intro-dock-scale":landing.scale} as CSSProperties;
   return <div className={`intro-sequence intro-${phase}`} aria-label="WDCC opening animation">
+    <style>{`
+      .wdcc-intro-active{overflow:hidden!important}
+      .intro-sequence{position:fixed!important;inset:0!important;z-index:2147483000!important;overflow:hidden!important;background:#02070c!important;isolation:isolate!important;display:block!important}
+      .intro-scene{position:absolute!important;inset:0!important;z-index:0!important;background:radial-gradient(circle at 50% 56%,rgba(16,68,104,.25),transparent 30%),linear-gradient(180deg,#02060a 0%,#03080d 60%,#02060a 100%)!important}
+      .intro-smoke{position:absolute!important;z-index:1!important;left:50%!important;top:48%!important;width:min(92vw,760px)!important;height:min(52vw,430px)!important;transform:translate(-50%,-50%)!important;border-radius:50%!important;filter:blur(32px)!important;pointer-events:none!important;opacity:.48!important;background:radial-gradient(ellipse,rgba(116,149,168,.28) 0%,rgba(56,91,113,.16) 38%,transparent 72%)!important}
+      .smoke-one{animation:wdccSmokeA 2.8s ease-in-out both!important}
+      .smoke-two{top:57%!important;opacity:.3!important;transform:translate(-50%,-50%) scale(.78)!important;animation:wdccSmokeB 2.8s ease-in-out both!important}
+      .intro-badge{position:absolute!important;z-index:5!important;left:50%!important;top:43%!important;width:min(58vw,360px)!important;aspect-ratio:1!important;display:grid!important;place-items:center!important;opacity:1!important;visibility:visible!important;pointer-events:none!important;will-change:transform,opacity!important;transform-origin:center!important}
+      .intro-badge img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important;opacity:1!important;visibility:visible!important;filter:drop-shadow(0 16px 38px rgba(0,0,0,.78)) drop-shadow(0 0 18px rgba(255,255,255,.16))!important}
+      .intro-reveal .intro-badge{animation:wdccBadgeReveal 1.65s cubic-bezier(.16,.84,.18,1) both!important}
+      .intro-dock .intro-badge{transform:translate(calc(-50% + var(--intro-dock-x)),calc(-50% + var(--intro-dock-y))) scale(var(--intro-dock-scale))!important;transition:transform 1.05s cubic-bezier(.2,.85,.22,1),opacity .18s linear .86s!important}
+      .intro-tagline{position:absolute!important;z-index:6!important;left:50%!important;top:67%!important;transform:translateX(-50%)!important;margin:0!important;white-space:nowrap!important;color:#fff!important;font-size:clamp(12px,3vw,16px)!important;font-weight:900!important;letter-spacing:.16em!important;text-transform:uppercase!important;text-shadow:0 2px 14px #000!important;opacity:.96!important;animation:wdccTag 2.25s ease both!important}
+      .intro-dock .intro-tagline{opacity:0!important;transition:opacity .22s ease!important}
+      .intro-skip{position:absolute!important;right:max(22px,env(safe-area-inset-right))!important;bottom:max(26px,calc(env(safe-area-inset-bottom) + 18px))!important;z-index:8!important;color:#fff!important;background:rgba(3,9,14,.72)!important;border:1px solid rgba(255,255,255,.28)!important;border-radius:999px!important;padding:14px 22px!important;font:800 12px/1 system-ui,sans-serif!important;letter-spacing:.02em!important}
+      @keyframes wdccBadgeReveal{0%{opacity:0;transform:translate(-50%,-50%) scale(.62) rotate(-5deg);filter:blur(7px)}18%{opacity:1}62%{transform:translate(-50%,-50%) scale(1.08) rotate(1.5deg);filter:blur(0)}100%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0);filter:blur(0)}}
+      @keyframes wdccSmokeA{0%{opacity:0;transform:translate(-58%,-42%) scale(.55)}35%{opacity:.52}100%{opacity:.18;transform:translate(-43%,-54%) scale(1.28)}}
+      @keyframes wdccSmokeB{0%{opacity:0;transform:translate(-42%,-52%) scale(.5)}45%{opacity:.34}100%{opacity:.12;transform:translate(-56%,-47%) scale(1.1)}}
+      @keyframes wdccTag{0%,24%{opacity:0;transform:translate(-50%,12px)}45%,82%{opacity:.96;transform:translate(-50%,0)}100%{opacity:.78}}
+      @media(max-width:600px){.intro-badge{top:41%!important;width:min(64vw,300px)!important}.intro-tagline{top:66%!important;font-size:12px!important;letter-spacing:.13em!important}.intro-smoke{top:45%!important;width:100vw!important;height:62vw!important}}
+    `}</style>
     <div className="intro-scene" aria-hidden="true"/>
     <div className="intro-smoke smoke-one" aria-hidden="true"/>
     <div className="intro-smoke smoke-two" aria-hidden="true"/>
