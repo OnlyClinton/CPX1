@@ -11,6 +11,7 @@ on:
       - 'public/wdcc-logo-transparent.webp'
       - 'public/wdcc-hero-v2.webp'
       - 'scripts/r31-local-visual-qa.mjs'
+      - 'scripts/r31-route-contract.mjs'
       - '.github/workflows/r31-local-visual-qa.yml'
   workflow_dispatch:
 
@@ -52,6 +53,8 @@ jobs:
           exit 1
       - name: Run desktop, tablet, mobile and failure-state QA
         run: node scripts/r31-local-visual-qa.mjs
+      - name: Run route, navigation and VDP contract QA
+        run: node scripts/r31-route-contract.mjs
       - name: Print local server log on failure
         if: failure()
         run: cat /tmp/r31-next.log || true
