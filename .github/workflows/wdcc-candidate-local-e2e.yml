@@ -78,7 +78,7 @@ jobs:
           line="$(grep 'LOCAL_CLEANUP=' /tmp/wdcc-cleanup.log | tail -1)"
           json="${line#LOCAL_CLEANUP=}"
           echo "$json" | jq .
-          echo "$json" | jq -e '.ok==true and (.leadsRemoved <= 3) and (.vehiclesArchived <= 1) and ((.leadIds // [])|length == .leadsRemoved) and ((.vehicleIds // [])|length == .vehiclesArchived)' >/dev/null
+          echo "$json" | jq -e '.ok==true and (.leadsRemoved <= 3) and (.vehiclesArchived <= 1) and (((.leadIds // [])|length) == .leadsRemoved) and (((.vehicleIds // [])|length) == .vehiclesArchived)' >/dev/null
       - name: Report candidate E2E
         if: always()
         env:
