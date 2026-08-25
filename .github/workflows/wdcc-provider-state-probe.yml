@@ -1,0 +1,42 @@
+name: WDCC Provider State Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-provider-state-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CF_API: https://api.cloudflare.com/client/v4
+      ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+      ZONE_NAME: wedontcarecars.com
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read provider state only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dnssec.json
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns.json
+          jq -e '.success==true' /tmp/dnssec.json >/dev/null
+          jq -e '.success==true' /tmp/dns.json >/dev/null
+
+          STATUS="$(jq -r '.result.status // "unknown"' /tmp/dnssec.json)"
+          DS="$(jq -r '.result.ds // ""' /tmp/dnssec.json)"
+          DKIM_COUNT="$(jq -r '.result[] | select(.type=="CNAME" and (.name|contains("._domainkey."))) | .name' /tmp/dns.json | sort -u | wc -l | tr -d ' ')"
+          DKIM_NAMES="$(jq -r '.result[] | select(.type=="CNAME" and (.name|contains("._domainkey."))) | .name' /tmp/dns.json | sort -u | paste -sd ',' -)"
+
+          BODY=$(printf 'WDCC provider state probe\n\nDNSSEC status: `%s`\nDNSSEC DS: `%s`\nDKIM selectors found: `%s`\nDKIM names: `%s`\n\nRead-only probe. No DNS records, aliases, routes, or provider settings were changed.' "$STATUS" "$DS" "$DKIM_COUNT" "${DKIM_NAMES:-none}")
+          gh issue comment 317 --repo "$GITHUB_REPOSITORY" --body "$BODY"
