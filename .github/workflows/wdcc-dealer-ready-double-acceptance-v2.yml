@@ -1,0 +1,78 @@
+name: WDCC Dealer Ready Double Acceptance v2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-dealer-ready-double-acceptance-v2.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wdcc-dealer-ready-double-acceptance-v2
+  cancel-in-progress: true
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      SERVING_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - name: Pull production bindings from the project actually serving dealer.wedontcarecars.com
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/live/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$SERVING_PROJECT" > /tmp/live/.vercel/project.json
+          cd /tmp/live
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/live.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/live.env
+          grep -q '^SESSION_SECRET=' /tmp/live.env
+      - name: Create authorized short-lived dealer session
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/live.env; set +a
+          node <<'NODE' > /tmp/session.env
+          const crypto=require('crypto'),{get}=require('@vercel/blob');
+          (async()=>{const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,token:process.env.BLOB_READ_WRITE_TOKEN});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const a=[];for await(const c of r.stream)a.push(c);const s=JSON.parse(Buffer.concat(a).toString());const roles=new Set(['dealer_agent','tenant_admin','platform_admin']);const u=(s.users||[]).find(x=>roles.has(String(x.role||'').toLowerCase())&&x.status!=='disabled'&&!x.disabled);if(!u)throw Error('NO_AUTHORIZED_USER');const raw=Buffer.from(JSON.stringify({id:u.id,role:u.role,exp:Date.now()+1800000})).toString('base64url');const sig=crypto.createHmac('sha256',process.env.SESSION_SECRET).update(raw).digest('base64url');console.log(`QA_COOKIE=${raw}.${sig}`)})().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          cat /tmp/session.env >> "$GITHUB_ENV"
+      - name: Verify live session
+        run: |
+          code="$(curl -sS -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
+          test "$code" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Verify routes and run dealer acceptance twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          const D=process.env.DEALER,S=process.env.STOREFRONT,C=process.env.QA_COOKIE,R=process.env.RUN_ID,wait=ms=>new Promise(r=>setTimeout(r,ms));
+          const cust=/Bad credit\?|No credit\?|Vehicles ready now\./i, dealer=/DEALER PORTAL|Inventory Operations|Dashboard|All Vehicles|Add \/ Edit Vehicle/i;
+          async function j(ctx,method,url,data){const o={method,headers:{Cookie:`__Host-wdcc_session=${C}`}};if(data!==undefined){o.headers['content-type']='application/json';o.data=data}const r=await ctx.request.fetch(url,o);let x={};try{x=await r.json()}catch{}return[r,x]}
+          async function dealerItem(ctx,id,status){for(let n=0;n<15;n++){const[r,x]=await j(ctx,'GET',`${D}/api/inventory`);if(!r.ok())throw Error(`DEALER_API_${r.status()}`);const v=(x.items||[]).find(v=>String(v.id)===String(id));if(v&&String(v.status).toLowerCase()===status)return v;await wait(1000)}throw Error(`DEALER_${status}_TIMEOUT`)}
+          async function publicHas(ctx,id,want){for(let n=0;n<20;n++){const r=await ctx.request.get(`${S}/api/inventory?qa=${R}-${Date.now()}`);if(!r.ok())throw Error(`PUBLIC_API_${r.status()}`);const x=await r.json(),has=(x.items||[]).some(v=>String(v.id)===String(id));if(has===want)return;await wait(1000)}throw Error(`PUBLIC_${want?'SHOW':'HIDE'}_TIMEOUT`)}
+          async function archive(ctx,id,stock){const[r,x]=await j(ctx,'PATCH',`${D}/api/inventory/${encodeURIComponent(id)}`,{status:'archived',stock:`R36TEST-${stock}`.slice(0,120)});if(!r.ok())throw Error(`ARCHIVE_${r.status()}_${x.error||''}`);await dealerItem(ctx,id,'archived');await publicHas(ctx,id,false)}
+          (async()=>{fs.writeFileSync('/tmp/q.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const b=await chromium.launch({headless:true});const out={ok:false,routes:{},runs:[]};try{
+            const u=await b.newContext({viewport:{width:390,height:844}}),p0=await u.newPage();for(const [k,path] of [['root','/'],['login','/dealer/login']]){const resp=await p0.goto(D+path,{waitUntil:'domcontentloaded',timeout:60000});const text=await p0.locator('body').innerText().catch(()=> '');if(!resp||resp.status()>=500||new URL(p0.url()).hostname!=='dealer.wedontcarecars.com'||cust.test(text))throw Error(`ROUTE_${k}_NOT_DEALER`);out.routes[k]=p0.url()}await u.close();
+            const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:C,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();for(const [k,path] of [['dashboard','/dealer/dashboard'],['inventory','/dealer/inventory'],['upload','/dealer/inventory/new']]){const resp=await p.goto(D+path,{waitUntil:'networkidle',timeout:60000}),text=await p.locator('body').innerText();if(!resp||resp.status()===404||resp.status()>=500||new URL(p.url()).hostname!=='dealer.wedontcarecars.com'||p.url().includes('/dealer/login')||cust.test(text)||!dealer.test(text))throw Error(`ROUTE_${k}_FAIL`);out.routes[k]=p.url()}
+            for(let n=1;n<=2;n++){const stock=`WDCC-QA-READY-${R}-${n}`,model=`QA-READY-${R}-${n}`;let id='';try{await p.goto(D+'/dealer/dashboard',{waitUntil:'networkidle',timeout:60000});if(cust.test(await p.locator('body').innerText()))throw Error(`RUN${n}_DASHBOARD_STOREFRONT`);await p.goto(D+'/dealer/inventory/new',{waitUntil:'networkidle',timeout:60000});for(const [lab,val] of [['YEAR','2021'],['MAKE','Toyota'],['MODEL',model],['TRIM','QA ONLY'],['PRICE','12345'],['DOWN PAYMENT','1500'],['MILEAGE','54321'],['STOCK #',stock]])await p.getByLabel(lab).fill(val);await p.getByLabel('DESCRIPTION').fill(`Automated dealer acceptance run ${n}. QA ONLY.`);await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/q.png');await p.getByRole('button',{name:/Save Draft/i}).first().click();await p.waitForURL(/\/dealer\/inventory\?saved=draft/,{timeout:60000});let[r,x]=await j(c,'GET',D+'/api/inventory'),v=(x.items||[]).find(v=>v.stock===stock);if(!r.ok()||!v)throw Error(`RUN${n}_DRAFT_MISSING`);id=String(v.id);if(String(v.status).toLowerCase()!=='draft'||!(v.photoPathnames||[]).length)throw Error(`RUN${n}_DRAFT_OR_PHOTO_FAIL`);await publicHas(c,id,false);[r,x]=await j(c,'PATCH',`${D}/api/inventory/${encodeURIComponent(id)}`,{status:'published'});if(!r.ok())throw Error(`RUN${n}_PUBLISH_${r.status()}`);await dealerItem(c,id,'published');await publicHas(c,id,true);const sp=await c.newPage();await sp.goto(`${S}/inventory?qa=${R}-${n}`,{waitUntil:'networkidle',timeout:60000});if(!(await sp.locator('body').innerText()).includes(model))throw Error(`RUN${n}_PUBLIC_UI_MISSING`);await sp.close();await archive(c,id,stock);out.runs.push({run:n,id,draft:true,photo:true,published:true,dealer:true,public:true,archived:true,removed:true})}catch(e){if(id)try{await archive(c,id,stock)}catch{}throw e}}
+            if(out.runs.length!==2)throw Error('DOUBLE_RUN_INCOMPLETE');out.ok=true;fs.writeFileSync('/tmp/result.json',JSON.stringify(out,null,2));await c.close()}finally{await b.close()}})().catch(e=>{fs.writeFileSync('/tmp/result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)});
+          NODE
+          cat /tmp/result.json
+          jq -e '.ok==true and (.runs|length)==2 and all(.runs[];.draft and .photo and .published and .dealer and .public and .archived and .removed)' /tmp/result.json >/dev/null
+      - run: echo 'WDCC_DEALER_READY_DOUBLE_ACCEPTANCE_V2=PASS'
