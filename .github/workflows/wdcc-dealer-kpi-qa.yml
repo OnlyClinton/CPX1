@@ -1,0 +1,46 @@
+name: WDCC Dealer KPI Drilldown QA
+
+on:
+  push:
+    branches:
+      - fix/dealer-kpi-drilldowns-thumbnails
+    paths:
+      - 'app/dealer/page.tsx'
+      - 'app/dealer/leads/page.tsx'
+      - 'app/dealer/inventory/page.tsx'
+      - '.github/workflows/wdcc-dealer-kpi-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-kpi-drilldown-qa
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify drilldown contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '/dealer/leads?view=new-today' app/dealer/page.tsx
+          grep -q '/dealer/leads?view=hot' app/dealer/page.tsx
+          grep -q '/dealer/leads?view=appointments' app/dealer/page.tsx
+          grep -q '/dealer/inventory?view=published' app/dealer/page.tsx
+          grep -q '/dealer/leads?view=sold' app/dealer/page.tsx
+          grep -q 'primaryPhotoPathname' app/dealer/page.tsx
+          grep -q 'new-today' app/dealer/leads/page.tsx
+      - name: Build candidate
+        run: npm run build
