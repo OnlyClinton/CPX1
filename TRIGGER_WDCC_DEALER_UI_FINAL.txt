@@ -1,3 +1,4 @@
 release_sha=98c84814c00528e6114196f8d5ff7597fb844b20
-requested=2026-08-25T14:03:00Z
+requested=2026-08-25T14:06:30Z
+attempt=2
 contract=screenshot-storefront+V52-api+dealer-dashboard+vehicle-editor+authenticated-listing-e2e
