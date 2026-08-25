@@ -1,0 +1,6 @@
+import {NextResponse} from "next/server";
+import {currentUser} from "../../../../lib/auth";
+import {readRecentDeadLetters} from "../../../../lib/deadLetter";
+export const dynamic="force-dynamic";
+const roles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
+export async function GET(request:Request){const user=await currentUser().catch(()=>null);if(!user||!roles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401,headers:{"Cache-Control":"private, no-store"}});try{const url=new URL(request.url);const limit=Math.max(1,Math.min(Number(url.searchParams.get("limit"))||200,500));const tenantId=String(user.tenantId||"wdcc");const all=await readRecentDeadLetters(limit);const items=String(user.role).toLowerCase()==="platform_admin"?all:all.filter((item:any)=>String(item?.tenantId||"wdcc")===tenantId);return NextResponse.json({ok:true,count:items.length,open:items.filter((x:any)=>x?.status!=="resolved").length,items},{headers:{"Cache-Control":"private, no-store","X-Robots-Tag":"noindex, nofollow"}});}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:"dead_letter_read_failed",items:[]},{status:500,headers:{"Cache-Control":"private, no-store"}});}}
