@@ -45,8 +45,11 @@ export async function GET(){
   try{
     const {response,json}=await backendHealth();
     const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:json?.integrations||null,provider:provider(),commit},{status:ok?200:503,headers});
+    // Older immutable canonical backends do not expose integration readiness.
+    // In that case report the facade runtime's actual configuration instead of null.
+    const notificationIntegrations=json?.integrations||integrations();
+    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
-    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:null,error:error instanceof Error?error.message:"backend_health_failed",provider:provider(),commit},{status:503,headers});
+    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:integrations(),integrationReadinessSource:"facade-runtime",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
   }
 }
