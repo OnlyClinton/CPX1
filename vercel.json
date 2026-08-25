@@ -5,5 +5,11 @@
   "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
   "git": {
     "deploymentEnabled": true
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/ops/retry",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
