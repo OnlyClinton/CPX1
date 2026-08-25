@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
-import {publicVehicles,readState,writeState} from "../../../lib/store";
+import {isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
@@ -14,21 +14,13 @@ function response(body:any,status:number,requestIdValue:string){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":requestIdValue}});
 }
 
-function isQaVehicle(item:any){
-  const stock=String(item?.stock||"").toUpperCase();
-  const id=String(item?.id||"").toUpperCase();
-  const description=String(item?.description||"").toLowerCase();
-  const badges=Array.isArray(item?.badges)?item.badges.map((value:any)=>String(value||"").toUpperCase()):[];
-  return /^R36TEST[-_]/.test(stock)||/^QA[-_]/.test(stock)||/^TEST[-_]/.test(stock)||/^QA[-_]/.test(id)||badges.some((badge:string)=>badge==="R36-TEST"||badge==="QA"||badge==="TEST"||badge.includes("CERTIFICATION"))||description.includes("automated temporary qa vehicle")||description.includes("automated dealer workflow certification")||description.includes("automated recovery certification vehicle");
-}
-
 function publicEligible(item:any){
   const year=Number(item?.year);
   const price=Number(item?.price);
   const mileage=Number(item?.mileage||0);
   const downPayment=Number(item?.downPayment||0);
   const maxYear=new Date().getUTCFullYear()+1;
-  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicle(item);
+  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item);
 }
 
 async function proxyPublicInventory(request:Request){
