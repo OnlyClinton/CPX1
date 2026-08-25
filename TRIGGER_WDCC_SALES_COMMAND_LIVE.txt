@@ -1,0 +1,2 @@
+WDCC Sales Command production trigger
+Purpose: deploy current full source with sleek mobile storefront header, single conversion dock, clickable dealer count tiles, exact filtered lead tables, and published inventory drilldown.
