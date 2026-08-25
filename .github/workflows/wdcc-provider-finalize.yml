@@ -1,0 +1,157 @@
+name: WDCC Provider Finalize
+
+on:
+  workflow_dispatch:
+    inputs:
+      dkim1_host:
+        description: Proton DKIM host 1 (for example protonmail._domainkey.wedontcarecars.com)
+        required: false
+        type: string
+      dkim1_target:
+        description: Proton DKIM CNAME target 1
+        required: false
+        type: string
+      dkim2_host:
+        description: Proton DKIM host 2
+        required: false
+        type: string
+      dkim2_target:
+        description: Proton DKIM CNAME target 2
+        required: false
+        type: string
+      dkim3_host:
+        description: Proton DKIM host 3
+        required: false
+        type: string
+      dkim3_target:
+        description: Proton DKIM CNAME target 3
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_NAME: wedontcarecars.com
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+  EXPECTED_DS_KEY_TAG: '2371'
+  EXPECTED_DS_ALGORITHM: '13'
+  EXPECTED_DS_DIGEST_TYPE: '2'
+  EXPECTED_DS_DIGEST: 54D207CCBE38F032431586C76B39772F69E1D6599E17C99A3C165B411D87AE87
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Cloudflare authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=1" -H "Authorization: Bearer $CF_ZONE_TOKEN" | jq -e '.success==true' >/dev/null
+
+      - name: Verify parent DS and Cloudflare DNSSEC state
+        id: dnssec
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq dnsutils >/dev/null
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/cf-dnssec.json
+          jq -e '.success==true' /tmp/cf-dnssec.json >/dev/null
+          CF_STATUS="$(jq -r '.result.status // "unknown"' /tmp/cf-dnssec.json)"
+          DS_LINES="$(dig +short DS "$ZONE_NAME" @1.1.1.1 | tr '[:lower:]' '[:upper:]' || true)"
+          EXPECTED="$EXPECTED_DS_KEY_TAG $EXPECTED_DS_ALGORITHM $EXPECTED_DS_DIGEST_TYPE $EXPECTED_DS_DIGEST"
+          PARENT=false
+          printf '%s\n' "$DS_LINES" | awk '{$1=$1;print}' | grep -Fxq "$EXPECTED" && PARENT=true || true
+          echo "cf_status=$CF_STATUS" >> "$GITHUB_OUTPUT"
+          echo "parent_ds=$PARENT" >> "$GITHUB_OUTPUT"
+          echo "Cloudflare DNSSEC status: $CF_STATUS"
+          echo "Parent DS present: $PARENT"
+
+      - name: Safely apply Proton DKIM CNAMEs when supplied
+        id: dkim
+        shell: bash
+        env:
+          H1: ${{ inputs.dkim1_host }}
+          T1: ${{ inputs.dkim1_target }}
+          H2: ${{ inputs.dkim2_host }}
+          T2: ${{ inputs.dkim2_target }}
+          H3: ${{ inputs.dkim3_host }}
+          T3: ${{ inputs.dkim3_target }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns.json
+          jq -e '.success==true' /tmp/dns.json >/dev/null
+
+          apply_one(){
+            host="$1"; target="$2"
+            [ -z "$host$target" ] && return 0
+            [ -n "$host" ] && [ -n "$target" ] || { echo 'DKIM host/target must be supplied as a pair'; exit 20; }
+            case "$host" in
+              *._domainkey.wedontcarecars.com) ;;
+              *) echo "Refusing DKIM host outside _domainkey.wedontcarecars.com: $host"; exit 21;;
+            esac
+            existing="$(jq -r --arg h "$host" '.result[] | select(.name==$h) | "\(.type)\t\(.content)"' /tmp/dns.json)"
+            if [ -n "$existing" ]; then
+              etype="${existing%%$'\t'*}"; evalv="${existing#*$'\t'}"
+              [ "$etype" = CNAME ] || { echo "Refusing to replace non-CNAME at $host"; exit 22; }
+              [ "$evalv" = "$target" ] || { echo "Refusing to overwrite different CNAME at $host"; exit 23; }
+              echo "DKIM already correct: $host"
+              return 0
+            fi
+            payload="$(jq -nc --arg n "$host" --arg c "$target" '{type:"CNAME",name:$n,content:$c,ttl:3600,proxied:false}')"
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' \
+              --data "$payload" | jq -e '.success==true' >/dev/null
+            echo "DKIM created: $host"
+            curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns.json
+          }
+
+          apply_one "$H1" "$T1"
+          apply_one "$H2" "$T2"
+          apply_one "$H3" "$T3"
+
+          COUNT="$(jq -r '.result[] | select(.type=="CNAME" and (.name|endswith("._domainkey.wedontcarecars.com"))) | .name' /tmp/dns.json | sort -u | wc -l | tr -d ' ')"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Published DKIM selectors: $COUNT"
+
+      - name: Live gate dealer and storefront
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEALER=false
+          STOREFRONT=false
+          if curl -fsS --max-time 20 https://dealer.wedontcarecars.com/api/health -o /tmp/dealer.json && jq -e '.ok==true and .degraded==false' /tmp/dealer.json >/dev/null; then DEALER=true; fi
+          if [ "$(curl -fsSL --max-time 20 -o /tmp/storefront.html -w '%{http_code}' https://wedontcarecars.com/)" = 200 ]; then STOREFRONT=true; fi
+          echo "dealer=$DEALER" >> "$GITHUB_OUTPUT"
+          echo "storefront=$STOREFRONT" >> "$GITHUB_OUTPUT"
+          test "$DEALER" = true
+          test "$STOREFRONT" = true
+
+      - name: Publish provider finalization status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CF_STATUS: ${{ steps.dnssec.outputs.cf_status }}
+          PARENT_DS: ${{ steps.dnssec.outputs.parent_ds }}
+          DKIM_COUNT: ${{ steps.dkim.outputs.count }}
+          DEALER: ${{ steps.live.outputs.dealer }}
+          STOREFRONT: ${{ steps.live.outputs.storefront }}
+        run: |
+          set -u
+          COMPLETE=false
+          if [ "$PARENT_DS" = true ] && [ "${DKIM_COUNT:-0}" -ge 3 ] && [ "$DEALER" = true ] && [ "$STOREFRONT" = true ]; then COMPLETE=true; fi
+          body="Provider finalizer: DNSSEC Cloudflare status **${CF_STATUS:-unknown}**; parent DS **${PARENT_DS:-false}**; DKIM selectors **${DKIM_COUNT:-0}**; dealer **${DEALER:-false}**; storefront **${STOREFRONT:-false}**; infrastructure complete **$COMPLETE**. Proton mailbox delivery is tracked separately and remains required until a successful message to sean@wedontcarecars.com is independently observed."
+          gh issue comment 317 --repo "$GITHUB_REPOSITORY" --body "$body" || true
+          if [ "$COMPLETE" = true ]; then
+            echo 'WDCC_DNS_INFRA_CLOSEOUT=PASS'
+          fi
