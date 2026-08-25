@@ -1,0 +1,64 @@
+name: WDCC Reliability V2 Preview
+
+"on":
+  push:
+    branches:
+      - fix/attribution-no-void-v2
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-attribution-preview-v2
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Require Vercel token
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN missing" >&2
+            exit 78
+          fi
+      - name: Link project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - run: npm install --global vercel@59.3.0
+      - run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      - run: vercel build --token="$VERCEL_TOKEN"
+      - name: Deploy preview
+        id: deploy
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -n 1 || true)"
+          if [ -z "$url" ]; then
+            echo "Vercel returned success but no deployment URL" >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Smoke preview
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          test -n "$URL"
+          code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?utm_source=preview_test&utm_medium=qa&utm_campaign=attribution")"
+          test "$code" = "200"
