@@ -33,15 +33,21 @@ jobs:
         run: |
           set -euo pipefail
           vercel alias set "$CANDIDATE_URL" "$DEALER_DOMAIN" --scope cpxagency --token "$VERCEL_TOKEN"
-      - name: Confirm dealer alias moved
+      - name: Wait for candidate auth fingerprint on dealer domain
+        shell: bash
         run: |
           set -euo pipefail
-          for n in 1 2 3 4 5 6 7 8; do
-            code="$(curl -sS -o /tmp/dealer.html -w '%{http_code}' "$DEALER_URL/dealer/login" || true)"
-            if [ "$code" = 200 ] && grep -qi 'Dealer Sign In' /tmp/dealer.html; then exit 0; fi
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          for n in $(seq 1 20); do
+            payload="$(jq -nc --arg email 'Big Pussy' --arg password "$PW" '{email:$email,password:$password}')"
+            code="$(curl -sS -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST "$DEALER_URL/api/auth/login" -H 'content-type: application/json' -H "origin: $DEALER_URL" --data "$payload" || true)"
+            if [ "$code" = 200 ] && grep -Eqi '^set-cookie:[[:space:]]*wdcc_session=' /tmp/h && ! grep -Eqi '^set-cookie:[[:space:]]*__Host-wdcc_session=' /tmp/h; then
+              echo "Candidate local-auth fingerprint confirmed on attempt $n"
+              exit 0
+            fi
             sleep 2
           done
-          echo 'Dealer login page did not become ready'; cat /tmp/dealer.html || true; exit 1
+          echo 'Candidate auth fingerprint never stabilized'; sed -n '1,40p' /tmp/h; cat /tmp/b; exit 1
       - name: Verify both credentials, sessions and privileged APIs
         run: node scripts/wdcc-temp-login-reset.mjs verify
       - name: Install Chromium
