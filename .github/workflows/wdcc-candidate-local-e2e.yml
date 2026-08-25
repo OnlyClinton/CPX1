@@ -16,7 +16,7 @@ jobs:
       issues: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      CANDIDATE_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+      CANDIDATE_SHA: 78fa97095fec229f673c1eb5f14388dee0ed5d92
     steps:
       - uses: actions/checkout@v4
         with:
