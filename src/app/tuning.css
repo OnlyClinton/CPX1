@@ -67,6 +67,9 @@
   .home-header-shell .main-nav {
     top: 94px;
   }
+  .home-header-shell .mobile-call {
+    display: none !important;
+  }
 
   .hero {
     min-height: 680px;
