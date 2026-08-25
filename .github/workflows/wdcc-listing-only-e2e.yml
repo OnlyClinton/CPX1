@@ -89,26 +89,26 @@ jobs:
           echo "login_http=$code" >> "$GITHUB_OUTPUT"
           echo "session_http=$session" >> "$GITHUB_OUTPUT"
 
-      - name: Prove add photo publish and public visibility
+      - name: Prove browser login add photo publish and public visibility
         id: browser
         shell: bash
         run: |
           set -euo pipefail
           set -a; . /tmp/listing.env; set +a
-          export DEALER_COOKIE="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/dealer.cookies | tail -1)"
-          test -n "$DEALER_COOKIE"
-          printf '::add-mask::%s\n' "$DEALER_COOKIE"
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
           node <<'NODE'
           const fs=require('fs');const{chromium}=require('playwright');
           (async()=>{const run=process.env.RUN_TAG,dealer=process.env.DEALER,store=process.env.STOREFRONT,stock=process.env.STOCK;
           fs.writeFileSync('/tmp/listing.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
-          const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.DEALER_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
-          await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});if(p.url().includes('/dealer/login'))throw Error('SESSION_REDIRECTED_TO_LOGIN');
+          const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:390,height:844}});const p=await c.newPage();
+          await p.goto(`${dealer}/login`,{waitUntil:'networkidle'});await p.getByLabel('LOGIN').fill(process.env.DEALER_EMAIL);await p.getByLabel('PASSWORD').fill(process.env.QA_PASSWORD);await p.getByRole('button',{name:'SIGN IN'}).click();await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
+          const sr=await c.request.get(`${dealer}/api/auth/session`);if(!sr.ok())throw Error(`BROWSER_SESSION_${sr.status()}`);const sj=await sr.json();if(!sj.authenticated||String(sj?.user?.role||'').toLowerCase()!=='dealer_agent')throw Error('BROWSER_SESSION_NOT_DEALER');
+          await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});if(p.url().includes('/login'))throw Error('SESSION_REDIRECTED_TO_LOGIN');
           await p.getByLabel('Year').fill('2019');await p.getByLabel('Make').fill('Toyota');await p.getByLabel('Model').fill('Corolla');await p.getByLabel('Trim').fill(`Listing Verification ${run}`);await p.getByLabel('Cash Price').fill('12345');await p.getByLabel('Estimated Down Payment').fill('1500');await p.getByLabel('Mileage').fill('54321');await p.getByLabel('Stock #').fill(stock);await p.getByLabel('Description').fill(`Temporary publication verification record ${run}. Remove after verification.`);await p.locator('input[type=file][multiple]').first().setInputFiles('/tmp/listing.png');
           await p.getByRole('button',{name:'PUBLISH VEHICLE'}).click();await p.waitForURL(/\/dealer\?saved=published/,{timeout:60000});
-          const ir=await c.request.get(`${dealer}/api/inventory`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`}});if(!ir.ok())throw Error(`DEALER_INVENTORY_${ir.status()}`);const ij=await ir.json(),item=(ij.items||[]).find(v=>v.stock===stock);if(!item)throw Error('PUBLISHED_VEHICLE_NOT_IN_DEALER_INVENTORY');if(!(item.photoPathnames||[]).length)throw Error('PUBLISHED_VEHICLE_PHOTO_MISSING');
+          const ir=await c.request.get(`${dealer}/api/inventory`);if(!ir.ok())throw Error(`DEALER_INVENTORY_${ir.status()}`);const ij=await ir.json(),item=(ij.items||[]).find(v=>v.stock===stock);if(!item)throw Error('PUBLISHED_VEHICLE_NOT_IN_DEALER_INVENTORY');if(!(item.photoPathnames||[]).length)throw Error('PUBLISHED_VEHICLE_PHOTO_MISSING');
           const pr=await c.request.get(`${store}/api/inventory?listing_verify=${Date.now()}`);if(!pr.ok())throw Error(`PUBLIC_INVENTORY_${pr.status()}`);const pj=await pr.json();if(!(pj.items||[]).some(v=>v.id===item.id||v.stock===stock))throw Error('PUBLISHED_VEHICLE_NOT_VISIBLE_ON_STOREFRONT');
-          const hide=await c.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{Cookie:`__Host-wdcc_session=${process.env.DEALER_COOKIE}`,'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!hide.ok())throw Error(`QA_HIDE_FAILED_${hide.status()}`);
+          const hide=await c.request.patch(`${dealer}/api/inventory/${encodeURIComponent(item.id)}`,{headers:{'content-type':'application/json'},data:{status:'draft',stock:`R36TEST-${stock}`}});if(!hide.ok())throw Error(`QA_HIDE_FAILED_${hide.status()}`);
           fs.writeFileSync('/tmp/listing-result.json',JSON.stringify({ok:true,id:item.id,photoPathnames:item.photoPathnames||[],photoCount:(item.photoPathnames||[]).length,publicVisible:true,stock},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/listing-result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
           NODE
           cat /tmp/listing-result.json
