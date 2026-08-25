@@ -26,7 +26,7 @@ export function R31Header(){
           </nav>
         </details>
         <Link className={`logoBrand ${styles.logo}`} href="/r31-preview" aria-label="We Don't Care Cars preview home">
-          <img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" />
+          <img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" />
         </Link>
         <nav className={styles.desktopNav} aria-label="R31 preview navigation">
           <Link href="/r31-preview/inventory?source=r31-nav">INVENTORY</Link>
