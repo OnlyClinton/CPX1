@@ -1,0 +1,46 @@
+name: WDCC Patch Presigned Client Once
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-patch-presigned-client-once.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/wdcc-final-cert-20260825
+          fetch-depth: 1
+      - name: Switch vehicle editor to uploadPresigned
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='app/dealer/inventory/new/page.tsx'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/dealer/inventory/new/page.tsx')
+          s=p.read_text()
+          old='import{upload}from"@vercel/blob/client";'
+          new='import{uploadPresigned}from"@vercel/blob/client";'
+          if old not in s:
+              raise SystemExit('legacy upload import not found')
+          s=s.replace(old,new,1)
+          old_call='const blob=await upload(`media/wdcc/${draftId}/${safe}`'
+          new_call='const blob=await uploadPresigned(`media/wdcc/${draftId}/${safe}`'
+          if old_call not in s:
+              raise SystemExit('legacy upload call not found')
+          s=s.replace(old_call,new_call,1)
+          p.write_text(s)
+          PY
+          grep -q 'uploadPresigned' "$file"
+          ! grep -q 'const blob=await upload(' "$file"
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$file"
+          git commit -m 'Use signed OIDC upload client for dealer vehicle photos'
+          git push origin HEAD:release/wdcc-final-cert-20260825
