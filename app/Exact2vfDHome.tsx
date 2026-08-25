@@ -34,11 +34,10 @@ function photo(v:Vehicle){
 function href(v:Vehicle){return v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`}
 
 export default function Exact2vfDHome(){
-  const[phase,setPhase]=useState<"reveal"|"dock"|"done">("reveal");
+  const[showIntro,setShowIntro]=useState(true);
   const[open,setOpen]=useState(false);
   const[active,setActive]=useState(0);
   const[items,setItems]=useState<Vehicle[]>(fallback);
-  const[dock,setDock]=useState({x:0,y:0,scale:.5});
 
   useEffect(()=>{
     fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>{
@@ -48,47 +47,31 @@ export default function Exact2vfDHome(){
   },[]);
 
   useEffect(()=>{
-    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if(reduced){setPhase("done");return}
-    const measure=()=>{
-      const target=document.querySelector(".home-header-shell .logo-button .brand-logo") as HTMLElement|null;
-      const badge=document.querySelector(".intro-badge") as HTMLElement|null;
-      if(!target||!badge)return;
-      const tr=target.getBoundingClientRect();
-      const br=badge.getBoundingClientRect();
-      const bx=br.left+br.width/2,by=br.top+br.height/2;
-      setDock({x:tr.left+tr.width/2-bx,y:tr.top+tr.height/2-by,scale:Math.max(.25,Math.min(.8,tr.width/(badge.offsetWidth||300)))});
-    };
-    const raf=requestAnimationFrame(measure);
-    window.addEventListener("resize",measure);
-    const a=window.setTimeout(()=>setPhase("dock"),1850);
-    const b=window.setTimeout(()=>setPhase("done"),3000);
-    return()=>{cancelAnimationFrame(raf);window.removeEventListener("resize",measure);clearTimeout(a);clearTimeout(b)};
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setShowIntro(false);return}
+    const timer=window.setTimeout(()=>setShowIntro(false),2800);
+    return()=>window.clearTimeout(timer);
   },[]);
 
-  const appClass=`wdcc-app intro-state-${phase}`;
-  const badgeStyle={"--intro-dock-x":`${dock.x}px`,"--intro-dock-y":`${dock.y}px`,"--intro-dock-scale":dock.scale} as CSSProperties;
   const visible=useMemo(()=>items.slice(0,5),[items]);
   const move=(n:number)=>setActive(v=>(v+n+visible.length)%visible.length);
 
-  return <div className={appClass}>
-    {phase!=="done"&&<div className={`intro-sequence intro-${phase}`} aria-hidden="true" onWheel={()=>setPhase("done")} onTouchMove={()=>setPhase("done")}>
+  return <div className="wdcc-app">
+    {showIntro&&<div className="intro-sequence intro-reveal" aria-label="WDCC opening animation" onWheel={()=>setShowIntro(false)} onTouchMove={()=>setShowIntro(false)}>
       <div className="intro-scene" style={{"--hero-image":"url(/wdcc-hero-v2.webp)"} as CSSProperties}/>
       <div className="intro-smoke smoke-one"/><div className="intro-smoke smoke-two"/>
-      <div className="intro-badge" style={badgeStyle}><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
+      <div className="intro-badge"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></div>
       <p className="intro-tagline">Tampa Bay · Drive today</p>
-      <button className="intro-skip" type="button" onClick={()=>setPhase("done")}>Skip intro</button>
+      <button className="intro-skip" type="button" onClick={()=>setShowIntro(false)}>Skip intro</button>
     </div>}
 
     <div className="header-shell home-header-shell">
       <div className="utility-bar"><span>⌖ Tampa Bay</span><span>In-house financing</span><span>Sean · <b>813-516-4752</b></span></div>
       <header className="site-header">
         <button className="mobile-menu" aria-expanded={open} aria-label="Open navigation" onClick={()=>setOpen(v=>!v)}><span aria-hidden="true"><i/><i/><i/></span></button>
-        <Link className="logo-button" aria-label="WDCC home" href="/"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></Link>
+        <Link className="logo-button" aria-label="WDCC home" href="/"><span style={{fontWeight:950,letterSpacing:"-.04em",fontSize:"clamp(16px,2vw,22px)"}}>WE DON'T CARE CARS</span></Link>
         <nav className={`main-nav${open?" open":""}`} aria-label="Main navigation">
           <Link href="/inventory">Inventory</Link><Link href="/financing">Financing</Link><Link href="/#how-it-works">How it works</Link><Link href="/reviews">Reviews</Link><Link href="/about">About us</Link>
         </nav>
-        <Link id="apply" className="btn btn-primary header-cta" href="/get-approved?source=header-get-approved">Get pre-approved</Link>
         <a className="mobile-call" href="tel:+18135164752" aria-label="Call Sean at 813-516-4752"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 3.5 10 7.8 8.4 9.4c1.1 2.2 2.9 4 5.1 5.1l1.6-1.6 4.4 2.8-.7 3.7c-.2.8-.9 1.4-1.8 1.4C9.4 20.2 3.8 14.6 3.2 7c-.1-.9.5-1.6 1.4-1.8l2.6-.7Z"/></svg><span><small>Call</small>Sean</span></a>
       </header>
     </div>
@@ -100,7 +83,6 @@ export default function Exact2vfDHome(){
         <div className="hero-actions" aria-label="Choose your next step">
           <Link className="btn btn-primary hero-cta-test" href="/schedule-test-drive?source=schedule-test-drive">Schedule a test drive <span>→</span></Link>
           <Link className="btn btn-outline hero-cta-qualify" href="/get-approved?source=get-approved">Get qualified <span>→</span></Link>
-          <Link className="hero-call hero-cta-contact" aria-label="Contact WDCC" href="/contact?source=call-sean"><span><small>Questions or ready?</small><strong>Contact us</strong></span><b aria-hidden="true">→</b></Link>
         </div>
       </div><div className="hero-car-glow"/>
     </section>
@@ -133,7 +115,7 @@ export default function Exact2vfDHome(){
 
     <section className="about-section trust-grid" id="reviews"><article><span className="trust-icon">☆</span><div><h3>Tampa Bay proud</h3><p>Local dealer. Local community.</p></div></article><article><span className="trust-icon">•••</span><div><h3>Straight answers</h3><p>Ask directly about pricing, fees and terms.</p></div></article><article><span className="trust-avatar">SE</span><div><h3>Real people</h3><p>Talk to Sean. Not a call center.</p></div></article><article><span className="trust-icon">✓</span><div><h3>Confidence driven</h3><p>We make it happen when others can't.</p></div></article></section>
 
-    <footer className="site-footer" id="about"><span className="brand-logo compact"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span><div><strong>WDCC · We Don't Care Cars</strong><span>Serving Tampa Bay · Confirm availability before visiting</span></div><a href="tel:+18135164752">813-516-4752</a><span className="footer-links"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></span></footer>
-    <div className="mobile-action-bar" aria-label="Quick actions"><Link className="mobile-dock-drive" href="/schedule-test-drive?source=schedule-test-drive">Test drive</Link><Link className="mobile-dock-qualify" href="/get-approved?source=get-approved">Get qualified</Link><a className="mobile-dock-contact" href="tel:+18135164752">Call Sean</a></div>
+    <footer className="site-footer" id="about"><div><strong>WDCC · We Don't Care Cars</strong><span>Serving Tampa Bay · Confirm availability before visiting</span></div><a href="tel:+18135164752">813-516-4752</a><span className="footer-links"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></span></footer>
+    <div className="mobile-action-bar" aria-label="Quick actions"><Link className="mobile-dock-drive" href="/schedule-test-drive?source=schedule-test-drive">Test drive</Link><Link className="mobile-dock-qualify" href="/get-approved?source=get-approved">Get qualified</Link></div>
   </div>;
 }
