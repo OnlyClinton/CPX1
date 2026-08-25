@@ -1,120 +1,16 @@
-name: Promote WDCC canonical production
+name: WDCC CANONICAL PRODUCTION PROMOTION — FROZEN
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
-
-concurrency:
-  group: wdcc-canonical-production
-  cancel-in-progress: false
-
-env:
-  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
-  CANDIDATE_URL: wdcc-v32-storefront-dt496r4il-cpxagency.vercel.app
-  CANDIDATE_ID: dpl_MPK5UEsE5YN3vupz45Ac8kkBphBu
-  EXPECTED_COMMIT: 6baa059e9cedff991c1bcf32dec1ceed40174ddc
 
 jobs:
-  validate-and-promote:
+  frozen:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
     steps:
-      - name: Require Vercel token
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
-
-      - name: Confirm immutable candidate
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
+      - name: Release-control guard
         run: |
-          set -euo pipefail
-          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v13/deployments/$CANDIDATE_ID?teamId=$VERCEL_TEAM_ID" \
-            -o /tmp/deployment.json
-          jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '.id==$id and .readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/deployment.json >/dev/null
-
-      - name: Validate candidate contract before promotion
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/home.html
-          missing=0
-          check(){ label="$1"; pattern="$2"; mode="${3:-}"; if grep $mode -q -- "$pattern" /tmp/home.html; then echo "PASS: $label"; else echo "FAIL: $label" >&2; missing=1; fi; }
-          check "intro sequence" 'intro-sequence'
-          check "intro smoke" 'intro-smoke'
-          check "transparent logo" 'wdcc-logo-transparent.webp'
-          check "test drive CTA" 'schedule a test drive' '-i'
-          if grep -Eqi 'get qualified|get pre-approved|get approved' /tmp/home.html; then echo 'PASS: approval CTA'; else echo 'FAIL: approval CTA' >&2; missing=1; fi
-          if grep -Eqi 'contact us|call sean' /tmp/home.html; then echo 'PASS: contact CTA'; else echo 'FAIL: contact CTA' >&2; missing=1; fi
-          test "$missing" -eq 0
-          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$CANDIDATE_URL" > /tmp/hero.webp
-          test -s /tmp/hero.webp
-          npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
-          jq -e '.ok==true' /tmp/health.json >/dev/null
-
-      - name: Capture rollback target
-        id: previous
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&target=production&state=READY&limit=1" \
-            -o /tmp/production.json
-          PREV="$(jq -r '.deployments[0].url // empty' /tmp/production.json)"
-          test -n "$PREV"
-          echo "url=$PREV" >> "$GITHUB_OUTPUT"
-
-      - name: Promote immutable candidate
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx --yes vercel@59.3.0 promote "$CANDIDATE_URL" --yes --token "$VERCEL_TOKEN" --scope cpxagency
-
-      - name: Verify production apex
-        id: verify
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if curl -fsS https://wedontcarecars.com/ -o /tmp/live.html \
-              && grep -q 'intro-sequence' /tmp/live.html \
-              && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
-              && grep -qi 'schedule a test drive' /tmp/live.html \
-              && curl -fsS https://wedontcarecars.com/wdcc-hero-v2.webp -o /tmp/live-hero.webp \
-              && test -s /tmp/live-hero.webp \
-              && curl -fsS https://wedontcarecars.com/api/health -o /tmp/live-health.json \
-              && jq -e '.ok==true' /tmp/live-health.json >/dev/null; then exit 0; fi
-            sleep 5
-          done
-          exit 1
-
-      - name: Roll back automatically if live verification fails
-        if: steps.verify.outcome != 'success'
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          PREVIOUS_URL: ${{ steps.previous.outputs.url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes vercel@59.3.0 promote "$PREVIOUS_URL" --yes --token "$VERCEL_TOKEN" --scope cpxagency
-          exit 1
-
-      - name: Publish promotion proof
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
-        shell: bash
-        run: |
-          if [ "$VERIFY_OUTCOME" = success ]; then TITLE='WDCC production promotion passed'; BODY="Candidate \`$CANDIDATE_ID\` promoted and apex verification passed."; else TITLE='WDCC production promotion blocked or rolled back'; BODY="Candidate \`$CANDIDATE_ID\` was not left live without passing the full gate."; fi
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
+          echo 'Canonical storefront promotion is frozen during immutable candidate acceptance.'
+          echo 'No Vercel promote, alias change, or customer-domain cutover is permitted from this workflow.'
