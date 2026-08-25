@@ -59,21 +59,27 @@ jobs:
           import {del,get,issueSignedToken,presignUrl} from '@vercel/blob';
           const oidcToken=process.env.OIDC_TOKEN,storeId=process.env.STORE_ID;
           const pathname=`media/wdcc/oidc-proof/${Date.now()}-${crypto.randomUUID()}.png`;
-          const signed=await issueSignedToken({pathname,operations:['put'],validUntil:Date.now()+5*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,oidcToken,storeId});
-          if(!signed?.delegationToken||!signed?.clientSigningToken)throw Error('SIGNED_TOKEN_MISSING');
-          const presigned=presignUrl(signed,{operation:'put',pathname,access:'private',validUntil:Date.now()+4*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:false});
-          const presignedUrl=typeof presigned==='string'?presigned:presigned?.presignedUrl;
-          if(!presignedUrl)throw Error(`PRESIGNED_URL_MISSING_${JSON.stringify(presigned)}`);
-          const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
-          const putResponse=await fetch(presignedUrl,{method:'PUT',headers:{'content-type':'image/png'},body:png});
-          const putBody=await putResponse.text();
-          if(!putResponse.ok)throw Error(`PRESIGNED_PUT_${putResponse.status}_${putBody.slice(0,500)}`);
-          const read=await get(pathname,{access:'private',useCache:false,oidcToken,storeId});
-          if(!read||read.statusCode!==200||!read.stream)throw Error('OIDC_READBACK_FAILED');
-          const chunks=[];for await(const chunk of read.stream)chunks.push(chunk);
-          const bytes=Buffer.concat(chunks).length;if(bytes!==png.length)throw Error(`READBACK_SIZE_${bytes}_${png.length}`);
-          await del(pathname,{oidcToken,storeId});
-          console.log('OIDC_PRESIGNED_PROOF='+JSON.stringify({ok:true,pathname,bytes,putStatus:putResponse.status,deleted:true}));
+          let uploaded=false;
+          try{
+            const signed=await issueSignedToken({pathname,operations:['put'],validUntil:Date.now()+5*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,oidcToken,storeId});
+            if(!signed?.delegationToken||!signed?.clientSigningToken)throw Error('SIGNED_TOKEN_MISSING');
+            const presigned=await presignUrl(signed,{operation:'put',pathname,access:'private',validUntil:Date.now()+4*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:false});
+            const candidate=typeof presigned==='string'?presigned:presigned?.presignedUrl??presigned?.url??String(presigned);
+            const presignedUrl=String(candidate||'');
+            if(!/^https?:\/\//.test(presignedUrl))throw Error(`PRESIGNED_URL_MISSING type=${presigned?.constructor?.name||typeof presigned} string=${String(presigned).slice(0,120)}`);
+            const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
+            const putResponse=await fetch(presignedUrl,{method:'PUT',headers:{'content-type':'image/png'},body:png});
+            const putBody=await putResponse.text();
+            if(!putResponse.ok)throw Error(`PRESIGNED_PUT_${putResponse.status}_${putBody.slice(0,500)}`);
+            uploaded=true;
+            const read=await get(pathname,{access:'private',useCache:false,oidcToken,storeId});
+            if(!read||read.statusCode!==200||!read.stream)throw Error('OIDC_READBACK_FAILED');
+            const chunks=[];for await(const chunk of read.stream)chunks.push(chunk);
+            const bytes=Buffer.concat(chunks).length;if(bytes!==png.length)throw Error(`READBACK_SIZE_${bytes}_${png.length}`);
+            console.log('OIDC_PRESIGNED_PROOF='+JSON.stringify({ok:true,pathname,bytes,putStatus:putResponse.status,authority:'phoenix-oidc'}));
+          } finally {
+            if(uploaded){try{await del(pathname,{oidcToken,storeId});console.log('OIDC_PRESIGNED_CLEANUP=PASS')}catch(e){console.error('OIDC_PRESIGNED_CLEANUP_FAILED',e);process.exitCode=1}}
+          }
           NODE
       - name: Report proof
         if: always()
@@ -81,4 +87,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC OIDC presigned Blob proof ${GITHUB_RUN_ID}" --body "Exact source: \`$FINAL_SHA\`\nStatus: **$STATUS**\nCanonical Phoenix project OIDC was used; no Vercel deployment, alias, DNS, or Cloudflare route move was performed. The proof path is deleted by the test on success." || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC OIDC presigned Blob proof ${GITHUB_RUN_ID}" --body "Exact source: \`$FINAL_SHA\`\nStatus: **$STATUS**\nCanonical Phoenix project OIDC was used; no Vercel deployment, alias, DNS, or Cloudflare route move was performed. Any successfully uploaded proof path is deleted in a finally block." || true
