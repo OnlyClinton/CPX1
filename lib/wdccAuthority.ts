@@ -3,6 +3,7 @@ export const WDCC_CANONICAL_BACKEND_DEFAULT="https://wdcc-cpx-launch-qhcvflfih-c
 export const WDCC_DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 export const WDCC_PHOENIX_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 export const WDCC_STOREFRONT_PROJECT_ID="prj_We7xkAkB5Qy31Pt17USSkQFE0u7h";
+export const WDCC_CANONICAL_BLOB_STORE_ID="store_cNUyQRVlXtyvZQ5N";
 
 const staleFacadeAliases=new Set([
   "https://wdcc-cpx-launch-cpxagency.vercel.app",
@@ -18,10 +19,12 @@ export function canonicalDealerBackend(){
 }
 
 export function blobAuthority(){
+  // OIDC is the primary authority. A stale static token must never override a
+  // valid project identity and recreate the STATE_READ_FAILED failure mode.
+  const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
+  const storeId=(process.env.BLOB_STORE_ID||WDCC_CANONICAL_BLOB_STORE_ID).trim();
+  if(oidcToken&&storeId)return {mode:"oidc" as const,options:{oidcToken,storeId}};
   const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
   if(token)return {mode:"token" as const,options:{token}};
-  const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
-  const storeId=(process.env.BLOB_STORE_ID||"").trim();
-  if(oidcToken&&storeId)return {mode:"oidc" as const,options:{oidcToken,storeId}};
   return {mode:"missing" as const,options:{}};
 }
