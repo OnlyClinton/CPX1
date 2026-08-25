@@ -48,21 +48,26 @@ jobs:
           echo 'STAGE=zone-token-verify'
           api zone_token "$CLOUDFLARE_ZONE_API_TOKEN" 'https://api.cloudflare.com/client/v4/user/tokens/verify' /tmp/zone-token.json
 
-          echo 'STAGE=zone-lookup'
+          echo 'STAGE=zone-token-zone-lookup'
           api zone_lookup "$CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=$CUSTOMER_DOMAIN&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50" /tmp/zones.json
           ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/zones.json 2>/dev/null)"
-          echo "zone_matches=$(jq -r '.result|length // 0' /tmp/zones.json 2>/dev/null || echo 0)"
+          echo "zone_token_matches=$(jq -r '.result|length // 0' /tmp/zones.json 2>/dev/null || echo 0)"
 
-          if [ -n "$ZONE_ID" ]; then
-            echo 'STAGE=dns-record-read'
-            api dns_read "$CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100" /tmp/dns.json
-            jq -c --arg n "$DEALER_DOMAIN" '[.result[]? | select(.name==$n) | {type,name,content,proxied}]' /tmp/dns.json 2>/dev/null || true
+          echo 'STAGE=worker-token-zone-lookup'
+          api worker_zone_lookup "$CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=$CUSTOMER_DOMAIN&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50" /tmp/worker-zones.json
+          WORKER_ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/worker-zones.json 2>/dev/null)"
+          echo "worker_token_matches=$(jq -r '.result|length // 0' /tmp/worker-zones.json 2>/dev/null || echo 0)"
 
-            echo 'STAGE=dnssec-read'
-            api dnssec_read "$CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dnssec" /tmp/dnssec.json
-            jq -c '{status:(.result.status//null),key_tag:(.result.key_tag//null),algorithm:(.result.algorithm//null),digest_type:(.result.digest_type//null)}' /tmp/dnssec.json 2>/dev/null || true
+          if [ -n "$WORKER_ZONE_ID" ]; then
+            echo 'STAGE=worker-token-dns-record-read'
+            api worker_dns_read "$CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$WORKER_ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100" /tmp/worker-dns.json
+            jq -c --arg n "$DEALER_DOMAIN" '[.result[]? | select(.name==$n) | {type,name,content,proxied}]' /tmp/worker-dns.json 2>/dev/null || true
+
+            echo 'STAGE=worker-token-dnssec-read'
+            api worker_dnssec_read "$CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$WORKER_ZONE_ID/dnssec" /tmp/worker-dnssec.json
+            jq -c '{status:(.result.status//null),key_tag:(.result.key_tag//null),algorithm:(.result.algorithm//null),digest_type:(.result.digest_type//null)}' /tmp/worker-dnssec.json 2>/dev/null || true
           else
-            echo 'ZONE_ID=UNRESOLVED'
+            echo 'WORKER_ZONE_ID=UNRESOLVED'
           fi
 
           echo 'STAGE=worker-route-read'
