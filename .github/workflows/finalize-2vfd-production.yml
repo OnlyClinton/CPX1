@@ -139,3 +139,4 @@ jobs:
 # Canonical composite: exact 2vfD storefront structure + exact 8AR intro.
 # This workflow validates the immutable candidate before promotion and restores
 # the previous production deployment automatically if post-promotion checks fail.
+# Manual retrigger marker: 2026-08-24 production recovery.
