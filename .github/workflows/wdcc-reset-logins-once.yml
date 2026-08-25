@@ -4,6 +4,10 @@ on:
     branches: [ops/reset-wdcc-logins-once]
     paths:
       - '.github/workflows/wdcc-reset-logins-once.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-reset-logins-once.yml'
 
 jobs:
   reset:
