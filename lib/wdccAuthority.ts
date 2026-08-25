@@ -1,11 +1,20 @@
-// Cloudflare dealer/frontdoor facades must write through the immutable healthy Phoenix ledger authority.
+// Customer/dealer frontends must write through the immutable healthy Phoenix ledger authority.
 export const WDCC_CANONICAL_BACKEND_DEFAULT="https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
 export const WDCC_DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 export const WDCC_PHOENIX_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 export const WDCC_STOREFRONT_PROJECT_ID="prj_We7xkAkB5Qy31Pt17USSkQFE0u7h";
 
+const staleFacadeAliases=new Set([
+  "https://wdcc-cpx-launch-cpxagency.vercel.app",
+  "https://wdcc-cpx-launch.vercel.app"
+]);
+
 export function canonicalDealerBackend(){
-  return (process.env.WDCC_DEALER_BACKEND_URL||WDCC_CANONICAL_BACKEND_DEFAULT).trim().replace(/\/$/,"");
+  const explicit=(process.env.WDCC_CANONICAL_AUTHORITY_URL||"").trim().replace(/\/$/,"");
+  if(explicit)return explicit;
+  const legacy=(process.env.WDCC_DEALER_BACKEND_URL||"").trim().replace(/\/$/,"");
+  if(legacy&&!staleFacadeAliases.has(legacy))return legacy;
+  return WDCC_CANONICAL_BACKEND_DEFAULT;
 }
 
 export function blobAuthority(){
