@@ -27,6 +27,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Verify exact donor branding wiring
+        run: |
+          grep -q 'img src="/wdcc-logo-transparent.webp"' app/r31-preview/R31Chrome.tsx
+          ! grep -q 'wdcc-official-logo.webp' app/r31-preview/R31Chrome.tsx
+          grep -q "url('/wdcc-hero-v2.webp')" app/r31-preview/r31-preview.module.css
       - name: Install app dependencies
         run: npm ci
       - name: Build Next app locally
