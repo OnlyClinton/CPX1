@@ -14,12 +14,14 @@ if grep -RIn --exclude-dir='.next' --exclude-dir='node_modules' --exclude='*.map
 fi
 
 # Canonical auth entry points are /dealer and /admin. Legacy login paths may only
-# exist in redirect stubs, never as a destination in protected runtime pages.
-if grep -RIn --exclude='page.tsx' '/dealer/login' app/dealer 2>/dev/null; then
+# exist in the dedicated redirect stub, never as destinations elsewhere.
+legacy_refs="$(find app/dealer -type f \( -name '*.ts' -o -name '*.tsx' \) ! -path 'app/dealer/login/page.tsx' -print0 | xargs -0 grep -nH '/dealer/login' || true)"
+if [[ -n "$legacy_refs" ]]; then
+  printf '%s\n' "$legacy_refs"
   fail "protected dealer runtime still points to /dealer/login"
 fi
 
-# Ensure the two canonical portal pages and source-of-truth asset references exist.
+# Ensure the canonical portal pages and storefront source-of-truth assets stay wired.
 grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx || fail "dealer canonical portal missing"
 grep -q 'PortalExperience mode="admin"' app/admin/page.tsx || fail "admin canonical portal missing"
 grep -q 'wdcc-logo-transparent.webp' app/PortalExperience.tsx || fail "portal shell not using canonical logo"
