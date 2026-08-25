@@ -56,7 +56,7 @@ export default function Dealer(){
         <a href="#appointments">Appointments</a>
         <Link href="/dealer/inventory">Inventory</Link>
         <Link href="/dealer/inventory/new">+ Add Vehicle</Link>
-        <Link href="/">View Website</Link>
+        <a href="https://wedontcarecars.com/">View Website</a>
       </nav>
       <button className="crmLogout" onClick={logout}>Log out</button>
     </aside>
