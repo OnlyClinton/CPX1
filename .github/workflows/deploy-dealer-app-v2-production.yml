@@ -20,7 +20,7 @@ env:
   VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
   VERCEL_SCOPE: cpxagency
-  RELEASE_REF: release/dealer-screenshot-ui-20260825
+  RELEASE_REF: release/dealer-v53-screenshot-ui-20260825
   ROLLBACK_URL: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
   PROJECT_ALIAS: https://wdcc-cpx-launch-cpxagency.vercel.app
   DEALER_HOST: dealer.wedontcarecars.com
