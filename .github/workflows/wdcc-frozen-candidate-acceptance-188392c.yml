@@ -1,0 +1,377 @@
+name: WDCC Frozen Candidate Acceptance 188392c
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-frozen-candidate-acceptance-188392c
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact frozen candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove exact source and install tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -n "$VERCEL_TOKEN"
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          echo "RUN_TAG=release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Capture immutable rollback targets before any candidate deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          get_ready(){
+            project="$1"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=${project}&target=production&state=READY&limit=1&teamId=${ORG_ID}"
+          }
+          get_ready "$PHOENIX_PROJECT" > /tmp/rollback-phoenix.json
+          get_ready "$STOREFRONT_PROJECT" > /tmp/rollback-storefront.json
+          PHX_ID="$(jq -r '.deployments[0].uid // .deployments[0].id // empty' /tmp/rollback-phoenix.json)"
+          PHX_URL="$(jq -r '.deployments[0].url // empty' /tmp/rollback-phoenix.json)"
+          STORE_DEPLOY_ID="$(jq -r '.deployments[0].uid // .deployments[0].id // empty' /tmp/rollback-storefront.json)"
+          STORE_URL="$(jq -r '.deployments[0].url // empty' /tmp/rollback-storefront.json)"
+          test -n "$PHX_ID" && test -n "$PHX_URL" && test -n "$STORE_DEPLOY_ID" && test -n "$STORE_URL"
+          jq -nc \
+            --arg candidate "$CANDIDATE_SHA" \
+            --arg phxId "$PHX_ID" --arg phxUrl "$PHX_URL" \
+            --arg storeId "$STORE_DEPLOY_ID" --arg storeUrl "$STORE_URL" \
+            '{candidate:$candidate,phoenix:{deploymentId:$phxId,url:$phxUrl},storefront:{deploymentId:$storeId,url:$storeUrl}}' \
+            > /tmp/wdcc-rollback-manifest.json
+          cat /tmp/wdcc-rollback-manifest.json
+
+      - name: Verify canonical state authority without exporting static Blob or session secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          cat > /tmp/wdcc-state-preflight.mjs <<'NODE'
+          import {get,head} from '@vercel/blob';
+          const path='private/state/platform-v3.json';
+          const meta=await head(path);
+          const r=await get(path,{access:'private',useCache:false});
+          if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+          const chunks=[];for await(const c of r.stream)chunks.push(c);
+          const state=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if(!Array.isArray(state.users)||!Array.isArray(state.leads)||!Array.isArray(state.vehicles))throw Error('STATE_CONTRACT_INVALID');
+          console.log(JSON.stringify({ok:true,etag:meta.etag,revision:Number(state.revision||0),users:state.users.length,leads:state.leads.length,vehicles:state.vehicles.length}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            env BLOB_STORE_ID="$STORE_ID" node /tmp/wdcc-state-preflight.mjs | tee /tmp/wdcc-state-preflight.json
+          grep -q '"ok":true' /tmp/wdcc-state-preflight.json
+
+      - name: Deploy exact Phoenix candidate without alias movement
+        id: phoenix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM"
+          out="$(vercel deploy --prebuilt --prod --skip-domain --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1)"
+          printf '%s\n' "$out"
+          url="$(printf '%s\n' "$out" | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "PHOENIX_CANDIDATE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Deploy exact storefront candidate without alias movement
+        id: storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$STOREFRONT_PROJECT" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM"
+          out="$(vercel deploy --prebuilt --prod --skip-domain --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1)"
+          printf '%s\n' "$out"
+          url="$(printf '%s\n' "$out" | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "STOREFRONT_CANDIDATE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Verify immutable deployment metadata and core transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in "phoenix:$PHOENIX_CANDIDATE_URL" "storefront:$STOREFRONT_CANDIDATE_URL"; do
+            label="${pair%%:*}"; url="${pair#*:}"
+            host="${url#https://}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host?teamId=$ORG_ID" > "/tmp/${label}-deployment.json"
+            sha="$(jq -r '.meta.githubCommitSha // empty' "/tmp/${label}-deployment.json")"
+            test "$sha" = "$CANDIDATE_SHA" || { echo "$label SHA mismatch: $sha" >&2; exit 1; }
+            code="$(curl -sS -o "/tmp/${label}-health.json" -w '%{http_code}' "$url/api/health")"
+            test "$code" = 200
+            jq -e '.ok==true and .degraded==false' "/tmp/${label}-health.json" >/dev/null
+            code="$(curl -sS -o "/tmp/${label}-inventory.json" -w '%{http_code}' "$url/api/inventory?acceptance=$GITHUB_RUN_ID")"
+            test "$code" = 200
+            jq -e '.ok==true and (.items|type=="array")' "/tmp/${label}-inventory.json" >/dev/null
+          done
+
+      - name: Render storefront desktop and mobile contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          export STORE="$STOREFRONT_CANDIDATE_URL"
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const b=await chromium.launch({headless:true});
+            const errors=[];const notFound=[];const bad=[];
+            for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
+              const c=await b.newContext({viewport,reducedMotion:'reduce'});const p=await c.newPage();
+              p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});p.on('pageerror',e=>errors.push(String(e)));
+              p.on('response',r=>{if(r.status()===404)notFound.push(r.url());if(r.status()>=500)bad.push(`${r.status()} ${r.url()}`)});
+              await p.goto(process.env.STORE,{waitUntil:'networkidle'});
+              if(!(await p.locator('img[src*="wdcc-logo-transparent.webp"]').count()))throw Error('CANONICAL_LOGO_MISSING');
+              if(!(await p.locator('nav.stickyCtaBar[aria-label="Quick actions"]').count()))throw Error('MOBILE_QUICK_ACTIONS_MISSING');
+              if(!(await p.locator('a[href^="/schedule-test-drive"]').count()))throw Error('TEST_DRIVE_CTA_MISSING');
+              if(!(await p.locator('a[href^="/get-approved"]').count()))throw Error('APPROVAL_CTA_MISSING');
+              if(!(await p.getByText('CALL SEAN',{exact:true}).count()))throw Error('CALL_SEAN_MISSING');
+              await c.close();
+            }
+            if(notFound.length)throw Error('BROWSER_404S:'+notFound.join(','));
+            if(bad.length)throw Error('BROWSER_5XX:'+bad.join(','));
+            if(errors.length)throw Error('BROWSER_ERRORS:'+errors.join(' | '));
+            await b.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Create exact-run temporary auth users through canonical state authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          export RUN_TAG
+          cat > /tmp/wdcc-release-users.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;if(!run)throw Error('RUN_TAG_REQUIRED');
+          const hash=v=>{const salt=crypto.randomBytes(24);const d=crypto.scryptSync(v,salt,64);return `scrypt$${salt.toString('base64url')}$${d.toString('base64url')}`};
+          const password=`Wdcc-Release-${crypto.randomBytes(18).toString('base64url')}!`;
+          const dealerId=`release-dealer-${crypto.randomUUID()}`,adminId=`release-admin-${crypto.randomUUID()}`;
+          const dealerEmail=`release-dealer-${run}@invalid.example`,adminEmail=`release-admin-${run}@invalid.example`;
+          for(let attempt=1;attempt<=2;attempt++){
+            const meta=await head(path);const r=await get(path,{access:'private',useCache:false});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+            const chunks=[];for await(const c of r.stream)chunks.push(c);const raw=Buffer.concat(chunks),s=JSON.parse(raw.toString('utf8')),now=new Date().toISOString();
+            const backup=`private/state/backups/platform-v3-pre-release-users-${run}-${crypto.randomUUID()}.json`;
+            await put(backup,raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            s.users=Array.isArray(s.users)?s.users:[];
+            s.users.push({id:dealerId,email:dealerEmail,username:dealerEmail,displayName:`WDCC Release Dealer ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash(password)});
+            s.users.push({id:adminId,email:adminEmail,username:adminEmail,displayName:`WDCC Release Admin ${run}`,role:'platform_admin',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash(password)});
+            s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'release.acceptance.users_create',actor:'github-actions',run,dealerId,adminId,backup});
+            s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:meta.etag});
+              fs.writeFileSync('/tmp/release-users.env',`QA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${dealerEmail}\nADMIN_ID=${adminId}\nADMIN_EMAIL=${adminEmail}\nUSERS_BACKUP=${backup}\n`);break;
+            }catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<2)continue;throw e}
+          }
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            env BLOB_STORE_ID="$STORE_ID" RUN_TAG="$RUN_TAG" node /tmp/wdcc-release-users.mjs
+          set -a; . /tmp/release-users.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          printf '%s\n%s\n' "$DEALER_ID" "$ADMIN_ID" > /tmp/release-user-ids.txt
+
+      - name: Prove candidate auth, roles, leads, notification transport and QA vehicle isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/release-users.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          login(){
+            label="$1"; email="$2"; expected="$3"
+            payload="$(jq -nc --arg email "$email" --arg password "$QA_PASSWORD" '{email:$email,password:$password}')"
+            code="$(curl -sS -D "/tmp/${label}-headers" -c "/tmp/${label}.cookies" -o "/tmp/${label}-login.json" -w '%{http_code}' \
+              -H "Origin: $PHOENIX_CANDIDATE_URL" -H 'content-type: application/json' -X POST "$PHOENIX_CANDIDATE_URL/api/auth/login" --data "$payload")"
+            test "$code" = 200
+            curl -fsS -b "/tmp/${label}.cookies" "$PHOENIX_CANDIDATE_URL/api/auth/session" > "/tmp/${label}-session.json"
+            jq -e --arg role "$expected" '.authenticated==true and ((.user.role|ascii_downcase)==($role|ascii_downcase))' "/tmp/${label}-session.json" >/dev/null
+          }
+          login dealer "$DEALER_EMAIL" dealer_agent
+          login admin "$ADMIN_EMAIL" platform_admin
+          code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/dealer-admin.json -w '%{http_code}' "$PHOENIX_CANDIDATE_URL/api/admin/users")"
+          case "$code" in 401|403) ;; *) echo "dealer role boundary failed: $code" >&2; exit 1;; esac
+          curl -fsS -b /tmp/admin.cookies "$PHOENIX_CANDIDATE_URL/api/admin/users" | jq -e '.ok==true' >/dev/null
+
+          postlead(){
+            kind="$1"; suffix="$2"; qa="$3"; key="wdcc-release-${suffix}-${RUN_TAG}"
+            if [ "$qa" = true ]; then
+              body="$(jq -nc --arg kind "$kind" --arg run "$RUN_TAG" --arg source "release-$suffix" '{qa:true,kind:$kind,name:("WDCC QA RELEASE "+$run),phone:"813-555-0199",email:("release-qa-"+$run+"@invalid.example"),message:"Automated WDCC release acceptance. Do not contact.",consent:true,source:$source}')"
+            else
+              body="$(jq -nc --arg kind "$kind" --arg run "$RUN_TAG" --arg source "release-$suffix" '{kind:$kind,name:("WDCC RELEASE ACCEPTANCE "+$run),phone:"813-555-0199",email:("release-acceptance-"+$run+"@example.com"),message:"Automated WDCC release acceptance. Do not contact.",consent:true,source:$source}')"
+            fi
+            code="$(curl -sS -o "/tmp/${suffix}.json" -w '%{http_code}' -H 'content-type: application/json' -H "Idempotency-Key: $key" -X POST "$STOREFRONT_CANDIDATE_URL/api/leads" --data "$body")"
+            case "$code" in 200|201) ;; *) cat "/tmp/${suffix}.json" >&2; exit 1;; esac
+            jq -e '.ok==true and .persisted==true and .item.id!=null' "/tmp/${suffix}.json" >/dev/null
+          }
+          postlead schedule schedule false
+          postlead approval approval true
+          postlead contact contact true
+          SCHEDULE_ID="$(jq -r '.item.id' /tmp/schedule.json)"; APPROVAL_ID="$(jq -r '.item.id' /tmp/approval.json)"; CONTACT_ID="$(jq -r '.item.id' /tmp/contact.json)"
+          printf '%s\n%s\n%s\n' "$SCHEDULE_ID" "$APPROVAL_ID" "$CONTACT_ID" > /tmp/release-lead-ids.txt
+          jq -e '.notifications.email=="sent"' /tmp/schedule.json >/dev/null || { echo 'LEAD_EMAIL_TRANSPORT_NOT_SENT' >&2; cat /tmp/schedule.json >&2; exit 1; }
+          echo "MAIL_SUBJECT=New WDCC schedule lead: WDCC RELEASE ACCEPTANCE $RUN_TAG" > /tmp/release-mail-proof.txt
+          curl -fsS -b /tmp/dealer.cookies "$PHOENIX_CANDIDATE_URL/api/leads" > /tmp/release-lead-feed.json
+          jq -e --arg s "$SCHEDULE_ID" --arg a "$APPROVAL_ID" --arg c "$CONTACT_ID" '(.items//[]) as $x | any($x[];.id==$s) and any($x[];.id==$a) and any($x[];.id==$c)' /tmp/release-lead-feed.json >/dev/null
+
+          stock="WDCC-QA-RELEASE-${RUN_TAG}"
+          vehicle="$(jq -nc --arg stock "$stock" '{year:2019,make:"Toyota",model:"LOCAL-RELEASE-QA",trim:"QA",price:12345,downPayment:1500,mileage:54321,stock:$stock,description:"WDCC release synthetic acceptance vehicle"}')"
+          code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/release-vehicle.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$PHOENIX_CANDIDATE_URL/api/inventory" --data "$vehicle")"
+          test "$code" = 201
+          VEHICLE_ID="$(jq -r '.item.id' /tmp/release-vehicle.json)"; test -n "$VEHICLE_ID"; echo "$VEHICLE_ID" > /tmp/release-vehicle-id.txt
+          media="media/wdcc/${VEHICLE_ID}/release-${RUN_TAG}.png"; echo "$media" > /tmp/release-media.txt
+          export VEHICLE_ID RUN_TAG RELEASE_MEDIA="$media"
+          rm -rf .vercel; mkdir -p .vercel; printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          cat > /tmp/wdcc-release-media.mjs <<'NODE'
+          import {put} from '@vercel/blob';
+          const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
+          await put(process.env.RELEASE_MEDIA,png,{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'image/png'});
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            env BLOB_STORE_ID="$STORE_ID" RELEASE_MEDIA="$media" node /tmp/wdcc-release-media.mjs
+          patch="$(jq -nc --arg p "$media" '{photoPathnames:[$p],primaryPhotoPathname:$p}')"
+          curl -fsS -b /tmp/dealer.cookies -H 'content-type: application/json' -X PATCH "$PHOENIX_CANDIDATE_URL/api/inventory/$VEHICLE_ID" --data "$patch" > /tmp/release-photo.json
+          jq -e --arg p "$media" '.ok==true and ((.item.photoPathnames//[])|index($p))!=null' /tmp/release-photo.json >/dev/null
+          curl -fsS "$PHOENIX_CANDIDATE_URL/api/media?p=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' "$media")" > /tmp/release-media.bin
+          test -s /tmp/release-media.bin
+          curl -fsS -b /tmp/dealer.cookies -H 'content-type: application/json' -X PATCH "$PHOENIX_CANDIDATE_URL/api/inventory/$VEHICLE_ID" --data '{"status":"published"}' > /tmp/release-publish.json
+          jq -e '.ok==true and .item.status=="published" and (.storefront.visible==false) and (.storefront.verified==true) and (.storefront.expected=="hidden")' /tmp/release-publish.json >/dev/null
+          curl -fsS "$STOREFRONT_CANDIDATE_URL/api/inventory?release_hidden=$GITHUB_RUN_ID" > /tmp/release-public.json
+          jq -e --arg id "$VEHICLE_ID" 'all((.items//[])[];.id!=$id)' /tmp/release-public.json >/dev/null
+          curl -fsS -b /tmp/dealer.cookies "$PHOENIX_CANDIDATE_URL/api/inventory" > /tmp/release-dealer-inventory.json
+          jq -e --arg id "$VEHICLE_ID" 'any((.items//[])[];.id==$id and .status=="published" and ((.photoPathnames//[])|length)>0)' /tmp/release-dealer-inventory.json >/dev/null
+
+      - name: Exact-run cleanup only
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          export RUN_TAG
+          cat > /tmp/wdcc-release-cleanup.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import {del,get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG||null;
+          const lines=p=>fs.existsSync(p)?fs.readFileSync(p,'utf8').trim().split(/\s+/).filter(Boolean):[];
+          const leadIds=new Set(lines('/tmp/release-lead-ids.txt')),userIds=new Set(lines('/tmp/release-user-ids.txt'));
+          const vehicleId=lines('/tmp/release-vehicle-id.txt')[0]||'',media=lines('/tmp/release-media.txt')[0]||'';
+          let result={ok:true,noOp:true,leadsRemoved:0,usersRemoved:0,vehiclesArchived:0,mediaDeleted:false};
+          for(let attempt=1;attempt<=2;attempt++){
+            const meta=await head(path);const r=await get(path,{access:'private',useCache:false});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+            const chunks=[];for await(const c of r.stream)chunks.push(c);const raw=Buffer.concat(chunks),s=JSON.parse(raw.toString('utf8')),now=new Date().toISOString();
+            const matchedLeads=(s.leads||[]).filter(x=>leadIds.has(x.id)).map(x=>x.id),matchedUsers=(s.users||[]).filter(x=>userIds.has(x.id)).map(x=>x.id),matchedVehicle=(s.vehicles||[]).filter(x=>x.id===vehicleId).map(x=>x.id);
+            if(!matchedLeads.length&&!matchedUsers.length&&!matchedVehicle.length){break}
+            const backup=`private/state/backups/platform-v3-pre-release-clean-${run||'unknown'}-${crypto.randomUUID()}.json`;
+            await put(backup,raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            s.leads=(s.leads||[]).filter(x=>!leadIds.has(x.id));s.users=(s.users||[]).filter(x=>!userIds.has(x.id));
+            if(vehicleId)s.vehicles=(s.vehicles||[]).map(v=>v.id===vehicleId?{...v,status:'archived',qaCleanupAt:now,updatedAt:now}:v);
+            s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'release.acceptance.cleanup',actor:'github-actions',run,leadIds:matchedLeads,userIds:matchedUsers,vehicleId:matchedVehicle[0]||null,backup});
+            s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:meta.etag});
+              result={ok:true,noOp:false,leadsRemoved:matchedLeads.length,usersRemoved:matchedUsers.length,vehiclesArchived:matchedVehicle.length,leadIds:matchedLeads,userIds:matchedUsers,vehicleIds:matchedVehicle,backup,mediaDeleted:false};break;
+            }catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<2)continue;throw e}
+          }
+          if(media){try{await del(media);result.mediaDeleted=true}catch(e){console.error('MEDIA_DELETE_FAILED',e);throw e}}
+          fs.writeFileSync('/tmp/release-cleanup.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- \
+            env BLOB_STORE_ID="$STORE_ID" RUN_TAG="$RUN_TAG" node /tmp/wdcc-release-cleanup.mjs
+          cat /tmp/release-cleanup.json
+          jq -e '.ok==true and (.leadsRemoved<=3) and (.usersRemoved<=2) and (.vehiclesArchived<=1)' /tmp/release-cleanup.json >/dev/null
+
+      - name: Final candidate-only gate — aliases must remain untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/wdcc-rollback-manifest.json
+          test -f /tmp/release-cleanup.json
+          jq -e '.ok==true' /tmp/release-cleanup.json >/dev/null
+          echo 'CANDIDATE_ACCEPTANCE=PASS'
+          echo 'ALIASES_MOVED=false'
+          echo 'PROMOTION_ALLOWED=false_until_mailbox_proof_and_separate_live_gate'
+
+      - name: Report acceptance evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set +e
+          rollback='not captured'; [ -f /tmp/wdcc-rollback-manifest.json ] && rollback="$(cat /tmp/wdcc-rollback-manifest.json)"
+          cleanup='not captured'; [ -f /tmp/release-cleanup.json ] && cleanup="$(cat /tmp/release-cleanup.json)"
+          mail='not captured'; [ -f /tmp/release-mail-proof.txt ] && mail="$(cat /tmp/release-mail-proof.txt)"
+          phx="${PHOENIX_CANDIDATE_URL:-not-created}"
+          store="${STOREFRONT_CANDIDATE_URL:-not-created}"
+          body=$(cat <<EOF
+          Frozen candidate: \`$CANDIDATE_SHA\`
+          Status: **$STATUS**
+
+          Candidate-only acceptance. **No production alias movement occurs in this workflow.**
+
+          Phoenix candidate: \`$phx\`
+          Storefront candidate: \`$store\`
+
+          Mailbox proof target:
+          \`\`\`
+          $mail
+          \`\`\`
+
+          Rollback manifest captured before candidate deploy:
+          \`\`\`json
+          $rollback
+          \`\`\`
+
+          Exact-run cleanup:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+
+          Promotion remains blocked until the exact-run notification is independently confirmed in the intended mailbox and a separate promotion/live-production gate is executed.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC frozen candidate acceptance ${GITHUB_RUN_ID}" --body "$body" || true
