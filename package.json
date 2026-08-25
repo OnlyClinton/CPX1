@@ -1,6 +1,6 @@
 {
   "name": "wdcc-unified-platform",
-  "version": "47.0.0",
+  "version": "47.1.0-webgpu",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,9 +9,11 @@
   },
   "dependencies": {
     "@vercel/blob": "^2.0.0",
+    "gsap": "^3.13.0",
     "next": "16.3.1",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "three": "^0.183.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
