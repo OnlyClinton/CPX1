@@ -14,7 +14,7 @@ const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 
 function leadKind(body:any){const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";if(["contact","call","call-or-contact","general"].includes(raw))return "contact";if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";return raw;}
 function upstreamRequestType(kind:string){if(kind==="schedule")return "test-drive";if(kind==="approval")return "pre-approval";return "contact";}
-function notificationText(lead:any){return [`New WDCC ${lead.kind} lead`,`Name: ${lead.name}`,`Phone: ${lead.phone||"Not provided"}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`,lead.upstreamLeadId?`Upstream ID: ${lead.upstreamLeadId}`:""].filter(Boolean).join("\n");}
+function notificationText(lead:any){return [`New WDCC ${lead.kind} lead`,`Name: ${lead.name}`,`Phone: ${lead.phone||"Not provided"}`,`Email: ${lead.email||"Not provided"}`,`Vehicle: ${lead.vehicleInterest||"Not specified"}`,`Source: ${lead.source||"Unknown"}`,`CTA: ${lead.cta||lead.kind||"Unknown"}`,`Message: ${lead.message||"None"}`,`Lead ID: ${lead.id}`,lead.upstreamLeadId?`Upstream ID: ${lead.upstreamLeadId}`:""].filter(Boolean).join("\n");}
 function isQaLead(body:any,lead:any,idempotencyKey:string){
   const name=String(lead?.name||"").trim().toUpperCase();
   const email=String(lead?.email||"").trim().toLowerCase();
@@ -34,7 +34,20 @@ async function sendNotifications(lead:any){
 
 async function persistViaDealer(body:any,kind:string,idempotencyKey:string,qa=false){const payload={...body,kind,consent:true,idempotencyKey:idempotencyKey||undefined,...(qa?{qa:true}:{})};const response=await fetch(`${DEALER_BACKEND}/api/leads`,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});const json=await response.json().catch(()=>({}));if(!response.ok||!json?.ok||!json?.item?.id)throw Error(json?.error||`DEALER_LEAD_${response.status}`);return json;}
 async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
-  const payload={name:body.name,phone:body.phone,email:body.email,vehicle:body.vehicleInterest,message:[body.preferredTime?`Preferred time: ${body.preferredTime}`:"",body.message||""].filter(Boolean).join(" | "),requestType:upstreamRequestType(kind),consent:true,source:body.utmSource||body.source||"wedontcarecars.com",idempotencyKey:idempotencyKey||undefined,vehicleId:body.vehicleId||undefined,pagePath:body.pagePath||undefined,referrer:body.referrer||undefined,utmSource:body.utmSource||undefined,utmMedium:body.utmMedium||undefined,utmCampaign:body.utmCampaign||undefined,utmContent:body.utmContent||undefined,clickId:body.clickId||undefined};
+  const payload={
+    name:body.name,phone:body.phone,email:body.email,vehicle:body.vehicleInterest,
+    message:[body.preferredTime?`Preferred time: ${body.preferredTime}`:"",body.message||""].filter(Boolean).join(" | "),
+    requestType:upstreamRequestType(kind),kind,consent:true,
+    source:body.utmSource||body.source||"wedontcarecars.com",sourceLabel:body.source||undefined,cta:body.cta||`cta-${kind}`,
+    idempotencyKey:idempotencyKey||undefined,vehicleId:body.vehicleId||undefined,pagePath:body.pagePath||undefined,
+    landingPath:body.landingPath||undefined,referrer:body.referrer||undefined,sessionId:body.sessionId||undefined,
+    anonymousUserId:body.anonymousUserId||undefined,referralCode:body.referralCode||undefined,
+    utmSource:body.utmSource||undefined,utmMedium:body.utmMedium||undefined,utmCampaign:body.utmCampaign||undefined,
+    utmContent:body.utmContent||undefined,utmTerm:body.utmTerm||undefined,clickId:body.clickId||undefined,
+    firstSource:body.firstSource||undefined,firstMedium:body.firstMedium||undefined,firstCampaign:body.firstCampaign||undefined,
+    firstContent:body.firstContent||undefined,firstTerm:body.firstTerm||undefined,firstClickId:body.firstClickId||undefined,
+    firstReferralCode:body.firstReferralCode||undefined
+  };
   const response=await fetch(LEAD_UPSTREAM,{method:"POST",headers:{"Content-Type":"application/json",...(idempotencyKey?{"Idempotency-Key":idempotencyKey}:{})},body:JSON.stringify(payload),signal:AbortSignal.timeout(10000),cache:"no-store"});
   const json=await response.json().catch(()=>({}));if(!response.ok||!json?.ok||!json?.leadId)throw Error(json?.error||`LEAD_UPSTREAM_${response.status}`);
   return {leadId:String(json.leadId),emailStatus:json.emailStatus||json.email||"upstream",smsStatus:json.smsStatus||json.sms||"upstream",mailto:json.mailto||null};
@@ -47,7 +60,14 @@ export async function GET(){const user=await currentUser();if(!user||!editorRole
 export async function POST(req:Request){
   try{
     const actor=await currentUser().catch(()=>null);const body=await req.json();const kind=leadKind(body);
-    const normalized={name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),vehicleId:text(body?.vehicleId,160),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),source:text(body?.source,80)||`cta-${kind||"unknown"}`,pagePath:text(body?.pagePath,240),referrer:text(body?.referrer,500),utmSource:text(body?.utmSource,120),utmMedium:text(body?.utmMedium,120),utmCampaign:text(body?.utmCampaign,160),utmContent:text(body?.utmContent,160),clickId:text(body?.clickId,220)};
+    const normalized={
+      name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),
+      vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),vehicleId:text(body?.vehicleId,160),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),
+      source:text(body?.source,80)||`cta-${kind||"unknown"}`,cta:text(body?.cta,120)||`cta-${kind||"unknown"}`,pagePath:text(body?.pagePath,240),landingPath:text(body?.landingPath,500),referrer:text(body?.referrer,500),
+      sessionId:text(body?.sessionId,200),anonymousUserId:text(body?.anonymousUserId,200),referralCode:text(body?.referralCode,160),
+      utmSource:text(body?.utmSource,120),utmMedium:text(body?.utmMedium,120),utmCampaign:text(body?.utmCampaign,160),utmContent:text(body?.utmContent,160),utmTerm:text(body?.utmTerm,160),clickId:text(body?.clickId,220),
+      firstSource:text(body?.firstSource,120),firstMedium:text(body?.firstMedium,120),firstCampaign:text(body?.firstCampaign,160),firstContent:text(body?.firstContent,160),firstTerm:text(body?.firstTerm,160),firstClickId:text(body?.firstClickId,220),firstReferralCode:text(body?.firstReferralCode,160)
+    };
     const consent=body?.consent===true||String(body?.consent||"").toLowerCase()==="true"||body?.consent==="on";
     if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
     const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160)||crypto.randomUUID();
@@ -66,7 +86,7 @@ export async function POST(req:Request){
 
     const now=new Date().toISOString();const createdBy=actor?.id||"public";const createdByRole=actor?.role||"public";const tenantId=actor?.tenantId||"wdcc";
     const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,consentVersion:"wdcc-request-v1",qa,status:qa?"test":"new",idempotencyKey,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now,sync:{dealer:"saved",upstream:qa?"suppressed_qa":"pending"}};
-    state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${qa?"qa.":""}${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source,idempotencyKey,qa});
+    state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${qa?"qa.":""}${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source,cta:lead.cta,sessionId:lead.sessionId,idempotencyKey,qa});
     let saved=await writeState(state);
 
     if(qa){lead.notifications={email:"suppressed_qa",sms:"suppressed_qa",webhook:"suppressed_qa"};lead.updatedAt=new Date().toISOString();saved=await writeState(state);return NextResponse.json({ok:true,persisted:true,qa:true,revision:saved.revision,item:lead,sync:lead.sync,notifications:lead.notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});}
