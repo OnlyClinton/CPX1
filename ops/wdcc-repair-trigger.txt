@@ -1,1 +1,2 @@
 2026-08-25 live dealer repair: repair storage/session authority, verify health, and restore dealer production cutover.
+retry=2
