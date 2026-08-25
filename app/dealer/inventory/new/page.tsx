@@ -139,7 +139,7 @@ export default function NewVehicle(){
           <Link className="active" href="/dealer/inventory/new">+ Add Vehicle</Link>
           <Link href="/dealer/inventory/logs">Vehicle Logs</Link>
           <Link href="/dealer/leads">Leads</Link>
-          <Link href="/">View Website</Link>
+          <a href="https://wedontcarecars.com/">View Website</a>
         </nav>
       </aside>
 
