@@ -1,0 +1,77 @@
+name: WDCC Fresh Dealer State Store
+on:
+  push:
+    branches: [ops/reset-wdcc-logins]
+    paths:
+      - '.github/workflows/wdcc-provision-fresh-dealer-state.yml'
+      - 'scripts/wdcc-bootstrap-fresh-state.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM_SLUG: cpxagency
+      DEALER_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      SOURCE_URL: https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Link dealer project and create fresh private Blob store
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$DEALER_PROJECT_ID" > .vercel/project.json
+          echo 'Existing team Blob stores:'
+          vercel blob list-stores --all --scope "$TEAM_SLUG" --token "$VERCEL_TOKEN" || true
+          vercel blob create-store wdcc-dealer-ledger-v4 --access private --region iad1 --environment production --yes --scope "$TEAM_SLUG" --token "$VERCEL_TOKEN"
+      - name: Pull the fresh Blob binding and prove it writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/wdcc-fresh.env --yes --environment=production --scope "$TEAM_SLUG" --token "$VERCEL_TOKEN" >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/wdcc-fresh.env
+          set +u
+          set -a; . /tmp/wdcc-fresh.env; set +a
+          set -u
+          echo "::add-mask::$BLOB_READ_WRITE_TOKEN"
+          node scripts/wdcc-bootstrap-fresh-state.mjs
+      - name: Install one fresh session secret and share the fresh Blob binding with preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +u
+          set -a; . /tmp/wdcc-fresh.env; set +a
+          set -u
+          NEW_SESSION_SECRET="$(openssl rand -hex 48)"
+          echo "::add-mask::$NEW_SESSION_SECRET"
+          echo "::add-mask::$BLOB_READ_WRITE_TOKEN"
+          payload="$(jq -nc --arg session "$NEW_SESSION_SECRET" --arg blob "$BLOB_READ_WRITE_TOKEN" '[{key:"SESSION_SECRET",value:$session,type:"encrypted",target:["production","preview"],comment:"WDCC unified dealer auth secret"},{key:"BLOB_READ_WRITE_TOKEN",value:$blob,type:"encrypted",target:["production","preview"],comment:"WDCC fresh dealer ledger v4"}]')"
+          code="$(curl -sS -o /tmp/env-upsert.json -w '%{http_code}' -X POST "https://api.vercel.com/v10/projects/$DEALER_PROJECT_ID/env?upsert=true&teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' --data "$payload")"
+          test "$code" -ge 200 -a "$code" -lt 300 || { echo "Environment upsert failed status=$code"; jq '{error,failed}' /tmp/env-upsert.json; exit 1; }
+          jq '{created:[.created[]? | {id,key,target,type}],failed}' /tmp/env-upsert.json
+      - name: Re-pull bindings and verify seeded state survives
+        shell: bash
+        run: |
+          set -euo pipefail
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/wdcc-final.env --yes --environment=production --scope "$TEAM_SLUG" --token "$VERCEL_TOKEN" >/dev/null
+          set +u
+          set -a; . /tmp/wdcc-final.env; set +a
+          set -u
+          echo "::add-mask::$BLOB_READ_WRITE_TOKEN"
+          node scripts/wdcc-temp-login-reset.mjs probe
+          test -n "${SESSION_SECRET:-}"
+          test "${#SESSION_SECRET}" -ge 32
+          echo 'Fresh dealer state + session bindings are ready for the next deployment.'
