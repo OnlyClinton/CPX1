@@ -1,72 +1,17 @@
-name: WDCC Manual Production Build
+name: WDCC PRODUCTION DEPLOY — FROZEN
+
 on:
   workflow_dispatch:
 
-concurrency:
-  group: wdcc-production
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  frozen:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    env:
-      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Require Vercel token
+      - name: Release-control guard
         run: |
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "VERCEL_TOKEN GitHub secret is missing" >&2
-            exit 78
-          fi
-      - name: Link canonical WDCC project
-        run: |
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-      - name: Install pinned Vercel CLI
-        run: npm install --global vercel@59.3.0
-      - name: Pull production environment
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Build production bundle
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy production bundle
-        id: deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Production URL: $url"
-      - name: Verify apex homepage
-        id: verify
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -L -o /tmp/wdcc-home.html -w '%{http_code}' https://wedontcarecars.com/)"
-          echo "HTTP $code"
-          test "$code" = "200"
-          grep -qi "BAD CREDIT" /tmp/wdcc-home.html
-      - name: Report deployment result
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
-        shell: bash
-        run: |
-          short="${GITHUB_SHA:0:7}"
-          body=$(printf 'Commit: `%s`\nDeploy outcome: `%s`\nVerify outcome: `%s`\nProduction URL: `%s`\nApex: https://wedontcarecars.com/' "$GITHUB_SHA" "${DEPLOY_OUTCOME:-unknown}" "${VERIFY_OUTCOME:-unknown}" "${DEPLOY_URL:-not-created}")
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC production deploy report $short" --body "$body" || true
-
-# Quota-expensive workflow: manual only. Normal pushes and PRs must never invoke it.
+          echo 'Production deployment is frozen during immutable candidate acceptance.'
+          echo 'This workflow cannot build, deploy, promote, alias, or cut over moving main.'
+          echo 'Frozen candidate: 188392c81696da5d0d61f5c6f0bec45f490a232d'
