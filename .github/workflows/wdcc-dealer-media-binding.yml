@@ -1,0 +1,78 @@
+name: WDCC Dealer Media Binding
+on:
+  push:
+    branches: [fix/dealer-publish-neon-v1]
+    paths:
+      - '.github/workflows/wdcc-dealer-media-binding.yml'
+  workflow_dispatch:
+
+jobs:
+  bind:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      MEDIA_PROJECT: prj_Hpdja1v7oFiUSteCa9ZW9xoxQKRB
+      DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+    steps:
+      - name: Require Vercel authorization
+        run: test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Pull existing media authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/media/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$MEDIA_PROJECT" > /tmp/media/.vercel/project.json
+          cd /tmp/media
+          vercel env pull /tmp/media-prod.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/media-prod.env || { echo 'wdcc-public-media does not expose BLOB_READ_WRITE_TOKEN' >&2; exit 78; }
+          echo 'WDCC_MEDIA_SOURCE=READY'
+
+      - name: Bind media authority to dealer runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          . /tmp/media-prod.env
+          set +a
+          test -n "${BLOB_READ_WRITE_TOKEN:-}"
+          mkdir -p /tmp/dealer/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$DEALER_PROJECT" > /tmp/dealer/.vercel/project.json
+          cd /tmp/dealer
+          upsert_sensitive(){
+            name="$1"; value="$2"; env_name="$3"
+            printf '%s' "$value" | vercel env update "$name" "$env_name" --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+              vercel env rm "$name" "$env_name" --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+              printf '%s' "$value" | vercel env add "$name" "$env_name" --sensitive --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+            }
+          }
+          upsert_plain(){
+            name="$1"; value="$2"; env_name="$3"
+            [ -n "$value" ] || return 0
+            printf '%s' "$value" | vercel env update "$name" "$env_name" --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || {
+              vercel env rm "$name" "$env_name" --yes --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null 2>&1 || true
+              printf '%s' "$value" | vercel env add "$name" "$env_name" --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+            }
+          }
+          for target in production preview; do
+            upsert_sensitive BLOB_READ_WRITE_TOKEN "$BLOB_READ_WRITE_TOKEN" "$target"
+            upsert_plain BLOB_STORE_ID "${BLOB_STORE_ID:-}" "$target"
+          done
+          echo 'WDCC_DEALER_MEDIA_BINDING=SYNCED'
+
+      - name: Verify dealer binding without exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/dealer
+          for target in production preview; do
+            vercel env pull "/tmp/dealer-$target.env" --yes --environment="$target" --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
+            grep -q '^BLOB_READ_WRITE_TOKEN=' "/tmp/dealer-$target.env"
+          done
+          echo 'WDCC_DEALER_MEDIA_BINDING=PASS'
