@@ -1,5 +1,5 @@
-Execute the unified WDCC final prebuilt production release.
+Use the existing READY unified deployment and move all WDCC aliases.
+Deployment: https://wdcc-v32-storefront-fwi0ko41b-cpxagency.vercel.app
 Release source: 98c84814c00528e6114196f8d5ff7597fb844b20
-Triggered: 2026-08-25T14:10:00Z
-Attempt: archive-tgz
-Contract: screenshot storefront + V52 API + dealer dashboard + vehicle editor + authenticated listing E2E
+Triggered: 2026-08-25T14:12:30Z
+Contract: apex + www + dealer + V52 API + authenticated listing E2E
