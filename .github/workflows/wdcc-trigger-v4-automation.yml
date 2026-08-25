@@ -1,4 +1,4 @@
-name: WDCC Trigger Dealer Ready v4
+name: WDCC Trigger Dealer Ready v5
 on:
   push:
     branches: [main]
@@ -11,7 +11,7 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch v4 acceptance
+      - name: Dispatch v5 acceptance
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run wdcc-dealer-ready-double-acceptance-v4.yml -R OnlyClinton/CPX1 --ref main
+        run: gh workflow run wdcc-dealer-ready-double-acceptance-v5.yml -R OnlyClinton/CPX1 --ref main
