@@ -1,0 +1,90 @@
+name: WDCC prebuilt cutover
+
+on:
+  push:
+    branches: [release/wdcc-single-candidate-20260825-control]
+    paths:
+      - '.github/workflows/wdcc-prebuilt-cutover.yml'
+
+concurrency:
+  group: wdcc-prebuilt-cutover
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      SOURCE_SHA: fa5f559dc1b9393f644e0bd8230d5a2ae0acd01f
+    steps:
+      - name: Checkout exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require token and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Install dependencies and Vercel CLI
+        run: |
+          npm ci
+          npm install --global vercel@59.3.0
+      - name: Link storefront and pull production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build locally with production environment
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy prebuilt production artifact
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "PREBUILT_URL=$url"
+      - name: Verify immutable artifact before accepting cutover
+        shell: bash
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl -fsSL "$DEPLOY_URL/" -o /tmp/home.html
+          grep -qi 'BAD CREDIT' /tmp/home.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/home.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
+          health="$(curl -fsSL "$DEPLOY_URL/api/health")"
+          echo "$health"
+          echo "$health" | jq -e '.ok==true' >/dev/null
+      - name: Verify production apex
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://wedontcarecars.com/ -o /tmp/apex.html
+          grep -qi 'BAD CREDIT' /tmp/apex.html
+          curl -fsSL https://wedontcarecars.com/api/health | jq -e '.ok==true' >/dev/null
+      - name: Report result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC prebuilt cutover ${SOURCE_SHA:0:7}" --body "Source: \`$SOURCE_SHA\`\nPrebuilt URL: \`${URL:-not-created}\`\nRun: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || true
