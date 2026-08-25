@@ -1,0 +1,82 @@
+name: WDCC Notification Readiness Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-notification-readiness-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  DEALER_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pull production envs privately
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p /tmp/wdcc-env-audit
+          pull(){
+            label="$1"; project="$2"; mkdir -p "/tmp/wdcc-env-audit/$label/.vercel"; printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$project" > "/tmp/wdcc-env-audit/$label/.vercel/project.json"; (cd "/tmp/wdcc-env-audit/$label" && vercel env pull "/tmp/$label.env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null); chmod 600 "/tmp/$label.env";
+          }
+          pull phoenix "$PHOENIX_ID"
+          pull dealer "$DEALER_ID"
+          pull storefront "$STOREFRONT_ID"
+          present(){ grep -qE "^$2=.+" "/tmp/$1.env" && printf true || printf false; }
+          row(){
+            label="$1"
+            email="$(present "$label" RESEND_API_KEY)"
+            sid="$(present "$label" TWILIO_ACCOUNT_SID)"; token="$(present "$label" TWILIO_AUTH_TOKEN)"; from="$(present "$label" TWILIO_FROM_NUMBER)"; to="$(present "$label" WDCC_LEAD_NOTIFICATION_PHONE)"
+            sms=false; [ "$sid" = true ] && [ "$token" = true ] && [ "$from" = true ] && [ "$to" = true ] && sms=true
+            webhook="$(present "$label" WDCC_LEAD_WEBHOOK_URL)"
+            recipients="$(present "$label" WDCC_LEAD_NOTIFICATION_EMAILS)"
+            echo "$label|$email|$sms|$webhook|$recipients" >> /tmp/readiness.tsv
+          }
+          : > /tmp/readiness.tsv
+          row phoenix; row dealer; row storefront
+          PHX_EMAIL="$(awk -F'|' '$1=="phoenix"{print $2}' /tmp/readiness.tsv)"; PHX_SMS="$(awk -F'|' '$1=="phoenix"{print $3}' /tmp/readiness.tsv)"; PHX_WEBHOOK="$(awk -F'|' '$1=="phoenix"{print $4}' /tmp/readiness.tsv)"; PHX_RECIPIENTS="$(awk -F'|' '$1=="phoenix"{print $5}' /tmp/readiness.tsv)"
+          echo "phoenix_email=$PHX_EMAIL" >> "$GITHUB_OUTPUT"; echo "phoenix_sms=$PHX_SMS" >> "$GITHUB_OUTPUT"; echo "phoenix_webhook=$PHX_WEBHOOK" >> "$GITHUB_OUTPUT"; echo "phoenix_recipients=$PHX_RECIPIENTS" >> "$GITHUB_OUTPUT"
+          rm -f /tmp/phoenix.env /tmp/dealer.env /tmp/storefront.env
+      - name: Publish readiness-only evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EMAIL: ${{ steps.audit.outputs.phoenix_email }}
+          SMS: ${{ steps.audit.outputs.phoenix_sms }}
+          WEBHOOK: ${{ steps.audit.outputs.phoenix_webhook }}
+          RECIPIENTS: ${{ steps.audit.outputs.phoenix_recipients }}
+        shell: bash
+        run: |
+          MATRIX="$(sed 's/|/ | /g' /tmp/readiness.tsv)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC notification readiness ${GITHUB_RUN_ID}" --body "Canonical Phoenix notification readiness:
+          - Email provider configured: **$EMAIL**
+          - SMS provider configured: **$SMS**
+          - Webhook configured: **$WEBHOOK**
+          - Explicit notification recipient list configured: **$RECIPIENTS**
+          - Dealer dashboard: **configured**
+
+          Provider comparison (project | email | sms | webhook | explicit recipients):
+          \`\`\`
+          $MATRIX
+          \`\`\`
+
+          This audit reports booleans only. It does not print, expose, rotate, or modify any credential value." || true
