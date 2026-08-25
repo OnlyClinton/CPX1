@@ -67,9 +67,10 @@ export function Header(){
       <Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link>
     </nav>}
     </header>
-    <nav className="stickyCtaBar compositeMobileDock" aria-label="Quick actions">
-      <TrackedCallLink className="stickyPrimary" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink>
-      <Link className="stickyContact" href="/get-approved?source=sticky-get-approved"><span>GET PRE-APPROVED</span></Link>
+    <nav className="stickyCtaBar" aria-label="Quick actions">
+      <Link className="stickyPrimary" href="/schedule-test-drive?source=sticky-test-drive"><span>TEST DRIVE</span></Link>
+      <Link className="stickySecondary" href="/get-approved?source=sticky-get-approved"><span>GET APPROVED</span></Link>
+      <TrackedCallLink className="stickyContact" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink>
     </nav>
   </>
 }
