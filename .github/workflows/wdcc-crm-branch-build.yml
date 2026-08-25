@@ -18,3 +18,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+
+  dispatch-safe-repair:
+    if: github.event_name == 'pull_request' && github.event.pull_request.title == 'Run deterministic WDCC safe repair gate' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Dispatch registered frozen-candidate safe repair workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-phoenix-oidc-repair-188392c.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo 'SAFE_REPAIR_DISPATCHED=true'
