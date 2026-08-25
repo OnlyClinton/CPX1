@@ -1,0 +1,98 @@
+name: WDCC V53.1 Auth Diagnostic V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v53-1-auth-diagnostic-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  SOURCE_SHA: 1d96e68c26fcecae2c7fee156307608c304720e9
+  STAGE: https://wdcc-v53-1-staging.clico-global.workers.dev
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install canonical state runtime
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Create temporary diagnostic dealer
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-auth-v2-user.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import {get,head,put} from '@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG,a=await head(path),r=await get(path,{access:'private',useCache:false}),c=[];for await(const x of r.stream)c.push(x);const s=JSON.parse(Buffer.concat(c).toString('utf8')),salt=crypto.randomBytes(24),password=`V2-${crypto.randomBytes(18).toString('base64url')}!`,digest=crypto.scryptSync(password,salt,64),id=`diagv2-${crypto.randomUUID()}`,email=`diagv2-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`Auth V2 ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`});s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.auth_v2.create',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:a.etag});fs.writeFileSync('/tmp/authv2.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nRUN_TAG=${run}\n`);console.log(JSON.stringify({ok:true,id,email}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-auth-v2-user.mjs
+          set -a; . /tmp/authv2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+      - name: Require full repaired auth contract
+        id: trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/authv2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/v2.cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $STAGE" -H 'content-type: application/json' -X POST "$STAGE/api/auth/login" --data "$payload")"
+          SESSION="$(curl -sS -b /tmp/v2.cookies -o /tmp/session.json -w '%{http_code}' "$STAGE/api/auth/session")"
+          DASHBOARD="$(curl -sS -b /tmp/v2.cookies -o /tmp/dashboard.json -w '%{http_code}' "$STAGE/api/crm/dashboard")"
+          LEADS="$(curl -sS -b /tmp/v2.cookies -o /tmp/leads.json -w '%{http_code}' "$STAGE/api/leads")"
+          INVENTORY="$(curl -sS -b /tmp/v2.cookies -o /tmp/inventory.json -w '%{http_code}' "$STAGE/api/inventory")"
+          echo "LOGIN=$LOGIN SESSION=$SESSION DASHBOARD=$DASHBOARD LEADS=$LEADS INVENTORY=$INVENTORY"
+          test "$LOGIN" = 200; test "$SESSION" = 200; test "$DASHBOARD" = 200; test "$LEADS" = 200; test "$INVENTORY" = 200
+          jq -e '.ok==true' /tmp/login.json >/dev/null; jq -e '.authenticated==true' /tmp/session.json >/dev/null; jq -e '.ok==true' /tmp/dashboard.json >/dev/null; jq -e '.ok==true' /tmp/leads.json >/dev/null; jq -e '.ok==true' /tmp/inventory.json >/dev/null
+          for x in login session dashboard leads inventory; do eval "v=\$$x" || true; done
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"; echo "session=$SESSION" >> "$GITHUB_OUTPUT"; echo "dashboard=$DASHBOARD" >> "$GITHUB_OUTPUT"; echo "leads=$LEADS" >> "$GITHUB_OUTPUT"; echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"
+      - name: Cleanup temporary diagnostic dealer
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f /tmp/authv2.env ] || exit 0
+          set -a; . /tmp/authv2.env; set +a; export QA_ID RUN_TAG
+          cat > .wdcc-auth-v2-clean.mjs <<'NODE'
+          import crypto from 'node:crypto';import {get,head,put} from '@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG,a=await head(path),r=await get(path,{access:'private',useCache:false}),c=[];for await(const x of r.stream)c.push(x);const s=JSON.parse(Buffer.concat(c).toString('utf8'));s.users=(s.users||[]).filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.auth_v2.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:a.etag});console.log(JSON.stringify({ok:true}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-auth-v2-clean.mjs
+      - name: Publish diagnostic proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          L: ${{ steps.trace.outputs.login }}
+          S: ${{ steps.trace.outputs.session }}
+          D: ${{ steps.trace.outputs.dashboard }}
+          E: ${{ steps.trace.outputs.leads }}
+          I: ${{ steps.trace.outputs.inventory }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V53.1 auth repaired $GITHUB_RUN_ID" --body "Exact source: \`$SOURCE_SHA\`
+          Login: \`${L:-failed}\`
+          Session: \`${S:-failed}\`
+          CRM dashboard: \`${D:-failed}\`
+          Leads: \`${E:-failed}\`
+          Inventory: \`${I:-failed}\`
+
+          Required result is five HTTP 200 responses. No production route or DNS mutation occurs." || true
