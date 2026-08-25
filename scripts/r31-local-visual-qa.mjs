@@ -81,8 +81,9 @@ for(const cfg of [
 {
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   const page=await context.newPage();
-  const response=await page.goto(base+'/r31-preview/inventory',{waitUntil:'networkidle',timeout:30000});
+  const response=await page.goto(base+'/r31-preview/inventory',{waitUntil:'domcontentloaded',timeout:30000});
   if(!response||response.status()>=400) throw new Error(`inventory_preview_${response?.status()||'no_response'}`);
+  await page.getByPlaceholder('Year, make, model…').waitFor({state:'visible',timeout:10000});
   const initialCards=await page.locator('article').filter({has:page.getByText('AVAILABLE',{exact:true})}).count();
   await page.getByPlaceholder('Year, make, model…').fill('Nissan');
   await page.waitForTimeout(150);
@@ -96,7 +97,8 @@ for(const cfg of [
 {
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
   const page=await context.newPage();
-  await page.goto(base+'/r31-preview/inventory',{waitUntil:'networkidle',timeout:30000});
+  await page.goto(base+'/r31-preview/inventory',{waitUntil:'domcontentloaded',timeout:30000});
+  await page.getByPlaceholder('Year, make, model…').waitFor({state:'visible',timeout:10000});
   await page.screenshot({path:`${out}/mobile-inventory.png`,fullPage:true});
   await context.close();
 }
@@ -106,8 +108,9 @@ for(const cfg of [
   const page=await context.newPage();
   let leadPosts=0;
   page.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname==='/api/leads')leadPosts++});
-  const response=await page.goto(base+'/r31-preview/get-approved?vehicle=qa-preview-vehicle',{waitUntil:'networkidle',timeout:30000});
+  const response=await page.goto(base+'/r31-preview/get-approved?vehicle=qa-preview-vehicle',{waitUntil:'domcontentloaded',timeout:30000});
   if(!response||response.status()>=400) throw new Error(`approval_preview_${response?.status()||'no_response'}`);
+  await page.getByPlaceholder('Your name').waitFor({state:'visible',timeout:10000});
   await page.getByPlaceholder('Your name').fill('QA Preview');
   await page.getByPlaceholder('(813) 555-0123').fill('(813) 555-0199');
   await page.getByRole('button',{name:/CONTINUE/}).click();
@@ -126,7 +129,8 @@ for(const cfg of [
 {
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
   const page=await context.newPage();
-  await page.goto(base+'/r31-preview/get-approved',{waitUntil:'networkidle',timeout:30000});
+  await page.goto(base+'/r31-preview/get-approved',{waitUntil:'domcontentloaded',timeout:30000});
+  await page.getByPlaceholder('Your name').waitFor({state:'visible',timeout:10000});
   await page.screenshot({path:`${out}/mobile-approval.png`,fullPage:true});
   await context.close();
 }
@@ -136,8 +140,9 @@ for(const cfg of [
   const page=await context.newPage();
   let inventoryWrites=0;
   page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&new URL(r.url()).pathname.startsWith('/api/inventory'))inventoryWrites++});
-  const response=await page.goto(base+'/r31-preview/dealer-editor',{waitUntil:'networkidle',timeout:30000});
+  const response=await page.goto(base+'/r31-preview/dealer-editor',{waitUntil:'domcontentloaded',timeout:30000});
   if(!response||response.status()>=400) throw new Error(`dealer_editor_preview_${response?.status()||'no_response'}`);
+  await page.getByPlaceholder('2020').waitFor({state:'visible',timeout:10000});
   await page.getByPlaceholder('2020').fill('2020');
   await page.getByPlaceholder('Dodge').fill('Dodge');
   await page.getByPlaceholder('Challenger').fill('Challenger');
@@ -163,7 +168,8 @@ for(const cfg of [
 {
   const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
   const page=await context.newPage();
-  await page.goto(base+'/r31-preview/dealer-editor',{waitUntil:'networkidle',timeout:30000});
+  await page.goto(base+'/r31-preview/dealer-editor',{waitUntil:'domcontentloaded',timeout:30000});
+  await page.getByPlaceholder('2020').waitFor({state:'visible',timeout:10000});
   await page.screenshot({path:`${out}/mobile-dealer-editor.png`,fullPage:true});
   await context.close();
 }
