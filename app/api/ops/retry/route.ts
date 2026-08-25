@@ -1,7 +1,7 @@
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../../lib/auth";
 import {recordAnalyticsEvent} from "../../../../lib/analyticsAudit";
-import {recordDeadLetter} from "../../../../lib/deadLetter";
+import {recordDeadLetter,resolveDeadLettersForEntity} from "../../../../lib/deadLetter";
 import {readState,writeState} from "../../../../lib/store";
 
 export const dynamic="force-dynamic";
@@ -36,6 +36,7 @@ async function runWorker(){
       const stillBroken=String(lead?.sync?.upstream||"")!=="synced"||Object.values(lead?.notifications||{}).some(v=>String(v||"").startsWith("failed"));
       if(stillBroken)throw Error("delivery_still_degraded");
       recovered++;lead.updatedAt=new Date().toISOString();
+      await resolveDeadLettersForEntity("lead",lead.id,lead.tenantId||"wdcc","lead delivery recovered").catch(()=>{});
       await recordAnalyticsEvent({event:"lead.retry.recovered",tenantId:String(lead.tenantId||"wdcc"),leadId:lead.id,channel:"ops",metadata:{upstream:lead?.sync?.upstream,notifications:lead.notifications}}).catch(()=>{});
     }catch(error){failed++;lead.updatedAt=new Date().toISOString();changed=true;await recordDeadLetter({category:"lead_delivery",stage:"retry",entityType:"lead",entityId:text(lead.id,180),tenantId:text(lead.tenantId||"wdcc",180),requestId:text(lead.requestId,180),retryable:true,attempts:Number(lead?.sync?.retryAttempts||0)+1,error:error instanceof Error?error.message:"retry_failed",nextAttemptAt:new Date(Date.now()+60*60*1000).toISOString(),context:{upstream:lead?.sync?.upstream||null,notifications:lead?.notifications||null}}).catch(()=>{});lead.sync={...(lead.sync||{}),retryAttempts:Number(lead?.sync?.retryAttempts||0)+1,lastRetryAt:new Date().toISOString()};}
   }
