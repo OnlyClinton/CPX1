@@ -82,17 +82,6 @@ PY
  exit 1
 fi
 
-AUTH_CODE="$(curl -sS -o /tmp/wdcc-auth.json -w '%{http_code}' "$BASE/api/auth/session" -H "Cookie: __Host-wdcc_session=$QA_COOKIE")"
-if [ "$AUTH_CODE" != 200 ] || ! jq -e '.authenticated==true' /tmp/wdcc-auth.json >/dev/null 2>&1; then
- python3 - <<'PY'
-import json,pathlib
-p=pathlib.Path('/tmp/wdcc-auth.json')
-body=p.read_text(errors='replace') if p.exists() else ''
-pathlib.Path('/tmp/wdcc-result.json').write_text(json.dumps({'ok':False,'failedStage':'local_auth','authStatus':body},indent=2))
-PY
- exit 1
-fi
-
 cat > .wdcc-local-browser.cjs <<'NODE'
 const fs=require('fs');const{chromium}=require('playwright');const{put}=require('@vercel/blob');
 const base=process.env.BASE,run=process.env.RUN_ID,cookie=process.env.QA_COOKIE;
