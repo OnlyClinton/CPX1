@@ -1,0 +1,81 @@
+name: Probe WDCC Frontdoor Route Detail v1n
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-frontdoor-route-detail-v1n.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  LIVE_WORKER: wdcc-dealer-frontdoor
+  ROUTE_ID: 245de2b4dbe642fbabe5ebe2dc6f7fb5
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe account-level single-route endpoint
+        id: detail
+        shell: bash
+        run: |
+          set -euo pipefail
+          for suffix in "/$ROUTE_ID" "/$ROUTE_ID/"; do
+            API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$LIVE_WORKER/routes$suffix"
+            code="$(curl -sS -o /tmp/detail.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API")"
+            echo "route_detail_http=$code endpoint=$suffix"
+            cat /tmp/detail.json | jq . 2>/dev/null || cat /tmp/detail.json
+            if [ "$code" = 200 ]; then
+              ZONE_ID="$(jq -r '[.. | objects | .zone_id? // .zoneId? // empty] | map(select(type=="string" and length>0)) | first // empty' /tmp/detail.json)"
+              ZONE_NAME="$(jq -r '[.. | objects | .zone_name? // .zoneName? // empty] | map(select(type=="string" and length>0)) | first // empty' /tmp/detail.json)"
+              echo "http=$code" >> "$GITHUB_OUTPUT"
+              echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+              echo "zone_name=$ZONE_NAME" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "http=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Query dealer DNS if zone id surfaced
+        id: dns
+        if: steps.detail.outputs.zone_id != ''
+        env:
+          ZONE_ID: ${{ steps.detail.outputs.zone_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/dns.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100")"
+          echo "dns_http=$code"
+          cat /tmp/dns.json | jq '{success,errors,result:[.result[]? | {id,type,name,content,proxied,ttl}]}' 2>/dev/null || cat /tmp/dns.json
+          echo "http=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = 200 ]; then
+            test "$(jq '.result|length' /tmp/dns.json)" -eq 1
+            echo "record_id=$(jq -r '.result[0].id' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+            echo "content=$(jq -r '.result[0].content' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+            echo "proxied=$(jq -r '.result[0].proxied // false' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HTTP: ${{ steps.detail.outputs.http }}
+          ZONE_ID: ${{ steps.detail.outputs.zone_id }}
+          ZONE_NAME: ${{ steps.detail.outputs.zone_name }}
+          DNS_HTTP: ${{ steps.dns.outputs.http }}
+          RECORD_ID: ${{ steps.dns.outputs.record_id }}
+          CONTENT: ${{ steps.dns.outputs.content }}
+          PROXIED: ${{ steps.dns.outputs.proxied }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC frontdoor route detail v1n ${GITHUB_RUN_ID}" --body "Route detail HTTP: \`$HTTP\`. Zone id: \`$ZONE_ID\`; zone name: \`$ZONE_NAME\`. Dealer DNS HTTP: \`$DNS_HTTP\`; record \`$RECORD_ID\`, content \`$CONTENT\`, proxied \`$PROXIED\`. Read-only probe." || true
