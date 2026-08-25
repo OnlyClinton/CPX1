@@ -61,8 +61,9 @@ jobs:
           const pathname=`media/wdcc/oidc-proof/${Date.now()}-${crypto.randomUUID()}.png`;
           const signed=await issueSignedToken({pathname,operations:['put'],validUntil:Date.now()+5*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,oidcToken,storeId});
           if(!signed?.delegationToken||!signed?.clientSigningToken)throw Error('SIGNED_TOKEN_MISSING');
-          const {presignedUrl}=presignUrl(signed,{operation:'put',pathname,access:'private',validUntil:Date.now()+4*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:false});
-          if(!presignedUrl)throw Error('PRESIGNED_URL_MISSING');
+          const presigned=presignUrl(signed,{operation:'put',pathname,access:'private',validUntil:Date.now()+4*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:false});
+          const presignedUrl=typeof presigned==='string'?presigned:presigned?.presignedUrl;
+          if(!presignedUrl)throw Error(`PRESIGNED_URL_MISSING_${JSON.stringify(presigned)}`);
           const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
           const putResponse=await fetch(presignedUrl,{method:'PUT',headers:{'content-type':'image/png'},body:png});
           const putBody=await putResponse.text();
