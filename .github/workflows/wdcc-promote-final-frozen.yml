@@ -1,0 +1,100 @@
+name: WDCC PROMOTE FINAL FROZEN
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TRIGGER_WDCC_PROMOTE_FINAL.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-promote-final-frozen
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      DEPLOYMENT_ID: dpl_4f3bXgSkpMUAgCHceRbhJSrhS714
+      DEPLOYMENT_URL: wdcc-v32-storefront-g9jcpm74o-cpxagency.vercel.app
+      RELEASE_SHA: d7f76ea60081db88da774bc732a66f0dffd65410
+      APEX: https://wedontcarecars.com
+    steps:
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Verify exact deployment before promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$TEAM_ID" \
+            -o /tmp/deployment.json
+          jq -e --arg id "$DEPLOYMENT_ID" --arg project "$PROJECT_ID" --arg sha "$RELEASE_SHA" '
+            (.id == $id or .uid == $id) and
+            (.projectId == $project or .project.id == $project) and
+            ((.readyState // .state) == "READY") and
+            (.meta.githubCommitSha == $sha)
+          ' /tmp/deployment.json >/dev/null
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Promote exact frozen deployment
+        id: promote
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel promote "$DEPLOYMENT_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          echo 'promoted=true' >> "$GITHUB_OUTPUT"
+
+      - name: Verify apex resolves to exact deployment
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 40); do
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" \
+              -o /tmp/apex-deployment.json || true
+            resolved="$(jq -r '.id // .uid // empty' /tmp/apex-deployment.json 2>/dev/null || true)"
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?intro=1&release=$RELEASE_SHA&run=${GITHUB_RUN_ID}" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory" || true)"
+            test_code="$(curl -sS -L -o /tmp/test-drive.html -w '%{http_code}' "$APEX/schedule-test-drive" || true)"
+            approve_code="$(curl -sS -L -o /tmp/approved.html -w '%{http_code}' "$APEX/get-approved" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APEX/dealer/login" || true)"
+            admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "$APEX/admin/login" || true)"
+            if [ "$resolved" = "$DEPLOYMENT_ID" ] && [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$test_code" = 200 ] && [ "$approve_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ]; then
+              if jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok == true' /tmp/inventory.json >/dev/null 2>&1; then
+                if grep -qi 'intro-sequence' /tmp/home.html && grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get approved' /tmp/home.html && grep -qi 'Call Sean' /tmp/home.html && grep -qi 'mobile-action-bar' /tmp/home.html && ! grep -q 'R36TEST-' /tmp/home.html; then
+                  ok=1
+                  break
+                fi
+              fi
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report exact production cutover
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTED: ${{ steps.promote.outputs.promoted }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Release SHA: `%s`\nDeployment: `%s`\nPromotion executed: `%s`\nApex resolved and full public contract verified: `%s`\n\nApex: %s' "$RELEASE_SHA" "$DEPLOYMENT_ID" "${PROMOTED:-false}" "${VERIFIED:-false}" "$APEX")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final production cutover ${GITHUB_SHA:0:7}" --body "$body" || true
