@@ -6,13 +6,18 @@ import TrackedCallLink from"./TrackedCallLink";
 export function Intro(){
   const[done,setDone]=useState(false);
   useEffect(()=>{
-    if(sessionStorage.getItem("wdcc_intro_seen")||window.matchMedia("(prefers-reduced-motion: reduce)").matches){setDone(true);return}
-    sessionStorage.setItem("wdcc_intro_seen","1");
-    const t=setTimeout(()=>setDone(true),2600);
-    return()=>clearTimeout(t);
+    const params=new URLSearchParams(window.location.search);
+    const force=params.get("intro")==="1"||params.get("replayIntro")==="1";
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(!force&&(sessionStorage.getItem("wdcc_intro_seen_v2")||reduced)){setDone(true);return}
+    if(!force)sessionStorage.setItem("wdcc_intro_seen_v2","1");
+    document.documentElement.classList.add("wdcc-intro-active");
+    const t=setTimeout(()=>setDone(true),3420);
+    return()=>{clearTimeout(t);document.documentElement.classList.remove("wdcc-intro-active")};
   },[]);
+  useEffect(()=>{if(done)document.documentElement.classList.remove("wdcc-intro-active")},[done]);
   if(done)return null;
-  return <div className="cinematic cinematic-enter" aria-label="WDCC opening animation">
+  return <div className="cinematic cinematic-enter cinematic-v2" data-wdcc-intro="layered-v2" aria-label="WDCC opening animation">
     <div className="cinScene" aria-hidden="true"/>
     <div className="cinVignette" aria-hidden="true"/>
     <div className="cinSmoke one" aria-hidden="true"/>
