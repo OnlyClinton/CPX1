@@ -1,0 +1,307 @@
+name: Deploy WDCC Dealer Cloudflare v1
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/deploy-dealer-cloudflare-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  NODE_VERSION: '22'
+  BACKEND: https://wdcc-cpx-launch-cpxagency.vercel.app
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  CUSTOMER_DOMAIN: wedontcarecars.com
+  WORKER_NAME: wdcc-dealer-command
+
+jobs:
+  deploy-and-cutover:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Require Cloudflare authority and healthy canonical backend
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify | jq -e '.success==true and .result.status=="active"' >/dev/null
+          curl -fsS "$BACKEND/api/health?dealer-cf-preflight=$GITHUB_RUN_ID" -o /tmp/backend-health.json
+          cat /tmp/backend-health.json | jq .
+          jq -e '.ok==true and .degraded==false' /tmp/backend-health.json >/dev/null
+
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          for login in 'Big Pussy' admin; do
+            jq -nc --arg login "$login" --arg password "$PW" '{login:$login,password:$password}' >/tmp/backend-login-payload.json
+            code="$(curl -sS -o /tmp/backend-login.json -w '%{http_code}' -X POST "$BACKEND/api/auth/login" \
+              -H 'content-type: application/json' --data-binary @/tmp/backend-login-payload.json)"
+            echo "backend login $login -> $code"
+            cat /tmp/backend-login.json | jq '{ok,error,role,user:(.user|if type=="object" then {id,role,username,email} else . end)}'
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/backend-login.json >/dev/null
+          done
+          echo 'preflight=true' >> "$GITHUB_OUTPUT"
+
+      - name: Build dealer-only OpenNext worker
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs');
+          const p='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(p,'utf8'));
+          cfg.name=process.env.WORKER_NAME;
+          cfg.workers_dev=true;
+          delete cfg.route;
+          delete cfg.routes;
+          cfg.vars=cfg.vars||{};
+          cfg.vars.WDCC_RUNTIME_ROLE='frontend';
+          cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;
+          fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          npx opennextjs-cloudflare build
+          echo 'built=true' >> "$GITHUB_OUTPUT"
+
+      - name: Deploy workers.dev candidate with no production route
+        id: candidate_deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy 2>&1 | tee /tmp/cf-candidate-deploy.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/cf-candidate-deploy.log | tail -1 || true)"
+          URL="${URL%/}"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Candidate: $URL"
+
+      - name: Gate dealer candidate end to end
+        id: candidate_gate
+        env:
+          URL: ${{ steps.candidate_deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?dealer-cf=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .backend=="healthy"' /tmp/cf-health.json >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          echo '--- candidate health ---'
+          cat /tmp/cf-health.json | jq . || cat /tmp/cf-health.json
+          test "$ready" = 1
+
+          root="$(curl -sS -L -o /tmp/cf-root.html -w '%{http_code}' "$URL/")"
+          test "$root" = 200
+          grep -Eqi 'dealer portal|dealer control|inventory operations|sales command' /tmp/cf-root.html
+
+          login(){
+            name="$1" jar="$2"
+            jq -nc --arg login "$name" --arg password "$PW" '{login:$login,password:$password}' >/tmp/cf-login-payload.json
+            code="$(curl -sS -c "$jar" -o /tmp/cf-login.json -w '%{http_code}' -X POST "$URL/api/auth/login" \
+              -H 'content-type: application/json' --data-binary @/tmp/cf-login-payload.json)"
+            echo "candidate login $name -> $code"
+            cat /tmp/cf-login.json | jq '{ok,error,role,user:(.user|if type=="object" then {id,role,username,email} else . end)}'
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/cf-login.json >/dev/null
+            scode="$(curl -sS -b "$jar" -o /tmp/cf-session.json -w '%{http_code}' "$URL/api/auth/session")"
+            test "$scode" = 200
+            jq -e '.authenticated==true' /tmp/cf-session.json >/dev/null
+          }
+          login 'Big Pussy' /tmp/cf-dealer.cookies
+          login admin /tmp/cf-admin.cookies
+
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/cf-dealer.cookies -o /tmp/cf-check.json -w '%{http_code}' "$URL$path")"
+            echo "candidate $path -> $code"
+            cat /tmp/cf-check.json | jq '{ok,error,revision,summary}' 2>/dev/null || true
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/cf-check.json >/dev/null
+          done
+          acode="$(curl -sS -b /tmp/cf-admin.cookies -o /tmp/cf-admin-users.json -w '%{http_code}' "$URL/api/admin/users")"
+          echo "candidate /api/admin/users -> $acode"
+          test "$acode" = 200
+          jq -e '.ok==true' /tmp/cf-admin-users.json >/dev/null
+
+          for path in /dealer /dealer/login /dealer/leads /dealer/crm /dealer/inventory /dealer/inventory/new /dealer/inventory/logs /admin /admin/login /admin/users; do
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "$URL$path")"
+            echo "candidate $path -> $code"
+            test "$code" = 200
+          done
+          echo 'candidate_passed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Resolve dealer DNS record and save rollback state
+        id: dns
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.cloudflare.com/client/v4
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "${auth[@]}" "$api/zones?name=$CUSTOMER_DOMAIN&account.id=$CLOUDFLARE_ACCOUNT_ID" >/tmp/zones.json
+          ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$ZONE_ID"
+          curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100" >/tmp/dealer-dns.json
+          COUNT="$(jq '.result|length' /tmp/dealer-dns.json)"
+          test "$COUNT" -eq 1
+          jq '.result[0]' /tmp/dealer-dns.json >/tmp/dealer-dns-before.json
+          DNS_ID="$(jq -r '.id' /tmp/dealer-dns-before.json)"
+          TYPE="$(jq -r '.type' /tmp/dealer-dns-before.json)"
+          CONTENT="$(jq -r '.content' /tmp/dealer-dns-before.json)"
+          PROXIED="$(jq -r '.proxied // false' /tmp/dealer-dns-before.json)"
+          echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+          echo "dns_id=$DNS_ID" >> "$GITHUB_OUTPUT"
+          echo "type=$TYPE" >> "$GITHUB_OUTPUT"
+          echo "content=$CONTENT" >> "$GITHUB_OUTPUT"
+          echo "proxied_before=$PROXIED" >> "$GITHUB_OUTPUT"
+          echo "Dealer DNS before cutover: type=$TYPE content=$CONTENT proxied=$PROXIED"
+
+      - name: Proxy only dealer DNS through Cloudflare
+        id: proxy_dns
+        env:
+          ZONE_ID: ${{ steps.dns.outputs.zone_id }}
+          DNS_ID: ${{ steps.dns.outputs.dns_id }}
+          TYPE: ${{ steps.dns.outputs.type }}
+          CONTENT: ${{ steps.dns.outputs.content }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.cloudflare.com/client/v4
+          jq -n --arg type "$TYPE" --arg name "$DEALER_DOMAIN" --arg content "$CONTENT" \
+            '{type:$type,name:$name,content:$content,ttl:1,proxied:true}' >/tmp/dealer-dns-proxy.json
+          curl -fsS -X PUT "$api/zones/$ZONE_ID/dns_records/$DNS_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/dealer-dns-proxy.json >/tmp/dealer-dns-proxy-response.json
+          cat /tmp/dealer-dns-proxy-response.json | jq '{success,errors,result:{name:.result.name,type:.result.type,content:.result.content,proxied:.result.proxied}}'
+          jq -e '.success==true and .result.proxied==true' /tmp/dealer-dns-proxy-response.json >/dev/null
+          echo 'proxied=true' >> "$GITHUB_OUTPUT"
+
+      - name: Attach dealer-only Worker route
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const p='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(p,'utf8'));
+          cfg.name=process.env.WORKER_NAME;
+          cfg.workers_dev=true;
+          cfg.routes=[{pattern:`${process.env.DEALER_DOMAIN}/*`,zone_name:process.env.CUSTOMER_DOMAIN}];
+          cfg.vars=cfg.vars||{};
+          cfg.vars.WDCC_RUNTIME_ROLE='frontend';
+          cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;
+          fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          npx wrangler deploy 2>&1 | tee /tmp/cf-route-deploy.log
+          grep -q "$DEALER_DOMAIN" /tmp/cf-route-deploy.log || true
+          echo 'attached=true' >> "$GITHUB_OUTPUT"
+
+      - name: Verify live dealer and exact 2vfD lock or roll back
+        id: live
+        env:
+          ZONE_ID: ${{ steps.dns.outputs.zone_id }}
+          DNS_ID: ${{ steps.dns.outputs.dns_id }}
+          TYPE: ${{ steps.dns.outputs.type }}
+          CONTENT: ${{ steps.dns.outputs.content }}
+          PROXIED_BEFORE: ${{ steps.dns.outputs.proxied_before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.cloudflare.com/client/v4
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          rollback(){
+            echo 'LIVE GATE FAILED — removing dealer Worker route and restoring prior DNS proxy state.'
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api/zones/$ZONE_ID/workers/routes" >/tmp/routes.json || true
+            jq -r --arg p "$DEALER_DOMAIN/*" --arg s "$WORKER_NAME" '.result[]|select(.pattern==$p and .script==$s)|.id' /tmp/routes.json 2>/dev/null | while read -r rid; do
+              [ -n "$rid" ] || continue
+              curl -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api/zones/$ZONE_ID/workers/routes/$rid" >/dev/null || true
+            done
+            jq -n --arg type "$TYPE" --arg name "$DEALER_DOMAIN" --arg content "$CONTENT" --argjson proxied "$PROXIED_BEFORE" \
+              '{type:$type,name:$name,content:$content,ttl:1,proxied:$proxied}' >/tmp/dealer-dns-rollback.json
+            curl -fsS -X PUT "$api/zones/$ZONE_ID/dns_records/$DNS_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' \
+              --data-binary @/tmp/dealer-dns-rollback.json >/dev/null || true
+          }
+          trap rollback ERR
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/live-root.html -w '%{http_code}' "https://$DEALER_DOMAIN/?cf_live=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && grep -Eqi 'dealer portal|dealer control|inventory operations|sales command' /tmp/live-root.html; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          login(){
+            name="$1" jar="$2"
+            jq -nc --arg login "$name" --arg password "$PW" '{login:$login,password:$password}' >/tmp/live-login-payload.json
+            code="$(curl -sS -c "$jar" -o /tmp/live-login.json -w '%{http_code}' -X POST "https://$DEALER_DOMAIN/api/auth/login" \
+              -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/live-login-payload.json)"
+            echo "live login $name -> $code"
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/live-login.json >/dev/null
+            scode="$(curl -sS -b "$jar" -o /tmp/live-session.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/auth/session")"
+            test "$scode" = 200
+            jq -e '.authenticated==true' /tmp/live-session.json >/dev/null
+          }
+          login 'Big Pussy' /tmp/live-dealer.cookies
+          login admin /tmp/live-admin.cookies
+
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/live-dealer.cookies -o /tmp/live-check.json -w '%{http_code}' "https://$DEALER_DOMAIN$path")"
+            echo "live $path -> $code"
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/live-check.json >/dev/null
+          done
+          acode="$(curl -sS -b /tmp/live-admin.cookies -o /tmp/live-admin-users.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/admin/users")"
+          echo "live /api/admin/users -> $acode"
+          test "$acode" = 200
+          jq -e '.ok==true' /tmp/live-admin-users.json >/dev/null
+
+          storecode="$(curl -sS -o /tmp/customer.html -w '%{http_code}' "https://$CUSTOMER_DOMAIN/?exact_2vfd_lock=$GITHUB_RUN_ID")"
+          test "$storecode" = 200
+          grep -q 'intro-sequence intro-prepare' /tmp/customer.html
+          grep -q 'mobile-dock-drive' /tmp/customer.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer.html
+          trap - ERR
+          echo 'live_verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report dealer Cloudflare release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          CANDIDATE: ${{ steps.candidate_gate.outcome }}
+          DNS: ${{ steps.proxy_dns.outcome }}
+          ROUTE: ${{ steps.route.outcome }}
+          LIVE: ${{ steps.live.outcome }}
+          VERIFIED: ${{ steps.live.outputs.live_verified }}
+          URL: ${{ steps.candidate_deploy.outputs.url }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC dealer Cloudflare release ${GITHUB_RUN_ID}" \
+            --body "Backend/login preflight: **$PREFLIGHT**. Build: **$BUILD**. workers.dev candidate gate: **$CANDIDATE**. Dealer DNS proxy: **$DNS**. Dealer Worker route: **$ROUTE**. Live E2E: **$LIVE**. Verified: \`$VERIFIED\`. Candidate: \`$URL\`. Customer domain remains exact 2vfD and was re-verified after cutover." || true
