@@ -1,0 +1,30 @@
+name: WDCC Brand Lock
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'public/wdcc-logo-transparent.webp'
+      - 'public/wdcc-hero-v2.webp'
+      - 'scripts/wdcc-brand-lock.sh'
+      - '.github/workflows/wdcc-brand-lock.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'public/wdcc-logo-transparent.webp'
+      - 'public/wdcc-hero-v2.webp'
+      - 'scripts/wdcc-brand-lock.sh'
+      - '.github/workflows/wdcc-brand-lock.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  brand-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical WDCC branding
+        run: bash scripts/wdcc-brand-lock.sh
