@@ -1,5 +1,6 @@
 name: WDCC CLOUDFLARE DEALER LIVE
 
+# trigger-refresh: 2026-08-25T12:07Z
 on:
   push:
     branches: [main]
