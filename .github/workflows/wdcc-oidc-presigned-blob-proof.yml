@@ -17,9 +17,9 @@ jobs:
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-      STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
       STORE_ID: store_cNUyQRVlXtyvZQ5N
-      FINAL_SHA: d7b56f3e67a971ffd10ca7189a86a5850f8f21af
+      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$FINAL_SHA"
           npm ci
-      - name: Generate storefront project OIDC token
+      - name: Generate canonical Phoenix project OIDC token
         shell: bash
         run: |
           set -euo pipefail
@@ -42,7 +42,7 @@ jobs:
             -H "Authorization: Bearer $VERCEL_TOKEN" \
             -H 'Content-Type: application/json' \
             --data '{"source":"vercel-cli:pull"}' \
-            "https://api.vercel.com/v1/projects/$STOREFRONT_ID/token?teamId=$TEAM_ID" \
+            "https://api.vercel.com/v1/projects/$PHOENIX_ID/token?teamId=$TEAM_ID" \
             -o /tmp/project-oidc.json
           OIDC="$(jq -r '.token // empty' /tmp/project-oidc.json)"
           test -n "$OIDC"
@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           export OIDC_TOKEN="$(cat /tmp/oidc-token)"
-          printf '::add-mask::%s\n' "$OIDC_TOKEN"
+          printf '::add-mask::%s\n' "$OIDIDC_TOKEN" 2>/dev/null || true
           node --input-type=module <<'NODE'
           import crypto from 'node:crypto';
           import {del,get,issueSignedToken,presignUrl} from '@vercel/blob';
@@ -80,4 +80,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC OIDC presigned Blob proof ${GITHUB_RUN_ID}" --body "Exact source: \`$FINAL_SHA\`\nStatus: **$STATUS**\nStorefront project OIDC was used; no Vercel deployment, alias, DNS, or Cloudflare route move was performed. The proof path is deleted by the test on success." || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC OIDC presigned Blob proof ${GITHUB_RUN_ID}" --body "Exact source: \`$FINAL_SHA\`\nStatus: **$STATUS**\nCanonical Phoenix project OIDC was used; no Vercel deployment, alias, DNS, or Cloudflare route move was performed. The proof path is deleted by the test on success." || true
