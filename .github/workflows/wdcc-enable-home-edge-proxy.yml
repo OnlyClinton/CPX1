@@ -1,0 +1,88 @@
+name: WDCC ENABLE HOME EDGE PROXY
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-enable-home-edge-proxy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-enable-home-edge-proxy
+  cancel-in-progress: false
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Guarded apex proxy enable with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          CF_TOKEN="${CLOUDFLARE_ZONE_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
+          test -n "$CF_TOKEN"
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&status=active" "${auth[@]}" > /tmp/zones.json
+          ZONE_ID="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$ZONE_ID"
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=wedontcarecars.com&per_page=100" "${auth[@]}" > /tmp/records.json
+          jq -e '.success==true' /tmp/records.json >/dev/null
+          jq '[.result[] | select(.name=="wedontcarecars.com" and (.type=="CNAME" or .type=="A" or .type=="AAAA"))]' /tmp/records.json > /tmp/apex.json
+          count="$(jq 'length' /tmp/apex.json)"
+          test "$count" -ge 1
+
+          # Prefer the canonical CNAME when present; otherwise require a single apex address record.
+          record="$(jq -c '([.[]|select(.type=="CNAME")]|first) // (if length==1 then .[0] else null end)' /tmp/apex.json)"
+          test "$record" != "null"
+          REC_ID="$(jq -r '.id' <<<"$record")"
+          REC_TYPE="$(jq -r '.type' <<<"$record")"
+          REC_NAME="$(jq -r '.name' <<<"$record")"
+          REC_CONTENT="$(jq -r '.content' <<<"$record")"
+          REC_TTL="$(jq -r '.ttl' <<<"$record")"
+          ORIGINAL_PROXY="$(jq -r '.proxied' <<<"$record")"
+          echo "Apex record: $REC_TYPE $REC_NAME -> $REC_CONTENT (proxied=$ORIGINAL_PROXY)"
+
+          make_payload(){ jq -nc --arg type "$REC_TYPE" --arg name "$REC_NAME" --arg content "$REC_CONTENT" --argjson ttl "$REC_TTL" --argjson proxied "$1" '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:$proxied}'; }
+          restore(){
+            echo "Rolling apex proxy back to proxied=$ORIGINAL_PROXY" >&2
+            curl -fsS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload "$ORIGINAL_PROXY")" >/tmp/rollback.json || true
+          }
+          committed=0
+          trap 'if [ "$committed" != 1 ]; then restore; fi' EXIT
+
+          if [ "$ORIGINAL_PROXY" != true ]; then
+            curl -fsS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$REC_ID" "${auth[@]}" --data "$(make_payload true)" > /tmp/update.json
+            jq -e '.success==true and .result.proxied==true' /tmp/update.json >/dev/null
+          fi
+
+          sleep 6
+          ok=0
+          for attempt in $(seq 1 25); do
+            root_code="$(curl -sS -D /tmp/root.h -o /tmp/root.html -w '%{http_code}' "https://wedontcarecars.com/?edge_enable=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            health_code="$(curl -sS -D /tmp/health.h -o /tmp/health.json -w '%{http_code}' "https://wedontcarecars.com/api/health?edge_enable=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            inv_code="$(curl -sS -D /tmp/inv.h -o /tmp/inv.json -w '%{http_code}' "https://wedontcarecars.com/api/inventory?edge_enable=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            if [ "$root_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] \
+              && grep -q 'id="wdcc-sleek-edge"' /tmp/root.html \
+              && grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/root.h \
+              && jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
+              && jq -e '.ok==true and (.items|type)=="array"' /tmp/inv.json >/dev/null 2>&1 \
+              && ! grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/health.h \
+              && ! grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/inv.h; then
+                ok=1
+                break
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          committed=1
+          trap - EXIT
+          echo 'WDCC_HOME_EDGE_PROXY=PASS'
