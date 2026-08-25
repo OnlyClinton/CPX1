@@ -92,6 +92,13 @@ export async function writeState(input:State){
     if(error instanceof BlobPreconditionFailedError)throw Error("STATE_REVISION_CONFLICT");
     throw error;
   }
+
+  // Callers intentionally enrich the same in-memory ledger across sequential
+  // persistence checkpoints (for example, lead persistence then sync/notification
+  // metadata). Carry the committed revision forward so those later checkpoints
+  // remain concurrency-safe instead of being mistaken for stale writers.
+  input.revision=state.revision;
+  input.updatedAt=state.updatedAt;
   return state;
 }
 
