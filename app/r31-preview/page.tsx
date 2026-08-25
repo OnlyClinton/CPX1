@@ -30,8 +30,8 @@ export default function R31PreviewPage() {
               <br />Get on the road without the runaround.
             </p>
             <div className={styles.heroActions}>
-              <Link className={styles.primary} href="/r31-preview/get-approved">GET PRE-APPROVED →</Link>
-              <Link className={styles.secondary} href="/r31-preview/inventory">BROWSE INVENTORY →</Link>
+              <Link className={styles.primary} href="/r31-preview/get-approved?source=r31-hero-approved">GET PRE-APPROVED →</Link>
+              <Link className={styles.secondary} href="/r31-preview/inventory?source=r31-hero-inventory">BROWSE INVENTORY →</Link>
             </div>
             <div className={styles.heroCall}>
               <TrackedCallLink source="r31-preview-hero-phone">☎ CALL SEAN <b>813-516-4752</b></TrackedCallLink>
@@ -52,7 +52,7 @@ export default function R31PreviewPage() {
           <div className="wrap">
             <div className={styles.sectionHead}>
               <h2>FEATURED INVENTORY</h2>
-              <Link href="/r31-preview/inventory">VIEW ALL INVENTORY →</Link>
+              <Link href="/r31-preview/inventory?source=r31-featured-view-all">VIEW ALL INVENTORY →</Link>
             </div>
             <R31FeaturedInventory />
           </div>
@@ -65,7 +65,7 @@ export default function R31PreviewPage() {
                 <h2>IN-HOUSE FINANCING <em>MADE EASY.</em></h2>
                 <span>ONE SIMPLE PROCESS. NO HOOPS. NO HASSLE.</span>
               </div>
-              <Link href="/r31-preview/get-approved">START NOW →</Link>
+              <Link href="/r31-preview/get-approved?source=r31-finance-start">START NOW →</Link>
             </div>
             <div className={styles.financeSteps}>
               <article><b>1</b><div><strong>APPLY ONLINE</strong><p>Send basic details securely.</p></div></article>
