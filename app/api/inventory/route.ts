@@ -14,15 +14,39 @@ function response(body:any,status:number,requestIdValue:string){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":requestIdValue}});
 }
 
+function customerSafe(vehicle:any){
+  const status=String(vehicle?.status||"").toLowerCase();
+  const stock=String(vehicle?.stock||vehicle?.stock_id||"").toUpperCase();
+  const badges=(Array.isArray(vehicle?.badges)?vehicle.badges:[]).map((value:any)=>String(value).toUpperCase());
+  const trace=`${stock} ${vehicle?.make||""} ${vehicle?.model||""} ${vehicle?.description||""}`.toUpperCase();
+  const qaTrace=/(^|[\s_-])(QA|TEST|MALFORMED)([\s_-]|$)/.test(trace)||stock.startsWith("R36TEST-")||badges.some((badge:string)=>/(QA|TEST)/.test(badge));
+  return status==="published"&&vehicle?.archived!==true&&vehicle?.qa!==true&&vehicle?.customerVisible!==false&&!qaTrace&&Number(vehicle?.year)>1900&&String(vehicle?.make||"").trim()!==""&&String(vehicle?.model||"").trim()!==""&&Number(vehicle?.price||vehicle?.cashPrice)>0;
+}
+
+async function publicProxyInventory(request:Request){
+  const upstream=await proxyDealer(request,"/api/inventory");
+  if(!upstream.ok)return upstream;
+  const clone=upstream.clone();
+  const payload=await clone.json().catch(()=>null);
+  if(!payload||typeof payload!=="object")return upstream;
+  const source=Array.isArray(payload.items)?payload.items:Array.isArray(payload.inventory)?payload.inventory:[];
+  const items=source.filter(customerSafe);
+  const headers=new Headers(upstream.headers);
+  headers.set("content-type","application/json; charset=utf-8");
+  headers.set("cache-control","public, max-age=0, must-revalidate");
+  headers.set("x-wdcc-public-inventory-filter","customer-safe-v1");
+  return new Response(JSON.stringify({...payload,items,count:items.length}),{status:upstream.status,statusText:upstream.statusText,headers});
+}
+
 export async function GET(request:Request){
-  if(!isDealerRuntime(request))return proxyDealer(request,"/api/inventory");
+  if(!isDealerRuntime(request))return publicProxyInventory(request);
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     let items;
     if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
       items=String(user.role).toLowerCase()==="platform_admin"?state.vehicles:state.vehicles.filter(vehicle=>String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc"));
-    }else items=publicVehicles(state);
+    }else items=publicVehicles(state).filter(customerSafe);
     return response({ok:true,count:items.length,items,revision:state.revision},200,rid);
   }catch(error){
     return response({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},500,rid);
