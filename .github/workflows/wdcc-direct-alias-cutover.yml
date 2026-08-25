@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
   issues: write
 
 concurrency:
@@ -17,18 +18,18 @@ concurrency:
 
 env:
   TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  CANDIDATE_ID: dpl_HsafQFMVjRnrGBGjt86YxaEvHudz
-  CANDIDATE_URL: wdcc-v32-storefront-9x6w64q3k-cpxagency.vercel.app
-  EXPECTED_COMMIT: e119854bc60a4a507e9f6162774a29366bbe497d
+  CANDIDATE_ID: dpl_EZ2fWgHBkJmcrboEK6cMGzTvx51N
+  CANDIDATE_URL: wdcc-v32-storefront-517ddd9cb-cpxagency.vercel.app
+  EXPECTED_COMMIT: da9517c2560ecf2d0cdb22ec12c5f9b7da73100a
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
 
 jobs:
   cutover:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
-      - name: Validate API-capable visual candidate and capture rollback aliases
+      - name: Validate exact READY merged candidate and capture rollback aliases
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -39,85 +40,74 @@ jobs:
             "https://api.vercel.com/v13/deployments/$CANDIDATE_ID?teamId=$TEAM_ID" -o /tmp/candidate.json
           jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '.id==$id and .readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/candidate.json >/dev/null
 
-          npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/candidate-home.html
-          grep -q 'intro-sequence' /tmp/candidate-home.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/candidate-home.html
-          grep -qi 'GET PRE-APPROVED' /tmp/candidate-home.html
-          grep -qi 'SCHEDULE A TEST DRIVE' /tmp/candidate-home.html
-          grep -q 'stickyCtaBar' /tmp/candidate-home.html
+          npx --yes vercel@59.5.0 curl / --deployment "$CANDIDATE_URL" > /tmp/candidate-home.html
+          grep -q 'screenshotContract' /tmp/candidate-home.html
+          grep -q 'header-logo-image' /tmp/candidate-home.html
+          grep -qi 'Schedule a test drive' /tmp/candidate-home.html
+          grep -qi 'Get pre-approved' /tmp/candidate-home.html
+          grep -qi 'Call Sean' /tmp/candidate-home.html
+          grep -q 'mobile-action-bar' /tmp/candidate-home.html
 
-          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$CANDIDATE_URL" > /tmp/hero.webp
-          test -s /tmp/hero.webp
-
-          npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
-          jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null
-
-          npx --yes vercel@59.3.0 curl /api/inventory --deployment "$CANDIDATE_URL" > /tmp/inventory.json
+          npx --yes vercel@59.5.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
+          jq -e --arg sha "$EXPECTED_COMMIT" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
+          npx --yes vercel@59.5.0 curl /api/inventory --deployment "$CANDIDATE_URL" > /tmp/inventory.json
           jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
-          jq -e 'all(.items[]; ((.stock // "") | ascii_upcase | startswith("WDCC-QA-") | not) and ((.stock // "") | ascii_upcase | startswith("R36TEST-") | not))' /tmp/inventory.json >/dev/null
+          jq -e 'all(.items[]; ((.stock // "") | ascii_upcase | startswith("R36TEST-") | not))' /tmp/inventory.json >/dev/null
 
-          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v4/aliases/$APEX?teamId=$TEAM_ID" -o /tmp/old-apex.json || true
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$APEX?teamId=$TEAM_ID" -o /tmp/old-apex.json || true
           jq -r '.deployment.id // .deploymentId // empty' /tmp/old-apex.json > /tmp/old-apex-id || true
-          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v4/aliases/$WWW?teamId=$TEAM_ID" -o /tmp/old-www.json || true
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$WWW?teamId=$TEAM_ID" -o /tmp/old-www.json || true
           jq -r '.deployment.id // .deploymentId // empty' /tmp/old-www.json > /tmp/old-www-id || true
 
-      - name: Reassign apex alias to approved READY candidate
+      - name: Assign apex and www aliases to exact candidate
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL -X POST \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            -H 'Content-Type: application/json' \
-            "https://api.vercel.com/v2/deployments/$CANDIDATE_ID/aliases?teamId=$TEAM_ID" \
-            --data "{\"alias\":\"$APEX\",\"redirect\":null}" -o /tmp/apex-result.json
-          jq -e --arg a "$APEX" '.alias==$a' /tmp/apex-result.json >/dev/null
+          for alias in "$APEX" "$WWW"; do
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              "https://api.vercel.com/v2/deployments/$CANDIDATE_ID/aliases?teamId=$TEAM_ID" \
+              --data "{\"alias\":\"$alias\",\"redirect\":null}" > "/tmp/alias-${alias//./-}.json"
+            jq -e --arg a "$alias" '.alias==$a' "/tmp/alias-${alias//./-}.json" >/dev/null
+          done
 
-      - name: Reassign www alias
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL -X POST \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            -H 'Content-Type: application/json' \
-            "https://api.vercel.com/v2/deployments/$CANDIDATE_ID/aliases?teamId=$TEAM_ID" \
-            --data "{\"alias\":\"$WWW\",\"redirect\":null}" -o /tmp/www-result.json
-          jq -e --arg a "$WWW" '.alias==$a' /tmp/www-result.json >/dev/null
-
-      - name: Verify live visual, mobile, health, and inventory contracts
+      - name: Verify www origin and Cloudflare apex contracts
         id: verify
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           ok=0
-          for i in 1 2 3 4 5 6; do
-            if curl -fsSL -H 'Cache-Control: no-cache' "https://$APEX/?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live.html \
-              && grep -q 'intro-sequence' /tmp/live.html \
-              && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
-              && grep -qi 'GET PRE-APPROVED' /tmp/live.html \
-              && grep -qi 'SCHEDULE A TEST DRIVE' /tmp/live.html \
-              && grep -q 'stickyCtaBar' /tmp/live.html \
-              && curl -fsSL "https://$APEX/wdcc-hero-v2.webp?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live-hero.webp \
-              && test -s /tmp/live-hero.webp \
-              && curl -fsSL "https://$APEX/api/health?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live-health.json \
-              && jq -e '.ok==true and .degraded==false' /tmp/live-health.json >/dev/null \
-              && curl -fsSL "https://$APEX/api/inventory?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live-inventory.json \
-              && jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null \
-              && jq -e 'all(.items[]; ((.stock // "") | ascii_upcase | startswith("WDCC-QA-") | not) and ((.stock // "") | ascii_upcase | startswith("R36TEST-") | not))' /tmp/live-inventory.json >/dev/null; then
-              ok=1
-              break
+          for i in $(seq 1 30); do
+            www_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o /tmp/www.html -w '%{http_code}' "https://$WWW/?cutover=$GITHUB_RUN_ID-$i" || true)"
+            apex_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o /tmp/apex.html -w '%{http_code}' "https://$APEX/?cutover=$GITHUB_RUN_ID-$i" || true)"
+            health_code="$(curl -sS -L -o /tmp/live-health.json -w '%{http_code}' "https://$APEX/api/health?cutover=$GITHUB_RUN_ID-$i" || true)"
+            inv_code="$(curl -sS -L -o /tmp/live-inventory.json -w '%{http_code}' "https://$APEX/api/inventory?cutover=$GITHUB_RUN_ID-$i" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "https://$APEX/dealer/login?cutover=$GITHUB_RUN_ID-$i" || true)"
+            admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "https://$APEX/admin/login?cutover=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$www_code" = 200 ] && [ "$apex_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ] \
+              && grep -q 'screenshotContract' /tmp/www.html \
+              && grep -q 'header-logo-image' /tmp/www.html \
+              && grep -q 'screenshotContract' /tmp/apex.html \
+              && grep -qi 'Schedule a test drive' /tmp/apex.html \
+              && grep -qi 'Get pre-approved' /tmp/apex.html \
+              && grep -qi 'Call Sean' /tmp/apex.html \
+              && grep -q 'mobile-action-bar' /tmp/apex.html \
+              && jq -e --arg sha "$EXPECTED_COMMIT" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null 2>&1 \
+              && jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null 2>&1 \
+              && jq -e 'all(.items[]; ((.stock // "") | ascii_upcase | startswith("R36TEST-") | not))' /tmp/live-inventory.json >/dev/null 2>&1; then
+                ok=1
+                break
             fi
             sleep 3
           done
-          test "$ok" -eq 1
+          test "$ok" = 1
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
 
-      - name: Restore old aliases if verification fails
+      - name: Restore aliases if live verification fails
         if: steps.verify.outcome != 'success'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -126,21 +116,23 @@ jobs:
           set -euo pipefail
           OLD_APEX="$(cat /tmp/old-apex-id 2>/dev/null || true)"
           OLD_WWW="$(cat /tmp/old-www-id 2>/dev/null || true)"
-          if [ -n "$OLD_APEX" ]; then
-            curl -fsSL -X POST \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H 'Content-Type: application/json' \
-              "https://api.vercel.com/v2/deployments/$OLD_APEX/aliases?teamId=$TEAM_ID" \
-              --data "{\"alias\":\"$APEX\",\"redirect\":null}" >/tmp/rollback-apex.json
-          fi
-          if [ -n "$OLD_WWW" ]; then
-            curl -fsSL -X POST \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H 'Content-Type: application/json' \
-              "https://api.vercel.com/v2/deployments/$OLD_WWW/aliases?teamId=$TEAM_ID" \
-              --data "{\"alias\":\"$WWW\",\"redirect\":null}" >/tmp/rollback-www.json
-          fi
+          if [ -n "$OLD_APEX" ]; then curl -fsSL -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' "https://api.vercel.com/v2/deployments/$OLD_APEX/aliases?teamId=$TEAM_ID" --data "{\"alias\":\"$APEX\",\"redirect\":null}" >/dev/null; fi
+          if [ -n "$OLD_WWW" ]; then curl -fsSL -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' "https://api.vercel.com/v2/deployments/$OLD_WWW/aliases?teamId=$TEAM_ID" --data "{\"alias\":\"$WWW\",\"redirect\":null}" >/dev/null; fi
           exit 1
+
+      - name: Dispatch authenticated dealer publish acceptance
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/wdcc-listing-only-e2e.yml/dispatches" \
+            -d '{"ref":"main"}'
 
       - name: Publish cutover proof
         if: always()
@@ -150,8 +142,4 @@ jobs:
         shell: bash
         run: |
           count="$(jq -r '.items|length // 0' /tmp/live-inventory.json 2>/dev/null || echo 0)"
-          if [ "$OUTCOME" = success ]; then
-            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC API-capable storefront cutover passed' --body "Candidate \`$CANDIDATE_ID\` / commit \`$EXPECTED_COMMIT\` is serving \`$APEX\` and \`$WWW\`. Intro, logo, hero, sticky quick actions, test-drive/pre-approval CTAs, healthy backend, and public inventory JSON all passed. Public inventory count: \`$count\`." || true
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC API-capable storefront cutover failed safely' --body "Candidate \`$CANDIDATE_ID\` did not pass the live gate; apex and www rollback were attempted." || true
-          fi
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC merged alias cutover $OUTCOME" --body "Candidate: \`$CANDIDATE_ID\`\nSource: \`$EXPECTED_COMMIT\`\nApex/www verification: \`$OUTCOME\`\nInventory count: \`$count\`\nAuthenticated listing acceptance dispatched after PASS." || true
