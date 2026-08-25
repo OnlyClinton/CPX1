@@ -1,0 +1,49 @@
+name: WDCC Final Source Build Proof
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-final-source-build-proof.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      FINAL_SHA: d0b119aa00e75f392c46194480471e9a39790701
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FINAL_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Compile exact final source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          npm ci
+          npm run build
+      - name: Static one-authority contract
+        run: |
+          set -euo pipefail
+          grep -q 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
+          grep -q 'STOREFRONT_PROJECT_ID' lib/dealerRuntime.ts
+          grep -q 'canonicalDealerBackend' lib/legacyAuthProxy.ts
+          grep -q 'proxyDealer(request,"/api/leads")' app/api/leads/route.ts
+          grep -q 'canonicalGET(request)' app/api/lead/route.ts
+          echo 'WDCC_FINAL_SOURCE_CONTRACT=PASS'
+      - name: Report source proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final source build ${GITHUB_RUN_ID}" --body "Exact SHA: \`$FINAL_SHA\`\nStatus: **$STATUS**\nNo Vercel deployment, Blob mutation, alias move, DNS change, or Cloudflare route change was performed." || true
