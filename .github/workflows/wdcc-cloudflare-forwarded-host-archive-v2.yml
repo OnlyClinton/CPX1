@@ -1,0 +1,136 @@
+name: WDCC CLOUDFLARE HOST ARCHIVE V2
+
+on:
+  push:
+    branches: [release/wdcc-live-screenshot-dealer-20260825]
+    paths:
+      - 'TRIGGER_WDCC_CLOUDFLARE_HOST_ARCHIVE_V2.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-cloudflare-host-archive-v2
+  cancel-in-progress: false
+
+env:
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_SCOPE: cpxagency
+  VERCEL_PROJECT: wdcc-v32-storefront
+  EXPECTED_SHA: 543400c464e3dbe3159a5e0673918cf15325e931
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+  DEALER: dealer.wedontcarecars.com
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify frozen Cloudflare-aware source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          grep -q 'dealerHost(request.headers.get("x-forwarded-host")' lib/dealerRuntime.ts
+          grep -q 'screenshotContract' app/Exact2vfDHome.tsx
+          grep -q '<textarea name="description"' app/dealer/inventory/new/page.tsx
+
+      - name: Build exact production bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy one TGZ archive
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --prod --archive=tgz --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$output"
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://wdcc-v32-storefront-[a-z0-9-]+-cpxagency\.vercel\.app' | tail -1 || true)"
+          test -n "$url"
+          host="${url#https://}"
+          ready=0
+          for i in $(seq 1 40); do
+            code="$(curl -sS -o /tmp/deploy.json -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$TEAM_ID" || true)"
+            if [ "$code" = 200 ] && jq -e --arg sha "$EXPECTED_SHA" '.readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/deploy.json >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+          id="$(jq -r '.id' /tmp/deploy.json)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "cli_rc=$rc" >> "$GITHUB_OUTPUT"
+
+      - name: Pin apex and www to READY release
+        env:
+          DEPLOY_ID: ${{ steps.deploy.outputs.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for alias in "$APEX" "$WWW"; do
+            curl -fsSL -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' \
+              "https://api.vercel.com/v2/deployments/$DEPLOY_ID/aliases?teamId=$TEAM_ID" \
+              --data "{\"alias\":\"$alias\",\"redirect\":null}" > "/tmp/${alias//./-}.json"
+            jq -e --arg a "$alias" '.alias==$a' "/tmp/${alias//./-}.json" >/dev/null
+          done
+
+      - name: Verify storefront and existing Cloudflare dealer front door
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            h="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "https://$APEX/api/health?cfhostv2=$GITHUB_RUN_ID-$i" || true)"
+            home="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "https://$APEX/?cfhostv2=$GITHUB_RUN_ID-$i" || true)"
+            dealer="$(curl -sS -L -D /tmp/dealer.h -o /tmp/dealer.html -w '%{http_code}' "https://$DEALER/dealer/login?cfhostv2=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$h" = 200 ] && [ "$home" = 200 ] && [ "$dealer" = 200 ] \
+              && jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null 2>&1 \
+              && grep -q 'screenshotContract' /tmp/home.html \
+              && grep -q 'header-logo-image' /tmp/home.html \
+              && grep -q 'mobile-action-bar' /tmp/home.html \
+              && grep -q 'PORTAL LOGIN' /tmp/dealer.html \
+              && grep -qi '^x-wdcc-edge: cloudflare-dealer-sales-command' /tmp/dealer.h; then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch authenticated listing acceptance
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run wdcc-listing-only-e2e.yml --ref main
+
+      - name: Publish evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY_ID: ${{ steps.deploy.outputs.id }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Cloudflare host archive v2 $GITHUB_RUN_ID" --body "Source: $EXPECTED_SHA\nDeployment: ${DEPLOY_ID:-none} ${DEPLOY_URL:-none}\nLive storefront/Cloudflare verification: ${VERIFIED:-false}\nListing acceptance dispatched after PASS." || true
