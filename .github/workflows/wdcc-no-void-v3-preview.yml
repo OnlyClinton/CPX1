@@ -1,0 +1,51 @@
+name: WDCC No-Void V3 Preview
+
+on:
+  push:
+    branches:
+      - fix/attribution-no-void-v3
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-no-void-v3-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Require Vercel token
+        run: test -n "$VERCEL_TOKEN"
+      - run: npm install --global vercel@59.3.0
+      - name: Link storefront project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      - run: vercel build --token="$VERCEL_TOKEN"
+      - name: Deploy preview only
+        id: deploy
+        shell: bash
+        run: |
+          set +e
+          output="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" 2>&1)"
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$code" -eq 0
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+      - name: Verify deployment metadata
+        run: vercel inspect "$PREVIEW_URL" --token="$VERCEL_TOKEN"
