@@ -1,21 +1,22 @@
-name: WDCC Pre-Regression Dealer Verification
+name: WDCC Dealer Auth Recovery
 on:
   push:
     branches: [ops/reset-wdcc-logins]
     paths:
       - '.github/workflows/wdcc-temporary-login-reset.yml'
-      - 'scripts/wdcc-login-ui-e2e.cjs'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  DEALER_URL: https://dealer.wedontcarecars.com
+  CANDIDATE_URL: https://wdcc-dealer-portal-n9u8asox5-cpxagency.vercel.app
+  ROLLBACK_URL: https://wdcc-dealer-portal-haaxzbb5n-cpxagency.vercel.app
+
 jobs:
-  verify:
+  recover:
     runs-on: ubuntu-latest
-    env:
-      DEALER_URL: https://wdcc-dealer-portal-n9u8asox5-cpxagency.vercel.app
-      BOOTSTRAP_URL: https://wdcc-dealer-portal-n9u8asox5-cpxagency.vercel.app/?_vercel_share=ICv7cb0gFT9QcQBmr0NxaJMi8cwjWfvj
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,9 +24,41 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Promote immutable pre-regression dealer artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          vercel promote "$CANDIDATE_URL" --yes --scope cpxagency --token "$VERCEL_TOKEN"
+      - name: Confirm dealer alias moved
+        run: |
+          set -euo pipefail
+          for n in 1 2 3 4 5 6; do
+            code="$(curl -sS -o /tmp/dealer.html -w '%{http_code}' "$DEALER_URL/dealer/login" || true)"
+            if [ "$code" = 200 ] && grep -qi 'Dealer Sign In' /tmp/dealer.html; then exit 0; fi
+            sleep 2
+          done
+          echo 'Dealer login page did not become ready'; cat /tmp/dealer.html || true; exit 1
+      - name: Verify both credentials, sessions and privileged APIs
+        run: node scripts/wdcc-temp-login-reset.mjs verify
       - name: Install Chromium
         run: |
           npm install --no-save playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
-      - name: Verify dealer and admin login plus privileged APIs
+      - name: Verify real mobile browser login flows
         run: node scripts/wdcc-login-ui-e2e.cjs
+      - name: Verify public storefront stayed separate
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/storefront.html -w '%{http_code}' https://wedontcarecars.com/)"
+          test "$code" = 200
+          grep -qi "WE DON.T CARE\|We Don.t Care" /tmp/storefront.html
+      - name: Roll back dealer only if any recovery gate failed
+        if: ${{ failure() }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          vercel promote "$ROLLBACK_URL" --yes --scope cpxagency --token "$VERCEL_TOKEN"
