@@ -1,0 +1,27 @@
+name: WDCC Trigger Phoenix Repair Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-trigger-phoenix-repair-once.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: wdcc-trigger-phoenix-repair-once
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch isolated Phoenix safe repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-phoenix-oidc-repair-188392c.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo 'Dispatched WDCC PHOENIX SAFE REPAIR 188392C. No alias or DNS move is authorized by this trigger.'
