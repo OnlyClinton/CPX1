@@ -1,6 +1,10 @@
 name: WDCC RELEASE READY
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-release-ready.yml'
   workflow_dispatch:
 
 concurrency:
