@@ -38,7 +38,7 @@ jobs:
           echo '--- STORE METADATA ---'
           vercel blob get-store "$STORE_ID" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | sed -E 's/(token|secret|authorization)[=: ]+[^ ]+/\1=[REDACTED]/Ig' || true
           echo '--- BLOB HELP ---'
-          vercel blob --help 2>&1 | head -120
+          (vercel blob --help 2>&1 | head -120) || true
           echo '--- PROJECT SAFE FIELDS ---'
           curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PHOENIX_PROJECT?teamId=$ORG_ID" \
             | jq '{id,name,autoExposeSystemEnvs,framework,link,env:(.env//[]|map({key,target,type})|map(select(.key=="BLOB_STORE_ID" or .key=="BLOB_READ_WRITE_TOKEN" or .key=="VERCEL_OIDC_TOKEN")))}'
