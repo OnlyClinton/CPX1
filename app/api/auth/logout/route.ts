@@ -1,4 +1,22 @@
+import {clearSessionCookieHeader} from "../../../../lib/auth";
+
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
 export const dynamic="force-dynamic";
-function copyCookies(upstream:Response,headers:Headers){const getter=(upstream.headers as any).getSetCookie;if(typeof getter==="function")for(const cookie of getter.call(upstream.headers))headers.append("set-cookie",cookie);else{const cookie=upstream.headers.get("set-cookie");if(cookie)headers.append("set-cookie",cookie);}}
-export async function POST(request:Request){try{const upstream=await fetch(`${AUTH_BASE}/sign-out`,{method:"POST",headers:{accept:"application/json",cookie:request.headers.get("cookie")||""},cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(10000)});const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});copyCookies(upstream,headers);return new Response(JSON.stringify({ok:true}),{status:200,headers});}catch(error){console.error("WDCC_NEON_AUTH_LOGOUT_ERROR",error);return Response.json({ok:true},{headers:{"cache-control":"no-store"}});}}
+
+function copyCookies(upstream:Response,headers:Headers){
+  const getter=(upstream.headers as any).getSetCookie;
+  if(typeof getter==="function")for(const cookie of getter.call(upstream.headers))headers.append("set-cookie",cookie);
+  else{const cookie=upstream.headers.get("set-cookie");if(cookie)headers.append("set-cookie",cookie);}
+}
+
+export async function POST(request:Request){
+  const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
+  headers.append("set-cookie",clearSessionCookieHeader());
+  try{
+    const upstream=await fetch(`${AUTH_BASE}/sign-out`,{method:"POST",headers:{accept:"application/json",cookie:request.headers.get("cookie")||""},cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(10000)});
+    copyCookies(upstream,headers);
+  }catch(error){
+    console.error("WDCC_NEON_AUTH_LOGOUT_ERROR",error);
+  }
+  return new Response(JSON.stringify({ok:true}),{status:200,headers});
+}
