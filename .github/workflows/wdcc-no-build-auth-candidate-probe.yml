@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      TEAM: cpxagency
     steps:
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0 >/dev/null
@@ -32,15 +31,14 @@ jobs:
             wdcc-dealer-portal-haaxzbb5n-cpxagency.vercel.app
             wdcc-dealer-portal-db34q2tqa-cpxagency.vercel.app
           )
-          vc(){ vercel --token="$VERCEL_TOKEN" --scope="$TEAM" "$@"; }
           for d in "${candidates[@]}"; do
             echo "=== $d ==="
             for p in / /dealer /admin /api/health; do
-              out="$(vc curl "$p" --deployment "$d" -- --silent --output /tmp/body --write-out '%{http_code}' 2>/tmp/err || true)"
+              out="$(vercel curl "$p" --deployment "$d" -- --silent --output /tmp/body --write-out '%{http_code}' 2>/tmp/err || true)"
               code="$(printf '%s' "$out" | tail -c 3)"
               echo "$p HTTP=${code:-ERR}"
             done
-            auth="$(vc curl /api/auth/login --deployment "$d" -- --silent --request POST --header 'Origin: https://wedontcarecars.com' --header 'Content-Type: application/json' --data '{"email":"probe-no-user@invalid.example","password":"nope"}' --write-out '\nHTTP:%{http_code}' 2>&1 || true)"
+            auth="$(vercel curl /api/auth/login --deployment "$d" -- --silent --request POST --header 'Origin: https://wedontcarecars.com' --header 'Content-Type: application/json' --data '{"email":"probe-no-user@invalid.example","password":"nope"}' --write-out '\nHTTP:%{http_code}' 2>&1 || true)"
             printf '%s\n' "$auth" | tail -8
             if printf '%s' "$auth" | grep -q 'No blob credentials found'; then echo 'BLOB_AUTH=FAIL';
             elif printf '%s' "$auth" | grep -Eqi 'invalid|credential|401|403|user'; then echo 'BLOB_AUTH=AVAILABLE';
