@@ -1,0 +1,60 @@
+name: WDCC Cinematic Preview Frames
+
+on:
+  push:
+    branches: [wdcc-cinematic-v2-mainline]
+    paths:
+      - 'app/cinematic-v2.css'
+      - 'app/layout.tsx'
+      - '.github/workflows/wdcc-cinematic-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install app
+        run: npm ci
+      - name: Build app
+        run: npm run build
+      - name: Start production app
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3000 >/tmp/wdcc-preview-server.log 2>&1 &
+          echo $! >/tmp/wdcc-preview-server.pid
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wdcc-preview-server.log
+          exit 1
+      - name: Install Chromium
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+      - name: Capture cinematic frames
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-preview
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-0650.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-1250.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-2200.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-0650.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-1250.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-2200.png
+      - name: Upload preview frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-cinematic-preview
+          path: /tmp/wdcc-preview/*.png
+          if-no-files-found: error
+          retention-days: 2
