@@ -3,6 +3,7 @@ import Link from"next/link";
 import type{CSSProperties}from"react";
 import{useEffect,useState}from"react";
 import TrackedCallLink from"./TrackedCallLink";
+import{vehicleImage}from"../lib/vehicleImages";
 
 export function Intro(){
   const[phase,setPhase]=useState<"reveal"|"dock"|"done">("reveal");
@@ -90,8 +91,7 @@ function customerVisible(v:any){
   return status==="published"&&v?.archived!==true&&v?.qa!==true&&v?.customerVisible!==false&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST")&&!/(^|[\s_-])(QA|TEST)([\s_-]|$)/.test(trace);
 }
 
-const fallbackPhoto=()=>"/vehicle-placeholder.svg";
-const onVehicleImageError=(event:React.SyntheticEvent<HTMLImageElement>)=>{const image=event.currentTarget;if(!image.src.endsWith("/vehicle-placeholder.svg"))image.src=fallbackPhoto()};
+const onVehicleImageError=(event:React.SyntheticEvent<HTMLImageElement>)=>{const image=event.currentTarget;if(!image.src.endsWith("/vehicle-placeholder.svg"))image.src="/vehicle-placeholder.svg"};
 
 export function VehicleGrid({limit}:{limit?:number}){
   const[items,setItems]=useState<any[]>([]),[loading,setLoading]=useState(true);
@@ -99,7 +99,7 @@ export function VehicleGrid({limit}:{limit?:number}){
   const shown=limit?items.slice(0,limit):items;
   if(loading)return <div className="grid">{[1,2,3,4,5].map(i=><div className="card" key={i}><div className="photo skeletonPhoto"/><div className="cardBody"><div className="carTitle">Loading inventory…</div></div></div>)}</div>;
   return <div className="grid">{shown.length?shown.map(v=><article className="card" key={v.id}>
-    <Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}><img src={v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:v.primary_image_url||v.photoUrl||v.image||fallbackPhoto()} onError={onVehicleImageError} alt={`${v.year} ${v.make} ${v.model}`}/></Link>
+    <Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}><img src={vehicleImage(v)} onError={onVehicleImageError} alt={`${v.year} ${v.make} ${v.model}`}/></Link>
     <div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div>
       <div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div>
       <div className="price">${Number(v.price||0).toLocaleString()}</div>
