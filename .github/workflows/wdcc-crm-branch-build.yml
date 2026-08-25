@@ -54,3 +54,144 @@ jobs:
           cp control/scripts/wdcc-safe-repair-execute.sh /tmp/wdcc-safe-repair-execute.sh
           chmod 700 /tmp/wdcc-safe-repair-execute.sh
           bash /tmp/wdcc-safe-repair-execute.sh "$GITHUB_WORKSPACE/candidate"
+
+  qa_e2e:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.title == 'Run WDCC QA cleanup and E2E gate' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+    steps:
+      - name: Checkout trusted control plane
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: control/package-lock.json
+      - name: Archive exact leaked QA rows and verify canonical public API
+        shell: bash
+        working-directory: control
+        run: bash scripts/wdcc-cleanup-public-qa.sh
+      - name: Checkout exact frozen candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          path: candidate
+          fetch-depth: 0
+      - name: Preserve hardened harness and restrict cleanup to this exact run
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp control/scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/wdcc-candidate-local-e2e.sh')
+          s=p.read_text()
+          s=s.replace("const qLead=l=>String(l?.name||'').toUpperCase().startsWith('WDCC QA LOCAL ')||String(l?.email||'').toLowerCase().includes('qa-local-');\nconst qVehicle=v=>String(v?.stock||'').toUpperCase().startsWith('WDCC-QA-LOCAL-')||String(v?.stock||'').toUpperCase().startsWith('R36TEST-WDCC-QA-LOCAL-');",
+          "const runId=String(process.env.RUN_ID||'').trim();if(!runId)throw Error('RUN_ID_REQUIRED');\nconst qLead=l=>(String(l?.name||'').toUpperCase().startsWith('WDCC QA LOCAL ')&&String(l?.name||'').endsWith(runId))||(String(l?.email||'').toLowerCase().includes('qa-local-')&&String(l?.email||'').includes(`-${runId}@invalid.example`));\nconst qVehicle=v=>{const stock=String(v?.stock||'').toUpperCase();return stock===`WDCC-QA-LOCAL-${runId}`||stock===`R36TEST-WDCC-QA-LOCAL-${runId}`};")
+          s=s.replace("result={ok:true,noOp:true,revision:Number(s.revision||0),leadsRemoved:0,vehiclesArchived:0};break",
+          "result={ok:true,noOp:true,revision:Number(s.revision||0),leadsRemoved:0,vehiclesArchived:0,leadIds:[],vehicleIds:[]};break")
+          s=s.replace("result={ok:true,noOp:false,revision:s.revision,leadsRemoved:lids.length,vehiclesArchived:vids.length,backup};break",
+          "result={ok:true,noOp:false,revision:s.revision,leadsRemoved:lids.length,vehiclesArchived:vids.length,leadIds:lids,vehicleIds:vids,backup};break")
+          if 'RUN_ID_REQUIRED' not in s:
+              raise SystemExit('exact-run cleanup patch did not apply')
+          p.write_text(s)
+          PY
+      - name: Run exact frozen candidate locally against canonical services
+        id: e2e
+        shell: bash
+        working-directory: candidate
+        run: bash /tmp/wdcc-candidate-local-e2e.sh
+      - name: Capture storefront verification transport
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          url="https://wedontcarecars.com/api/inventory?transport_probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          curl -sS -D /tmp/storefront-initial.headers -o /tmp/storefront-initial.body "$url"
+          initial_code="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}' /tmp/storefront-initial.headers)"
+          initial_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/ {sub(/^[^:]*:[[:space:]]*/,""); gsub(/\r/,""); value=$0} END{print value}' /tmp/storefront-initial.headers)"
+          redirect="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/,""); gsub(/\r/,""); value=$0} END{print value}' /tmp/storefront-initial.headers)"
+          final_meta="$(curl -sS -L -o /tmp/storefront-final.body -w '%{http_code}|%{content_type}|%{url_effective}' "$url")"
+          final_code="${final_meta%%|*}"
+          rest="${final_meta#*|}"
+          final_type="${rest%%|*}"
+          final_url="${rest#*|}"
+          {
+            echo "initial_status=$initial_code"
+            echo "initial_content_type=$initial_type"
+            echo "redirect_location=${redirect:-none}"
+            echo "final_status=$final_code"
+            echo "final_content_type=$final_type"
+            echo "final_url=$final_url"
+          } | tee /tmp/wdcc-storefront-transport.txt
+      - name: Enforce exact-run cleanup contract
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/wdcc-cleanup.log
+          line="$(grep 'LOCAL_CLEANUP=' /tmp/wdcc-cleanup.log | tail -1)"
+          json="${line#LOCAL_CLEANUP=}"
+          echo "$json" | jq .
+          echo "$json" | jq -e '.ok==true and (.leadsRemoved <= 3) and (.vehiclesArchived <= 1) and (((.leadIds // [])|length) == .leadsRemoved) and (((.vehicleIds // [])|length) == .vehiclesArchived)' >/dev/null
+      - name: Report QA cleanup and candidate E2E evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          public_cleanup='not captured'; [ -f /tmp/wdcc-public-qa-cleanup.json ] && public_cleanup="$(cat /tmp/wdcc-public-qa-cleanup.json)"
+          result='not captured'; [ -f /tmp/wdcc-result.json ] && result="$(cat /tmp/wdcc-result.json)"
+          cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
+          health='not captured'; [ -f /tmp/wdcc-health.json ] && health="$(cat /tmp/wdcc-health.json)"
+          server='not captured'; [ -f /tmp/wdcc-server.log ] && server="$(tail -80 /tmp/wdcc-server.log)"
+          storefront='not captured'; [ -f /tmp/wdcc-storefront-transport.txt ] && storefront="$(cat /tmp/wdcc-storefront-transport.txt)"
+          body=$(cat <<EOF
+          Candidate: \`$CANDIDATE_SHA\`
+          Status: **$STATUS**
+
+          No Vercel application deployment was created. Exact public QA cleanup ran through Phoenix OIDC with backup/CAS before the frozen local E2E.
+
+          Public QA cleanup:
+          \`\`\`json
+          $public_cleanup
+          \`\`\`
+
+          Result:
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Health:
+          \`\`\`json
+          $health
+          \`\`\`
+
+          Storefront transport:
+          \`\`\`
+          $storefront
+          \`\`\`
+
+          Server tail:
+          \`\`\`
+          $server
+          \`\`\`
+
+          Exact-run cleanup:
+          \`\`\`
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC QA cleanup and frozen E2E ${GITHUB_RUN_ID}" --body "$body" || true
