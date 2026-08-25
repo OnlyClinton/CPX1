@@ -53,8 +53,8 @@ jobs:
           jq -e '.ok == true and .degraded == false' /tmp/backend-health.json >/dev/null
           code="$(curl -sS -L -o /tmp/customer-before.html -w '%{http_code}' "$CUSTOMER/?v53-stage-before=$GITHUB_RUN_ID")"
           test "$code" = 200
-          grep -q 'intro-sequence intro-prepare' /tmp/customer-before.html
-          grep -q 'mobile-dock-drive' /tmp/customer-before.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-before.html
+          grep -q 'mobile-action-bar' /tmp/customer-before.html
           grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-before.html
           echo 'preflight=pass' >> "$GITHUB_OUTPUT"
 
@@ -94,9 +94,7 @@ jobs:
           set -euo pipefail
           npx wrangler deploy 2>&1 | tee /tmp/deploy.log
           URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/deploy.log | tail -1 || true)"
-          if [ -z "$URL" ]; then
-            URL="https://${WORKER}.${CLOUDFLARE_ACCOUNT_ID}.workers.dev"
-          fi
+          test -n "$URL" || { echo 'wrangler did not report a workers.dev URL' >&2; cat /tmp/deploy.log >&2; exit 1; }
           URL="${URL%/}"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
@@ -136,8 +134,8 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -L -o /tmp/customer-after.html -w '%{http_code}' "$CUSTOMER/?v53-stage-after=$GITHUB_RUN_ID")"
           test "$code" = 200
-          grep -q 'intro-sequence intro-prepare' /tmp/customer-after.html
-          grep -q 'mobile-dock-drive' /tmp/customer-after.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-after.html
+          grep -q 'mobile-action-bar' /tmp/customer-after.html
           grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
           echo 'unchanged=true' >> "$GITHUB_OUTPUT"
 
@@ -159,7 +157,7 @@ jobs:
           Build: **$BUILD**
           Isolated workers.dev deploy: **$DEPLOY**
           V53 contract: **$VERIFY**
-          Customer 2vfD baseline unchanged: **${CUSTOMER_UNCHANGED:-false}**
+          Customer baseline unchanged: **${CUSTOMER_UNCHANGED:-false}**
           Staging URL: \`${URL:-not-resolved}\`
 
           This workflow does not mutate production DNS, customer aliases, or the live dealer Worker route.
