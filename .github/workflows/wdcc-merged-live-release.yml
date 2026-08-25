@@ -1,0 +1,158 @@
+name: WDCC MERGED LIVE RELEASE
+
+on:
+  push:
+    branches: [release/wdcc-live-screenshot-dealer-20260825]
+    paths:
+      - 'TRIGGER_WDCC_LIVE_MERGED.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-merged-live-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      VERCEL_PROJECT: wdcc-v32-storefront
+      RELEASE_SHA: da9517c2560ecf2d0cdb22ec12c5f9b7da73100a
+      APEX: https://wedontcarecars.com
+    steps:
+      - name: Checkout frozen merged release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Prove merged source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'screenshotContract' app/Exact2vfDHome.tsx
+          grep -q 'header-logo-image' app/Exact2vfDHome.tsx
+          grep -q 'Schedule a test drive' app/Exact2vfDHome.tsx
+          grep -q 'Get pre-approved' app/Exact2vfDHome.tsx
+          grep -q 'mobile-action-bar' app/Exact2vfDHome.tsx
+          grep -q 'Total Vehicles' app/dealer/page.tsx
+          grep -q 'Inventory Overview' app/dealer/page.tsx
+          grep -q 'Vehicle Information' app/dealer/inventory/new/page.tsx
+          grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
+          grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
+          grep -q 'Publish / Submit' app/dealer/inventory/new/page.tsx
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+
+      - name: Link exact storefront project
+        run: vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Pull production environment
+        run: vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Build production locally
+        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt production bundle
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$output"
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://wdcc-v32-storefront-[a-z0-9-]+-cpxagency\.vercel\.app' | tail -n 1 || true)"
+          test -n "$url"
+          if [ "$rc" -ne 0 ] && ! printf '%s\n' "$output" | grep -q 'Deployment completed'; then
+            exit "$rc"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url"
+
+      - name: Reassert exact deployment as production
+        shell: bash
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          vercel promote "$DEPLOY_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" || true
+
+      - name: Verify exact deployment first
+        shell: bash
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          home="$(curl -fsSL "$DEPLOY_URL/?release=${GITHUB_RUN_ID}")"
+          printf '%s' "$home" | grep -q 'screenshotContract'
+          printf '%s' "$home" | grep -q 'header-logo-image'
+          printf '%s' "$home" | grep -qi 'Schedule a test drive'
+          printf '%s' "$home" | grep -qi 'Get pre-approved'
+          printf '%s' "$home" | grep -qi 'Call Sean'
+          printf '%s' "$home" | grep -q 'mobile-action-bar'
+          curl -fsS "$DEPLOY_URL/api/health" | jq -e '.ok==true' >/dev/null
+          curl -fsS "$DEPLOY_URL/api/inventory" | jq -e '.ok==true and (.items|type)=="array"' >/dev/null
+
+      - name: Verify public production cutover
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 40); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APEX/dealer/login?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "$APEX/admin/login?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            test_code="$(curl -sS -L -o /tmp/test.html -w '%{http_code}' "$APEX/schedule-test-drive?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            approve_code="$(curl -sS -L -o /tmp/approve.html -w '%{http_code}' "$APEX/get-approved?release=${GITHUB_RUN_ID}&n=$i" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ] && [ "$test_code" = 200 ] && [ "$approve_code" = 200 ] && jq -e '.ok==true' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1 && grep -q 'screenshotContract' /tmp/home.html && grep -q 'header-logo-image' /tmp/home.html && grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get pre-approved' /tmp/home.html && grep -qi 'Call Sean' /tmp/home.html && grep -q 'mobile-action-bar' /tmp/home.html; then
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          ! grep -q 'R36TEST-' /tmp/home.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch authenticated listing acceptance
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/wdcc-listing-only-e2e.yml/dispatches" \
+            -d '{"ref":"main"}'
+          echo 'Authenticated listing acceptance dispatched.'
+
+      - name: Report merged production release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Merged source SHA: `%s`\nProduction deployment: `%s`\nPublic storefront/API contract: `%s`\nAuthenticated listing acceptance: dispatched after public PASS\nApex: %s' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFIED:-false}" "$APEX")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC merged live release ${GITHUB_RUN_ID}" --body "$body" || true
