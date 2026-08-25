@@ -54,9 +54,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@59.3.0 curl / \
-            --deployment "$CANDIDATE_URL" \
-            --token "$VERCEL_TOKEN" --scope cpxagency > /tmp/home.html
+          npx --yes vercel@59.3.0 --token "$VERCEL_TOKEN" --scope cpxagency \
+            curl / --deployment "$CANDIDATE_URL" > /tmp/home.html
           grep -q 'intro-sequence' /tmp/home.html
           grep -q 'intro-smoke' /tmp/home.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
@@ -64,9 +63,8 @@ jobs:
           grep -qi 'schedule a test drive' /tmp/home.html
           grep -qi 'get qualified\|get pre-approved\|get approved' /tmp/home.html
           grep -qi 'contact us\|call sean' /tmp/home.html
-          npx --yes vercel@59.3.0 curl /api/health \
-            --deployment "$CANDIDATE_URL" \
-            --token "$VERCEL_TOKEN" --scope cpxagency > /tmp/health.json
+          npx --yes vercel@59.3.0 --token "$VERCEL_TOKEN" --scope cpxagency \
+            curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
           jq -e '.ok == true' /tmp/health.json >/dev/null
 
       - name: Capture current production rollback target
