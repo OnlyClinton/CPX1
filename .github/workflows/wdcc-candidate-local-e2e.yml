@@ -1,0 +1,58 @@
+name: WDCC Candidate Local E2E
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/wdcc-candidate-local-e2e.yml'
+      - 'scripts/wdcc-candidate-local-e2e.sh'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      CANDIDATE_SHA: 8384512f795fcc758a80826b8474e2c48b44c80c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve E2E harness then checkout exact candidate
+        shell: bash
+        run: |
+          cp scripts/wdcc-candidate-local-e2e.sh /tmp/wdcc-candidate-local-e2e.sh
+          git checkout --detach "$CANDIDATE_SHA"
+      - name: Run candidate locally against canonical ledger
+        id: e2e
+        shell: bash
+        run: bash /tmp/wdcc-candidate-local-e2e.sh
+      - name: Report candidate E2E
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          result='not captured'; [ -f /tmp/wdcc-result.json ] && result="$(cat /tmp/wdcc-result.json)"
+          cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
+          body=$(cat <<EOF
+          Candidate: \`$CANDIDATE_SHA\`
+          Status: **$STATUS**
+
+          Candidate was built and started locally in GitHub using the canonical Phoenix OIDC/Blob store. No Vercel application deployment was created.
+
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Cleanup:
+          \`\`\`
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC candidate local E2E ${GITHUB_RUN_ID}" --body "$body" || true
