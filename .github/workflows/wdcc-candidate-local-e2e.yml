@@ -69,3 +69,5 @@ jobs:
           EOF
           )
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC candidate local E2E ${GITHUB_RUN_ID}" --body "$body" || true
+
+# manual acceptance retrigger: 2026-08-25T00:23:00-04:00
