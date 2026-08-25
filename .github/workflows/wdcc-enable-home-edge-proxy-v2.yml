@@ -1,0 +1,100 @@
+name: WDCC ENABLE HOME EDGE PROXY V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-enable-home-edge-proxy-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-enable-home-edge-proxy-v2
+  cancel-in-progress: false
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Discover authorized apex records
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/cf-token /tmp/zone-id /tmp/apex-records.json
+          try_token(){
+            local label="$1" token="$2" code zone records_code
+            [ -n "$token" ] || return 1
+            code="$(curl -sS -o /tmp/zones-$label.json -w '%{http_code}' 'https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&status=active' -H "Authorization: Bearer $token" -H 'Content-Type: application/json' || true)"
+            [ "$code" = 200 ] || return 1
+            zone="$(jq -r '.result[0].id // empty' /tmp/zones-$label.json)"; [ -n "$zone" ] || return 1
+            records_code="$(curl -sS -o /tmp/records-$label.json -w '%{http_code}' "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=wedontcarecars.com&per_page=100" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' || true)"
+            [ "$records_code" = 200 ] || return 1
+            jq -e '.success==true' /tmp/records-$label.json >/dev/null || return 1
+            jq '[.result[] | select(.name=="wedontcarecars.com" and (.type=="CNAME" or .type=="A" or .type=="AAAA") and .proxiable==true)]' /tmp/records-$label.json > /tmp/apex-$label.json
+            [ "$(jq 'length' /tmp/apex-$label.json)" -ge 1 ] || return 1
+            printf '%s' "$token" >/tmp/cf-token; printf '%s' "$zone" >/tmp/zone-id; cp /tmp/apex-$label.json /tmp/apex-records.json
+            echo "Using $label token; apex records: $(jq 'length' /tmp/apex-records.json)"
+            return 0
+          }
+          if try_token zone "$CLOUDFLARE_ZONE_API_TOKEN"; then :; elif try_token workers "$CLOUDFLARE_API_TOKEN"; then :; else echo 'No DNS-capable Cloudflare token' >&2; exit 1; fi
+          jq -r '.[]|"\(.type) \(.name) -> \(.content) proxied=\(.proxied)"' /tmp/apex-records.json
+
+      - name: Proxy all apex records with automatic rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(cat /tmp/cf-token)"; zone="$(cat /tmp/zone-id)"
+          auth=(-H "Authorization: Bearer $token" -H 'Content-Type: application/json')
+          cp /tmp/apex-records.json /tmp/original-apex.json
+          payload(){ jq -nc --arg type "$1" --arg name "$2" --arg content "$3" --argjson ttl "$4" --argjson proxied "$5" '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:$proxied}'; }
+          patch_record(){
+            local id="$1" type="$2" name="$3" content="$4" ttl="$5" proxied="$6"
+            local code
+            code="$(curl -sS -o /tmp/patch-$id.json -w '%{http_code}' -X PATCH "https://api.cloudflare.com/client/v4/zones/$zone/dns_records/$id" "${auth[@]}" --data "$(payload "$type" "$name" "$content" "$ttl" "$proxied")" || true)"
+            echo "$type $name -> $content proxied=$proxied HTTP $code"
+            [ "$code" = 200 ] && jq -e '.success==true' /tmp/patch-$id.json >/dev/null
+          }
+          restore(){
+            echo 'Rolling back all apex proxy states.' >&2
+            while IFS=$'\t' read -r id type name content ttl proxied; do patch_record "$id" "$type" "$name" "$content" "$ttl" "$proxied" || true; done < <(jq -r '.[]|[.id,.type,.name,.content,(.ttl|tostring),(.proxied|tostring)]|@tsv' /tmp/original-apex.json)
+          }
+          committed=0; trap 'if [ "$committed" != 1 ]; then restore; fi' EXIT
+          while IFS=$'\t' read -r id type name content ttl proxied; do
+            [ "$proxied" = true ] || patch_record "$id" "$type" "$name" "$content" "$ttl" true
+          done < <(jq -r '.[]|[.id,.type,.name,.content,(.ttl|tostring),(.proxied|tostring)]|@tsv' /tmp/original-apex.json)
+
+          sleep 8
+          ok=0
+          for attempt in $(seq 1 30); do
+            root_code="$(curl -sS -D /tmp/root.h -o /tmp/root.html -w '%{http_code}' "https://wedontcarecars.com/?edge_v2=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            health_code="$(curl -sS -D /tmp/health.h -o /tmp/health.json -w '%{http_code}' "https://wedontcarecars.com/api/health?edge_v2=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            inv_code="$(curl -sS -D /tmp/inv.h -o /tmp/inv.json -w '%{http_code}' "https://wedontcarecars.com/api/inventory?edge_v2=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            dealer_code="$(curl -sS -D /tmp/dealer.h -o /tmp/dealer.html -w '%{http_code}' "https://dealer.wedontcarecars.com/dealer/leads?stage=new&edge_v2=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            event_code="$(curl -sS -o /tmp/event.out -w '%{http_code}' -X POST 'https://wedontcarecars.com/api/events' -H 'content-type: application/json' --data "{\"event\":\"edge_proxy_probe\",\"source\":\"github-actions\",\"runId\":\"$GITHUB_RUN_ID\"}" || true)"
+            if [ "$root_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] \
+              && grep -q 'id="wdcc-sleek-edge"' /tmp/root.html \
+              && grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/root.h \
+              && jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
+              && jq -e '.ok==true and (.items|type)=="array"' /tmp/inv.json >/dev/null 2>&1 \
+              && ! grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/health.h \
+              && ! grep -qi '^x-wdcc-edge: cloudflare-home-sleek' /tmp/inv.h \
+              && grep -q 'ACCOUNT TABLE' /tmp/dealer.html \
+              && grep -qi '^x-wdcc-edge: cloudflare-dealer-sales-command' /tmp/dealer.h \
+              && [[ "$event_code" =~ ^20[0-9]$ ]]; then ok=1; break; fi
+            sleep 3
+          done
+          if [ "$ok" != 1 ]; then
+            echo "gate failed root=$root_code health=$health_code inventory=$inv_code dealer=$dealer_code event=$event_code" >&2
+            echo 'root headers:' >&2; grep -Ei '^(server|cf-ray|x-wdcc-edge|x-wdcc-origin|location):' /tmp/root.h >&2 || true
+            echo 'health headers:' >&2; grep -Ei '^(server|cf-ray|x-wdcc-edge|x-wdcc-origin|location):' /tmp/health.h >&2 || true
+            echo 'dealer headers:' >&2; grep -Ei '^(server|cf-ray|x-wdcc-edge|x-wdcc-origin|location):' /tmp/dealer.h >&2 || true
+            exit 1
+          fi
+          committed=1; trap - EXIT
+          echo 'WDCC_HOME_EDGE_PROXY_V2=PASS'
