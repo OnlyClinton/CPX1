@@ -1,63 +1,43 @@
-import crypto from "node:crypto";
 import {NextResponse} from "next/server";
-import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
-import {isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
-import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {dataApi,dealerIdentity,publicVehicleRow,rowToVehicle} from "../../../lib/neonDealerData";
 
 export const dynamic="force-dynamic";
-const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 
-function response(body:any,status:number,requestIdValue:string){
-  return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":requestIdValue}});
-}
-
-function publicEligible(item:any){
-  const year=Number(item?.year);
-  const price=Number(item?.price);
-  const mileage=Number(item?.mileage||0);
-  const downPayment=Number(item?.downPayment||0);
-  const maxYear=new Date().getUTCFullYear()+1;
-  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item);
-}
-
-async function proxyPublicInventory(request:Request){
-  const upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok)return upstream;
-  const json=await upstream.json().catch(()=>({}));
-  const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
-  const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+function response(body:any,status:number,rid:string,extra:Record<string,string>={}){
+  return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,"X-WDCC-Inventory-Authority":"neon",...extra}});
 }
 
 export async function GET(request:Request){
-  if(!isDealerRuntime(request)){
-    const hasSession=String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=");
-    return hasSession?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
-  }
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/inventory");
   const rid=requestId(request);
   try{
-    const [state,user]=await Promise.all([readState(),currentUser()]);
-    let items;
-    if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
-      items=String(user.role).toLowerCase()==="platform_admin"?state.vehicles:state.vehicles.filter(vehicle=>String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc"));
-    }else items=publicVehicles(state).filter(publicEligible);
-    return response({ok:true,count:items.length,items,revision:state.revision},200,rid);
+    const identity=await dealerIdentity(request).catch(()=>null);
+    if(identity){
+      const upstream=await dataApi(request,"vehicles?select=*&order=updated_at.desc",{},true);
+      const rows=await upstream.json().catch(()=>[]);
+      if(!upstream.ok)return response({ok:false,items:[],error:rows?.message||rows?.code||"inventory_read_failed"},upstream.status,rid);
+      const items=Array.isArray(rows)?rows.map(rowToVehicle):[];
+      return response({ok:true,count:items.length,items,authority:"neon",dealerId:identity.dealerId},200,rid);
+    }
+
+    const upstream=await dataApi(request,"vehicles?select=*&status=in.(available,published)&order=updated_at.desc",{},false);
+    const rows=await upstream.json().catch(()=>[]);
+    if(!upstream.ok)return response({ok:false,items:[],error:rows?.message||rows?.code||"public_inventory_unavailable"},upstream.status,rid,{"Cache-Control":"public, max-age=0, must-revalidate"});
+    const items=(Array.isArray(rows)?rows:[]).map(publicVehicleRow).filter(Boolean);
+    return response({ok:true,count:items.length,items,authority:"neon"},200,rid,{"Cache-Control":"public, max-age=0, must-revalidate"});
   }catch(error){
-    return response({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},500,rid);
+    return response({ok:false,items:[],error:error instanceof Error?error.message:"inventory_read_failed"},500,rid);
   }
 }
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/inventory");
   const rid=requestId(request);
-  const user=await currentUser().catch(()=>null);
-  if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
-    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"denied",requestId:rid,actorId:user?.id||null,actorRole:user?.role||null,detail:"auth_required"});
-    return response({ok:false,error:"Unauthorized"},401,rid);
-  }
+  const identity=await dealerIdentity(request).catch(()=>null);
+  if(!identity||!identity.dealerId)return response({ok:false,error:"Unauthorized"},401,rid);
   try{
     const body=await request.json();
     const year=Math.trunc(Number(body?.year));
@@ -67,32 +47,35 @@ export async function POST(request:Request){
     const price=Number(body?.price);
     const downPayment=Number(body?.downPayment||0);
     const mileage=Math.trunc(Number(body?.mileage||0));
-    const stock=text(body?.stock,80);
+    const stock=text(body?.stock,80)||`WDCC-${Date.now()}`;
     const description=text(body?.description,3000);
     const maxYear=new Date().getUTCFullYear()+1;
-    const fail=async(error:string,status=400)=>{
-      await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,detail:error});
-      return response({ok:false,error},status,rid);
+    if(!Number.isInteger(year)||year<1901||year>maxYear)return response({ok:false,error:"valid_year_required"},400,rid);
+    if(!make||!model)return response({ok:false,error:"make_and_model_required"},400,rid);
+    if(!Number.isFinite(price)||price<=0||price>10_000_000)return response({ok:false,error:"valid_price_required"},400,rid);
+    if(!Number.isFinite(downPayment)||downPayment<0||downPayment>price)return response({ok:false,error:"invalid_down_payment"},400,rid);
+    if(!Number.isInteger(mileage)||mileage<0||mileage>2_000_000)return response({ok:false,error:"invalid_mileage"},400,rid);
+
+    const dbBody={
+      dealer_id:identity.dealerId,
+      stock_id:stock,
+      year,make,model,trim,mileage,price,
+      down_payment:downPayment,
+      status:"draft",
+      media:{photos:[],description,details:{}},
+      primary_image_url:null,
     };
-    if(!Number.isInteger(year)||year<1901||year>maxYear)return fail("valid_year_required");
-    if(!make||!model)return fail("make_and_model_required");
-    if(!Number.isFinite(price)||price<=0||price>10_000_000)return fail("valid_price_required");
-    if(!Number.isFinite(downPayment)||downPayment<0||downPayment>price)return fail("invalid_down_payment");
-    if(!Number.isInteger(mileage)||mileage<0||mileage>2_000_000)return fail("invalid_mileage");
-
-    const now=new Date().toISOString();
-    const tenantId=String(user.tenantId||"wdcc");
-    const state=await readState();
-    if(stock&&state.vehicles.some(vehicle=>String(vehicle.tenantId||"wdcc")===tenantId&&String(vehicle.stock||"").toLowerCase()===stock.toLowerCase()&&String(vehicle.status||"").toLowerCase()!=="archived"))return fail("stock_number_already_exists",409);
-
-    const item={id:crypto.randomUUID(),tenantId,year,make,model,trim,price,downPayment,mileage,stock,description,status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now,createdBy:user.id,uploadSource:"dealer-ui"};
-    state.vehicles.push(item);
-    state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,actorRole:user.role,vehicleId:item.id,requestId:rid,year,make,model,mileage,stock});
-    const saved=await writeState(state);
-    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"ok",requestId:rid,vehicleId:item.id,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,status:"draft",photoCount:0,detail:`revision:${saved.revision}`});
-    return response({ok:true,item,revision:saved.revision,requestId:rid},201,rid);
+    const upstream=await dataApi(request,"vehicles",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(dbBody)},true);
+    const rows=await upstream.json().catch(()=>[]);
+    if(!upstream.ok){
+      const duplicate=String(rows?.code||"")==="23505";
+      return response({ok:false,error:duplicate?"stock_number_already_exists":rows?.message||rows?.code||"vehicle_create_failed"},duplicate?409:upstream.status,rid);
+    }
+    const row=Array.isArray(rows)?rows[0]:rows;
+    if(!row?.id)return response({ok:false,error:"vehicle_create_missing_row"},502,rid);
+    const item=rowToVehicle(row);
+    return response({ok:true,item,authority:"neon",requestId:rid},201,rid);
   }catch(error){
-    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,detail:error instanceof Error?error.message:"create_failed"});
-    return response({ok:false,error:error instanceof Error?error.message:"create_failed"},500,rid);
+    return response({ok:false,error:error instanceof Error?error.message:"vehicle_create_failed"},500,rid);
   }
 }
