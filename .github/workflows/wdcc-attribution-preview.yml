@@ -38,10 +38,14 @@ jobs:
       - run: vercel build --token="$VERCEL_TOKEN"
       - name: Deploy preview
         id: deploy
+        shell: bash
         run: |
-          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" | tail -n 1)"
+          set -euo pipefail
+          output="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" 2>&1)"
+          printf '%s\n' "$output"
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -n 1)"
+          test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "$url"
       - name: Smoke preview
         env:
           URL: ${{ steps.deploy.outputs.url }}
