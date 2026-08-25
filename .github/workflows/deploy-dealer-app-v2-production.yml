@@ -1,73 +1,17 @@
-name: Deploy WDCC Dealer App V2 Production
+name: WDCC DEALER PRODUCTION DEPLOY — FROZEN
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/deploy-dealer-app-v2-production.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+  frozen:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-      VERCEL_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      DEALER_DOMAIN: dealer.wedontcarecars.com
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: Require token
-        run: test -n "$VERCEL_TOKEN"
-      - name: Link dealer project
+      - name: Release-control guard
         run: |
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.3.0
-      - name: Pull dealer production environment
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Build dealer production bundle
-        run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy updated dealer app
-        id: deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "$url" > /tmp/deploy-url.txt
-      - name: Verify new app home before alias
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="$(cat /tmp/deploy-url.txt)"
-          html="$(curl -fsSL "$url/dealer")"
-          grep -q 'Post a Car' <<<"$html"
-          grep -q 'Dashboard' <<<"$html"
-          grep -q 'Needs Attention' <<<"$html"
-          grep -q 'wdcc-logo-transparent.webp' <<<"$html"
-      - name: Alias dealer domain to verified build
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="$(cat /tmp/deploy-url.txt)"
-          vercel alias set "$url" "$DEALER_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Verify live dealer domain
-        shell: bash
-        run: |
-          set -euo pipefail
-          ok=0
-          for i in $(seq 1 20); do
-            html="$(curl -fsSL "https://$DEALER_DOMAIN/dealer" || true)"
-            if grep -q 'Post a Car' <<<"$html" && grep -q 'Dashboard' <<<"$html" && grep -q 'Needs Attention' <<<"$html"; then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = '1'
+          echo 'Dealer production deployment is frozen during immutable candidate acceptance.'
+          echo 'This workflow cannot deploy or move dealer.wedontcarecars.com.'
+          echo 'Frozen candidate: 188392c81696da5d0d61f5c6f0bec45f490a232d'
