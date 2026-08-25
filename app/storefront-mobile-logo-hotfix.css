@@ -1,0 +1,8 @@
+/* Surgical storefront mobile fix: remove only the duplicate upper-left header brand.
+   The intro/center WDCC logo, menu, phone control, hero, inventory and CTAs are untouched. */
+@media (max-width: 760px) {
+  .home-header-shell .site-header > .logo-button,
+  .home-header-shell .site-header > a[aria-label="WDCC home"] {
+    display: none !important;
+  }
+}
