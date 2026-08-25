@@ -1,0 +1,128 @@
+name: WDCC Fresh 8AR Rebuild
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-fresh-8ar-rebuild.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-fresh-8ar-rebuild
+  cancel-in-progress: false
+
+env:
+  TEAM: cpxagency
+  PROJECT: wdcc-v32-storefront
+  SOURCE_REF: release/8ar-on-exact-2vfd
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Require Vercel authorization
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Checkout exact 8AR source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Prove source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/wdcc-logo-transparent.webp
+          test -s public/wdcc-hero-v2.webp
+          grep -q 'intro-sequence intro-reveal' app/Exact2vfDHome.tsx
+          grep -q 'intro-smoke smoke-one' app/Exact2vfDHome.tsx
+          grep -q 'intro-smoke smoke-two' app/Exact2vfDHome.tsx
+          grep -q 'Schedule a test drive' app/Exact2vfDHome.tsx
+          npm ci
+          npm run build
+
+      - name: Install and link Vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          vercel link --yes --project "$PROJECT" --scope "$TEAM" --token "$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --scope "$TEAM" --token "$VERCEL_TOKEN"
+
+      - name: Fresh production deployment
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel deploy --prod --yes --scope "$TEAM" --token "$VERCEL_TOKEN" 2>&1 | tee /tmp/vercel-deploy.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' /tmp/vercel-deploy.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Fresh deployment: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin customer domains to fresh deployment
+        shell: bash
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          vercel alias set "$URL" "$APEX" --scope "$TEAM" --token "$VERCEL_TOKEN"
+          vercel alias set "$URL" "$WWW" --scope "$TEAM" --token "$VERCEL_TOKEN"
+
+      - name: Verify complete live asset contract twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify_host() {
+            host="$1"
+            pass="$2"
+            html="/tmp/${host//./_}-$pass.html"
+            curl -fsS -A 'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36' "https://$host/?intro=1&fresh8ar=${GITHUB_RUN_ID}-${pass}" -o "$html"
+            grep -q 'intro-sequence intro-reveal' "$html"
+            grep -q 'intro-scene' "$html"
+            grep -q 'intro-smoke smoke-one' "$html"
+            grep -q 'intro-smoke smoke-two' "$html"
+            grep -q 'wdcc-hero-v2.webp' "$html"
+            grep -q 'Tampa Bay · Drive today' "$html"
+            grep -q 'Schedule a test drive' "$html"
+            mapfile -t assets < <(grep -Eo '(href|src)="/_next/static/[^"]+\.(css|js)"' "$html" | sed -E 's/^(href|src)="([^"]+)"/\2/' | sort -u)
+            test "${#assets[@]}" -gt 0
+            for asset in "${assets[@]}"; do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$host$asset?assetcheck=${GITHUB_RUN_ID}-${pass}")"
+              test "$code" = 200 || { echo "$host$asset returned $code" >&2; exit 1; }
+            done
+            for static in /wdcc-logo-transparent.webp /wdcc-hero-v2.webp; do
+              code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$host$static?assetcheck=${GITHUB_RUN_ID}-${pass}")"
+              test "$code" = 200 || exit 1
+            done
+          }
+          sleep 5
+          for pass in 1 2; do
+            verify_host "$APEX" "$pass"
+            verify_host "$WWW" "$pass"
+            sleep 3
+          done
+          echo 'WDCC_FRESH_8AR_LIVE=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report recovery result
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          body=$(printf 'Fresh 8AR recovery run: `%s`\nSource: `%s`\nDeployment: `%s`\nApex: https://wedontcarecars.com/?intro=1\n\nThis workflow verifies the animation markers plus every referenced CSS/JS asset twice on apex and www.' "$GITHUB_RUN_ID" "$SOURCE_REF" "${DEPLOY_URL:-not-created}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC fresh 8AR recovery $GITHUB_RUN_ID" --body "$body" || true
