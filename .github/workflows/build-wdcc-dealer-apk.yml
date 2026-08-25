@@ -18,6 +18,7 @@ concurrency:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +45,7 @@ jobs:
       - name: Stage dealer APK
         run: |
           cp android/dealer-app/app/build/outputs/apk/debug/app-debug.apk WDCC-Dealer.apk
+          test "$(stat -c%s WDCC-Dealer.apk)" -gt 10000
           sha256sum WDCC-Dealer.apk | tee WDCC-Dealer.apk.sha256
 
       - uses: actions/upload-artifact@v4
@@ -60,9 +62,9 @@ jobs:
           tag_name: wdcc-dealer-app-v1
           name: WDCC Dealer Android App
           body: |
-            Installable Android dealer portal.
+            WDCC Dealer 1.1 Android installer.
 
-            Entry point: canonical WDCC dealer application.
+            Automatically rejects a misrouted customer storefront and selects a verified dealer portal endpoint.
             Includes persistent portal cookies, camera/file picker support, multiple-photo selection, and secure external-link handling.
             Build commit: ${{ github.sha }}
           files: |
@@ -72,3 +74,32 @@ jobs:
           prerelease: false
           draft: false
           overwrite_files: true
+
+      - name: Verify public installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v1/WDCC-Dealer.apk"
+          for attempt in $(seq 1 12); do
+            if curl -fL --retry 2 --retry-delay 2 "$URL" -o /tmp/WDCC-Dealer.apk; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/WDCC-Dealer.apk
+          test "$(stat -c%s /tmp/WDCC-Dealer.apk)" -gt 10000
+          RELEASE_SHA="$(sha256sum /tmp/WDCC-Dealer.apk | awk '{print $1}')"
+          LOCAL_SHA="$(awk '{print $1}' WDCC-Dealer.apk.sha256)"
+          test "$RELEASE_SHA" = "$LOCAL_SHA"
+          cat > /tmp/ready.json <<EOF
+          {"message":"certify WDCC Dealer APK $GITHUB_SHA","content":"$(printf 'status=READY\nversion=1.1.0\nbuild_commit=%s\nsha256=%s\ndownload=https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v1/WDCC-Dealer.apk\n' "$GITHUB_SHA" "$RELEASE_SHA" | base64 -w0)"}
+          EOF
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/WDCC_DEALER_APK_READY.txt"
+          CURRENT_SHA="$(curl -fsS -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' "$API" | jq -r '.sha // empty' || true)"
+          if [ -n "$CURRENT_SHA" ]; then
+            jq --arg sha "$CURRENT_SHA" '. + {sha:$sha}' /tmp/ready.json > /tmp/ready-update.json
+            mv /tmp/ready-update.json /tmp/ready.json
+          fi
+          curl -fsS -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' "$API" --data-binary @/tmp/ready.json >/dev/null
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
