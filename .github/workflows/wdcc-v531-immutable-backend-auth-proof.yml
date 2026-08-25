@@ -1,0 +1,103 @@
+name: WDCC V53.1 Immutable Backend Auth Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v531-immutable-backend-auth-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  SOURCE_SHA: 61a8053c248f731fe1de1c5be1c189607a5abaea
+  BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install state runtime and verify immutable backend health
+        id: preflight
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          curl -fsS "$BACKEND/api/health?immutable-proof=$GITHUB_RUN_ID" -o /tmp/health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/health.json >/dev/null
+          echo "commit=$(jq -r '.commit//"unknown"' /tmp/health.json)" >> "$GITHUB_OUTPUT"
+      - name: Create temporary dealer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-immutable-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`Imm-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`imm-${crypto.randomUUID()}`,email=`imm-${run}@invalid.example`,backup=`private/state/backups/platform-v3-pre-imm-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`Immutable Proof ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.immutable_auth.create',actor:'github-actions',run,userId:id,backup});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/imm.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-immutable-user.mjs
+          set -a; . /tmp/imm.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+      - name: Require five-code immutable auth contract
+        id: contract
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/imm.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/imm.cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $BACKEND" -H 'content-type: application/json' -X POST "$BACKEND/api/auth/login" --data "$payload")"
+          SESSION="$(curl -sS -b /tmp/imm.cookies -o /tmp/session.json -w '%{http_code}' "$BACKEND/api/auth/session")"
+          DASHBOARD="$(curl -sS -b /tmp/imm.cookies -o /tmp/dashboard.json -w '%{http_code}' "$BACKEND/api/crm/dashboard")"
+          LEADS="$(curl -sS -b /tmp/imm.cookies -o /tmp/leads.json -w '%{http_code}' "$BACKEND/api/leads")"
+          INVENTORY="$(curl -sS -b /tmp/imm.cookies -o /tmp/inventory.json -w '%{http_code}' "$BACKEND/api/inventory")"
+          echo "LOGIN=$LOGIN SESSION=$SESSION DASHBOARD=$DASHBOARD LEADS=$LEADS INVENTORY=$INVENTORY"
+          test "$LOGIN" = 200; test "$SESSION" = 200; test "$DASHBOARD" = 200; test "$LEADS" = 200; test "$INVENTORY" = 200
+          jq -e '.ok==true' /tmp/login.json >/dev/null; jq -e '.authenticated==true' /tmp/session.json >/dev/null; jq -e '.ok==true' /tmp/dashboard.json >/dev/null; jq -e '.ok==true' /tmp/leads.json >/dev/null; jq -e '.ok==true' /tmp/inventory.json >/dev/null
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"; echo "session=$SESSION" >> "$GITHUB_OUTPUT"; echo "dashboard=$DASHBOARD" >> "$GITHUB_OUTPUT"; echo "leads=$LEADS" >> "$GITHUB_OUTPUT"; echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"
+      - name: Cleanup temporary dealer identity
+        id: cleanup
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f /tmp/imm.env ] || { echo ok=true >> "$GITHUB_OUTPUT"; exit 0; }
+          set -a; . /tmp/imm.env; set +a; export QA_ID RUN_TAG
+          cat > .wdcc-immutable-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=Array.isArray(s.users)?s.users:[];s.users=u.filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.immutable_auth.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removed:u.length-s.users.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-immutable-clean.mjs
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Publish proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ steps.preflight.outputs.commit }}
+          C: ${{ steps.contract.outcome }}
+          L: ${{ steps.contract.outputs.login }}
+          S: ${{ steps.contract.outputs.session }}
+          D: ${{ steps.contract.outputs.dashboard }}
+          E: ${{ steps.contract.outputs.leads }}
+          I: ${{ steps.contract.outputs.inventory }}
+          CLEAN: ${{ steps.cleanup.outcome }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC immutable backend auth proof $GITHUB_RUN_ID" --body "Backend: \`$BACKEND\`
+          Backend commit: \`${COMMIT:-unknown}\`
+          Protected contract: **$C**
+          Login/Session/CRM/Leads/Inventory: \`${L:-?}/${S:-?}/${D:-?}/${E:-?}/${I:-?}\`
+          Temporary identity cleanup: **$CLEAN**
+
+          No deployment, alias, DNS, or Cloudflare traffic mutation is performed." || true
