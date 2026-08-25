@@ -1,0 +1,85 @@
+name: WDCC Phoenix Source OIDC Proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-phoenix-source-oidc-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-phoenix-source-oidc-proof
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+  ROLLBACK_DEPLOYMENT: wdcc-cpx-launch-hqw7zqgix-cpxagency.vercel.app
+  CANONICAL_ALIAS: wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          fetch-depth: 0
+
+      - name: Deploy source on Vercel build infrastructure and prove OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          rollback(){
+            npx --yes vercel@59.3.0 alias set "$ROLLBACK_DEPLOYMENT" "$CANONICAL_ALIAS" --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1 || true
+          }
+          trap rollback EXIT
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          code="$(curl -sS -o /tmp/safe-health.json -w '%{http_code}' "https://$ROLLBACK_DEPLOYMENT/api/health")"
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/safe-health.json >/dev/null
+          vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          grep -q '^BLOB_STORE_ID=' /tmp/phoenix.env
+          if grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix.env; then echo 'P0: production static Blob token unexpectedly present' >&2; exit 1; fi
+          set +e
+          out="$(vercel deploy --prod --skip-domain --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$out"
+          immutable="$(printf '%s\n' "$out" | grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' | head -1 || true)"
+          if [ -z "$immutable" ]; then
+            start_ms="$(( ($(date +%s)-180) * 1000 ))"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$PHOENIX_PROJECT&target=production&state=READY&limit=10&since=$start_ms&teamId=$ORG_ID" > /tmp/recent.json
+            immutable_host="$(jq -r --arg sha "$CANDIDATE_SHA" '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' /tmp/recent.json | head -1)"
+            [ -n "$immutable_host" ] && immutable="https://$immutable_host"
+          fi
+          test -n "$immutable" || { echo "P0: source deployment URL unavailable (rc=$rc)" >&2; exit 1; }
+          echo "IMMUTABLE=$immutable"
+          ok=0
+          for i in $(seq 1 15); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$immutable/api/health" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .state=="readable" and .storage=="oidc"' /tmp/health.json >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          cat /tmp/health.json || true
+          test "$ok" = 1 || { echo 'P0: Vercel source build still lacks usable runtime OIDC' >&2; exit 1; }
+          curl -fsS "$immutable/api/inventory?source_oidc_proof=$GITHUB_RUN_ID" > /tmp/inventory.json
+          jq -e '.ok==true and (.items|type=="array")' /tmp/inventory.json >/dev/null
+          rollback
+          trap - EXIT
+          code="$(curl -sS -o /tmp/restored.json -w '%{http_code}' "https://$CANONICAL_ALIAS/api/health")"
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/restored.json >/dev/null
+          echo 'WDCC_SOURCE_OIDC_PROOF=PASS'
