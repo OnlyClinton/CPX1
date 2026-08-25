@@ -1,4 +1,4 @@
-const AUTH_BACKEND="https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app";
+import {canonicalDealerBackend} from "./wdccAuthority";
 
 function requestHeaders(request:Request){
   const headers=new Headers();
@@ -6,7 +6,7 @@ function requestHeaders(request:Request){
     const value=request.headers.get(name);
     if(value)headers.set(name,value);
   }
-  headers.set("x-wdcc-auth-compat","legacy-immutable");
+  headers.set("x-wdcc-auth-compat","canonical-v53");
   return headers;
 }
 
@@ -25,14 +25,15 @@ function responseHeaders(upstream:Response){
     if(cookie)headers.append("set-cookie",cookie);
   }
   headers.set("cache-control","private, no-store, max-age=0, must-revalidate");
-  headers.set("x-wdcc-auth-backend","legacy-immutable");
+  headers.set("x-wdcc-auth-backend","canonical-v53");
   return headers;
 }
 
 export async function legacyAuthProxy(request:Request,path:string){
+  const backend=canonicalDealerBackend();
   try{
     const source=new URL(request.url);
-    const target=new URL(path,AUTH_BACKEND);
+    const target=new URL(path,backend);
     target.search=source.search;
     const method=request.method.toUpperCase();
     const init:RequestInit={
@@ -46,7 +47,7 @@ export async function legacyAuthProxy(request:Request,path:string){
     const upstream=await fetch(target,init);
     return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:responseHeaders(upstream)});
   }catch(error){
-    console.error("WDCC_LEGACY_AUTH_PROXY_ERROR",{path,error});
+    console.error("WDCC_LEGACY_AUTH_PROXY_ERROR",{path,backend,error});
     return Response.json({ok:false,error:"auth_backend_unavailable"},{status:503,headers:{"cache-control":"no-store","retry-after":"5"}});
   }
 }
