@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readRecentAnalyticsEvents,recordAnalyticsEvent} from "../../../lib/analyticsAudit";
+import {recordDeadLetter} from "../../../lib/deadLetter";
 import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
@@ -32,14 +33,17 @@ export async function GET(request:Request){
 
 export async function POST(request:Request){
   if(!canonicalRuntime(request))return proxyDealer(request,"/api/events");
+  let body:any={};
+  let event="";
+  let eventId="";
   try{
     const length=Number(request.headers.get("content-length")||0);if(length>32768)return NextResponse.json({ok:false,error:"event_payload_too_large"},{status:413});
-    const body=await request.json().catch(()=>({}));
-    const event=text(body?.event??body?.name,100);
+    body=await request.json().catch(()=>({}));
+    event=text(body?.event??body?.name,100);
     if(!event||!allowedEvent.test(event))return NextResponse.json({ok:false,error:"invalid_event"},{status:400});
     const metadata=body?.metadata&&typeof body.metadata==="object"?body.metadata:null;
     if(metadata&&JSON.stringify(metadata).length>8192)return NextResponse.json({ok:false,error:"metadata_too_large"},{status:413});
-    const eventId=text(body?.eventId??request.headers.get("x-wdcc-event-id"),160);
+    eventId=text(body?.eventId??request.headers.get("x-wdcc-event-id"),160);
     const record=await recordAnalyticsEvent({
       tenantId:"wdcc",dedupeKey:eventId?`client:${eventId}`:null,
       event,at:text(body?.at,80)||undefined,
@@ -56,6 +60,7 @@ export async function POST(request:Request){
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-WDCC-Event-ID":record.id}});
   }catch(error){
     console.error("WDCC_ANALYTICS_PERSIST_FAILED",error);
+    try{await recordDeadLetter({category:"analytics",stage:"persist",entityType:"event",entityId:eventId||null,tenantId:"wdcc",retryable:true,error:error instanceof Error?error.message:"analytics_persist_failed",context:{event:event||null,sessionId:text(body?.sessionId,160)||null,leadId:text(body?.leadId,160)||null,vehicleId:text(body?.vehicleId,160)||null}})}catch(deadError){console.error("WDCC_ANALYTICS_DEAD_LETTER_FAILED",deadError)}
     return NextResponse.json({ok:false,error:"analytics_persist_failed"},{status:503,headers:{"Cache-Control":"no-store"}});
   }
 }
