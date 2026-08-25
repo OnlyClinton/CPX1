@@ -1,0 +1,117 @@
+name: WDCC Phoenix OIDC Repair 188392c
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-phoenix-oidc-repair-188392c.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-phoenix-oidc-repair-188392c
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+  ROLLBACK_DEPLOYMENT: wdcc-cpx-launch-hqw7zqgix-cpxagency.vercel.app
+  CANONICAL_ALIAS: wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact frozen candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify safe rollback and required OIDC store binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -n "$VERCEL_TOKEN"
+          code="$(curl -sS -o /tmp/safe-health.json -w '%{http_code}' "https://$ROLLBACK_DEPLOYMENT/api/health")"
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/safe-health.json >/dev/null
+          npm ci >/dev/null
+          npm install --global vercel@59.3.0 >/dev/null
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          vercel env pull /tmp/phoenix-before.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          grep -q '^BLOB_STORE_ID=' /tmp/phoenix-before.env || { echo 'P0: Phoenix production has no BLOB_STORE_ID; refusing mutation' >&2; exit 1; }
+          echo "BLOB_STORE_ID_PRESENT=true"
+          if grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix-before.env; then echo "STALE_STATIC_BLOB_TOKEN_PRESENT=true"; else echo "STALE_STATIC_BLOB_TOKEN_PRESENT=false"; fi
+
+      - name: Remove static Blob token so frozen candidate uses OIDC authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          vercel env rm BLOB_READ_WRITE_TOKEN production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1 || true
+          vercel env pull /tmp/phoenix-after.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          grep -q '^BLOB_STORE_ID=' /tmp/phoenix-after.env
+          if grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix-after.env; then echo 'P0: static Blob token still present after removal' >&2; exit 1; fi
+          echo 'PHOENIX_BLOB_AUTHORITY=OIDC_ONLY'
+
+      - name: Redeploy exact candidate, prove runtime storage, then restore safe alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){
+            npx --yes vercel@59.3.0 alias set "$ROLLBACK_DEPLOYMENT" "$CANONICAL_ALIAS" --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1 || true
+          }
+          trap rollback EXIT
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          set +e
+          out="$(vercel deploy --prebuilt --prod --skip-domain --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$out"
+          immutable="$(printf '%s\n' "$out" | grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' | head -1 || true)"
+          if [ -z "$immutable" ]; then
+            start_ms="$(( ($(date +%s)-120) * 1000 ))"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$PHOENIX_PROJECT&target=production&state=READY&limit=10&since=$start_ms&teamId=$ORG_ID" > /tmp/recent.json
+            immutable_host="$(jq -r --arg sha "$CANDIDATE_SHA" '.deployments[] | select(.meta.githubCommitSha==$sha) | .url' /tmp/recent.json | head -1)"
+            [ -n "$immutable_host" ] && immutable="https://$immutable_host"
+          fi
+          test -n "$immutable" || { echo "P0: candidate deployment URL not recoverable (deploy rc=$rc)" >&2; exit 1; }
+          echo "IMMUTABLE_PHOENIX=$immutable"
+          ok=0
+          for i in $(seq 1 12); do
+            code="$(curl -sS -o /tmp/candidate-health.json -w '%{http_code}' "$immutable/api/health" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .state=="readable" and .storage=="oidc"' /tmp/candidate-health.json >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          cat /tmp/candidate-health.json || true
+          test "$ok" = 1 || { echo 'P0: frozen candidate still cannot read canonical state through OIDC' >&2; exit 1; }
+          code="$(curl -sS -o /tmp/candidate-inventory.json -w '%{http_code}' "$immutable/api/inventory?oidc_repair=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e '.ok==true and (.items|type=="array")' /tmp/candidate-inventory.json >/dev/null
+          rollback
+          trap - EXIT
+          code="$(curl -sS -o /tmp/restored-health.json -w '%{http_code}' "https://$CANONICAL_ALIAS/api/health")"
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/restored-health.json >/dev/null
+          echo 'WDCC_PHOENIX_OIDC_REPAIR=PASS'
+          echo "CANDIDATE_URL=$immutable"
