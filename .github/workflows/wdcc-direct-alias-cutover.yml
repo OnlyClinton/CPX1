@@ -17,9 +17,9 @@ concurrency:
 
 env:
   TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  CANDIDATE_ID: dpl_MPK5UEsE5YN3vupz45Ac8kkBphBu
-  CANDIDATE_URL: wdcc-v32-storefront-dt496r4il-cpxagency.vercel.app
-  EXPECTED_COMMIT: 6baa059e9cedff991c1bcf32dec1ceed40174ddc
+  CANDIDATE_ID: dpl_82TtEv3Bkeq59WMpRHLUyjDgofmk
+  CANDIDATE_URL: wdcc-v32-storefront-htz3k7zdd-cpxagency.vercel.app
+  EXPECTED_COMMIT: 3b7d9e5fee9ec448a00408f3cdb4311e2b66d0a7
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
 
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Validate candidate and capture existing apex alias
+      - name: Validate visual candidate and capture rollback alias
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -39,14 +39,19 @@ jobs:
             "https://api.vercel.com/v13/deployments/$CANDIDATE_ID?teamId=$TEAM_ID" -o /tmp/candidate.json
           jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '.id==$id and .readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/candidate.json >/dev/null
           npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/candidate-home.html
-          grep -q 'intro-sequence' /tmp/candidate-home.html
+          grep -q 'class="cinematic cinematic-enter"' /tmp/candidate-home.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/candidate-home.html
-          grep -qi 'schedule a test drive' /tmp/candidate-home.html
+          grep -qi 'GET PRE-APPROVED' /tmp/candidate-home.html
+          grep -qi 'BROWSE INVENTORY' /tmp/candidate-home.html
+          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$CANDIDATE_URL" > /tmp/hero.webp
+          test -s /tmp/hero.webp
+          npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
+          jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null
           curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v4/aliases/$APEX?teamId=$TEAM_ID" -o /tmp/old-alias.json || true
           jq -r '.deployment.id // .deploymentId // empty' /tmp/old-alias.json > /tmp/old-deployment-id || true
 
-      - name: Reassign apex alias to immutable READY candidate
+      - name: Reassign apex alias to approved READY candidate
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -59,7 +64,7 @@ jobs:
             --data "{\"alias\":\"$APEX\",\"redirect\":null}" -o /tmp/apex-result.json
           jq -e --arg a "$APEX" '.alias==$a' /tmp/apex-result.json >/dev/null
 
-      - name: Reassign www alias when configured
+      - name: Reassign www alias
         continue-on-error: true
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -73,7 +78,7 @@ jobs:
             --data "{\"alias\":\"$WWW\",\"redirect\":null}" -o /tmp/www-result.json
           jq -e --arg a "$WWW" '.alias==$a' /tmp/www-result.json >/dev/null
 
-      - name: Verify live apex
+      - name: Verify live visual contract and backend
         id: verify
         continue-on-error: true
         shell: bash
@@ -81,12 +86,15 @@ jobs:
           set -euo pipefail
           ok=0
           for i in 1 2 3 4 5 6; do
-            if curl -fsSL -H 'Cache-Control: no-cache' "https://$APEX/?cutover=$GITHUB_RUN_ID-$i" -o /tmp/live.html \
-              && grep -q 'intro-sequence' /tmp/live.html \
+            if curl -fsSL -H 'Cache-Control: no-cache' "https://$APEX/?visualcutover=$GITHUB_RUN_ID-$i" -o /tmp/live.html \
+              && grep -q 'class="cinematic cinematic-enter"' /tmp/live.html \
               && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
-              && grep -qi 'schedule a test drive' /tmp/live.html \
-              && curl -fsSL "https://$APEX/api/health?cutover=$GITHUB_RUN_ID-$i" -o /tmp/health.json \
-              && jq -e '.ok==true' /tmp/health.json >/dev/null; then ok=1; break; fi
+              && grep -qi 'GET PRE-APPROVED' /tmp/live.html \
+              && grep -qi 'BROWSE INVENTORY' /tmp/live.html \
+              && curl -fsSL "https://$APEX/wdcc-hero-v2.webp?visualcutover=$GITHUB_RUN_ID-$i" -o /tmp/live-hero.webp \
+              && test -s /tmp/live-hero.webp \
+              && curl -fsSL "https://$APEX/api/health?visualcutover=$GITHUB_RUN_ID-$i" -o /tmp/live-health.json \
+              && jq -e '.ok==true and .degraded==false' /tmp/live-health.json >/dev/null; then ok=1; break; fi
             sleep 3
           done
           test "$ok" -eq 1
@@ -116,7 +124,7 @@ jobs:
         shell: bash
         run: |
           if [ "$OUTCOME" = success ]; then
-            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC direct alias cutover passed' --body "Immutable candidate \`$CANDIDATE_ID\` is serving \`$APEX\`; intro/logo/CTA/API health verification passed." || true
+            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC approved visual cutover passed' --body "Candidate \`$CANDIDATE_ID\` is serving \`$APEX\`; cinematic opener, WDCC logo, hero asset, approval/inventory CTAs, and API health all passed." || true
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC direct alias cutover failed safely' --body "Alias cutover did not pass the live gate; rollback was attempted." || true
+            gh issue create --repo "$GITHUB_REPOSITORY" --title 'WDCC approved visual cutover failed safely' --body "Approved visual candidate did not pass the live gate; rollback was attempted." || true
           fi
