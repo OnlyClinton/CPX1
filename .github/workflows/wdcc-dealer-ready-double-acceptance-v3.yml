@@ -78,3 +78,4 @@ jobs:
           cat /tmp/result.json
           jq -e '.ok==true and (.runs|length)==2 and all(.runs[];.draft and .photo and .published and .dealerInventory and .publicApi and .publicUi and .archived and .publicRemoved)' /tmp/result.json >/dev/null
       - run: echo 'WDCC_DEALER_READY_DOUBLE_ACCEPTANCE_V3=PASS'
+# automation-probe: 2026-08-25T18:05:05Z
