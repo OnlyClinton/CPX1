@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
-import {upload} from "@vercel/blob/client";
+import {uploadPresigned} from "@vercel/blob/client";
 
 const allowedTypes=new Set(["image/jpeg","image/png","image/webp","image/avif"]);
 const norm=(v:any)=>String(v??"").trim();
@@ -80,11 +80,9 @@ export default function NewVehicle(){
         const file=photos[index];
         setMessage(`Draft verified. Uploading photo ${index+1} of ${photos.length}… Trace ${requestId}`);
         const safeName=file.name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-120)||`photo-${index+1}.jpg`;
-        const blob=await upload(`media/wdcc/${draftId}/${safeName}`,file,{
+        const blob=await uploadPresigned(`media/wdcc/${draftId}/${safeName}`,file,{
           access:"private",
-          handleUploadUrl:"/api/upload",
-          clientPayload:JSON.stringify({vehicleId:draftId,requestId}),
-          contentType:file.type
+          handleUploadUrl:"/api/upload"
         });
         if(!blob?.pathname)throw new Error(`Photo ${index+1} did not return a stored path`);
         paths.push(blob.pathname);

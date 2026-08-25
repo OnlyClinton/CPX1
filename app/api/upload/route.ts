@@ -1,4 +1,5 @@
-import {handleUpload,type HandleUploadBody} from "@vercel/blob/client";
+import {issueSignedToken} from "@vercel/blob";
+import {handleUploadPresigned,type HandleUploadPresignedBody} from "@vercel/blob/client";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
@@ -8,25 +9,42 @@ import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
+const allowedContentTypes=["image/jpeg","image/png","image/webp","image/avif"];
+const maximumSizeInBytes=15*1024*1024;
+
+function blobAuth(){
+  const token=String(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
+  if(token)return {token};
+  const oidcToken=String(process.env.VERCEL_OIDC_TOKEN||"").trim();
+  const storeId=String(process.env.BLOB_STORE_ID||"").trim();
+  if(oidcToken&&storeId)return {oidcToken,storeId};
+  return null;
+}
+
+function vehicleIdFromPath(pathname:string){
+  const match=/^media\/wdcc\/([^/]+)\//.exec(String(pathname||""));
+  return match?.[1]||"";
+}
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/upload");
   const rid=requestId(request);
   try{
-    const body=(await request.json())as HandleUploadBody;
-    const result=await handleUpload({
-      body,request,token:process.env.BLOB_READ_WRITE_TOKEN,
-      onBeforeGenerateToken:async(pathname,clientPayload)=>{
+    const authority=blobAuth();
+    if(!authority)throw Error("Blob upload authority unavailable");
+    const body=(await request.json())as HandleUploadPresignedBody;
+    const result=await handleUploadPresigned({
+      body,
+      request,
+      getSignedToken:async(pathname)=>{
         const user=await currentUser();
         if(!user||!editorRoles.has(String(user.role||"").toLowerCase())){
           await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"denied",requestId:rid,actorId:user?.id||null,actorRole:user?.role||null,detail:"auth_required"});
           throw Error("Unauthorized");
         }
-        let payload:any={};try{payload=JSON.parse(clientPayload||"{}");}catch{}
-        const vehicleId=String(payload.vehicleId||"");
-        const correlationId=String(payload.requestId||rid).slice(0,160)||rid;
-        if(!vehicleId||!pathname.startsWith(`media/wdcc/${vehicleId}/`)){
-          await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"failed",requestId:correlationId,vehicleId:vehicleId||null,actorId:user.id,actorRole:user.role,detail:"invalid_upload_path"});
+        const vehicleId=vehicleIdFromPath(pathname);
+        if(!vehicleId){
+          await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,detail:"invalid_upload_path"});
           throw Error("Invalid upload path");
         }
         const state=await readState();
@@ -34,22 +52,30 @@ export async function POST(request:Request){
         if(!vehicle)throw Error("Vehicle not found");
         if(String(user.role).toLowerCase()!=="platform_admin"&&String(vehicle.tenantId||"wdcc")!==String(user.tenantId||"wdcc"))throw Error("Forbidden");
         if(String(vehicle.status||"").toLowerCase()==="archived")throw Error("Vehicle archived");
-        await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"ok",requestId:correlationId,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames.length:0,detail:pathname});
+        await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"ok",requestId:rid,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames.length:0,detail:pathname});
+        const token=await issueSignedToken({
+          pathname,
+          operations:["put"],
+          allowedContentTypes,
+          maximumSizeInBytes,
+          ...(authority as any)
+        });
         return {
-          allowedContentTypes:["image/jpeg","image/png","image/webp","image/avif"],
-          maximumSizeInBytes:15*1024*1024,
-          addRandomSuffix:true,
-          tokenPayload:JSON.stringify({vehicleId,userId:user.id,actorRole:user.role,tenantId:user.tenantId||"wdcc",requestId:correlationId,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock})
+          token,
+          urlOptions:{
+            allowedContentTypes,
+            maximumSizeInBytes,
+            addRandomSuffix:true,
+            allowOverwrite:false
+          }
         };
-      },
-      onUploadCompleted:async({blob,tokenPayload})=>{
-        let payload:any={};try{payload=JSON.parse(tokenPayload||"{}");}catch{}
-        await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:String(payload.requestId||rid),vehicleId:payload.vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,year:payload.year,make:payload.make,model:payload.model,mileage:payload.mileage,stock:payload.stock,detail:blob.pathname});
       }
     });
     return NextResponse.json(result,{headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
   }catch(error){
-    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:error instanceof Error?error.message:"upload_failed"});
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"upload_failed",requestId:rid},{status:400,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
+    const detail=error instanceof Error?error.message:"upload_failed";
+    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail});
+    const status=detail==="Unauthorized"?401:detail==="Forbidden"?403:detail.includes("authority unavailable")?503:400;
+    return NextResponse.json({ok:false,error:detail,requestId:rid},{status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
   }
 }
