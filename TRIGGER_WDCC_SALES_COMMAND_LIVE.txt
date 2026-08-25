@@ -1,3 +1,3 @@
 WDCC Sales Command production trigger
-Purpose: deploy current full source with sleek mobile storefront header, single conversion dock, clickable dealer count tiles, exact filtered lead tables, and published inventory drilldown.
-Transport: Vercel prebuilt archive=tgz to bypass the free upload file-count throttle.
+Purpose: deploy current full source with active 2vfD sleek mobile storefront header, transparent logo, no duplicate top call CTA, single conversion dock, clickable dealer count tiles, exact filtered lead tables, and published inventory drilldown.
+Transport: Vercel prebuilt archive=tgz; tolerate optional post-READY Vercel checks, then alias and verify live.
