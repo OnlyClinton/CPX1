@@ -22,9 +22,11 @@ jobs:
       VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      SOURCE_SHA: fa5f559dc1b9393f644e0bd8230d5a2ae0acd01f
+      SOURCE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+      STOREFRONT_DOMAIN: wedontcarecars.com
+      WWW_DOMAIN: www.wedontcarecars.com
     steps:
-      - name: Checkout exact current main
+      - name: Checkout exact approved source
         uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_SHA }}
@@ -51,16 +53,16 @@ jobs:
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency
       - name: Build locally with production environment
         run: vercel build --prod --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy prebuilt production artifact
+      - name: Deploy one immutable prebuilt artifact without moving domains
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
+          url="$(vercel deploy --prebuilt --prod --skip-domain --token="$VERCEL_TOKEN" --scope=cpxagency | tail -n 1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "PREBUILT_URL=$url"
-      - name: Verify immutable artifact before accepting cutover
+      - name: Verify immutable artifact before promotion
         shell: bash
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
@@ -68,18 +70,40 @@ jobs:
           set -euo pipefail
           curl -fsSL "$DEPLOY_URL/" -o /tmp/home.html
           grep -qi 'BAD CREDIT' /tmp/home.html
+          grep -q 'intro-sequence' /tmp/home.html
           grep -q 'wdcc-hero-v2.webp' /tmp/home.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
+          grep -q '/schedule-test-drive' /tmp/home.html
+          grep -q '/get-approved' /tmp/home.html
+          grep -q 'CALL SEAN' /tmp/home.html
           health="$(curl -fsSL "$DEPLOY_URL/api/health")"
           echo "$health"
           echo "$health" | jq -e '.ok==true' >/dev/null
-      - name: Verify production apex
+      - name: Promote verified immutable artifact to storefront aliases
+        shell: bash
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          vercel alias set "$DEPLOY_URL" "$STOREFRONT_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+          vercel alias set "$DEPLOY_URL" "$WWW_DOMAIN" --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Verify production apex after promotion
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://wedontcarecars.com/ -o /tmp/apex.html
-          grep -qi 'BAD CREDIT' /tmp/apex.html
-          curl -fsSL https://wedontcarecars.com/api/health | jq -e '.ok==true' >/dev/null
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -fsSL "https://$STOREFRONT_DOMAIN/" -o /tmp/apex.html \
+              && grep -qi 'BAD CREDIT' /tmp/apex.html \
+              && grep -q 'wdcc-hero-v2.webp' /tmp/apex.html \
+              && grep -q 'wdcc-logo-transparent.webp' /tmp/apex.html \
+              && curl -fsSL "https://$STOREFRONT_DOMAIN/api/health" | jq -e '.ok==true' >/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
       - name: Report result
         if: always()
         env:
