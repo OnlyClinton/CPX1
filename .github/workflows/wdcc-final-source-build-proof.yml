@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      FINAL_SHA: d7b56f3e67a971ffd10ca7189a86a5850f8f21af
+      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,10 +35,13 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
+          grep -q 'WDCC_CANONICAL_BLOB_STORE_ID' lib/wdccAuthority.ts
+          grep -q 'VERCEL_OIDC_TOKEN' lib/wdccAuthority.ts
           grep -q 'STOREFRONT_PROJECT_ID' lib/dealerRuntime.ts
           grep -q 'canonicalDealerBackend' lib/legacyAuthProxy.ts
           grep -q 'proxyDealer(request,"/api/leads")' app/api/leads/route.ts
           grep -q 'canonicalGET(request)' app/api/lead/route.ts
+          grep -q 'proxyDealer(request,"/api/upload")' app/api/upload/route.ts
           grep -q 'handleUploadPresigned' app/api/upload/route.ts
           grep -q 'issueSignedToken' app/api/upload/route.ts
           grep -q 'uploadPresigned' app/dealer/inventory/new/page.tsx
