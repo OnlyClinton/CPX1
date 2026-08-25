@@ -3,11 +3,11 @@ name: WDCC Attribution Preview
 "on":
   push:
     branches:
-      - fix/attribution-no-void-v2
+      - fix/attribution-no-void-final
   workflow_dispatch:
 
 concurrency:
-  group: wdcc-attribution-preview-v2
+  group: wdcc-attribution-preview-final
   cancel-in-progress: true
 
 jobs:
