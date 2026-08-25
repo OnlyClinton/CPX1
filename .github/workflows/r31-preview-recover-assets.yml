@@ -17,7 +17,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ROOT='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/?_vercel_share=gctRJTCi66HS577swAHYEU9eI7stmkqk'
+          ROOT='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/?_vercel_share=5v8yLAZJV7RkY2sOM5vEguPhTnrdzFfd'
           HOST='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app'
           curl -fsSL -L -c /tmp/vcookie "$ROOT" -o /tmp/root.html
           echo "root_bytes=$(stat -c '%s' /tmp/root.html)"
