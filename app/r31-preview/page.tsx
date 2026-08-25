@@ -1,7 +1,8 @@
 import Link from "next/link";
 import TrackedCallLink from "../TrackedCallLink";
-import { Footer, Intro, VehicleGrid } from "../components";
+import { Footer, Intro } from "../components";
 import { R31Header } from "./R31Chrome";
+import R31FeaturedInventory from "./R31FeaturedInventory";
 import styles from "./r31-preview.module.css";
 
 export default function R31PreviewPage() {
@@ -53,7 +54,7 @@ export default function R31PreviewPage() {
               <h2>FEATURED INVENTORY</h2>
               <Link href="/r31-preview/inventory">VIEW ALL INVENTORY →</Link>
             </div>
-            <VehicleGrid limit={5} />
+            <R31FeaturedInventory />
           </div>
         </section>
 
