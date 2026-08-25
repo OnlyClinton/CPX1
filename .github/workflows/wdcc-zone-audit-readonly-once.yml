@@ -1,0 +1,57 @@
+name: WDCC Zone Audit Readonly Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-zone-audit-readonly-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ZONE: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+      DEALER: dealer.wedontcarecars.com
+    steps:
+      - name: Read-only DNS audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=$ZONE&account.id=$ACCOUNT_ID&per_page=50" >/tmp/z.json
+          ZID="$(jq -r '.result[0].id' /tmp/z.json)"
+          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?per_page=5000" >/tmp/r.json
+          echo '=== ROUTING ==='
+          jq -c --arg z "$ZONE" --arg w "$WWW" --arg d "$DEALER" '[.result[]|select(.name==$z or .name==$w or .name==$d)|{type,name,content,proxied,priority}]' /tmp/r.json
+          echo '=== MX ==='
+          jq -c --arg z "$ZONE" '[.result[]|select(.name==$z and .type=="MX")|{priority,content}]' /tmp/r.json
+          echo '=== SPF ==='
+          jq -c --arg z "$ZONE" '[.result[]|select(.name==$z and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=spf1")))|.content]' /tmp/r.json
+          echo '=== DMARC ==='
+          jq -c --arg n "_dmarc.$ZONE" '[.result[]|select(.name==$n and .type=="TXT")|.content]' /tmp/r.json
+          echo '=== DKIM ==='
+          jq -c --arg z "$ZONE" '[.result[]|select(.type=="CNAME" and (.name|ascii_downcase|contains("._domainkey.")) and (.name|ascii_downcase|endswith($z|ascii_downcase)))|{name,content,proxied}]' /tmp/r.json
+          echo '=== CAA ==='
+          jq -c --arg z "$ZONE" '[.result[]|select(.name==$z and .type=="CAA")|{data,content}]' /tmp/r.json
+          echo '=== COUNTS ==='
+          jq -r --arg z "$ZONE" --arg w "$WWW" --arg d "$DEALER" '
+            "apex="+([.result[]|select(.name==$z and (.type=="A" or .type=="AAAA" or .type=="CNAME"))]|length|tostring),
+            "www="+([.result[]|select(.name==$w and (.type=="A" or .type=="AAAA" or .type=="CNAME"))]|length|tostring),
+            "dealer="+([.result[]|select(.name==$d)]|length|tostring),
+            "spf="+([.result[]|select(.name==$z and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=spf1")))]|length|tostring),
+            "dmarc="+([.result[]|select(.name==("_dmarc."+$z) and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=dmarc1")))]|length|tostring),
+            "dkim="+([.result[]|select(.type=="CNAME" and (.name|ascii_downcase|contains("._domainkey.")) and (.name|ascii_downcase|endswith($z|ascii_downcase)))]|length|tostring),
+            "caa="+([.result[]|select(.name==$z and .type=="CAA")]|length|tostring)
+          ' /tmp/r.json
+          echo '=== NS ==='
+          printf 'cf='; jq -r '.result[0].name_servers|sort|join(",")' /tmp/z.json
+          printf 'public='; dig +short NS "$ZONE" @1.1.1.1 | tr '[:upper:]' '[:lower:]' | sed 's/\.$//' | sort | paste -sd, -
+          echo '=== DNSSEC ==='
+          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZID/dnssec" | jq -c '{success,result:{status:.result.status,key_tag:.result.key_tag,algorithm:.result.algorithm,digest_type:.result.digest_type}}'
+          printf 'parent_ds='; dig +short DS "$ZONE" @1.1.1.1 | head -1
