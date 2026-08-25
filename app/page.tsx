@@ -1,3 +1,3 @@
-import Exact2vfDHome from "./Exact2vfDHome";
+import {redirect} from "next/navigation";
 
-export default function Home(){return <Exact2vfDHome/>}
+export default function Home(){redirect("/dealer")}
