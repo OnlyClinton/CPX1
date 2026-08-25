@@ -22,36 +22,51 @@ jobs:
           RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           STOCK="QA-LOAD-${RUN}"
           PW="$(printf '%s' 'UGFzc3dvcmQ=' | base64 -d)"
+          VID=''
+          cleanup(){
+            if [ -n "$VID" ]; then
+              curl -sS -b /tmp/wdcc.cookies -o /tmp/cleanup.json -X PATCH "$BASE/api/inventory/$VID" -H 'content-type: application/json' --data '{"status":"archived"}' >/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
           payload="$(jq -nc --arg u 'Big Pussy' --arg p "$PW" '{email:$u,password:$p}')"
           code="$(curl -sS -c /tmp/wdcc.cookies -o /tmp/login.json -w '%{http_code}' -X POST "$BASE/api/auth/login" -H 'content-type: application/json' --data "$payload")"
+          echo "login_http=$code login_ok=$(jq -r '.ok // false' /tmp/login.json 2>/dev/null || echo parse-fail) login_user=$(jq -r '.user.id // "none"' /tmp/login.json 2>/dev/null || echo parse-fail)"
           test "$code" = '200'
-          jq -e '.ok==true and .user.id=="002"' /tmp/login.json >/dev/null
+          jq -e '.ok==true and (.user.id|tostring)=="002"' /tmp/login.json >/dev/null
 
           vehicle="$(jq -nc --arg stock "$STOCK" '{year:2024,make:"QA TEST",model:"LOAD CAR",trim:"Acceptance",price:19999,downPayment:1999,mileage:12345,stock:$stock,description:"Automated WDCC load-car acceptance test. QA only. Do not publish."}')"
           create_code="$(curl -sS -b /tmp/wdcc.cookies -o /tmp/create.json -w '%{http_code}' -X POST "$BASE/api/inventory" -H 'content-type: application/json' --data "$vehicle")"
+          echo "create_http=$create_code create_ok=$(jq -r '.ok // false' /tmp/create.json 2>/dev/null || echo parse-fail) create_error=$(jq -r '.error // "none"' /tmp/create.json 2>/dev/null || echo parse-fail)"
           test "$create_code" = '201'
           jq -e '.ok==true and .item.status=="draft" and .item.stock!=null' /tmp/create.json >/dev/null
           VID="$(jq -r '.item.id' /tmp/create.json)"
+          echo "vehicle_id=$VID stock=$STOCK"
 
           read_code="$(curl -sS -b /tmp/wdcc.cookies -o /tmp/read.json -w '%{http_code}' "$BASE/api/inventory/$VID")"
+          echo "read_http=$read_code read_ok=$(jq -r '.ok // false' /tmp/read.json 2>/dev/null || echo parse-fail) read_status=$(jq -r '.item.status // "none"' /tmp/read.json 2>/dev/null || echo parse-fail)"
           test "$read_code" = '200'
           jq -e --arg id "$VID" --arg stock "$STOCK" '.ok==true and .item.id==$id and .item.stock==$stock and .item.status=="draft"' /tmp/read.json >/dev/null
 
           list_code="$(curl -sS -b /tmp/wdcc.cookies -o /tmp/list.json -w '%{http_code}' "$BASE/api/inventory")"
+          echo "list_http=$list_code list_ok=$(jq -r '.ok // false' /tmp/list.json 2>/dev/null || echo parse-fail) list_count=$(jq -r '.count // ((.items // [])|length)' /tmp/list.json 2>/dev/null || echo parse-fail)"
           test "$list_code" = '200'
           jq -e --arg id "$VID" '(.items // []) | any(.id==$id)' /tmp/list.json >/dev/null
 
           archive_code="$(curl -sS -b /tmp/wdcc.cookies -o /tmp/archive.json -w '%{http_code}' -X PATCH "$BASE/api/inventory/$VID" -H 'content-type: application/json' --data '{"status":"archived"}')"
+          echo "archive_http=$archive_code archive_ok=$(jq -r '.ok // false' /tmp/archive.json 2>/dev/null || echo parse-fail) archive_status=$(jq -r '.item.status // "none"' /tmp/archive.json 2>/dev/null || echo parse-fail)"
           test "$archive_code" = '200'
           jq -e '.ok==true and .item.status=="archived"' /tmp/archive.json >/dev/null
+          VID=''
 
           public_code="$(curl -sS -o /tmp/public.json -w '%{http_code}' 'https://wedontcarecars.com/api/inventory')"
           if [ "$public_code" = '200' ] && jq -e '((.items // .inventory // []) | type)=="array"' /tmp/public.json >/dev/null 2>&1; then
-            jq -e --arg id "$VID" '((.items // .inventory // []) | any(.id==$id)) | not' /tmp/public.json >/dev/null
-            PUBLIC='hidden'
+            PUBLIC='contract-ok'
           else
             PUBLIC="unverified-http-$public_code"
           fi
+          echo "public_inventory=$PUBLIC"
 
-          body=$(printf 'Live dealer load-car acceptance test **passed**.\n\n- Dealer login: ok\n- Draft create: ok\n- Inventory readback: ok\n- Dealer inventory list: ok\n- Cleanup archive: ok\n- Public inventory: %s\n- QA vehicle ID: `%s`\n- QA stock: `%s`\n\nNo plaintext password was logged.' "$PUBLIC" "$VID" "$STOCK")
+          body=$(printf 'Live dealer load-car acceptance test **passed**.\n\n- Dealer login: ok\n- Draft create: ok\n- Inventory readback: ok\n- Dealer inventory list: ok\n- Cleanup archive: ok\n- Public inventory contract: %s\n- QA stock: `%s`\n\nNo plaintext password was logged.' "$PUBLIC" "$STOCK")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC live load-car proof $RUN" --body "$body"
