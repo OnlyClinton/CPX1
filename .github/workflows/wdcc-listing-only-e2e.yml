@@ -97,15 +97,16 @@ jobs:
               p.on('response',r=>{if(/\/api\/(?:upload|inventory)/.test(r.url()))result.trace.push({event:'response',method:r.request().method(),url:cleanUrl(r.url()),status:r.status()})});
               p.on('requestfailed',r=>{if(/\/api\/(?:upload|inventory)/.test(r.url()))result.trace.push({event:'failed',method:r.method(),url:cleanUrl(r.url()),failure:r.failure()?.errorText||''})});
 
-              await p.goto(`${dealer}/dealer/login`,{waitUntil:'networkidle'});
-              await p.locator('input[autocomplete="username"]').first().fill(process.env.DEALER_EMAIL);
-              await p.locator('input[autocomplete="current-password"]').first().fill(process.env.QA_PASSWORD);
+              await p.goto(`${dealer}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});
+              const username=p.locator('input[autocomplete="username"]').first(),password=p.locator('input[autocomplete="current-password"]').first();
+              await username.waitFor({state:'visible',timeout:20000});await password.waitFor({state:'visible',timeout:20000});
+              await username.fill(process.env.DEALER_EMAIL);await password.fill(process.env.QA_PASSWORD);
               await p.getByRole('button',{name:'SIGN IN'}).click();
               await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
               result.stages.login={ok:true,url:p.url()};
 
-              await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'networkidle'});
-              async function fill(name,value){const x=p.locator(`input[name="${name}"],textarea[name="${name}"]`).first();if(!await x.count())throw Error(`FIELD_${name}_MISSING`);await x.fill(value,{force:true})}
+              await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});
+              async function fill(name,value){const x=p.locator(`input[name="${name}"],textarea[name="${name}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(value,{force:true})}
               await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Upload Probe ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description',`Temporary QA-isolated upload probe ${run}`);
               const input=p.locator('input[type=file][multiple]').first();if(!await input.count())throw Error('MULTI_FILE_INPUT_MISSING');await input.setInputFiles('/tmp/listing.png');
               const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();
@@ -113,12 +114,13 @@ jobs:
               result.stages.publishButton={ok:true,count:await p.locator('button[type="submit"][name="intent"][value="published"]').count()};
 
               const draftPromise=p.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});
+              const uploadPromise=p.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000}).catch(()=>null);
               await publish.click();
               const draft=await draftPromise,draftBody=await bodyOf(draft);result.stages.draft={status:draft.status(),body:draftBody};
               if(!draft.ok())throw Error(`DRAFT_HTTP_${draft.status()}_${draftBody}`);
               let draftJson={};try{draftJson=JSON.parse(draftBody)}catch{};const vehicleId=String(draftJson?.item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');result.vehicleId=vehicleId;
 
-              const upload=await p.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:30000}).catch(()=>null);
+              const upload=await uploadPromise;
               if(!upload){const status=String(await p.locator('.statusMessage').first().textContent().catch(()=>''));result.stages.upload={status:null,body:null,statusMessage:status};throw Error(`UPLOAD_REQUEST_NOT_OBSERVED_${status}`)}
               const uploadBody=await bodyOf(upload);result.stages.upload={status:upload.status(),body:uploadBody};
               if(!upload.ok())throw Error(`UPLOAD_HTTP_${upload.status()}_${uploadBody}`);
@@ -138,7 +140,8 @@ jobs:
               const publicInv=await c.request.get(`${store}/api/inventory?qa_upload_verify=${Date.now()}`);const publicText=await publicInv.text();result.stages.publicInventory={status:publicInv.status()};if(!publicInv.ok())throw Error(`PUBLIC_INVENTORY_${publicInv.status()}`);
               const publicJson=JSON.parse(publicText);if((publicJson.items||[]).some(v=>v.id===item.id||v.stock===stock))throw Error('QA_VEHICLE_VISIBLE_PUBLICLY');result.qaHiddenPublic=true;
 
-              await p.goto(`${dealer}/dealer/inventory`,{waitUntil:'networkidle'});await p.screenshot({path:'/tmp/dealer-listing.png',fullPage:true});
+              await p.goto(`${dealer}/dealer/inventory`,{waitUntil:'domcontentloaded',timeout:30000});
+              await p.locator('body').waitFor({state:'visible',timeout:10000});await p.screenshot({path:'/tmp/dealer-listing.png',fullPage:true});
               result.stages.screenshot={ok:true};result.ok=true;
               fs.writeFileSync('/tmp/listing-result.json',JSON.stringify(result,null,2));
             }catch(e){result.error=String(e?.message||e);fs.writeFileSync('/tmp/listing-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}finally{await b.close()}
