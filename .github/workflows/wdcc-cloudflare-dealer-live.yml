@@ -1,6 +1,6 @@
 name: WDCC CLOUDFLARE DEALER LIVE
 
-# dealer-root-login-cutover: 2026-08-25T13:05Z
+# Sales Command origin cutover: 2026-08-25T15:01Z
 on:
   push:
     branches: [main]
@@ -16,9 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIMARY_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
-  FALLBACK_ORIGIN: https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app
-  EXPECTED_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+  PRIMARY_ORIGIN: https://wedontcarecars.com
+  FALLBACK_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  EXPECTED_SHA: 5d52cc6d2691310d0d5a19eafe95bd6b01805703
   DEALER_HOST: dealer.wedontcarecars.com
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
 
-      - name: Prove canonical dealer origin before cutover
+      - name: Prove current Sales Command origin before cutover
         shell: bash
         run: |
           set -euo pipefail
@@ -44,10 +44,13 @@ jobs:
           jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
           curl -fsS "$PRIMARY_ORIGIN/api/inventory?cf_dealer=$GITHUB_RUN_ID" -o /tmp/inventory.json
           jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
-          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path")"
             test "$code" = 200
           done
+          curl -fsS "$PRIMARY_ORIGIN/dealer/leads?stage=new&cf_dealer=$GITHUB_RUN_ID" -o /tmp/leads.html
+          grep -q 'ACCOUNT TABLE' /tmp/leads.html
+          grep -q 'These are the exact records behind the selected dashboard number' /tmp/leads.html
           echo 'ORIGIN_PREFLIGHT=PASS'
 
       - name: Install Wrangler
@@ -59,8 +62,8 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/wdcc-dealer-cf
           cat > /tmp/wdcc-dealer-cf/worker.js <<'EOF'
-          const PRIMARY = "https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
-          const FALLBACK = "https://wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app";
+          const PRIMARY = "https://wedontcarecars.com";
+          const FALLBACK = "https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
 
           function targetUrl(request, base) {
             const incoming = new URL(request.url);
@@ -94,7 +97,7 @@ jobs:
                 }
               } catch {}
             }
-            outHeaders.set("x-wdcc-edge", "cloudflare-dealer");
+            outHeaders.set("x-wdcc-edge", "cloudflare-dealer-sales-command");
             outHeaders.set("x-wdcc-origin", new URL(base).hostname);
             return new Response(response.body, {status: response.status, statusText: response.statusText, headers: outHeaders});
           }
@@ -103,7 +106,7 @@ jobs:
             async fetch(request) {
               const incoming = new URL(request.url);
               if (incoming.pathname === "/") {
-                return Response.redirect(new URL("/dealer/login", incoming), 302);
+                return Response.redirect(new URL("/dealer", incoming), 302);
               }
               try {
                 const response = await proxy(request, PRIMARY);
@@ -143,13 +146,15 @@ jobs:
           jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null
           curl -fsS "$URL/api/inventory?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-inventory.json
           jq -e '.ok==true and (.items|type)=="array"' /tmp/cf-inventory.json >/dev/null
-          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$URL$path")"
             test "$code" = 200
           done
+          curl -fsS "$URL/dealer/leads?stage=new&cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-leads.html
+          grep -q 'ACCOUNT TABLE' /tmp/cf-leads.html
           root_code="$(curl -sS -o /dev/null -D /tmp/root-headers -w '%{http_code}' "$URL/")"
           test "$root_code" = 302
-          grep -qi '^location: .*/dealer/login' /tmp/root-headers
+          grep -qi '^location: .*/dealer' /tmp/root-headers
           echo 'CLOUDFLARE_STAGE=PASS'
 
       - name: Bind dealer.wedontcarecars.com route
@@ -167,21 +172,24 @@ jobs:
           wrangler deploy
           sleep 5
 
-      - name: Verify live dealer route
+      - name: Verify live dealer Sales Command route
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cf_live=$GITHUB_RUN_ID")"
+          code="$(curl -sS -D /tmp/live-health.h -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cf_live=$GITHUB_RUN_ID")"
           test "$code" = 200
           jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-sales-command' /tmp/live-health.h
           curl -fsS -D /tmp/live-inventory.h -o /tmp/live-inventory.json "https://$DEALER_HOST/api/inventory?cf_live=$GITHUB_RUN_ID"
           jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null
-          grep -qi '^x-wdcc-edge: cloudflare-dealer' /tmp/live-inventory.h
-          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
+          for path in /dealer /dealer/inventory /dealer/inventory/new; do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEALER_HOST$path")"
             test "$code" = 200
           done
+          curl -fsS "https://$DEALER_HOST/dealer/leads?stage=new&cf_live=$GITHUB_RUN_ID" -o /tmp/live-leads.html
+          grep -q 'ACCOUNT TABLE' /tmp/live-leads.html
+          grep -q 'These are the exact records behind the selected dashboard number' /tmp/live-leads.html
           root_code="$(curl -sS -o /dev/null -D /tmp/live-root-headers -w '%{http_code}' "https://$DEALER_HOST/")"
           test "$root_code" = 302
-          grep -qi '^location: https://dealer.wedontcarecars.com/dealer/login' /tmp/live-root-headers
-          echo 'WDCC_CLOUDFLARE_DEALER_LIVE=PASS'
+          grep -qi '^location: https://dealer.wedontcarecars.com/dealer' /tmp/live-root-headers
+          echo 'WDCC_CLOUDFLARE_DEALER_SALES_COMMAND=PASS'
