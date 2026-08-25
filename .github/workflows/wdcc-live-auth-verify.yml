@@ -1,0 +1,27 @@
+name: WDCC Live Auth Verify
+on:
+  push:
+    branches: [ops/reset-wdcc-logins]
+    paths:
+      - '.github/workflows/wdcc-live-auth-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEALER_URL: https://dealer.wedontcarecars.com
+  ORIGIN_URL: https://dealer.wedontcarecars.com
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify current dealer and admin credentials, sessions and APIs
+        run: node scripts/wdcc-temp-login-reset.mjs verify
