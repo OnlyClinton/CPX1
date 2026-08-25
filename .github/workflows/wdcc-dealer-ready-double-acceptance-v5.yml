@@ -1,0 +1,65 @@
+name: WDCC Dealer Ready Double Acceptance v5
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-ready-double-acceptance-v5.yml'
+      - 'scripts/wdcc-dealer-ready-double.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wdcc-dealer-ready-double-acceptance-v5
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - name: Install acceptance dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Create exact-run authorized QA dealer identity
+        id: identity
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node scripts/wdcc-dealer-ready-double.mjs create
+          set -a; . /tmp/dealer-ready.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+      - name: Run route checks and two complete live acceptances
+        id: live
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer-ready.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          node scripts/wdcc-dealer-ready-double.mjs accept
+          cat /tmp/dealer-ready-result.json
+          jq -e '.ok==true and (.runs|length)==2 and all(.runs[];.authenticated and .dashboard and .draft and .photo and .published and .dealerInventory and .publicApi and .publicUi and .archived and .publicRemoved)' /tmp/dealer-ready-result.json >/dev/null
+      - name: Remove exact-run QA identity vehicles and media
+        id: cleanup
+        if: always() && steps.identity.outcome == 'success'
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/dealer-ready.env; set +a
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node scripts/wdcc-dealer-ready-double.mjs cleanup | tee /tmp/dealer-ready-cleanup.log
+          grep -q '"ok":true' /tmp/dealer-ready-cleanup.log
+      - name: Final gate
+        if: steps.live.outcome == 'success' && steps.cleanup.outcome == 'success'
+        run: echo 'WDCC_DEALER_READY_DOUBLE_ACCEPTANCE_V5=PASS'
