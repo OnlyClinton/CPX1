@@ -1,0 +1,63 @@
+name: WDCC Dealer KPI Preview
+
+on:
+  push:
+    branches:
+      - fix/dealer-kpi-drilldowns-thumbnails
+    paths:
+      - 'app/dealer/page.tsx'
+      - 'app/dealer/leads/page.tsx'
+      - 'app/dealer/inventory/page.tsx'
+      - '.github/workflows/wdcc-dealer-kpi-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-kpi-preview
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: test -n "$VERCEL_TOKEN"
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+      - name: Link dealer origin project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -1)"
+          echo "WDCC_DEALER_KPI_PREVIEW=$URL"
