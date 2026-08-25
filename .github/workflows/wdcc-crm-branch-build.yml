@@ -19,17 +19,80 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-  dispatch-safe-repair:
+  safe-repair:
     if: github.event_name == 'pull_request' && github.event.pull_request.title == 'Run deterministic WDCC safe repair gate' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
+      issues: write
       actions: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - name: Dispatch registered frozen-candidate safe repair workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Checkout trusted control plane from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: control
+          fetch-depth: 1
+
+      - name: Copy trusted repair executor outside checkout
+        shell: bash
         run: |
           set -euo pipefail
-          gh workflow run wdcc-phoenix-oidc-repair-188392c.yml --repo "$GITHUB_REPOSITORY" --ref main
-          echo 'SAFE_REPAIR_DISPATCHED=true'
+          cp control/scripts/wdcc-safe-repair-execute.sh /tmp/wdcc-safe-repair-execute.sh
+          chmod 700 /tmp/wdcc-safe-repair-execute.sh
+
+      - name: Checkout exact frozen candidate separately
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          path: candidate
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Execute fail-closed repair without production routing mutation
+        id: repair
+        shell: bash
+        run: bash /tmp/wdcc-safe-repair-execute.sh "$GITHUB_WORKSPACE/candidate"
+
+      - name: Report repair evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set +e
+          authority='not-found'; candidate_url='not-created'
+          if [ -f /tmp/wdcc-safe-result.env ]; then
+            . /tmp/wdcc-safe-result.env
+            authority="${AUTHORITY_PROJECT:-not-found}"
+            candidate_url="${CANDIDATE_URL:-not-created}"
+          fi
+          health='not captured'; [ -f /tmp/candidate-after.json ] && health="$(cat /tmp/candidate-after.json)"
+          cleanup='not captured'; [ -f /tmp/qa-cleanup.json ] && cleanup="$(cat /tmp/qa-cleanup.json)"
+          live='not captured'; [ -f /tmp/live-after.json ] && live="$(cat /tmp/live-after.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC safe repair direct ${GITHUB_RUN_ID}" --body "Frozen SHA: \`188392c81696da5d0d61f5c6f0bec45f490a232d\`
+Status: **$STATUS**
+Authority: \`$authority\`
+Candidate: \`$candidate_url\`
+No Vercel project environment, alias, DNS record, Cloudflare route, storefront domain, or dealer domain was changed.
+Candidate health: \`$health\`
+QA cleanup: \`$cleanup\`
+Live health: \`$live\`"
+
+      - name: Dispatch controlled frozen-candidate E2E
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-candidate-local-e2e.yml --repo "$GITHUB_REPOSITORY" --ref main
