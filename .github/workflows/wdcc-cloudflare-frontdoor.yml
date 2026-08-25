@@ -2,6 +2,15 @@ name: WDCC CLOUDFLARE FRONTDOOR
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/dealer/**'
+      - 'app/api/auth/**'
+      - 'lib/legacyAuthProxy.ts'
+      - 'lib/dealerProxy.ts'
+      - 'lib/wdccAuthority.ts'
+      - '.github/workflows/wdcc-cloudflare-frontdoor.yml'
 
 concurrency:
   group: wdcc-cloudflare-frontdoor
@@ -143,8 +152,21 @@ jobs:
           jq -e '.ok == true and (.items | type == "array")' /tmp/cf-inventory.json >/dev/null
           home_status="$(curl -sS -o /tmp/home.html -w '%{http_code}' "$URL/")"
           test "$home_status" = 200
+          for path in /dealer /dealer/inventory /dealer/inventory/new /dealer/leads; do
+            out="/tmp$(echo "$path" | tr '/' '_').html"
+            code="$(curl -sS -o "$out" -w '%{http_code}' "$URL$path")"
+            test "$code" = 200 || { echo "$path returned HTTP $code" >&2; exit 1; }
+          done
+          grep -Eq 'Dealer Sign In|DEALER PORTAL|Dashboard' /tmp_dealer.html
+          grep -Eq 'All Vehicles|Manage your dealership inventory' /tmp_dealer_inventory.html
+          grep -Eq 'Add / Edit Vehicle|Listing Readiness|Publish / Submit' /tmp_dealer_inventory_new.html
+          grep -Eq 'Leads|Track and manage every customer opportunity' /tmp_dealer_leads.html
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo 'deployed=true' >> "$GITHUB_OUTPUT"
+          echo "Dealer login: $URL/dealer" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dealer dashboard: $URL/dealer" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vehicle inventory: $URL/dealer/inventory" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vehicle upload: $URL/dealer/inventory/new" >> "$GITHUB_STEP_SUMMARY"
 
   status:
     needs: [preflight, deploy]
