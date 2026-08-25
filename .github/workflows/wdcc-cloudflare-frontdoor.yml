@@ -1,0 +1,185 @@
+name: WDCC CLOUDFLARE FRONTDOOR
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'wrangler.jsonc'
+      - '.github/workflows/wdcc-cloudflare-frontdoor.yml'
+
+concurrency:
+  group: wdcc-cloudflare-frontdoor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  CANONICAL_BACKEND: https://wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Prove frontend is provider-portable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wrangler.jsonc
+          grep -q 'WDCC_RUNTIME_ROLE' lib/dealerRuntime.ts
+          grep -q 'WDCC_DEALER_BACKEND_URL' lib/wdccAuthority.ts
+          test -s public/wdcc-logo-transparent.webp
+          test -s public/wdcc-hero-v2.webp
+          npm ci
+          npm run build
+          echo 'WDCC_CLOUDFLARE_PREFLIGHT=PASS'
+
+  deploy:
+    needs: preflight
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.verify.outputs.url }}
+      deployed: ${{ steps.verify.outputs.deployed }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_WORKERS_URL: ${{ secrets.CLOUDFLARE_WORKERS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Verify current Vercel backend before frontend deploy
+        id: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CANONICAL_BACKEND/api/health?cloudflare-frontdoor=$GITHUB_RUN_ID" -o /tmp/backend-health.json
+          jq -e '.ok == true' /tmp/backend-health.json >/dev/null
+          curl -fsS -D /tmp/backend-inventory.headers -o /tmp/backend-inventory.json "$CANONICAL_BACKEND/api/inventory?cloudflare-frontdoor=$GITHUB_RUN_ID"
+          content_type="$(tr -d '\r' </tmp/backend-inventory.headers | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
+          case "$content_type" in application/json*) ;; *) echo "Canonical inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
+          jq -e '.ok == true and (.items | type == "array")' /tmp/backend-inventory.json >/dev/null
+          echo 'BACKEND_GATE=PASS'
+
+      - name: Check Cloudflare authorization
+        id: creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            printf 'Cloudflare deployment staged; missing GitHub secrets: %s\n' "${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Install Cloudflare Next.js adapter
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+
+      - name: Bind frontend to canonical Vercel backend
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const path='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(path,'utf8'));
+          cfg.vars=cfg.vars||{};
+          cfg.vars.WDCC_RUNTIME_ROLE='frontend';
+          cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.CANONICAL_BACKEND;
+          fs.writeFileSync(path,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+
+      - name: Build Cloudflare Worker
+        if: steps.creds.outputs.ready == 'true'
+        run: npx opennextjs-cloudflare build
+
+      - name: Deploy Cloudflare Worker
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy 2>&1 | tee /tmp/cloudflare-deploy.log
+
+      - name: Verify deployed Cloudflare frontend
+        if: steps.creds.outputs.ready == 'true'
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${CLOUDFLARE_WORKERS_URL:-}"
+          if [ -z "$URL" ]; then
+            URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/cloudflare-deploy.log | tail -1 || true)"
+          fi
+          URL="${URL%/}"
+          [ -n "$URL" ] || { echo 'Cloudflare deployed but URL could not be resolved' >&2; exit 1; }
+
+          curl -fsS "$URL/api/health?cloudflare-frontdoor=$GITHUB_RUN_ID" -o /tmp/cf-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null
+          curl -fsS -D /tmp/cf-inventory.headers -o /tmp/cf-inventory.json "$URL/api/inventory?cloudflare-frontdoor=$GITHUB_RUN_ID"
+          content_type="$(tr -d '\r' </tmp/cf-inventory.headers | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
+          case "$content_type" in application/json*) ;; *) echo "Cloudflare inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
+          jq -e '.ok == true and (.items | type == "array")' /tmp/cf-inventory.json >/dev/null
+          curl -fsS "$URL/" -o /tmp/home.html
+          grep -q 'wdcc' /tmp/home.html || grep -qi 'we don.t care' /tmp/home.html
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo 'deployed=true' >> "$GITHUB_OUTPUT"
+          echo "Cloudflare frontend verified: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Backend authority: $CANONICAL_BACKEND" >> "$GITHUB_STEP_SUMMARY"
+
+  status:
+    needs: [preflight, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Front-door status
+        env:
+          DEPLOYED: ${{ needs.deploy.outputs.deployed }}
+          URL: ${{ needs.deploy.outputs.url }}
+        shell: bash
+        run: |
+          {
+            echo '# WDCC Cloudflare front door'
+            echo
+            echo "Cloudflare deployed: ${DEPLOYED:-false}"
+            echo "Cloudflare URL: ${URL:-not-created}"
+            echo "Canonical backend: $CANONICAL_BACKEND"
+            echo
+            if [ "${DEPLOYED:-}" = true ]; then
+              echo '**CLOUDFLARE FRONTEND READY FOR DOMAIN CUTOVER.**'
+            else
+              echo '**CLOUDFLARE FRONTEND AUTOMATION STAGED. Existing production remains unchanged.**'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+# launch-trigger: 2026-08-25T03:42-04:00

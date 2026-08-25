@@ -2,7 +2,16 @@ import crypto from "node:crypto";
 
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 
+function runtimeRole(){
+  return String(process.env.WDCC_RUNTIME_ROLE||"").trim().toLowerCase();
+}
+
 export function isDealerRuntime(request?:Request){
+  const role=runtimeRole();
+  if(role==="backend"||role==="api"||role==="canonical")return true;
+  if(role==="frontend"||role==="storefront"||role==="proxy")return false;
+
+  // Legacy Vercel detection remains as a rollback-compatible fallback.
   if(process.env.VERCEL_PROJECT_ID===DEALER_PROJECT_ID)return true;
   if(!request)return false;
   try{

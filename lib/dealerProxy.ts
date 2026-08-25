@@ -6,9 +6,20 @@ const mutationMethods=new Set(["POST","PUT","PATCH","DELETE"]);
 
 function trustedMutation(request:Request){
   if(!mutationMethods.has(request.method.toUpperCase()))return true;
-  const origin=request.headers.get("origin");
+  const origin=String(request.headers.get("origin")||"").trim().replace(/\/$/,"").toLowerCase();
   if(!origin)return true;
-  return TRUSTED_ORIGINS.has(origin.toLowerCase());
+
+  // same-origin mutations are safe for provider previews and alternate frontends.
+  try{
+    if(origin===new URL(request.url).origin.toLowerCase())return true;
+  }catch{}
+
+  if(TRUSTED_ORIGINS.has(origin))return true;
+  const extraOrigins=String(process.env.WDCC_TRUSTED_ORIGINS||"")
+    .split(",")
+    .map(value=>value.trim().replace(/\/$/,"").toLowerCase())
+    .filter(Boolean);
+  return extraOrigins.includes(origin);
 }
 
 function copyRequestHeaders(request:Request){
