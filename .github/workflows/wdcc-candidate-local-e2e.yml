@@ -40,11 +40,9 @@ jobs:
           new='.ok==true and .degraded==false and (.backend=="healthy" or .backend==null) and (.service=="wdcc-canonical-authority" or .service=="wdcc-hardened-dealer-facade")'
           if old not in s: raise SystemExit('health identity patch target missing')
           s=s.replace(old,new)
-          # This candidate is a facade: auth/inventory mutations are proxied to the immutable dealer backend.
-          # A locally signed SESSION_SECRET cookie cannot authenticate that remote backend. Pull the backend's
-          # real production SESSION_SECRET for signing while keeping the local Phoenix Blob/OIDC binding.
+          # Pull the signing secret from the canonical backend project explicitly.
           old='LOCAL_SESSION_SECRET="$(openssl rand -base64 72 | tr -d \'\\n\')"\nexport LOCAL_SESSION_SECRET\nprintf \'::add-mask::%s\\n\' "$LOCAL_SESSION_SECRET"'
-          new='''LOCAL_SESSION_SECRET="$(env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -c 'printf %s "$SESSION_SECRET"')"\n[ "${#LOCAL_SESSION_SECRET}" -ge 32 ] || { echo "canonical SESSION_SECRET missing" >&2; exit 1; }\nexport LOCAL_SESSION_SECRET\nprintf '::add-mask::%s\\n' "$LOCAL_SESSION_SECRET"'''
+          new='''mkdir -p /tmp/wdcc-backend/.vercel\nprintf '{"orgId":"%s","projectId":"%s"}\\n' "$ORG_ID" "$PHOENIX_ID" > /tmp/wdcc-backend/.vercel/project.json\n( cd /tmp/wdcc-backend && env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/wdcc-backend.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null )\nLOCAL_SESSION_SECRET="$(set -a; . /tmp/wdcc-backend.env; set +a; printf %s "$SESSION_SECRET")"\n[ "${#LOCAL_SESSION_SECRET}" -ge 32 ] || { echo "canonical SESSION_SECRET missing from backend project" >&2; exit 1; }\nexport LOCAL_SESSION_SECRET\nprintf '::add-mask::%s\\n' "$LOCAL_SESSION_SECRET"'''
           if old not in s: raise SystemExit('session secret patch target missing')
           s=s.replace(old,new)
           old='test "$ready" = 1'
