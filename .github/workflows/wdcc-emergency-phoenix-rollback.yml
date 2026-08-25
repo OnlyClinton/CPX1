@@ -1,0 +1,37 @@
+name: WDCC Emergency Phoenix Rollback
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-emergency-phoenix-rollback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-emergency-phoenix-rollback
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ROLLBACK_DEPLOYMENT: wdcc-cpx-launch-hqw7zqgix-cpxagency.vercel.app
+  CANONICAL_ALIAS: wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore healthy canonical Phoenix alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npx --yes vercel@59.3.0 alias set "$ROLLBACK_DEPLOYMENT" "$CANONICAL_ALIAS" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          sleep 3
+          code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "https://$CANONICAL_ALIAS/api/health")"
+          cat /tmp/health.json
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null
+          echo 'WDCC_PHOENIX_ROLLBACK=PASS'
