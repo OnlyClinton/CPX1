@@ -2,10 +2,6 @@ name: Promote WDCC canonical production
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/finalize-2vfd-production.yml'
 
 permissions:
   contents: read
@@ -38,17 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v13/deployments/$CANDIDATE_ID?teamId=$VERCEL_TEAM_ID" \
             -o /tmp/deployment.json
-          jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '
-            .id == $id and
-            .readyState == "READY" and
-            .meta.githubCommitSha == $sha
-          ' /tmp/deployment.json >/dev/null
+          jq -e --arg id "$CANDIDATE_ID" --arg sha "$EXPECTED_COMMIT" '.id==$id and .readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/deployment.json >/dev/null
 
-      - name: Validate 8AR plus 2vfD contract before promotion
+      - name: Validate candidate contract before promotion
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -56,63 +47,34 @@ jobs:
           set -euo pipefail
           npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/home.html
           missing=0
-          check() {
-            local label="$1" pattern="$2" flags="${3:-}"
-            if grep $flags -q -- "$pattern" /tmp/home.html; then
-              echo "PASS: $label"
-            else
-              echo "FAIL: $label (pattern: $pattern)" >&2
-              missing=1
-            fi
-          }
-          echo "Candidate HTML bytes: $(wc -c < /tmp/home.html)"
+          check(){ label="$1"; pattern="$2"; mode="${3:-}"; if grep $mode -q -- "$pattern" /tmp/home.html; then echo "PASS: $label"; else echo "FAIL: $label" >&2; missing=1; fi; }
           check "intro sequence" 'intro-sequence'
           check "intro smoke" 'intro-smoke'
-          check "transparent logo asset" 'wdcc-logo-transparent.webp'
-          check "schedule test drive CTA" 'schedule a test drive' '-i'
-          if grep -Eqi 'get qualified|get pre-approved|get approved' /tmp/home.html; then
-            echo "PASS: approval CTA"
-          else
-            echo "FAIL: approval CTA" >&2
-            missing=1
-          fi
-          if grep -Eqi 'contact us|call sean' /tmp/home.html; then
-            echo "PASS: contact CTA"
-          else
-            echo "FAIL: contact CTA" >&2
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo "--- relevant candidate tokens ---" >&2
-            grep -Eio 'intro[-_a-z0-9]*|wdcc[-_a-z0-9.]*|schedule[^<]{0,80}|qualified[^<]{0,80}|approved[^<]{0,80}|contact[^<]{0,80}|call sean[^<]{0,80}' /tmp/home.html | head -n 120 >&2 || true
-            exit 1
-          fi
-
+          check "transparent logo" 'wdcc-logo-transparent.webp'
+          check "test drive CTA" 'schedule a test drive' '-i'
+          if grep -Eqi 'get qualified|get pre-approved|get approved' /tmp/home.html; then echo 'PASS: approval CTA'; else echo 'FAIL: approval CTA' >&2; missing=1; fi
+          if grep -Eqi 'contact us|call sean' /tmp/home.html; then echo 'PASS: contact CTA'; else echo 'FAIL: contact CTA' >&2; missing=1; fi
+          test "$missing" -eq 0
           npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$CANDIDATE_URL" > /tmp/hero.webp
           test -s /tmp/hero.webp
-          echo "PASS: hero asset ($(wc -c < /tmp/hero.webp) bytes)"
-
           npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
-          echo "Health response: $(cat /tmp/health.json)"
-          jq -e '.ok == true' /tmp/health.json >/dev/null
+          jq -e '.ok==true' /tmp/health.json >/dev/null
 
-      - name: Capture current production rollback target
+      - name: Capture rollback target
         id: previous
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&target=production&state=READY&limit=1" \
             -o /tmp/production.json
           PREV="$(jq -r '.deployments[0].url // empty' /tmp/production.json)"
           test -n "$PREV"
           echo "url=$PREV" >> "$GITHUB_OUTPUT"
-          echo "Rollback target: $PREV"
 
-      - name: Promote combined canonical artifact
+      - name: Promote immutable candidate
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@59.3.0 promote "$CANDIDATE_URL" --yes --token "$VERCEL_TOKEN" --scope cpxagency
@@ -131,9 +93,7 @@ jobs:
               && curl -fsS https://wedontcarecars.com/wdcc-hero-v2.webp -o /tmp/live-hero.webp \
               && test -s /tmp/live-hero.webp \
               && curl -fsS https://wedontcarecars.com/api/health -o /tmp/live-health.json \
-              && jq -e '.ok == true' /tmp/live-health.json >/dev/null; then
-              exit 0
-            fi
+              && jq -e '.ok==true' /tmp/live-health.json >/dev/null; then exit 0; fi
             sleep 5
           done
           exit 1
@@ -146,28 +106,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Production verification failed; restoring $PREVIOUS_URL"
           npx --yes vercel@59.3.0 promote "$PREVIOUS_URL" --yes --token "$VERCEL_TOKEN" --scope cpxagency
           exit 1
 
-      - name: Publish automation proof
+      - name: Publish promotion proof
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         shell: bash
         run: |
-          if [ "$VERIFY_OUTCOME" = "success" ]; then
-            TITLE="WDCC 8AR + 2vfD production promotion passed"
-            BODY="Candidate: \`$CANDIDATE_ID\` (\`$CANDIDATE_URL\`)\nCommit: \`$EXPECTED_COMMIT\`\nResult: candidate contract passed, promoted, and public apex verification passed."
-          else
-            TITLE="WDCC 8AR + 2vfD production promotion blocked or rolled back"
-            BODY="Candidate: \`$CANDIDATE_ID\` (\`$CANDIDATE_URL\`)\nCommit: \`$EXPECTED_COMMIT\`\nResult: the gated promotion did not complete cleanly. Review this workflow run before another promotion."
-          fi
+          if [ "$VERIFY_OUTCOME" = success ]; then TITLE='WDCC production promotion passed'; BODY="Candidate \`$CANDIDATE_ID\` promoted and apex verification passed."; else TITLE='WDCC production promotion blocked or rolled back'; BODY="Candidate \`$CANDIDATE_ID\` was not left live without passing the full gate."; fi
           gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" || true
-
-# Canonical composite: exact 2vfD storefront structure + exact 8AR intro.
-# This workflow validates the immutable candidate before promotion and restores
-# the previous production deployment automatically if post-promotion checks fail.
-# Recovery fix: hero is CSS-bound, so validate the real asset endpoint instead
-# of requiring its filename to be literal server-rendered HTML.
