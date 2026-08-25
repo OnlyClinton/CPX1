@@ -1,0 +1,2 @@
+cloudflare-direct-api-v4=2026-08-25
+api-origin=wdcc-cpx-launch-qwwwulfj9-cpxagency.vercel.app
