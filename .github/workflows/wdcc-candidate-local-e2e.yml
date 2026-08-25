@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/wdcc-candidate-local-e2e.yml'
       - 'scripts/wdcc-candidate-local-e2e.sh'
+      - 'scripts/wdcc-cleanup-public-qa.sh'
   workflow_dispatch:
 
 jobs:
@@ -21,6 +22,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Archive exact leaked QA inventory and verify public API
+        shell: bash
+        run: bash scripts/wdcc-cleanup-public-qa.sh
       - name: Preserve hardened harness and scope cleanup to exact run
         shell: bash
         run: |
@@ -86,6 +94,7 @@ jobs:
           STATUS: ${{ job.status }}
         shell: bash
         run: |
+          public_cleanup='not captured'; [ -f /tmp/wdcc-public-qa-cleanup.json ] && public_cleanup="$(cat /tmp/wdcc-public-qa-cleanup.json)"
           result='not captured'; [ -f /tmp/wdcc-result.json ] && result="$(cat /tmp/wdcc-result.json)"
           cleanup='not captured'; [ -f /tmp/wdcc-cleanup.log ] && cleanup="$(tail -40 /tmp/wdcc-cleanup.log)"
           health='not captured'; [ -f /tmp/wdcc-health.json ] && health="$(cat /tmp/wdcc-health.json)"
@@ -95,7 +104,12 @@ jobs:
           Candidate: \`$CANDIDATE_SHA\`
           Status: **$STATUS**
 
-          Frozen release candidate was built and started locally against canonical WDCC services using the hardened current harness. No Vercel application deployment was created.
+          Exact public QA cleanup ran first through Phoenix OIDC with backup/CAS. Frozen release candidate was then built and started locally against canonical WDCC services using the hardened current harness. No Vercel application deployment was created.
+
+          Public QA cleanup:
+          \`\`\`json
+          $public_cleanup
+          \`\`\`
 
           Result:
           \`\`\`json
