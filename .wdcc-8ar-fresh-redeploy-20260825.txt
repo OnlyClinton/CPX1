@@ -1,0 +1,1 @@
+Force fresh Vercel deployment of release/8ar-on-exact-2vfd after stale production asset mismatch was confirmed on 2026-08-25.
