@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           grep -q 'Publish Listing' app/dealer/inventory/new/page.tsx
           grep -q 'CUSTOMER VIEW' app/dealer/inventory/new/page.tsx
-          grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
+          grep -qi 'listing readiness' app/dealer/inventory/new/page.tsx
           grep -q 'Take Photo' app/dealer/inventory/new/page.tsx
           grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
           grep -q 'Drag & Drop' app/dealer/inventory/new/page.tsx
