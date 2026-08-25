@@ -27,16 +27,13 @@ jobs:
       APEX: https://wedontcarecars.com
       DEALER: https://dealer.wedontcarecars.com
     steps:
-      - name: Checkout unified frozen release
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 1
-
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-
       - name: Verify unified source contract
         shell: bash
         run: |
@@ -53,47 +50,41 @@ jobs:
           grep -q 'Listing Readiness' app/dealer/inventory/new/page.tsx
           grep -q 'Upload Files' app/dealer/inventory/new/page.tsx
           grep -q 'Publish / Submit' app/dealer/inventory/new/page.tsx
-
       - name: Install Vercel CLI
         run: npm install --global vercel@59.3.0
-
-      - name: Link exact storefront project
-        run: vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-
-      - name: Pull production environment
-        run: vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-
+      - name: Link project and pull production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
       - name: Build production locally
         run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
-
-      - name: Deploy prebuilt output and capture READY URL
+      - name: Deploy archived prebuilt output
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
           set +e
-          vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/deploy.log 2>&1
+          vercel deploy --prebuilt --prod --yes --archive=tgz --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/deploy.log 2>&1
           rc=$?
           set -e
           cat /tmp/deploy.log
           url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -n 1 || true)"
           test -n "$url"
-          echo "Vercel CLI exit after post-deploy checks: $rc"
+          echo "vercel_post_deploy_exit=$rc"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Point apex www and dealer to the same deployment
+      - name: Point apex www and dealer to one deployment
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_URL"
           vercel promote "$DEPLOY_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" || true
           for domain in wedontcarecars.com www.wedontcarecars.com dealer.wedontcarecars.com; do
             vercel alias set "$DEPLOY_URL" "$domain" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
           done
-
-      - name: Verify public live contract
+      - name: Verify live contract
         id: verify
         shell: bash
         run: |
@@ -108,7 +99,7 @@ jobs:
             dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$DEALER/dealer" || true)"
             admin_code="$(curl -sS -L -o /tmp/admin.html -w '%{http_code}' "$APEX/admin/login" || true)"
             if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$test_code" = 200 ] && [ "$approve_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$admin_code" = 200 ]; then
-              if jq -e --arg sha "$RELEASE_SHA" '.ok == true and .degraded == false and .commit == $sha' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok == true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1; then
+              if jq -e --arg sha "$RELEASE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null 2>&1 && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1; then
                 if grep -q 'screenshotContract' /tmp/home.html && grep -q 'header-logo-image' /tmp/home.html && grep -qi 'Schedule a test drive' /tmp/home.html && grep -qi 'Get pre-approved' /tmp/home.html && grep -qi 'CALL SEAN' /tmp/home.html && grep -q 'mobile-action-bar' /tmp/home.html; then ok=1; break; fi
               fi
             fi
@@ -117,13 +108,11 @@ jobs:
           test "$ok" = 1
           ! grep -q 'R36TEST-' /tmp/home.html
           echo verified=true >> "$GITHUB_OUTPUT"
-
       - name: Trigger authenticated dealer listing acceptance
         if: steps.verify.outputs.verified == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run wdcc-listing-only-e2e.yml --ref main
-
       - name: Report release
         if: always()
         env:
@@ -133,4 +122,4 @@ jobs:
         shell: bash
         run: |
           body=$(printf 'Unified source SHA: `%s`\nProduction deployment: `%s`\nApex/www/dealer unified: attempted\nPublic contract verified: `%s`\nAuthenticated listing E2E: triggered after public PASS\n\nApex: %s\nDealer: %s' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFY:-false}" "$APEX" "$DEALER")
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC unified prebuilt production ${GITHUB_RUN_ID}" --body "$body" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC unified archived production ${GITHUB_RUN_ID}" --body "$body" || true
