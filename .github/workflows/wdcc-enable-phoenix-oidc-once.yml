@@ -1,0 +1,59 @@
+name: WDCC Enable Phoenix OIDC Once
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-enable-phoenix-oidc-once.yml']
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  oidc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - name: Inspect and enable Phoenix project runtime OIDC
+        id: enable
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.vercel.com/v9/projects/$PHOENIX_ID?teamId=$TEAM_ID"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "$api" -o /tmp/before.json
+          before_enabled="$(jq -r '.oidcTokenConfig.enabled // false' /tmp/before.json)"
+          before_mode="$(jq -r '.oidcTokenConfig.issuerMode // "unset"' /tmp/before.json)"
+          echo "before_enabled=$before_enabled" >> "$GITHUB_OUTPUT"
+          echo "before_mode=$before_mode" >> "$GITHUB_OUTPUT"
+          if [ "$before_enabled" != true ]; then
+            curl -fsS -X PATCH \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data '{"oidcTokenConfig":{"enabled":true,"issuerMode":"global"}}' \
+              "$api" -o /tmp/patch.json
+          fi
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "$api" -o /tmp/after.json
+          after_enabled="$(jq -r '.oidcTokenConfig.enabled // false' /tmp/after.json)"
+          after_mode="$(jq -r '.oidcTokenConfig.issuerMode // "unset"' /tmp/after.json)"
+          test "$after_enabled" = true
+          echo "after_enabled=$after_enabled" >> "$GITHUB_OUTPUT"
+          echo "after_mode=$after_mode" >> "$GITHUB_OUTPUT"
+          echo "PHOENIX_OIDC_CONFIG=PASS before=$before_enabled/$before_mode after=$after_enabled/$after_mode"
+
+      - name: Report OIDC project configuration
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BEFORE: ${{ steps.enable.outputs.before_enabled }}
+          BEFORE_MODE: ${{ steps.enable.outputs.before_mode }}
+          AFTER: ${{ steps.enable.outputs.after_enabled }}
+          AFTER_MODE: ${{ steps.enable.outputs.after_mode }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC Phoenix runtime OIDC config ${GITHUB_RUN_ID}" \
+            --body "Status: **$STATUS**\nPhoenix project: \`$PHOENIX_ID\`\nBefore: enabled \`${BEFORE:-unknown}\`, issuer \`${BEFORE_MODE:-unknown}\`\nAfter: enabled \`${AFTER:-unknown}\`, issuer \`${AFTER_MODE:-unknown}\`\nNo Vercel deployment, project environment variable, alias, DNS record or Cloudflare route was changed by this workflow; only \`oidcTokenConfig\` is managed."
