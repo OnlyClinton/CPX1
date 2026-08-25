@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
-import {readState,writeState} from "../../../../lib/store";
+import {isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
 import {recordVehicleAudit} from "../../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
@@ -17,8 +17,8 @@ function canEdit(user:any,vehicle:any){
 function json(body:any,status:number,rid:string,headers:Record<string,string>={}){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,...headers}});
 }
-async function verifyStorefront(id:string){
-  let visible=false;let verification="pending";const attempts:any[]=[];
+async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible"){
+  let visible=false;let verified=false;let verification="pending";const attempts:any[]=[];
   for(let attempt=0;attempt<4;attempt++){
     if(attempt)await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
     const target=`https://wedontcarecars.com/api/inventory?verify=${Date.now()}-${attempt}`;
@@ -32,17 +32,22 @@ async function verifyStorefront(id:string){
       const items=Array.isArray(publicJson?.items)?publicJson.items:Array.isArray(publicJson?.inventory)?publicJson.inventory:[];
       visible=publicResponse.ok&&hasItems&&items.some((item:any)=>String(item?.id)===String(id));
       attempts.push({attempt,status:publicResponse.status,ok:publicResponse.ok,redirected:publicResponse.redirected,url:publicResponse.url||target,contentType,contractValid:hasItems,itemCount:items.length,parseError,bodyPrefix:hasItems?undefined:raw.slice(0,180)});
-      if(visible){verification="verified";break;}
-      if(!publicResponse.ok)verification=`storefront_http_${publicResponse.status}`;
-      else if(!hasItems)verification="storefront_invalid_payload";
-      else verification="not_yet_visible";
+      if(!publicResponse.ok){verification=`storefront_http_${publicResponse.status}`;continue;}
+      if(!hasItems){verification="storefront_invalid_payload";continue;}
+      if(expected==="hidden"){
+        if(!visible){verified=true;verification="verified_hidden";break;}
+        verification="unexpectedly_visible";
+      }else{
+        if(visible){verified=true;verification="verified_visible";break;}
+        verification="not_yet_visible";
+      }
     }catch(error){
       const message=error instanceof Error?`${error.name}:${error.message}`:"storefront_fetch_failed";
       attempts.push({attempt,error:message,url:target});
       verification="storefront_unreachable";
     }
   }
-  return {visible,verification,vehicleId:id,attempts};
+  return {visible,verified,expected,verification,vehicleId:id,attempts};
 }
 
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
@@ -66,8 +71,9 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const response=await proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
     if(!response.ok||String(body?.status||"").toLowerCase()!=="published")return response;
     const upstreamText=await response.text();let upstreamJson:any={};try{upstreamJson=JSON.parse(upstreamText);}catch{}
-    const storefront=await verifyStorefront(id);
-    return Response.json({...upstreamJson,storefront},{status:response.status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid,"X-WDCC-Storefront-Verified":storefront.visible?"1":"0"}});
+    const expected=isQaVehicleRecord(upstreamJson?.item)?"hidden":"visible";
+    const storefront=await verifyStorefront(id,expected);
+    return Response.json({...upstreamJson,storefront},{status:response.status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid,"X-WDCC-Storefront-Verified":storefront.verified?"1":"0","X-WDCC-Storefront-Expected":expected}});
   }
 
   const user=await currentUser().catch(()=>null);
@@ -132,11 +138,12 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 
     let storefront:any=undefined;
     if(statusChanged&&next.status==="published"){
-      storefront=await verifyStorefront(id);
+      const expected=isQaVehicleRecord(next)?"hidden":"visible";
+      storefront=await verifyStorefront(id,expected);
       const lastAttempt=Array.isArray(storefront.attempts)&&storefront.attempts.length?storefront.attempts[storefront.attempts.length-1]:null;
-      await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.visible?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${storefront.verification}:${JSON.stringify(lastAttempt||{})}`});
+      await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.verified?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${storefront.verification};expected:${expected}:${JSON.stringify(lastAttempt||{})}`});
     }
-    return json({ok:true,item:next,revision:saved.revision,requestId:rid,storefront},200,rid,storefront?{"X-WDCC-Storefront-Verified":storefront.visible?"1":"0"}:{});
+    return json({ok:true,item:next,revision:saved.revision,requestId:rid,storefront},200,rid,storefront?{"X-WDCC-Storefront-Verified":storefront.verified?"1":"0","X-WDCC-Storefront-Expected":storefront.expected}:{});
   }catch(error){
     await recordVehicleAudit({action:"vehicle.update",outcome:"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,detail:error instanceof Error?error.message:"update_failed"});
     return json({ok:false,error:error instanceof Error?error.message:"update_failed"},500,rid);
