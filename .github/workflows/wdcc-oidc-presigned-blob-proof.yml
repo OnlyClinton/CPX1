@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           export OIDC_TOKEN="$(cat /tmp/oidc-token)"
-          printf '::add-mask::%s\n' "$OIDIDC_TOKEN" 2>/dev/null || true
+          printf '::add-mask::%s\n' "$OIDC_TOKEN"
           node --input-type=module <<'NODE'
           import crypto from 'node:crypto';
           import {del,get,issueSignedToken,presignUrl} from '@vercel/blob';
