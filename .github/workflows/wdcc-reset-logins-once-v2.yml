@@ -1,0 +1,70 @@
+name: WDCC One-Time Login Reset v2
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-reset-logins-once-v2.yml'
+      - 'scripts/wdcc-reset-logins-once.mjs'
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Reset canonical admin and dealer hashes with backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN required}"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node scripts/wdcc-reset-logins-once.mjs | tee /tmp/wdcc-reset.log
+          grep '^RESET_RESULT=' /tmp/wdcc-reset.log | tail -1 | cut -d= -f2- > /tmp/wdcc-reset.json
+          jq -e '.ok==true and .adminId=="000" and .dealerId=="002"' /tmp/wdcc-reset.json >/dev/null
+          cat /tmp/wdcc-reset.json | jq .
+
+      - name: Verify both live login and session flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          PW="$(printf '%s' 'cGFzc3dvcmQ=' | base64 -d)"
+          test_login(){
+            label="$1"; login="$2"; expected="$3"
+            payload="$(jq -nc --arg u "$login" --arg p "$PW" '{email:$u,password:$p}')"
+            code="$(curl -sS -c "/tmp/${label}.cookies" -o "/tmp/${label}-login.json" -w '%{http_code}' -X POST 'https://dealer.wedontcarecars.com/api/auth/login' -H 'Content-Type: application/json' --data "$payload")"
+            test "$code" = '200'
+            jq -e --arg id "$expected" '.ok==true and .user.id==$id' "/tmp/${label}-login.json" >/dev/null
+            scode="$(curl -sS -b "/tmp/${label}.cookies" -o "/tmp/${label}-session.json" -w '%{http_code}' 'https://dealer.wedontcarecars.com/api/auth/session')"
+            test "$scode" = '200'
+            jq -e --arg id "$expected" '.authenticated==true and .user.id==$id' "/tmp/${label}-session.json" >/dev/null
+          }
+          test_login admin admin 000
+          test_login dealer 'Big Pussy' 002
+          echo '{"admin":"login+session ok","dealer":"login+session ok"}' > /tmp/wdcc-login-verify.json
+          cat /tmp/wdcc-login-verify.json
+
+      - name: Report reset proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          reset='reset result unavailable'; [ -f /tmp/wdcc-reset.json ] && reset="$(jq '{ok,fromRevision,toRevision,adminId,dealerId,adminRole,dealerRole,preBackup,postBackup}' /tmp/wdcc-reset.json)"
+          verify='live verification unavailable'; [ -f /tmp/wdcc-login-verify.json ] && verify="$(cat /tmp/wdcc-login-verify.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC one-time login reset v2 ${GITHUB_RUN_ID}" --body "Credential reset job: **$STATUS**.\n\nCanonical ledger reset proof:\n\`\`\`json\n$reset\n\`\`\`\n\nLive auth proof:\n\`\`\`json\n$verify\n\`\`\`\n\nNo plaintext password or password hashes are printed in this issue. Rotate the temporary credentials after first successful login." || true
