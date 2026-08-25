@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vercel curl / --deployment "$CANDIDATE_URL" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" > /tmp/candidate-home.html
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$CANDIDATE_URL" > /tmp/candidate-home.html
           grep -q 'screenshotContract' /tmp/candidate-home.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/candidate-home.html
           grep -q 'Schedule a test drive' /tmp/candidate-home.html
@@ -67,14 +67,14 @@ jobs:
           grep -q 'CALL SEAN' /tmp/candidate-home.html
           grep -q 'mobile-action-bar' /tmp/candidate-home.html
 
-          vercel curl /api/health --deployment "$CANDIDATE_URL" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" > /tmp/candidate-health.json
+          vercel --scope "$VERCEL_SCOPE" curl /api/health --deployment "$CANDIDATE_URL" > /tmp/candidate-health.json
           jq -e '.ok == true and .backend == "healthy"' /tmp/candidate-health.json >/dev/null
 
-          vercel curl /api/inventory --deployment "$CANDIDATE_URL" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" > /tmp/candidate-inventory.json
+          vercel --scope "$VERCEL_SCOPE" curl /api/inventory --deployment "$CANDIDATE_URL" > /tmp/candidate-inventory.json
           jq -e '.ok == true and (.items | type == "array") and (.items | length > 0)' /tmp/candidate-inventory.json >/dev/null
 
           for path in /schedule-test-drive /get-approved /dealer/login /admin/login /dealer/inventory/new; do
-            vercel curl "$path" --deployment "$CANDIDATE_URL" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" > /tmp/candidate-page.html
+            vercel --scope "$VERCEL_SCOPE" curl "$path" --deployment "$CANDIDATE_URL" > /tmp/candidate-page.html
             test -s /tmp/candidate-page.html
           done
           echo 'WDCC_EXACT_CANDIDATE=PASS'
