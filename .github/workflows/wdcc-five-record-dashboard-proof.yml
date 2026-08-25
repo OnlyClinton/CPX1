@@ -1,0 +1,254 @@
+name: WDCC Five Record Dashboard Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-five-record-dashboard-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-five-record-dashboard-proof
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install proof dependencies
+        id: deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/screens
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Create short lived dealer QA identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-five-create-user.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path);const r=await get(path,{access:'private',useCache:false});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const x of r.stream)chunks.push(x);const raw=Buffer.concat(chunks),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,state:JSON.parse(raw.toString('utf8'))}}throw Error('STATE_TOO_HOT')}
+          for(let attempt=1;attempt<=4;attempt++){
+            const before=await stable(),s=before.state,now=new Date().toISOString();
+            const password=`WdccDash-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+            const dealerId=`dash-proof-${crypto.randomUUID()}`,email=`dash-proof-${run}@invalid.example`;
+            s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];
+            s.users.push({id:dealerId,email,username:email,displayName:`WDCC Dashboard Proof ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});
+            const backup=`private/state/backups/platform-v3-pre-dashboard-proof-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;
+            await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.dashboard_proof.user_create',actor:'github-actions',run,dealerId,backup});s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/proof.env',`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${email}\nSTOCK1=R36TEST-DASH-ACCORD-${run}\nSTOCK2=R36TEST-DASH-ESCAPE-${run}\n`);console.log(JSON.stringify({ok:true,run,dealerId,email,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}
+          }
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-five-create-user.mjs
+          set -a; . /tmp/proof.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Log into live dealer portal
+        id: login
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$DEALER_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          code="$(curl -sS -c /tmp/dealer.cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $DEALER" -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$payload")"
+          test "$code" = 200 || { cat /tmp/login.json; exit 1; }
+          session="$(curl -sS -b /tmp/dealer.cookies -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session")"
+          test "$session" = 200
+          jq -e '.authenticated==true and ((.user.role|ascii_downcase)=="dealer_agent")' /tmp/session.json >/dev/null
+          echo "login_http=$code" >> "$GITHUB_OUTPUT"
+          echo "session_http=$session" >> "$GITHUB_OUTPUT"
+
+      - name: Enter one Call Sean one Test Drive and one Get Approved lead
+        id: leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          post(){ kind="$1"; source="$2"; label="$3"; phone="$4"; key="wdcc-qa-five-$label-$RUN_TAG"; name="WDCC Dashboard Test $label $RUN_TAG"; payload="$(jq -nc --arg kind "$kind" --arg source "$source" --arg name "$name" --arg phone "$phone" --arg key "$key" '{qa:true,kind:$kind,source:$source,name:$name,phone:$phone,email:("qa-"+$key+"@invalid.example"),vehicleInterest:"Dashboard end-to-end proof",preferredTime:"QA only",message:"Automated WDCC contract verification - leave visible in dealer dashboard for inspection.",consent:true,idempotencyKey:$key}')"; code="$(curl -sS -o "/tmp/lead-$label.json" -w '%{http_code}' -H 'content-type: application/json' -H "Idempotency-Key: $key" -X POST "$STOREFRONT/api/leads" --data "$payload")"; case "$code" in 200|201);;*) echo "$label lead HTTP $code" >&2; cat "/tmp/lead-$label.json" >&2; exit 1;;esac; jq -e '.ok==true and .persisted==true and .item.id!=null' "/tmp/lead-$label.json" >/dev/null; }
+          post contact call-sean CALL 813-555-0141
+          post schedule schedule-test-drive TEST_DRIVE 813-555-0142
+          post approval get-approved GET_APPROVED 813-555-0143
+          CALL_ID="$(jq -r '.item.id' /tmp/lead-CALL.json)"; TEST_ID="$(jq -r '.item.id' /tmp/lead-TEST_DRIVE.json)"; APPROVAL_ID="$(jq -r '.item.id' /tmp/lead-GET_APPROVED.json)"
+          echo "CALL_ID=$CALL_ID" >> /tmp/proof.env
+          echo "TEST_ID=$TEST_ID" >> /tmp/proof.env
+          echo "APPROVAL_ID=$APPROVAL_ID" >> /tmp/proof.env
+          echo "call=$CALL_ID" >> "$GITHUB_OUTPUT"; echo "test_drive=$TEST_ID" >> "$GITHUB_OUTPUT"; echo "get_approved=$APPROVAL_ID" >> "$GITHUB_OUTPUT"
+          echo "call_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-CALL.json)" >> "$GITHUB_OUTPUT"
+          echo "test_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-TEST_DRIVE.json)" >> "$GITHUB_OUTPUT"
+          echo "approval_email=$(jq -r '.notifications.email // "unknown"' /tmp/lead-GET_APPROVED.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Create two dealer vehicle drafts
+        id: drafts
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          create_vehicle(){ label="$1"; year="$2"; make="$3"; model="$4"; trim="$5"; price="$6"; down="$7"; mileage="$8"; stock="$9"; payload="$(jq -nc --argjson year "$year" --arg make "$make" --arg model "$model" --arg trim "$trim" --argjson price "$price" --argjson down "$down" --argjson mileage "$mileage" --arg stock "$stock" '{year:$year,make:$make,model:$model,trim:$trim,price:$price,downPayment:$down,mileage:$mileage,stock:$stock,description:"Dealer dashboard QA vehicle. Hidden from customer storefront by QA stock prefix."}')"; code="$(curl -sS -b /tmp/dealer.cookies -o "/tmp/vehicle-$label.json" -w '%{http_code}' -H "Origin: $DEALER" -H 'content-type: application/json' -X POST "$DEALER/api/inventory" --data "$payload")"; test "$code" = 201 || { echo "$label draft HTTP $code" >&2; cat "/tmp/vehicle-$label.json" >&2; exit 1; }; jq -e '.ok==true and .item.id!=null and .item.status=="draft"' "/tmp/vehicle-$label.json" >/dev/null; }
+          create_vehicle accord 2018 Honda Accord EX 15995 2200 78210 "$STOCK1"
+          create_vehicle escape 2020 Ford Escape SE 17495 2500 64320 "$STOCK2"
+          V1="$(jq -r '.item.id' /tmp/vehicle-accord.json)"; V2="$(jq -r '.item.id' /tmp/vehicle-escape.json)"
+          echo "VEHICLE1=$V1" >> /tmp/proof.env; echo "VEHICLE2=$V2" >> /tmp/proof.env
+          echo "vehicle1=$V1" >> "$GITHUB_OUTPUT"; echo "vehicle2=$V2" >> "$GITHUB_OUTPUT"
+
+      - name: Attach real image blobs to both vehicles
+        id: photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          export VEHICLE1 VEHICLE2 RUN_TAG
+          cat > .wdcc-five-photo.mjs <<'NODE'
+          import fs from 'node:fs';import {put} from '@vercel/blob';
+          const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
+          const p1=`media/wdcc/${process.env.VEHICLE1}/dashboard-proof-accord-${process.env.RUN_TAG}.png`;
+          const p2=`media/wdcc/${process.env.VEHICLE2}/dashboard-proof-escape-${process.env.RUN_TAG}.png`;
+          await put(p1,png,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'image/png'});
+          await put(p2,png,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'image/png'});
+          fs.appendFileSync('/tmp/proof.env',`PHOTO1=${p1}\nPHOTO2=${p2}\n`);console.log(JSON.stringify({ok:true,p1,p2}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-five-photo.mjs
+
+      - name: Publish both QA vehicles through authenticated dealer API
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          publish(){ label="$1"; id="$2"; photo="$3"; checkpoint="$(jq -nc --arg p "$photo" '{photoPathnames:[$p],primaryPhotoPathname:$p}')"; c1="$(curl -sS -b /tmp/dealer.cookies -o "/tmp/$label-photo.json" -w '%{http_code}' -H "Origin: $DEALER" -H 'content-type: application/json' -X PATCH "$DEALER/api/inventory/$id" --data "$checkpoint")"; test "$c1" = 200 || { cat "/tmp/$label-photo.json"; exit 1; }; c2="$(curl -sS -b /tmp/dealer.cookies -o "/tmp/$label-publish.json" -w '%{http_code}' -H "Origin: $DEALER" -H 'content-type: application/json' -X PATCH "$DEALER/api/inventory/$id" --data '{"status":"published"}')"; test "$c2" = 200 || { cat "/tmp/$label-publish.json"; exit 1; }; jq -e '.ok==true and .item.status=="published" and ((.item.photoPathnames//[])|length>0)' "/tmp/$label-publish.json" >/dev/null; }
+          publish accord "$VEHICLE1" "$PHOTO1"
+          publish escape "$VEHICLE2" "$PHOTO2"
+          echo "accord_storefront=$(jq -r '.storefront.verification // "unknown"' /tmp/accord-publish.json)" >> "$GITHUB_OUTPUT"
+          echo "escape_storefront=$(jq -r '.storefront.verification // "unknown"' /tmp/escape-publish.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify all five records in authenticated dealer data feeds
+        id: feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          lcode="$(curl -sS -b /tmp/dealer.cookies -o /tmp/leads-feed.json -w '%{http_code}' "$DEALER/api/leads")"; test "$lcode" = 200
+          icode="$(curl -sS -b /tmp/dealer.cookies -o /tmp/inventory-feed.json -w '%{http_code}' "$DEALER/api/inventory")"; test "$icode" = 200
+          dcode="$(curl -sS -b /tmp/dealer.cookies -o /tmp/dashboard-feed.json -w '%{http_code}' "$DEALER/api/crm/dashboard")"; test "$dcode" = 200
+          jq -e --arg a "$CALL_ID" --arg b "$TEST_ID" --arg c "$APPROVAL_ID" '(.items//[]) as $x | any($x[];.id==$a and .source=="call-sean") and any($x[];.id==$b and .source=="schedule-test-drive") and any($x[];.id==$c and .source=="get-approved")' /tmp/leads-feed.json >/dev/null
+          jq -e --arg a "$VEHICLE1" --arg b "$VEHICLE2" '(.items//[]) as $x | any($x[];.id==$a and .status=="published") and any($x[];.id==$b and .status=="published")' /tmp/inventory-feed.json >/dev/null
+          jq -e --arg a "$CALL_ID" --arg b "$TEST_ID" --arg c "$APPROVAL_ID" '(.leads//[]) as $x | any($x[];.id==$a) and any($x[];.id==$b) and any($x[];.id==$c)' /tmp/dashboard-feed.json >/dev/null
+          echo "lead_feed_http=$lcode" >> "$GITHUB_OUTPUT"; echo "inventory_feed_http=$icode" >> "$GITHUB_OUTPUT"; echo "dashboard_http=$dcode" >> "$GITHUB_OUTPUT"
+
+      - name: Verify rendered dealer dashboard modules show exact records
+        id: rendered
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          export SESSION_COOKIE="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/dealer.cookies | tail -1)"
+          test -n "$SESSION_COOKIE"; printf '::add-mask::%s\n' "$SESSION_COOKIE"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          (async()=>{const dealer=process.env.DEALER,run=process.env.RUN_TAG,stock1=process.env.STOCK1,stock2=process.env.STOCK2;const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.SESSION_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
+          await p.goto(`${dealer}/dealer`,{waitUntil:'networkidle'});if(!p.url().includes('/dealer'))throw Error('DASHBOARD_NOT_REACHED');await p.screenshot({path:'/tmp/screens/dashboard.png',fullPage:true});
+          await p.goto(`${dealer}/dealer/leads`,{waitUntil:'networkidle'});await p.waitForFunction(r=>document.body.innerText.includes(`WDCC Dashboard Test CALL ${r}`)&&document.body.innerText.includes(`WDCC Dashboard Test TEST_DRIVE ${r}`)&&document.body.innerText.includes(`WDCC Dashboard Test GET_APPROVED ${r}`),run,{timeout:30000});const leadText=await p.locator('body').innerText();if(!leadText.includes('Call Sean')||!leadText.includes('Schedule Test Drive')||!leadText.includes('Get Approved'))throw Error('LEAD_SOURCE_LABELS_MISSING');await p.screenshot({path:'/tmp/screens/leads.png',fullPage:true});
+          await p.goto(`${dealer}/dealer/inventory`,{waitUntil:'networkidle'});await p.waitForFunction(([a,b])=>document.body.innerText.includes(a)&&document.body.innerText.includes(b),[stock1,stock2],{timeout:30000});const inventoryText=await p.locator('body').innerText();if(!inventoryText.includes('2018 Honda Accord EX')||!inventoryText.includes('2020 Ford Escape SE'))throw Error('VEHICLES_NOT_RENDERED');await p.screenshot({path:'/tmp/screens/inventory.png',fullPage:true});
+          fs.writeFileSync('/tmp/rendered.json',JSON.stringify({ok:true,leadsRendered:true,vehiclesRendered:true,stocks:[stock1,stock2]},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/rendered.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          cat /tmp/rendered.json
+          jq -e '.ok==true and .leadsRendered==true and .vehiclesRendered==true' /tmp/rendered.json >/dev/null
+
+      - name: Upload dashboard screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-five-record-dashboard-proof-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Remove only the temporary QA login identity
+        id: cleanup_identity
+        if: always() && steps.identity.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/proof.env; set +a
+          export DEALER_ID RUN_TAG
+          cat > .wdcc-five-clean-user.mjs <<'NODE'
+          import crypto from 'node:crypto';import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',dealerId=process.env.DEALER_ID,run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path);const r=await get(path,{access:'private',useCache:false});if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const x of r.stream)chunks.push(x);const raw=Buffer.concat(chunks),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,state:JSON.parse(raw.toString('utf8'))}}throw Error('STATE_TOO_HOT')}
+          for(let attempt=1;attempt<=4;attempt++){const before=await stable(),s=before.state,users=Array.isArray(s.users)?s.users:[];s.users=users.filter(u=>u.id!==dealerId);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.dashboard_proof.user_cleanup',actor:'github-actions',run,dealerId});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removed:users.length-s.users.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-five-clean-user.mjs
+
+      - name: Report exact proof result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          LOGIN: ${{ steps.login.outcome }}
+          CALL_ID: ${{ steps.leads.outputs.call }}
+          TEST_ID: ${{ steps.leads.outputs.test_drive }}
+          APPROVAL_ID: ${{ steps.leads.outputs.get_approved }}
+          V1: ${{ steps.drafts.outputs.vehicle1 }}
+          V2: ${{ steps.drafts.outputs.vehicle2 }}
+          LEAD_FEED: ${{ steps.feeds.outputs.lead_feed_http }}
+          INVENTORY_FEED: ${{ steps.feeds.outputs.inventory_feed_http }}
+          DASH_HTTP: ${{ steps.feeds.outputs.dashboard_http }}
+          RENDERED: ${{ steps.rendered.outcome }}
+          CLEANUP: ${{ steps.cleanup_identity.outcome }}
+          CALL_EMAIL: ${{ steps.leads.outputs.call_email }}
+          TEST_EMAIL: ${{ steps.leads.outputs.test_email }}
+          APPROVAL_EMAIL: ${{ steps.leads.outputs.approval_email }}
+          ACCORD_STOREFRONT: ${{ steps.publish.outputs.accord_storefront }}
+          ESCAPE_STOREFRONT: ${{ steps.publish.outputs.escape_storefront }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Live dealer login: **$LOGIN**
+          Dealer lead feed HTTP: \`$LEAD_FEED\`
+          Dealer inventory feed HTTP: \`$INVENTORY_FEED\`
+          Dealer dashboard feed HTTP: \`$DASH_HTTP\`
+          Rendered dealer modules: **$RENDERED**
+          Temporary QA login removed: **$CLEANUP**
+
+          Lead - Call Sean: \`$CALL_ID\` — email \`$CALL_EMAIL\`
+          Lead - Schedule Test Drive: \`$TEST_ID\` — email \`$TEST_EMAIL\`
+          Lead - Get Approved: \`$APPROVAL_ID\` — email \`$APPROVAL_EMAIL\`
+          Vehicle - 2018 Honda Accord EX: \`$V1\` — storefront check \`$ACCORD_STOREFRONT\`
+          Vehicle - 2020 Ford Escape SE: \`$V2\` — storefront check \`$ESCAPE_STOREFRONT\`
+
+          The three lead records and two QA vehicle records are intentionally left in the dealer portal for inspection. Vehicle stock numbers use the R36TEST prefix so they remain hidden from the customer storefront.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC five-record dashboard proof ${GITHUB_RUN_ID}" --body "$body" || true
