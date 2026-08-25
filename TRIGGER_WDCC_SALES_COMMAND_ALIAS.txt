@@ -1,0 +1,1 @@
+Alias the verified READY Sales Command deployment to wedontcarecars.com, www.wedontcarecars.com, and dealer.wedontcarecars.com, then run the live contract checks.
