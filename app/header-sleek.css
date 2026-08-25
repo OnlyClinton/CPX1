@@ -1,40 +1,47 @@
-/* Mobile storefront simplification: brand + one menu control up top, one CTA dock at bottom. */
+/* WDCC mobile storefront simplification.
+   One brand + one compact menu at the top. One conversion dock at the bottom. */
+
+/* Active 2vfD logo: always use the transparent badge instead of a text substitute. */
+.logo-button{display:block;width:96px;height:96px;background:url('/wdcc-logo-transparent.webp') center/contain no-repeat;flex:0 0 auto;filter:drop-shadow(0 5px 15px #000b)}
+.logo-button>span{display:none!important}
+
 @media(max-width:900px){
+  /* Active 2vfD storefront */
+  .utility-bar{height:28px!important;min-height:28px!important;padding:0 14px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;background:#02070c!important;border-bottom:1px solid #ffffff12!important;font-size:8px!important;letter-spacing:.075em!important}
+  .utility-bar>span{white-space:nowrap!important}.utility-bar>span:nth-child(2){display:none!important}
+
+  .home-header-shell{background:#02070ceb!important;border-bottom:1px solid #ffffff12!important;backdrop-filter:blur(16px)!important}
+  .site-header{position:relative!important;height:76px!important;min-height:76px!important;padding:0 14px!important;display:grid!important;grid-template-columns:minmax(0,1fr) 44px!important;align-items:center!important;gap:12px!important;background:transparent!important}
+  .logo-button{grid-column:1!important;grid-row:1!important;justify-self:start!important;width:84px!important;height:84px!important;margin:0!important;background-size:contain!important;transform:none!important;filter:drop-shadow(0 5px 15px #000b)!important}
+
+  .mobile-call{display:none!important}
+  .mobile-menu{grid-column:2!important;grid-row:1!important;justify-self:end!important;position:relative!important;inset:auto!important;display:grid!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;margin:0!important;padding:0!important;border:1px solid #ffffff24!important;border-radius:12px!important;background:#0a1621e8!important;color:#fff!important;box-shadow:none!important}
+  .mobile-menu>span{display:grid!important;width:18px!important;height:14px!important;align-content:space-between!important}
+  .mobile-menu i{display:block!important;width:18px!important;height:2px!important;margin:0!important;border:0!important;border-radius:3px!important;background:#e8eef3!important;transform:none!important;opacity:1!important}
+  .mobile-menu[aria-expanded="true"]>span i:nth-child(1){transform:translateY(6px) rotate(45deg)!important}.mobile-menu[aria-expanded="true"]>span i:nth-child(2){opacity:0!important}.mobile-menu[aria-expanded="true"]>span i:nth-child(3){transform:translateY(-6px) rotate(-45deg)!important}
+
+  .main-nav{position:absolute!important;z-index:520!important;top:68px!important;left:10px!important;right:10px!important;width:auto!important;margin:0!important;padding:8px!important;display:none!important;grid-template-columns:1fr 1fr!important;gap:2px!important;background:#07131ff7!important;border:1px solid #ffffff20!important;border-radius:14px!important;box-shadow:0 22px 60px #000d!important;backdrop-filter:blur(18px)!important}
+  .main-nav.open{display:grid!important}
+  .main-nav a{min-height:46px!important;display:flex!important;align-items:center!important;padding:0 13px!important;border:0!important;border-radius:8px!important;color:#dfe8ef!important;font-size:10px!important;font-weight:900!important;letter-spacing:.05em!important;text-transform:uppercase!important}
+  .main-nav a:active{background:#ffffff0d!important}
+
+  /* Bottom dock already owns conversion. Do not duplicate CTA buttons in the hero. */
+  .hero-actions{display:none!important}
+  .hero-copy{padding-bottom:28px!important}
+  .mobile-action-bar{z-index:620!important;grid-template-columns:1.08fr 1fr .78fr!important;background:#050c13f7!important;border-top:1px solid #ffffff1c!important;box-shadow:0 -12px 32px #0008!important;backdrop-filter:blur(14px)!important}
+  .mobile-action-bar a{min-height:58px!important;font-size:10px!important;font-weight:950!important;letter-spacing:.015em!important}
+
+  /* Older premium shell safety: same rule if a route still uses it. */
   .commandStrip{min-height:30px!important;height:30px!important;padding:0!important;background:#03080d!important;border-bottom:1px solid #ffffff12!important}
   .commandStrip .wrap{min-height:30px!important;height:30px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;padding:0 16px!important;gap:12px!important}
-  .commandStrip .wrap span{font-size:9px!important;line-height:1!important;letter-spacing:.08em!important;white-space:nowrap!important}
-  .commandStrip .wrap span:nth-child(2){display:none!important}
-
+  .commandStrip .wrap span{font-size:9px!important;line-height:1!important;letter-spacing:.08em!important;white-space:nowrap!important}.commandStrip .wrap span:nth-child(2){display:none!important}
   .premiumHeader{height:80px!important;min-height:80px!important;background:#02070ceb!important;border-bottom:1px solid #ffffff12!important;backdrop-filter:blur(16px)!important}
   .premiumHeader .nav{height:80px!important;min-height:80px!important;display:grid!important;grid-template-columns:minmax(0,1fr) 46px!important;align-items:center!important;gap:12px!important;padding:0 16px!important}
-  .logoBrand{grid-column:1!important;justify-self:start!important;width:88px!important;height:88px!important;margin:0!important;transform:none!important}
-  .logoBrand img{width:88px!important;height:88px!important;object-fit:contain!important;filter:drop-shadow(0 5px 15px #000b)!important}
-
-  .mobileCallButton{display:none!important}
-  .mobileMenuButton{display:grid!important;grid-column:2!important;justify-self:end!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:0!important;border:1px solid #ffffff24!important;border-radius:12px!important;background:#0a1621d9!important;color:#fff!important;box-shadow:none!important;font-size:0!important;line-height:1!important;letter-spacing:0!important}
-  .mobileMenuButton:before{content:"☰";font-size:20px!important;font-weight:700!important;line-height:1!important}
-  .mobileMenuButton[aria-expanded="true"]:before{content:"×";font-size:26px!important;font-weight:400!important}
-  .mobileMenuButton:active{transform:scale(.96)!important}
-
-  .mobileHeaderMenu{position:absolute!important;top:80px!important;left:12px!important;right:12px!important;z-index:500!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:1px!important;padding:8px!important;background:#07131ff7!important;border:1px solid #ffffff20!important;border-radius:14px!important;box-shadow:0 22px 60px #000c!important;backdrop-filter:blur(18px)!important}
-  .mobileHeaderMenu a{min-height:46px!important;display:flex!important;align-items:center!important;padding:0 13px!important;border:0!important;border-radius:8px!important;color:#dfe8ef!important;font-size:10px!important;font-weight:900!important;letter-spacing:.05em!important;text-transform:uppercase!important}
-  .mobileHeaderMenu a:active{background:#ffffff0d!important}
-
-  /* The bottom dock already contains the three conversion actions. Do not duplicate them in the hero. */
-  .premiumHero .actions,.premiumHero .heroCall{display:none!important}
-  .premiumHero .heroContent{padding-bottom:34px!important}
-
-  .stickyCtaBar{z-index:600!important;grid-template-columns:1.08fr 1fr .78fr!important}
-  .stickyCtaBar a{font-size:10px!important;font-weight:950!important}
+  .logoBrand{grid-column:1!important;justify-self:start!important;width:88px!important;height:88px!important;margin:0!important;transform:none!important}.logoBrand img{width:88px!important;height:88px!important;object-fit:contain!important;filter:drop-shadow(0 5px 15px #000b)!important}
+  .mobileCallButton{display:none!important}.mobileMenuButton{display:grid!important;grid-column:2!important;justify-self:end!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;padding:0!important;border:1px solid #ffffff24!important;border-radius:12px!important;background:#0a1621d9!important;color:#fff!important;box-shadow:none!important;font-size:0!important;line-height:1!important;letter-spacing:0!important}.mobileMenuButton:before{content:"☰";font-size:20px!important;font-weight:700!important;line-height:1!important}.mobileMenuButton[aria-expanded="true"]:before{content:"×";font-size:26px!important;font-weight:400!important}.mobileHeaderMenu{position:absolute!important;top:80px!important;left:12px!important;right:12px!important;z-index:500!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:1px!important;padding:8px!important;background:#07131ff7!important;border:1px solid #ffffff20!important;border-radius:14px!important;box-shadow:0 22px 60px #000c!important;backdrop-filter:blur(18px)!important}.mobileHeaderMenu a{min-height:46px!important;display:flex!important;align-items:center!important;padding:0 13px!important;border:0!important;border-radius:8px!important;color:#dfe8ef!important;font-size:10px!important;font-weight:900!important;letter-spacing:.05em!important;text-transform:uppercase!important}.premiumHero .actions,.premiumHero .heroCall{display:none!important}.premiumHero .heroContent{padding-bottom:34px!important}.stickyCtaBar{z-index:600!important;grid-template-columns:1.08fr 1fr .78fr!important}.stickyCtaBar a{font-size:10px!important;font-weight:950!important}
 }
 
 @media(max-width:560px){
-  .commandStrip .wrap{padding:0 12px!important}.commandStrip .wrap span{font-size:8px!important;letter-spacing:.055em!important}
-  .premiumHeader,.premiumHeader .nav{height:74px!important;min-height:74px!important}
-  .premiumHeader .nav{grid-template-columns:minmax(0,1fr) 42px!important;padding:0 12px!important}
-  .logoBrand,.logoBrand img{width:80px!important;height:80px!important}
-  .mobileMenuButton{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border-radius:11px!important}
-  .mobileHeaderMenu{top:74px!important;left:8px!important;right:8px!important}
-  .premiumHero .heroContent{padding-bottom:26px!important}
-  .stickyCtaBar a{font-size:9px!important;letter-spacing:.015em!important}
+  .utility-bar{padding:0 11px!important;font-size:7.5px!important;letter-spacing:.05em!important}.site-header{height:72px!important;min-height:72px!important;padding:0 11px!important;grid-template-columns:minmax(0,1fr) 42px!important}.logo-button{width:78px!important;height:78px!important}.mobile-menu{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border-radius:11px!important}.main-nav{top:65px!important;left:7px!important;right:7px!important}.hero-copy{padding-bottom:22px!important}.mobile-action-bar a{min-height:58px!important;font-size:9px!important}
+  .commandStrip .wrap{padding:0 12px!important}.commandStrip .wrap span{font-size:8px!important;letter-spacing:.055em!important}.premiumHeader,.premiumHeader .nav{height:74px!important;min-height:74px!important}.premiumHeader .nav{grid-template-columns:minmax(0,1fr) 42px!important;padding:0 12px!important}.logoBrand,.logoBrand img{width:80px!important;height:80px!important}.mobileMenuButton{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border-radius:11px!important}.mobileHeaderMenu{top:74px!important;left:8px!important;right:8px!important}.premiumHero .heroContent{padding-bottom:26px!important}.stickyCtaBar a{font-size:9px!important;letter-spacing:.015em!important}
 }
