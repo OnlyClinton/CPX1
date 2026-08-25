@@ -3,6 +3,8 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readState,writeState} from "../../../lib/store";
 import {canonicalDealerBackend,WDCC_DEALER_PROJECT_ID,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -41,7 +43,12 @@ async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
 
 function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===WDCC_DEALER_PROJECT_ID||project===WDCC_PHOENIX_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
 
-export async function GET(){const user=await currentUser();if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}}
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/leads");
+  const user=await currentUser();
+  if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
+  try{const state=await readState();const tenantId=String(user.tenantId||"wdcc");const items=(String(user.role).toLowerCase()==="platform_admin"?state.leads:state.leads.filter(lead=>String(lead.tenantId||"wdcc")===tenantId)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"private, no-store"}});}catch(error){return NextResponse.json({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},{status:500});}
+}
 
 export async function POST(req:Request){
   try{
