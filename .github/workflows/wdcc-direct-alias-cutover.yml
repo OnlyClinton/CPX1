@@ -18,9 +18,9 @@ concurrency:
 
 env:
   TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  CANDIDATE_ID: dpl_EZ2fWgHBkJmcrboEK6cMGzTvx51N
-  CANDIDATE_URL: wdcc-v32-storefront-517ddd9cb-cpxagency.vercel.app
-  EXPECTED_COMMIT: da9517c2560ecf2d0cdb22ec12c5f9b7da73100a
+  CANDIDATE_ID: dpl_AxrG2K56aopDqvrJyjW5UWN6Gmfq
+  CANDIDATE_URL: wdcc-v32-storefront-jx9rfipva-cpxagency.vercel.app
+  EXPECTED_COMMIT: b2d7636e9a026f821b071991fcd42f9bb8586583
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
 
@@ -142,4 +142,4 @@ jobs:
         shell: bash
         run: |
           count="$(jq -r '.items|length // 0' /tmp/live-inventory.json 2>/dev/null || echo 0)"
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC merged alias cutover $OUTCOME" --body "Candidate: \`$CANDIDATE_ID\`\nSource: \`$EXPECTED_COMMIT\`\nApex/www verification: \`$OUTCOME\`\nInventory count: \`$count\`\nAuthenticated listing acceptance dispatched after PASS." || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC fixed alias cutover $OUTCOME" --body "Candidate: \`$CANDIDATE_ID\`\nSource: \`$EXPECTED_COMMIT\`\nApex/www verification: \`$OUTCOME\`\nInventory count: \`$count\`\nAuthenticated listing acceptance dispatched after PASS." || true
