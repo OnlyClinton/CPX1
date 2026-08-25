@@ -1,183 +1,89 @@
-/* WDCC 2vfD conversion/contrast tuning — visual refinement only. */
+/* WDCC 2vfD restrained visual tuning. Keep the donor layout intact. */
 
-/* BRAND: make the official mark read first without changing the donor artwork. */
-.home-header-shell .site-header {
-  min-height: 108px;
-}
+/* Brand: modest lift, not an oversized takeover. */
 .home-header-shell .site-header .brand-logo {
-  width: 132px !important;
-  height: 132px !important;
-  min-width: 132px !important;
-  filter: drop-shadow(0 10px 22px rgba(0,0,0,.82)) drop-shadow(0 0 16px rgba(255,255,255,.12));
+  width: 108px !important;
+  height: 108px !important;
+  min-width: 108px !important;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.58));
 }
-.intro-badge,
+.intro-sequence .intro-badge,
 .intro-reveal .intro-badge {
-  width: 390px !important;
-  height: 390px !important;
-  filter: drop-shadow(0 18px 36px rgba(0,0,0,.82)) drop-shadow(0 0 24px rgba(255,255,255,.12));
+  width: 270px !important;
+  height: 270px !important;
 }
 
-/* CTA HIERARCHY: one conversion cluster only.  No duplicated header/sticky CTA rail. */
-.home-header-shell .header-cta {
-  display: none !important;
-}
+/* One CTA cluster: hero only. */
+.home-header-shell .header-cta,
 .mobile-action-bar {
   display: none !important;
 }
-body {
-  padding-bottom: 0 !important;
-}
+body { padding-bottom: 0 !important; }
 .hero .hero-actions {
-  width: min(760px, 100%);
+  width: min(650px, 100%);
   display: grid !important;
-  grid-template-columns: 1.12fr 1.28fr .82fr !important;
+  grid-template-columns: 1.2fr 1fr .9fr !important;
   gap: 10px !important;
 }
 .hero .hero-actions > * {
   width: 100% !important;
-  min-width: 0 !important;
-  min-height: 56px !important;
-  border-radius: 8px !important;
+  min-height: 54px !important;
+  border-radius: 7px !important;
 }
-/* Get Qualified is the dominant conversion action. */
 .hero .hero-cta-qualify {
-  order: 1;
-  border-color: #ff4d57 !important;
+  border-color: #ff5860 !important;
   color: #fff !important;
-  background: linear-gradient(180deg,#ff252f,#d80712) !important;
-  box-shadow: 0 12px 28px rgba(237,17,25,.34) !important;
+  background: linear-gradient(180deg,#f5242d,#d70b14) !important;
+  box-shadow: 0 10px 24px rgba(237,17,25,.28) !important;
 }
-/* Test drive remains a strong secondary action. */
 .hero .hero-cta-test {
-  order: 2;
-  border-color: #3a86c4 !important;
-  color: #eef8ff !important;
-  background: linear-gradient(180deg,#123957,#0a2439) !important;
-  box-shadow: 0 10px 24px rgba(0,0,0,.28) !important;
+  border-color: #4d789b !important;
+  color: #f1f7fb !important;
+  background: rgba(9,28,42,.88) !important;
+  box-shadow: none !important;
 }
-/* Contact is intentionally quieter and third. */
 .hero .hero-cta-contact {
-  order: 3;
-  display: flex !important;
-  min-height: 56px !important;
-  border: 1px solid #43586a !important;
-  border-left: 1px solid #43586a !important;
-  color: #e1ebf2 !important;
-  background: rgba(5,15,23,.88) !important;
-  box-shadow: 0 10px 24px rgba(0,0,0,.24) !important;
-}
-.hero .hero-cta-contact small {
-  color: #8fa3b4 !important;
-}
-.hero .hero-cta-contact b {
-  background: #253b4d !important;
+  border: 1px solid #3c5162 !important;
+  border-left: 1px solid #3c5162 !important;
+  color: #dce7ee !important;
+  background: rgba(5,15,23,.78) !important;
+  box-shadow: none !important;
 }
 
-/* HERO: darker cinematic field with a transparent spotlight around the car. */
-.hero {
-  background-color: #010305 !important;
-}
+/* Hero: deepen the field while preserving the car as the bright focal object. */
 .hero::after {
   background:
-    radial-gradient(ellipse at 78% 54%, rgba(0,0,0,0) 0 25%, rgba(0,0,0,.10) 36%, rgba(0,0,0,.48) 70%, rgba(0,0,0,.72) 100%),
-    linear-gradient(90deg, #000 0%, #000 41%, rgba(0,0,0,.97) 50%, rgba(0,0,0,.18) 70%, rgba(0,0,0,.42) 100%) !important;
+    radial-gradient(ellipse at 78% 54%, rgba(0,0,0,0) 0 28%, rgba(0,0,0,.08) 40%, rgba(0,0,0,.30) 72%, rgba(0,0,0,.46) 100%),
+    linear-gradient(90deg, #02070c 0%, #02070c 38%, rgba(2,7,12,.88) 50%, rgba(2,7,12,.12) 73%, rgba(2,7,12,.28) 100%) !important;
 }
-.hero::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  pointer-events: none;
-  content: "";
-  box-shadow: inset 0 0 200px 58px rgba(0,0,0,.64);
-}
-.hero-car-glow {
-  right: 5% !important;
-  bottom: 10% !important;
-  width: 50% !important;
-  height: 28% !important;
-  background: radial-gradient(ellipse, rgba(255,255,255,.13) 0%, rgba(8,119,249,.12) 34%, rgba(237,17,25,.10) 55%, transparent 76%) !important;
-  filter: blur(42px) !important;
-  opacity: .95 !important;
-}
-.hero-copy {
-  text-shadow: 0 4px 18px rgba(0,0,0,.72);
-}
-.hero h1 {
-  text-shadow: 0 6px 28px rgba(0,0,0,.96), 0 1px 1px #000 !important;
-}
-.hero-lead {
-  color: #f8fafc !important;
-  text-shadow: 0 3px 16px rgba(0,0,0,1) !important;
-}
-
-/* Intro receives the same contrast treatment so logo/car/Tampa read as separate layers. */
-.intro-scene::after {
-  background:
-    radial-gradient(ellipse at 73% 57%, rgba(0,0,0,0) 0 24%, rgba(0,0,0,.12) 39%, rgba(0,0,0,.52) 76%, rgba(0,0,0,.72) 100%),
-    linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.58) 38%, rgba(0,0,0,.12) 68%, rgba(0,0,0,.34) 100%) !important;
-}
+.hero-copy { text-shadow: 0 3px 14px rgba(0,0,0,.62); }
+.hero-lead { color: #f2f6f9 !important; }
 
 @media (max-width: 760px) {
-  .home-header-shell .site-header {
-    min-height: 100px;
-  }
   .home-header-shell .site-header .brand-logo {
-    width: 124px !important;
-    height: 124px !important;
-    min-width: 124px !important;
+    width: 92px !important;
+    height: 92px !important;
+    min-width: 92px !important;
   }
-  .home-header-shell .main-nav {
-    top: 100px !important;
-  }
-  .home-header-shell .mobile-call {
-    display: none !important;
-  }
-  .intro-badge,
+  .intro-sequence .intro-badge,
   .intro-reveal .intro-badge {
-    width: 286px !important;
-    height: 286px !important;
+    width: 216px !important;
+    height: 216px !important;
   }
-  .intro-dock .intro-badge {
-    width: 124px !important;
-    height: 124px !important;
-  }
-
   .hero {
-    min-height: 690px !important;
-    padding-top: 60px !important;
-    background-position: 70% center !important;
+    min-height: 0 !important;
+    padding: 292px 18px 32px !important;
+    background-position: 61% top !important;
+    background-size: auto 390px !important;
   }
   .hero::after {
     background:
-      radial-gradient(ellipse at 69% 55%, rgba(0,0,0,0) 0 23%, rgba(0,0,0,.16) 39%, rgba(0,0,0,.54) 72%, rgba(0,0,0,.74) 100%),
-      linear-gradient(180deg, rgba(0,0,0,.96) 0%, rgba(0,0,0,.86) 39%, rgba(0,0,0,.40) 67%, rgba(0,0,0,.72) 100%) !important;
-  }
-  .hero::before {
-    box-shadow: inset 0 0 135px 34px rgba(0,0,0,.62);
-  }
-  .hero-car-glow {
-    right: -4% !important;
-    width: 70% !important;
-    height: 25% !important;
+      linear-gradient(180deg, rgba(2,7,12,.10) 0%, rgba(2,7,12,.08) 31%, rgba(2,7,12,.62) 52%, #050b12 66%, #050b12 100%),
+      linear-gradient(90deg, rgba(2,7,12,.24), transparent 78%) !important;
   }
   .hero .hero-actions {
     grid-template-columns: 1fr !important;
-    gap: 9px !important;
+    gap: 8px !important;
   }
-  .hero .hero-cta-qualify { order: 1; }
-  .hero .hero-cta-test { order: 2; }
-  .hero .hero-cta-contact { order: 3; min-height: 50px !important; }
-}
-
-@media (max-width: 380px) {
-  .home-header-shell .site-header .brand-logo {
-    width: 114px !important;
-    height: 114px !important;
-    min-width: 114px !important;
-  }
-  .intro-badge,
-  .intro-reveal .intro-badge {
-    width: 264px !important;
-    height: 264px !important;
-  }
+  .hero .hero-actions > * { min-height: 50px !important; }
 }
