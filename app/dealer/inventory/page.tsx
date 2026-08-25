@@ -21,13 +21,13 @@ export default function DealerInventory(){
 
   return <main className="refDealerShell">
     <aside className="refDealerSide">
-      <Link href="/dealer" className="refDealerBrand"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
+      <Link href="/dealer" className="refDealerBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
       <nav><Link href="/dealer">Dashboard</Link><div className="refDealerLabel">INVENTORY</div><Link className="active" href="/dealer/inventory">All Vehicles</Link><Link href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link><Link href="/dealer/inventory">Categories</Link><Link href="/dealer/inventory">Import Vehicles</Link><div className="refDealerLabel">OPERATIONS</div><Link href="/dealer/leads">Leads</Link><Link href="/dealer/leads">Appointments</Link><Link href="/dealer/leads">Test Drives</Link><Link href="/dealer/leads">Customers</Link><Link href="/dealer/leads">Applications</Link><Link href="/dealer/leads">Messages</Link><Link href="/dealer/inventory/logs">Reports</Link><Link href="/dealer">Settings</Link></nav>
       <div className="refDealerHelp"><span>NEED HELP?</span><b>Call Sean anytime.</b><a href="tel:18135164752">813-516-4752</a></div>
     </aside>
 
     <section className="refDealerBody">
-      <header className="refDealerTop"><div className="refDealerTopBrand"><img src="/wdcc-official-logo.webp" alt=""/><div><b>WDCC · DEALER PORTAL</b><span>Inventory Operations</span></div></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span></header>
+      <header className="refDealerTop"><div className="refDealerTopBrand"><img src="/wdcc-logo-transparent.webp" alt=""/><div><b>WDCC · DEALER PORTAL</b><span>Inventory Operations</span></div></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span></header>
       <div className="refDealerContent">
         <div className="refDealerTitle"><div><h1>All Vehicles</h1><p>Manage your dealership inventory.</p></div><div className="refDealerTitleActions"><Link className="primary" href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link><button>⇧ Import</button><button>⇧ Export</button></div></div>
         <div className="refDealerStats"><article><span>Total Vehicles</span><b>{items.length}</b></article><article><span>Published</span><b>{published}</b><em>{items.length?Math.round(published/items.length*100):0}%</em></article><article><span>Drafts</span><b>{drafts}</b></article><article><span>Needs Attention</span><b>{attention}</b></article><article><span>Sold This Week</span><b>0</b></article></div>
