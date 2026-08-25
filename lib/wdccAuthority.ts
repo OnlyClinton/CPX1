@@ -19,11 +19,22 @@ export function canonicalDealerBackend(){
 }
 
 export function blobAuthority(){
-  // OIDC is the primary authority. A stale static token must never override a
-  // valid project identity and recreate the STATE_READ_FAILED failure mode.
-  const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
   const storeId=(process.env.BLOB_STORE_ID||WDCC_CANONICAL_BLOB_STORE_ID).trim();
-  if(oidcToken&&storeId)return {mode:"oidc" as const,options:{oidcToken,storeId}};
+  const explicitOidc=(process.env.VERCEL_OIDC_TOKEN||"").trim();
+  if(explicitOidc&&storeId)return {mode:"oidc" as const,options:{oidcToken:explicitOidc,storeId}};
+
+  // @vercel/blob 2.8 resolves deployment OIDC from Vercel's request context.
+  // Passing the stale BLOB_READ_WRITE_TOKEN explicitly would override that path,
+  // so deployed backend runtimes provide only storeId and let the SDK resolve OIDC.
+  const role=String(process.env.WDCC_RUNTIME_ROLE||"").trim().toLowerCase();
+  const project=String(process.env.VERCEL_PROJECT_ID||"").trim();
+  const vercelBackendRuntime=
+    role==="backend"||role==="api"||role==="canonical"||
+    project===WDCC_PHOENIX_PROJECT_ID||project===WDCC_DEALER_PROJECT_ID;
+  if(vercelBackendRuntime&&storeId)return {mode:"oidc-auto" as const,options:{storeId}};
+
+  // Local/CI maintenance jobs have no Vercel request context, so they retain the
+  // static-token fallback used by controlled backup/CAS cleanup tooling.
   const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
   if(token)return {mode:"token" as const,options:{token}};
   return {mode:"missing" as const,options:{}};
