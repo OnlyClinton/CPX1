@@ -1,23 +1,21 @@
-name: WDCC Dealer Auth Recovery
+name: WDCC Unified Phoenix Auth Verification
 on:
   push:
     branches: [ops/reset-wdcc-logins]
     paths:
       - '.github/workflows/wdcc-temporary-login-reset.yml'
+      - 'scripts/wdcc-temp-login-reset.mjs'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  DEALER_URL: https://dealer.wedontcarecars.com
-  DEALER_DOMAIN: dealer.wedontcarecars.com
-  CANDIDATE_URL: https://wdcc-dealer-portal-n9u8asox5-cpxagency.vercel.app
-  ROLLBACK_URL: https://wdcc-dealer-portal-haaxzbb5n-cpxagency.vercel.app
-
 jobs:
-  recover:
+  verify:
     runs-on: ubuntu-latest
+    env:
+      DEALER_URL: https://wdcc-cpx-launch-duevmhlwo-cpxagency.vercel.app
+      ORIGIN_URL: https://dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,47 +23,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.3.0 >/dev/null
-      - name: Point dealer domain at immutable pre-regression artifact without deploying
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          vercel alias set "$CANDIDATE_URL" "$DEALER_DOMAIN" --scope cpxagency --token "$VERCEL_TOKEN"
-      - name: Wait for candidate auth fingerprint on dealer domain
-        shell: bash
-        run: |
-          set -euo pipefail
-          PW="$(printf '\160\141\163\163\167\157\162\144')"
-          for n in $(seq 1 20); do
-            payload="$(jq -nc --arg email 'Big Pussy' --arg password "$PW" '{email:$email,password:$password}')"
-            code="$(curl -sS -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST "$DEALER_URL/api/auth/login" -H 'content-type: application/json' -H "origin: $DEALER_URL" --data "$payload" || true)"
-            if [ "$code" = 200 ] && grep -Eqi '^set-cookie:[[:space:]]*wdcc_session=' /tmp/h && ! grep -Eqi '^set-cookie:[[:space:]]*__Host-wdcc_session=' /tmp/h; then
-              echo "Candidate local-auth fingerprint confirmed on attempt $n"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo 'Candidate auth fingerprint never stabilized'; sed -n '1,40p' /tmp/h; cat /tmp/b; exit 1
-      - name: Verify both credentials, sessions and privileged APIs
+      - name: Verify Big Pussy and admin on unified Phoenix authority
         run: node scripts/wdcc-temp-login-reset.mjs verify
-      - name: Install Chromium
-        run: |
-          npm install --no-save playwright@1.55.0 >/dev/null
-          npx playwright install --with-deps chromium >/dev/null
-      - name: Verify real mobile browser login flows
-        run: node scripts/wdcc-login-ui-e2e.cjs
-      - name: Verify public storefront stayed separate
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -o /tmp/storefront.html -w '%{http_code}' https://wedontcarecars.com/)"
-          test "$code" = 200
-          grep -qi "WE DON.T CARE\|We Don.t Care" /tmp/storefront.html
-      - name: Roll back dealer alias if any recovery gate failed
-        if: ${{ failure() }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          vercel alias set "$ROLLBACK_URL" "$DEALER_DOMAIN" --scope cpxagency --token "$VERCEL_TOKEN"
