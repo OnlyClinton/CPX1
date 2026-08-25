@@ -32,7 +32,7 @@ export default function R31FeaturedInventory(){
   return <div className={styles.grid}>{items.map(v=>{
     const photo=photoFor(v);const down=v.downPayment??v.down_payment;
     return <article className={styles.card} key={v.id}>
-      <Link className={styles.photo} href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-featured-card`}>
+      <Link prefetch={false} className={styles.photo} href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-featured-card`}>
         {photo?<img src={photo} alt={`${v.year} ${v.make} ${v.model}`}/>:<div className={styles.placeholder}>PHOTO NEEDED</div>}
         <span>AVAILABLE</span>
       </Link>
@@ -41,7 +41,7 @@ export default function R31FeaturedInventory(){
         <b className={styles.price}>${Number(v.price||0).toLocaleString()}</b>
         {down!=null&&<div className={styles.down}>${Number(down).toLocaleString()} DOWN</div>}
         <div className={styles.miles}>{Number(v.mileage||0).toLocaleString()} MILES</div>
-        <div className={styles.actions}><Link href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-featured-details`}>VIEW DETAILS</Link><Link href={`/r31-preview/get-approved?source=r31-featured-approved&vehicle=${encodeURIComponent(v.id)}`}>GET PRE-APPROVED</Link></div>
+        <div className={styles.actions}><Link prefetch={false} href={`/vehicle/${encodeURIComponent(v.id)}?source=r31-featured-details`}>VIEW DETAILS</Link><Link href={`/r31-preview/get-approved?source=r31-featured-approved&vehicle=${encodeURIComponent(v.id)}`}>GET PRE-APPROVED</Link></div>
       </div>
     </article>;
   })}</div>;
