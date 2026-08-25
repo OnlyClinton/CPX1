@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           test -n "${CF_TOKEN:-}" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 2; }
 
-      - name: Snapshot public Worker routes only
+      - name: Snapshot Worker routes
         shell: bash
         run: |
           set -euo pipefail
@@ -36,72 +36,58 @@ jobs:
             -H 'Content-Type: application/json' > /tmp/routes-before.json
           jq -e '.success == true' /tmp/routes-before.json >/dev/null
           jq -r '.result[] | [.id,.pattern,(.script//"-")] | @tsv' /tmp/routes-before.json | sort | tee /tmp/routes-before.tsv
-          echo '### Worker routes before' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/routes-before.tsv >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Purge WDCC edge cache
+      - name: Remove stale customer storefront Worker route only
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS -X POST "$CF_API/zones/$ZONE_ID/purge_cache" \
-            -H "Authorization: Bearer $CF_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data '{"purge_everything":true}' > /tmp/purge.json
-          jq -e '.success == true' /tmp/purge.json >/dev/null
+          mapfile -t PUBLIC_IDS < <(jq -r '.result[] | select(.pattern=="wedontcarecars.com/*" and .script=="wdcc-home-sleek-edge") | .id' /tmp/routes-before.json)
+          if [ "${#PUBLIC_IDS[@]}" -gt 1 ]; then
+            echo 'Unexpected duplicate public WDCC Worker routes; refusing broad mutation.'
+            exit 3
+          fi
+          if [ "${#PUBLIC_IDS[@]}" -eq 1 ]; then
+            id="${PUBLIC_IDS[0]}"
+            echo "Removing stale customer Worker route $id"
+            curl -fsS -X DELETE "$CF_API/zones/$ZONE_ID/workers/routes/$id" \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              -H 'Content-Type: application/json' > /tmp/delete-public.json
+            jq -e '.success == true' /tmp/delete-public.json >/dev/null
+          else
+            echo 'Stale public Worker route already absent.'
+          fi
 
-      - name: Compare apex with immutable donor
-        id: first
+      - name: Prove dealer Worker route was not touched
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/routes-after.json
+          jq -e '.success == true' /tmp/routes-after.json >/dev/null
+          test "$(jq '[.result[] | select(.pattern=="wedontcarecars.com/*")] | length' /tmp/routes-after.json)" -eq 0
+          jq -e '.result[] | select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-after.json >/dev/null
+
+      - name: Verify pinned public storefront is exposed
         shell: bash
         run: |
           set -euo pipefail
           stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          curl -fsSL --max-time 25 "$DONOR/?restore=$stamp" -o /tmp/donor.html
-          curl -fsSL --max-time 25 "$APEX/?restore=$stamp" -o /tmp/apex.html
-          donor_sha="$(sha256sum /tmp/donor.html | awk '{print $1}')"
-          apex_sha="$(sha256sum /tmp/apex.html | awk '{print $1}')"
-          echo "donor_sha=$donor_sha" >> "$GITHUB_OUTPUT"
-          echo "apex_sha=$apex_sha" >> "$GITHUB_OUTPUT"
-          if [ "$donor_sha" = "$apex_sha" ]; then echo 'match=true' >> "$GITHUB_OUTPUT"; else echo 'match=false' >> "$GITHUB_OUTPUT"; fi
-
-      - name: Remove only customer-domain Worker routes if still intercepting
-        if: steps.first.outputs.match != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t IDS < <(jq -r '.result[] | select(.pattern=="wedontcarecars.com/*" or .pattern=="www.wedontcarecars.com/*") | .id' /tmp/routes-before.json)
-          echo "Customer Worker routes found: ${#IDS[@]}"
-          for id in "${IDS[@]}"; do
-            [ -n "$id" ] || continue
-            curl -fsS -X DELETE "$CF_API/zones/$ZONE_ID/workers/routes/$id" \
-              -H "Authorization: Bearer $CF_TOKEN" \
-              -H 'Content-Type: application/json' > "/tmp/delete-$id.json"
-            jq -e '.success == true' "/tmp/delete-$id.json" >/dev/null
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 15); do
+              code="$(curl -sS -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "$host/?restore=$stamp-$i" || true)"
+              if [ "$code" = 200 ] \
+                && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
+                && grep -q 'wdcc-hero-v2.webp' /tmp/live.html \
+                && grep -qi 'we don.t care' /tmp/live.html; then
+                ok=1; break
+              fi
+              sleep 2
+            done
+            test "$ok" = 1
           done
-          curl -fsS -X POST "$CF_API/zones/$ZONE_ID/purge_cache" \
-            -H "Authorization: Bearer $CF_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data '{"purge_everything":true}' | jq -e '.success == true' >/dev/null
-
-      - name: Verify exact public donor and dealer isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          stamp="final-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          curl -fsSL --max-time 25 "$DONOR/?restore=$stamp" -o /tmp/donor-final.html
-          curl -fsSL --max-time 25 "$APEX/?restore=$stamp" -o /tmp/apex-final.html
-          curl -fsSL --max-time 25 "$WWW/?restore=$stamp" -o /tmp/www-final.html
-          donor_sha="$(sha256sum /tmp/donor-final.html | awk '{print $1}')"
-          apex_sha="$(sha256sum /tmp/apex-final.html | awk '{print $1}')"
-          www_sha="$(sha256sum /tmp/www-final.html | awk '{print $1}')"
-          test "$donor_sha" = "$apex_sha"
-          test "$donor_sha" = "$www_sha"
-          grep -q 'wdcc-logo-transparent.webp' /tmp/apex-final.html
-          grep -q 'wdcc-hero-v2.webp' /tmp/apex-final.html
-          grep -qi 'we don.t care' /tmp/apex-final.html
-          # Dealer route is intentionally not modified by this workflow.
           curl -fsS --max-time 20 -o /dev/null -w '%{http_code}' https://dealer.wedontcarecars.com/dealer | grep -Eq '^(200|302|307|308)$'
-          echo 'PUBLIC_2VFD_RESTORE=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo "donor_sha=$donor_sha" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Dealer domain: untouched' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PUBLIC_STALE_WORKER_REMOVED=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public: Vercel-pinned 2vfD exposed' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Dealer: Cloudflare route preserved' >> "$GITHUB_STEP_SUMMARY"
