@@ -4,11 +4,14 @@ import {FormEvent,useEffect,useMemo,useState} from "react";
 import styles from "./approval.module.css";
 
 type Draft={name:string;phone:string;email:string;vehicle:string;income:string;down:string;housing:string;referral:string;consent:boolean};
+type Attribution={source:string;utmSource:string;utmCampaign:string;clickId:string;referrer:string};
 const empty:Draft={name:"",phone:"",email:"",vehicle:"",income:"",down:"",housing:"",referral:"",consent:false};
+const emptyAttribution:Attribution={source:"direct",utmSource:"",utmCampaign:"",clickId:"",referrer:""};
 
 export default function R31ApprovalPreview(){
   const[step,setStep]=useState(1);
   const[draft,setDraft]=useState<Draft>(empty);
+  const[attribution,setAttribution]=useState<Attribution>(emptyAttribution);
   const[error,setError]=useState("");
   const[complete,setComplete]=useState(false);
 
@@ -16,6 +19,13 @@ export default function R31ApprovalPreview(){
     const params=new URLSearchParams(window.location.search);
     const vehicle=params.get("vehicle")||"";
     if(vehicle)setDraft(v=>({...v,vehicle}));
+    setAttribution({
+      source:params.get("source")||"direct",
+      utmSource:params.get("utm_source")||"",
+      utmCampaign:params.get("utm_campaign")||"",
+      clickId:params.get("gclid")||params.get("fbclid")||"",
+      referrer:document.referrer||""
+    });
   },[]);
 
   const progress=useMemo(()=>`${Math.round(step/3*100)}%`,[step]);
@@ -28,7 +38,7 @@ export default function R31ApprovalPreview(){
   };
   const submit=(e:FormEvent)=>{e.preventDefault();setError("");if(!draft.consent){setError("Consent is required before a real application could be sent.");return;}setComplete(true)};
 
-  if(complete)return <section className={styles.complete}><div className={styles.check}>✓</div><h2>PREVIEW FLOW COMPLETE.</h2><p>No customer lead was created. This R31 QA route deliberately stops before the production lead API.</p><button type="button" onClick={()=>{setComplete(false);setStep(1)}}>TEST AGAIN</button></section>;
+  if(complete)return <section className={styles.complete}><div className={styles.check}>✓</div><h2>PREVIEW FLOW COMPLETE.</h2><p>No customer lead was created. This R31 QA route deliberately stops before the production lead API.</p><div className={styles.attributionProof}><b>ATTRIBUTION PRESERVED</b><span>Source: {attribution.source}</span>{attribution.utmSource&&<span>UTM source: {attribution.utmSource}</span>}{attribution.utmCampaign&&<span>Campaign: {attribution.utmCampaign}</span>}</div><button type="button" onClick={()=>{setComplete(false);setStep(1)}}>TEST AGAIN</button></section>;
 
   return <form className={styles.form} onSubmit={submit}>
     <div className={styles.progress}><span style={{width:progress}}/></div>
@@ -56,12 +66,12 @@ export default function R31ApprovalPreview(){
 
     {step===3&&<section className={styles.panel}>
       <h2>REVIEW BEFORE SENDING.</h2><p>This safe preview shows exactly what would be reviewed before the production submission.</p>
-      <dl className={styles.review}><div><dt>NAME</dt><dd>{draft.name}</dd></div><div><dt>PHONE</dt><dd>{draft.phone}</dd></div><div><dt>EMAIL</dt><dd>{draft.email||"Not provided"}</dd></div><div><dt>VEHICLE</dt><dd>{draft.vehicle||"Open to options"}</dd></div><div><dt>MONTHLY INCOME</dt><dd>{draft.income}</dd></div><div><dt>DOWN PAYMENT</dt><dd>{draft.down}</dd></div></dl>
+      <dl className={styles.review}><div><dt>NAME</dt><dd>{draft.name}</dd></div><div><dt>PHONE</dt><dd>{draft.phone}</dd></div><div><dt>EMAIL</dt><dd>{draft.email||"Not provided"}</dd></div><div><dt>VEHICLE</dt><dd>{draft.vehicle||"Open to options"}</dd></div><div><dt>MONTHLY INCOME</dt><dd>{draft.income}</dd></div><div><dt>DOWN PAYMENT</dt><dd>{draft.down}</dd></div><div><dt>ATTRIBUTION SOURCE</dt><dd>{attribution.source}</dd></div><div><dt>CAMPAIGN</dt><dd>{attribution.utmCampaign||"None"}</dd></div></dl>
       <label className={styles.consent}><input type="checkbox" checked={draft.consent} onChange={e=>set("consent",e.target.checked)}/><span>I consent to being contacted about my vehicle inquiry. In this QA preview, checking this box still sends nothing.</span></label>
     </section>}
 
     {error&&<div className={styles.error}>{error}</div>}
     <div className={styles.actions}>{step>1&&<button type="button" className={styles.back} onClick={()=>{setError("");setStep(s=>s-1)}}>← BACK</button>}{step<3?<button type="button" className={styles.next} onClick={next}>CONTINUE →</button>:<button type="submit" className={styles.next}>COMPLETE SAFE PREVIEW →</button>}</div>
-    <div className={styles.safe}>QA SAFE MODE · NO POST TO /api/leads</div>
+    <div className={styles.safe}>QA SAFE MODE · NO POST TO /api/leads · SOURCE {attribution.source.toUpperCase()}</div>
   </form>;
 }
