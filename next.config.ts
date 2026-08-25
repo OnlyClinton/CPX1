@@ -76,6 +76,15 @@ const privilegedApiHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async rewrites() {
+    return [
+      {
+        source: "/",
+        has: [{ type: "host", value: "dealer.wedontcarecars.com" }],
+        destination: "/dealer"
+      }
+    ];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: storefrontHeaders },
