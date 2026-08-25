@@ -1,0 +1,112 @@
+name: WDCC Five Record Dashboard Proof V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-five-record-dashboard-proof-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-five-record-dashboard-proof-v2
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER: https://dealer.wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install proof runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/screens
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Run production five-record proof against canonical dealer ledger
+        id: proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node scripts/wdcc-five-record-proof.mjs
+
+      - name: Upload rendered dashboard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-five-record-dashboard-v2-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Report exact production result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          if [ -f /tmp/five-record-proof.json ]; then
+            ok="$(jq -r '.ok' /tmp/five-record-proof.json)"
+            err="$(jq -r '.error.message // ""' /tmp/five-record-proof.json)"
+            call_id="$(jq -r '.leads.callSean.id // ""' /tmp/five-record-proof.json)"
+            call_email="$(jq -r '.leads.callSean.notificationEmail // ""' /tmp/five-record-proof.json)"
+            test_id="$(jq -r '.leads.testDrive.id // ""' /tmp/five-record-proof.json)"
+            test_email="$(jq -r '.leads.testDrive.notificationEmail // ""' /tmp/five-record-proof.json)"
+            approval_id="$(jq -r '.leads.getApproved.id // ""' /tmp/five-record-proof.json)"
+            approval_email="$(jq -r '.leads.getApproved.notificationEmail // ""' /tmp/five-record-proof.json)"
+            car1="$(jq -r '.vehicles.accord.id // ""' /tmp/five-record-proof.json)"
+            stock1="$(jq -r '.vehicles.accord.stock // ""' /tmp/five-record-proof.json)"
+            car2="$(jq -r '.vehicles.escape.id // ""' /tmp/five-record-proof.json)"
+            stock2="$(jq -r '.vehicles.escape.stock // ""' /tmp/five-record-proof.json)"
+            lead_http="$(jq -r '.feeds.leadFeedHttp // ""' /tmp/five-record-proof.json)"
+            inv_http="$(jq -r '.feeds.inventoryFeedHttp // ""' /tmp/five-record-proof.json)"
+            dash_http="$(jq -r '.feeds.dashboardFeedHttp // ""' /tmp/five-record-proof.json)"
+            rendered="$(jq -r '.rendered.ok // false' /tmp/five-record-proof.json)"
+            cleanup="$(jq -r '.cleanupIdentity.ok // false' /tmp/five-record-proof.json)"
+          else
+            ok=false; err='proof result file missing'; call_id=''; call_email=''; test_id=''; test_email=''; approval_id=''; approval_email=''; car1=''; stock1=''; car2=''; stock2=''; lead_http=''; inv_http=''; dash_http=''; rendered=false; cleanup=false
+          fi
+          body=$(cat <<EOF
+          Job status: **$JOB_STATUS**
+          Exact proof passed: **$ok**
+          Error: \`$err\`
+
+          Call Sean lead: \`$call_id\` — email \`$call_email\`
+          Schedule Test Drive lead: \`$test_id\` — email \`$test_email\`
+          Get Approved lead: \`$approval_id\` — email \`$approval_email\`
+          2018 Honda Accord EX: \`$car1\` — stock \`$stock1\`
+          2020 Ford Escape SE: \`$car2\` — stock \`$stock2\`
+
+          Dealer lead feed HTTP: \`$lead_http\`
+          Dealer inventory feed HTTP: \`$inv_http\`
+          Dealer dashboard feed HTTP: \`$dash_http\`
+          Rendered dashboard/leads/inventory proof: **$rendered**
+          Temporary QA login cleaned up: **$cleanup**
+
+          The three QA leads and two R36TEST vehicles are intentionally retained in the dealer portal for inspection; the R36TEST stock prefix keeps the two vehicles off the customer storefront.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC five-record dashboard proof v2 ${GITHUB_RUN_ID}" --body "$body" || true
