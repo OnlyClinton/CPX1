@@ -22,6 +22,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Inspect source assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          file public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+          sha256sum public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
+          stat -c '%n %s bytes' public/wdcc-hero-v2.webp public/wdcc-logo-transparent.webp public/wdcc-official-logo.webp
       - name: Install app
         run: npm ci
       - name: Build app
@@ -33,24 +40,28 @@ jobs:
           npm run start -- -p 3000 >/tmp/wdcc-preview-server.log 2>&1 &
           echo $! >/tmp/wdcc-preview-server.pid
           for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then break; fi
             sleep 1
           done
-          cat /tmp/wdcc-preview-server.log
-          exit 1
+          curl -fsSI http://127.0.0.1:3000/wdcc-hero-v2.webp
+          curl -fsSI http://127.0.0.1:3000/wdcc-logo-transparent.webp
       - name: Install Chromium
         run: npx --yes playwright@1.55.0 install --with-deps chromium
-      - name: Capture cinematic frames
+      - name: Capture cinematic and source frames
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/wdcc-preview
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-hero-v2.webp /tmp/wdcc-preview/source-hero.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='700,700' --wait-for-timeout=150 http://127.0.0.1:3000/wdcc-logo-transparent.webp /tmp/wdcc-preview/source-logo.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-0650.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-1250.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-2200.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='1440,900' --wait-for-timeout=3300 http://127.0.0.1:3000/ /tmp/wdcc-preview/desktop-3300.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=650 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-0650.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=1250 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-1250.png
           npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=2200 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-2200.png
+          npx --yes playwright@1.55.0 screenshot --browser=chromium --viewport-size='390,844' --wait-for-timeout=3300 http://127.0.0.1:3000/ /tmp/wdcc-preview/mobile-3300.png
       - name: Upload preview frames
         uses: actions/upload-artifact@v4
         with:
