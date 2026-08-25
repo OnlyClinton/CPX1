@@ -1,0 +1,102 @@
+name: WDCC Live Certify Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-live-certify-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      WORKER_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      E2E: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+      ZONE: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+      DEALER: dealer.wedontcarecars.com
+      ORIGIN: wdcc-dealer-portal.vercel.app
+      WORKER: wdcc-dealer-frontdoor
+      BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+      BACKEND_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+      BASELINE: https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/
+    steps:
+      - name: Current production certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '::add-mask::%s\n' "$E2E"
+          echo 'GATE=cloudflare'
+          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=$ZONE&account.id=$ACCOUNT_ID&per_page=50" >/tmp/z.json
+          ZID="$(jq -r '.result[0].id' /tmp/z.json)"
+          test -n "$ZID"
+          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZID/dns_records?per_page=5000" >/tmp/r.json
+          jq -e --arg d "$DEALER" --arg o "$ORIGIN" '[.result[]|select(.name==$d)] as $x|($x|length)==1 and $x[0].type=="CNAME" and (($x[0].content|rtrimstr("."))==$o) and $x[0].proxied==true' /tmp/r.json >/dev/null
+          curl -fsS -H "Authorization: Bearer $WORKER_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/scripts/$WORKER/routes" >/tmp/routes.json
+          jq -e --arg p "$DEALER/*" --arg s "$WORKER" 'any(.result[]?;.pattern==$p and .script==$s)' /tmp/routes.json >/dev/null
+          echo 'CLOUDFLARE=PASS'
+
+          echo 'GATE=backend'
+          curl -fsS "$BACKEND/api/health?cert=$GITHUB_RUN_ID" >/tmp/health.json
+          jq -e --arg sha "$BACKEND_SHA" '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and .commit==$sha' /tmp/health.json >/dev/null
+          echo 'BACKEND=PASS'
+
+          auth(){
+            base="$1"; label="$2"
+            for login in 'Big Pussy' admin; do
+              jar="/tmp/${label}-$(printf '%s' "$login"|tr ' ' '_').cookies"
+              jq -nc --arg login "$login" --arg password "$E2E" '{login:$login,password:$password}' >/tmp/payload.json
+              code="$(curl -sS -c "$jar" -o /tmp/login.json -w '%{http_code}' -X POST "$base/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER" --data-binary @/tmp/payload.json)"
+              echo "$label login $login=$code"
+              test "$code" = 200
+              jq -e '.ok==true' /tmp/login.json >/dev/null
+              code="$(curl -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$base/api/auth/session")"
+              echo "$label session $login=$code"
+              test "$code" = 200
+              jq -e '.authenticated==true' /tmp/session.json >/dev/null
+              if [ "$login" = 'Big Pussy' ]; then
+                for path in /api/crm/dashboard /api/leads /api/inventory; do
+                  code="$(curl -sS -b "$jar" -o /tmp/protected.json -w '%{http_code}' "$base$path")"
+                  echo "$label $path=$code"
+                  test "$code" = 200
+                  jq -e '.ok==true' /tmp/protected.json >/dev/null
+                done
+              else
+                code="$(curl -sS -b "$jar" -o /tmp/admin.json -w '%{http_code}' "$base/api/admin/users")"
+                echo "$label /api/admin/users=$code"
+                test "$code" = 200
+                jq -e '.ok==true' /tmp/admin.json >/dev/null
+              fi
+            done
+          }
+          echo 'GATE=auth-backend'
+          auth "$BACKEND" backend
+          echo 'GATE=auth-dealer'
+          auth "https://$DEALER" dealer
+          echo 'AUTH=PASS'
+
+          echo 'GATE=2vfd'
+          curl -fsS -L "$BASELINE?cert=$GITHUB_RUN_ID" >/tmp/baseline.html
+          curl -fsS -L "https://$ZONE/?cert=$GITHUB_RUN_ID" >/tmp/live.html
+          for f in /tmp/baseline.html /tmp/live.html; do
+            grep -q 'intro-sequence intro-prepare' "$f"
+            grep -q 'mobile-dock-drive' "$f"
+            grep -q '/assets/cars/2016-ford-f150-limited-1.webp' "$f"
+          done
+          echo '2VFD=PASS'
+
+          echo 'GATE=tls'
+          for host in "$ZONE" "$WWW" "$DEALER"; do
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' --proto '=https' --tlsv1.2 "https://$host/")"
+            echo "$host HTTPS=$code"
+            test "$code" = 200
+            echo | openssl s_client -connect "$host:443" -servername "$host" -verify_return_error 2>/tmp/tls.err | openssl x509 -noout -subject -issuer -dates >/dev/null
+          done
+          echo 'TLS=PASS'
+          echo 'CERTIFICATION=PASS'
