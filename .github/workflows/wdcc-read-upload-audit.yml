@@ -1,0 +1,49 @@
+name: WDCC READ UPLOAD AUDIT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-read-upload-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Read latest vehicle photo audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+          cat > /tmp/read-upload-audit.mjs <<'NODE'
+          import {list,get} from '@vercel/blob';
+          const token=(process.env.BLOB_READ_WRITE_TOKEN||'').trim();
+          const oidcToken=(process.env.VERCEL_OIDC_TOKEN||'').trim();
+          const storeId=(process.env.BLOB_STORE_ID||'').trim();
+          const options=token?{token}:(oidcToken&&storeId?{oidcToken,storeId}:{});
+          const r=await list({prefix:'private/logs/vehicle/',limit:1000,...options});
+          const blobs=[...r.blobs].sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||''))).slice(0,120);
+          const out=[];
+          for(const b of blobs){
+            try{const x=await get(b.pathname,{access:'private',useCache:false,...options});if(!x?.stream)continue;const chunks=[];for await(const c of x.stream)chunks.push(c);const j=JSON.parse(Buffer.concat(chunks).toString('utf8'));if(/^vehicle\.photo_/.test(String(j.action||'')))out.push(j);}catch{}
+          }
+          console.log(JSON.stringify(out.slice(0,25),null,2));
+          NODE
+          vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node /tmp/read-upload-audit.mjs
