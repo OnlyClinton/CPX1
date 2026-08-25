@@ -142,14 +142,33 @@ jobs:
           fi
           URL="${URL%/}"
           [ -n "$URL" ] || { echo 'Cloudflare deployed but URL could not be resolved' >&2; exit 1; }
+          echo "VERIFY_URL=$URL"
 
-          curl -fsS "$URL/api/health?cloudflare-frontdoor=$GITHUB_RUN_ID" -o /tmp/cf-health.json
-          jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null
+          ready=false
+          for attempt in $(seq 1 30); do
+            status="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?cloudflare-frontdoor=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            echo "Cloudflare propagation probe $attempt/30 -> HTTP $status"
+            if [ "$status" = "200" ] && jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" != true ]; then
+            echo 'Cloudflare health route never became ready' >&2
+            echo 'Last response:' >&2
+            cat /tmp/cf-health.json >&2 || true
+            exit 1
+          fi
+
           curl -fsS -D /tmp/cf-inventory.headers -o /tmp/cf-inventory.json "$URL/api/inventory?cloudflare-frontdoor=$GITHUB_RUN_ID"
           content_type="$(tr -d '\r' </tmp/cf-inventory.headers | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
           case "$content_type" in application/json*) ;; *) echo "Cloudflare inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
           jq -e '.ok == true and (.items | type == "array")' /tmp/cf-inventory.json >/dev/null
-          curl -fsS "$URL/" -o /tmp/home.html
+
+          home_status="$(curl -sS -o /tmp/home.html -w '%{http_code}' "$URL/")"
+          [ "$home_status" = "200" ] || { echo "Cloudflare homepage returned HTTP $home_status" >&2; exit 1; }
           grep -q 'wdcc' /tmp/home.html || grep -qi 'we don.t care' /tmp/home.html
 
           echo "url=$URL" >> "$GITHUB_OUTPUT"
