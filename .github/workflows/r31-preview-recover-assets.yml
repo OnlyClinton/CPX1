@@ -1,0 +1,41 @@
+name: Recover exact 2vfD assets for R31 preview
+on:
+  push:
+    branches: [preview/r31-exact-live-base]
+    paths:
+      - '.github/workflows/r31-preview-recover-assets.yml'
+permissions:
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/r31-exact-live-base
+      - name: Download exact a2wntmnnn logo and hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/?_vercel_share=PIW8cpsl8kxqAlPKDqKSqvPK4kuGiRFg'
+          HOST='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app'
+          curl -fsSL -L -c /tmp/vcookie "$ROOT" -o /tmp/root.html
+          curl -fsSL -b /tmp/vcookie "$HOST/wdcc-logo-transparent.webp" -o public/wdcc-logo-transparent.webp
+          curl -fsSL -b /tmp/vcookie "$HOST/wdcc-hero-v2.webp" -o public/wdcc-hero-v2.webp
+          test "$(stat -c '%s' public/wdcc-logo-transparent.webp)" = '47594'
+          test "$(head -c 4 public/wdcc-logo-transparent.webp)" = 'RIFF'
+          test "$(head -c 4 public/wdcc-hero-v2.webp)" = 'RIFF'
+          sha256sum public/wdcc-logo-transparent.webp public/wdcc-hero-v2.webp
+      - name: Commit exact preview assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Preview Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add public/wdcc-logo-transparent.webp public/wdcc-hero-v2.webp
+          if git diff --cached --quiet; then
+            echo 'Exact donor assets already match.'
+          else
+            git commit -m 'Use exact a2wntmnnn WDCC logo and hero for R31 preview'
+            git push origin HEAD:preview/r31-exact-live-base
+          fi
