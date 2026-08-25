@@ -1,0 +1,2 @@
+cloudflare-direct-api-v3=2026-08-25
+compatibility_flag=global_fetch_strictly_public
