@@ -1,0 +1,90 @@
+name: WDCC Five Record Readback
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-five-record-readback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER: https://dealer.wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install readback runtime
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/readback-screens
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Verify exact five retained records in feeds and rendered portal
+        id: readback
+        run: |
+          set -euo pipefail
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node scripts/wdcc-five-record-readback.mjs
+      - name: Upload readback screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-five-record-readback-${{ github.run_id }}
+          path: /tmp/readback-screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Report readback
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          if [ -f /tmp/five-record-readback.json ]; then
+            ok="$(jq -r '.ok' /tmp/five-record-readback.json)"
+            err="$(jq -r '.error.message // ""' /tmp/five-record-readback.json)"
+            feeds="$(jq -c '.feeds.http // {}' /tmp/five-record-readback.json)"
+            rendered="$(jq -r '.rendered.ok // false' /tmp/five-record-readback.json)"
+            cleanup="$(jq -r '.cleanupIdentity.ok // false' /tmp/five-record-readback.json)"
+            call="$(jq -r '.feeds.leads.callSean.id // ""' /tmp/five-record-readback.json)"
+            testdrive="$(jq -r '.feeds.leads.testDrive.id // ""' /tmp/five-record-readback.json)"
+            approved="$(jq -r '.feeds.leads.getApproved.id // ""' /tmp/five-record-readback.json)"
+            accord="$(jq -r '.feeds.vehicles.accord.id // ""' /tmp/five-record-readback.json)"
+            accordstock="$(jq -r '.feeds.vehicles.accord.stock // ""' /tmp/five-record-readback.json)"
+            escape="$(jq -r '.feeds.vehicles.escape.id // ""' /tmp/five-record-readback.json)"
+            escapestock="$(jq -r '.feeds.vehicles.escape.stock // ""' /tmp/five-record-readback.json)"
+          else
+            ok=false; err='result missing'; feeds='{}'; rendered=false; cleanup=false; call=''; testdrive=''; approved=''; accord=''; accordstock=''; escape=''; escapestock=''
+          fi
+          body=$(cat <<EOF
+          Job status: **$JOB_STATUS**
+          Readback passed: **$ok**
+          Error: \`$err\`
+          Authenticated feed HTTP: \`$feeds\`
+          Rendered dealer portal proof: **$rendered**
+          Temporary readback login cleaned up: **$cleanup**
+
+          Call Sean lead: \`$call\`
+          Schedule Test Drive lead: \`$testdrive\`
+          Get Approved lead: \`$approved\`
+          Honda Accord: \`$accord\` / \`$accordstock\`
+          Ford Escape: \`$escape\` / \`$escapestock\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC five-record retained readback ${GITHUB_RUN_ID}" --body "$body" || true
