@@ -3,6 +3,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./tuning.css";
+import "./mobile-header-fix.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://wedontcarecars.com"),
