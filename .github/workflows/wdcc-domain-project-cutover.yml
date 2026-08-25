@@ -1,0 +1,169 @@
+name: WDCC Domain Project Cutover
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-domain-project-cutover.yml'
+
+concurrency:
+  group: wdcc-domain-project-cutover
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_SCOPE: cpxagency
+  TARGET_PROJECT_ID: prj_Ov6OomlySBxvTBf0j5cqcAQHDiPK
+  RELEASE_REF: release/wdcc-screenshot-contract-20260825
+  BACKEND_URL: https://wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require Vercel authority
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Checkout immutable screenshot contract
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application and Vercel CLI
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0
+
+      - name: Verify canonical backend before cutover
+        run: |
+          set -euo pipefail
+          curl -fsS "$BACKEND_URL/api/health?domain-cutover=$GITHUB_RUN_ID" -o /tmp/backend-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/backend-health.json >/dev/null
+          curl -fsS "$BACKEND_URL/api/inventory?domain-cutover=$GITHUB_RUN_ID" -o /tmp/backend-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/backend-inventory.json >/dev/null
+
+      - name: Link actual custom-domain Vercel project
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$TARGET_PROJECT_ID" > .vercel/project.json
+
+      - name: Bind domain project to canonical backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          set_env(){
+            local key="$1" value="$2"
+            if ! printf '%s' "$value" | vercel env update "$key" production --sensitive --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null 2>&1; then
+              vercel env rm "$key" production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null 2>&1 || true
+              printf '%s' "$value" | vercel env add "$key" production --sensitive --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+            fi
+          }
+          set_env WDCC_RUNTIME_ROLE frontend
+          set_env WDCC_DEALER_BACKEND_URL "$BACKEND_URL"
+          set_env WDCC_TRUSTED_ORIGINS 'https://wedontcarecars.com,https://www.wedontcarecars.com,https://dealer.wedontcarecars.com'
+          echo 'WDCC_DOMAIN_BINDINGS=SYNCED'
+
+      - name: Pull target production configuration
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Build exact screenshot-contract release
+        run: |
+          set -euo pipefail
+          grep -q 'screenshotContract' app/Exact2vfDHome.tsx
+          grep -q 'screenshot-contract.css' app/layout.tsx
+          grep -q 'Schedule a test drive' app/Exact2vfDHome.tsx
+          grep -q 'Get pre-approved' app/Exact2vfDHome.tsx
+          grep -q 'Call Sean' app/Exact2vfDHome.tsx
+          npm run build
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Deploy prebuilt to production
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" | tail -n 1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify immutable deployment before domain readback
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$DEPLOY_URL/" -o /tmp/candidate-home.html
+          grep -q 'screenshotContract' /tmp/candidate-home.html
+          grep -q 'Schedule a test drive' /tmp/candidate-home.html
+          grep -q 'Get pre-approved' /tmp/candidate-home.html
+          grep -q 'mobile-action-bar' /tmp/candidate-home.html
+          curl -fsS "$DEPLOY_URL/api/health?verify=$GITHUB_RUN_ID" -o /tmp/candidate-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/candidate-health.json >/dev/null
+          curl -fsS "$DEPLOY_URL/api/inventory?verify=$GITHUB_RUN_ID" -o /tmp/candidate-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/candidate-inventory.json >/dev/null
+          for path in /schedule-test-drive /get-approved /dealer /admin/login; do
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "$DEPLOY_URL$path")"
+            test "$code" = 200
+          done
+
+      - name: Verify live custom domains
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          live_ok=0
+          for i in $(seq 1 30); do
+            home_code="$(curl -sS -L -o /tmp/live-home.html -w '%{http_code}' "https://www.wedontcarecars.com/?release=$GITHUB_RUN_ID" || true)"
+            health_code="$(curl -sS -L -o /tmp/live-health.json -w '%{http_code}' "https://www.wedontcarecars.com/api/health?release=$GITHUB_RUN_ID" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && grep -q 'screenshotContract' /tmp/live-home.html && grep -q 'Schedule a test drive' /tmp/live-home.html && grep -q 'Get pre-approved' /tmp/live-home.html && jq -e '.ok == true and .backend == "healthy"' /tmp/live-health.json >/dev/null 2>&1; then
+              live_ok=1
+              break
+            fi
+            sleep 2
+          done
+          test "$live_ok" = 1
+          curl -fsS "https://www.wedontcarecars.com/api/inventory?release=$GITHUB_RUN_ID" -o /tmp/live-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/live-inventory.json >/dev/null
+          for url in \
+            'https://www.wedontcarecars.com/schedule-test-drive' \
+            'https://www.wedontcarecars.com/get-approved' \
+            'https://dealer.wedontcarecars.com/dealer' \
+            'https://www.wedontcarecars.com/admin/login'; do
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "$url")"
+            test "$code" = 200
+          done
+          apex_code="$(curl -sS -L -o /tmp/apex.html -w '%{http_code}' "https://wedontcarecars.com/?release=$GITHUB_RUN_ID" || true)"
+          echo "apex_code=$apex_code" >> "$GITHUB_OUTPUT"
+          echo 'WDCC_CUSTOM_DOMAIN_CONTRACT=PASS'
+
+      - name: Report successful production cutover
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          APEX_CODE: ${{ steps.live.outputs.apex_code }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC screenshot-contract production PASS ${GITHUB_RUN_ID}" --body "Screenshot-contract release: \`$RELEASE_REF\`\nDomain project: \`$TARGET_PROJECT_ID\`\nProduction deployment: \`$DEPLOY_URL\`\nwww health/inventory/dealer/admin/CTA contract: **PASS**\nApex HTTP: \`${APEX_CODE:-unknown}\`" || true
+
+      - name: Report failed production cutover
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC screenshot-contract production FAIL ${GITHUB_RUN_ID}" --body "The custom-domain cutover gate failed. Candidate: \`${DEPLOY_URL:-not-created}\`. Production claim withheld." || true
