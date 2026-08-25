@@ -4,6 +4,7 @@ import {readRecentAnalyticsEvents,recordAnalyticsEvent} from "../../../lib/analy
 import {recordDeadLetter} from "../../../lib/deadLetter";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {isLikelyBot,rateLimit} from "../../../lib/requestGuard";
+import {resolveSource} from "../../../lib/sourceRegistry";
 
 export const dynamic="force-dynamic";
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
@@ -47,18 +48,19 @@ export async function POST(request:Request){
     const metadata=body?.metadata&&typeof body.metadata==="object"?body.metadata:null;
     if(metadata&&JSON.stringify(metadata).length>8192)return NextResponse.json({ok:false,error:"metadata_too_large"},{status:413});
     eventId=text(body?.eventId??request.headers.get("x-wdcc-event-id"),160);
+    const sourceResolution=resolveSource(body?.source,body?.referralCode);
     const record=await recordAnalyticsEvent({
       tenantId:"wdcc",dedupeKey:eventId?`client:${eventId}`:null,
       event,at:text(body?.at,80)||undefined,
       sessionId:text(body?.sessionId,160)||null,anonymousUserId:text(body?.anonymousUserId,160)||null,
       leadId:text(body?.leadId,160)||null,vehicleId:text(body?.vehicleId,160)||null,
-      source:text(body?.source,120)||null,medium:text(body?.medium,120)||null,
+      source:sourceResolution.canonical||null,medium:text(body?.medium,120)||null,
       campaign:text(body?.campaign,160)||null,content:text(body?.content,160)||null,
       term:text(body?.term,160)||null,clickId:text(body?.clickId,220)||null,
       referralCode:text(body?.referralCode,160)||null,pagePath:text(body?.pagePath??body?.path,300)||null,
       landingPath:text(body?.landingPath,300)||null,referrer:text(body?.referrer,700)||null,
       channel:text(body?.channel,80)||null,cta:text(body?.cta,100)||null,
-      metadata:{...(metadata||{}),...(eventId?{eventId}:{}),botLikely:isLikelyBot(request)}
+      metadata:{...(metadata||{}),...(eventId?{eventId}:{}),botLikely:isLikelyBot(request),sourceResolution:{raw:sourceResolution.raw,label:sourceResolution.label,confidence:sourceResolution.confidence,referralName:sourceResolution.referralName||null}}
     });
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-WDCC-Event-ID":record.id}});
   }catch(error){
