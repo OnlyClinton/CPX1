@@ -1,18 +1,23 @@
 "use client";
 
-import {useMemo,useState} from "react";
+import {DragEvent,useEffect,useMemo,useRef,useState} from "react";
 import styles from "./dealer-editor.module.css";
 
 type Draft={year:string;make:string;model:string;trim:string;mileage:string;stock:string;price:string;down:string;description:string};
+type PhotoItem={id:string;file:File;url:string};
 const initial:Draft={year:"",make:"",model:"",trim:"",mileage:"",stock:"",price:"",down:"",description:""};
 
 export default function DealerEditorPreview(){
   const[step,setStep]=useState(1);
   const[draft,setDraft]=useState(initial);
-  const[photos,setPhotos]=useState<File[]>([]);
-  const[primary,setPrimary]=useState(0);
+  const[photos,setPhotos]=useState<PhotoItem[]>([]);
+  const[primaryId,setPrimaryId]=useState("");
+  const[draggingId,setDraggingId]=useState("");
   const[message,setMessage]=useState("");
   const[complete,setComplete]=useState(false);
+  const urls=useRef<string[]>([]);
+  useEffect(()=>()=>urls.current.forEach(url=>URL.revokeObjectURL(url)),[]);
+
   const set=(key:keyof Draft,value:string)=>setDraft(v=>({...v,[key]:value}));
   const readiness=useMemo(()=>{
     let score=0;
@@ -22,9 +27,28 @@ export default function DealerEditorPreview(){
     if(draft.description.trim().length>=20)score+=20;
     return score;
   },[draft,photos]);
+  const primaryIndex=Math.max(0,photos.findIndex(p=>p.id===primaryId));
   const go=(next:number)=>{setMessage("");if(step===1&&(!draft.year||!draft.make||!draft.model||!draft.mileage)){setMessage("Year, make, model and mileage are required.");return;}if(step===2&&(!draft.price||!draft.down)){setMessage("Cash price and down payment are required for this preview.");return;}if(step===3&&!photos.length){setMessage("Add at least one photo to test the publish-ready path.");return;}if(step===4&&draft.description.trim().length<20){setMessage("Add at least 20 characters of customer-facing description.");return;}setStep(next)};
-  const addPhotos=(files:File[])=>setPhotos(current=>[...current,...files.filter(f=>f.type.startsWith("image/"))].slice(0,30));
-  const removePhoto=(index:number)=>{setPhotos(p=>p.filter((_,i)=>i!==index));setPrimary(0)};
+  const addPhotos=(files:File[])=>{
+    const accepted=files.filter(f=>f.type.startsWith("image/")).slice(0,30-photos.length);
+    if(!accepted.length)return;
+    const next=accepted.map((file,index)=>{const url=URL.createObjectURL(file);urls.current.push(url);return{id:`${Date.now()}-${index}-${file.name}`,file,url}});
+    setPhotos(current=>[...current,...next]);
+    setPrimaryId(current=>current||next[0]?.id||"");
+  };
+  const removePhoto=(id:string)=>{
+    setPhotos(current=>{
+      const removed=current.find(p=>p.id===id);if(removed)URL.revokeObjectURL(removed.url);
+      const next=current.filter(p=>p.id!==id);
+      if(primaryId===id)setPrimaryId(next[0]?.id||"");
+      return next;
+    });
+  };
+  const movePhoto=(fromId:string,toId:string)=>{
+    if(!fromId||fromId===toId)return;
+    setPhotos(current=>{const from=current.findIndex(p=>p.id===fromId),to=current.findIndex(p=>p.id===toId);if(from<0||to<0)return current;const next=[...current];const[moved]=next.splice(from,1);next.splice(to,0,moved);return next});
+  };
+  const dropFiles=(e:DragEvent<HTMLLabelElement>)=>{e.preventDefault();setDraggingId("");addPhotos(Array.from(e.dataTransfer.files||[]))};
 
   if(complete)return <section className={styles.safeComplete}><div>✓</div><h2>PUBLISH PREVIEW PASSED.</h2><p>No vehicle was created or changed. The editor flow reached a publish-ready state entirely in QA safe mode.</p><button onClick={()=>{setComplete(false);setStep(1)}}>TEST AGAIN</button></section>;
 
@@ -36,11 +60,11 @@ export default function DealerEditorPreview(){
 
     {step===2&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 2</span><h2>Pricing</h2></div><small>Clear customer starting numbers.</small></div><div className={styles.fields}><label><span>CASH PRICE *</span><input value={draft.price} onChange={e=>set("price",e.target.value)} inputMode="numeric" placeholder="$24,995"/></label><label><span>DOWN PAYMENT *</span><input value={draft.down} onChange={e=>set("down",e.target.value)} inputMode="numeric" placeholder="$2,000"/></label></div></section>}
 
-    {step===3&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 3</span><h2>Photos</h2></div><small>Camera, upload, primary image and removal.</small></div><div className={styles.photoActions}><label>TAKE PHOTO<input hidden type="file" accept="image/*" capture="environment" onChange={e=>addPhotos(Array.from(e.target.files||[]))}/></label><label>UPLOAD FILES<input hidden type="file" accept="image/*" multiple onChange={e=>addPhotos(Array.from(e.target.files||[]))}/></label></div><label className={styles.drop}>DROP / SELECT VEHICLE PHOTOS<input type="file" hidden accept="image/*" multiple onChange={e=>addPhotos(Array.from(e.target.files||[]))}/><span>JPG · PNG · WEBP · AVIF · up to 30 photos</span></label>{photos.length>0&&<div className={styles.photoGrid}>{photos.map((p,i)=><article key={`${p.name}-${i}`} className={primary===i?styles.primaryPhoto:""}><div><b>{i+1}</b><span>{p.name}</span></div><button type="button" onClick={()=>setPrimary(i)}>SET PRIMARY</button><button type="button" onClick={()=>removePhoto(i)}>REMOVE</button></article>)}</div>}</section>}
+    {step===3&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 3</span><h2>Photos</h2></div><small>Camera, upload, drag/drop, reorder, primary image and removal.</small></div><div className={styles.photoActions}><label>TAKE PHOTO<input hidden type="file" accept="image/*" capture="environment" onChange={e=>addPhotos(Array.from(e.target.files||[]))}/></label><label>UPLOAD FILES<input hidden type="file" accept="image/*" multiple onChange={e=>addPhotos(Array.from(e.target.files||[]))}/></label></div><label className={styles.drop} onDragOver={e=>e.preventDefault()} onDrop={dropFiles}>DROP / SELECT VEHICLE PHOTOS<input type="file" hidden accept="image/*" multiple onChange={e=>addPhotos(Array.from(e.target.files||[]))}/><span>JPG · PNG · WEBP · AVIF · up to 30 photos</span></label>{photos.length>0&&<><div className={styles.photoHint}>DRAG CARDS TO REORDER · FIRST/PRIMARY PHOTO IS THE STOREFRONT HERO</div><div className={styles.photoGrid}>{photos.map((p,i)=><article key={p.id} draggable onDragStart={()=>{setDraggingId(p.id)}} onDragEnd={()=>setDraggingId("")} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();movePhoto(draggingId,p.id);setDraggingId("")}} className={`${primaryId===p.id?styles.primaryPhoto:""} ${draggingId===p.id?styles.dragging:""}`}><img src={p.url} alt={`Preview ${p.file.name}`}/><div className={styles.photoMeta}><b>{i+1}</b><span>{p.file.name}</span>{primaryId===p.id&&<em>PRIMARY</em>}</div><div className={styles.photoButtons}><button type="button" onClick={()=>setPrimaryId(p.id)}>SET PRIMARY</button><button type="button" onClick={()=>removePhoto(p.id)}>REMOVE</button></div></article>)}</div></>}</section>}
 
     {step===4&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 4</span><h2>Details</h2></div><small>Customer-facing condition and equipment notes.</small></div><label className={styles.description}><span>DESCRIPTION *</span><textarea value={draft.description} onChange={e=>set("description",e.target.value)} placeholder="Condition, equipment, features, recent service, and anything the buyer should know."/><small>{draft.description.trim().length}/3000 · minimum 20 for preview readiness</small></label></section>}
 
-    {step===5&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 5</span><h2>Review & Publish</h2></div><small>Server verification would happen here in production.</small></div><div className={styles.review}><div><span>VEHICLE</span><b>{draft.year} {draft.make} {draft.model} {draft.trim}</b></div><div><span>PRICE</span><b>{draft.price} · {draft.down} down</b></div><div><span>MILEAGE</span><b>{draft.mileage}</b></div><div><span>PHOTOS</span><b>{photos.length} · primary #{primary+1}</b></div><div className={styles.reviewWide}><span>DESCRIPTION</span><b>{draft.description}</b></div></div><div className={styles.publishNote}>QA SAFE MODE: the production version will save/read back the draft, checkpoint every photo, enforce server readiness, publish, verify storefront visibility, and preserve the trace ID. This preview intentionally performs none of those writes.</div></section>}
+    {step===5&&<section className={styles.panel}><div className={styles.panelHead}><div><span>STEP 5</span><h2>Review & Publish</h2></div><small>Server verification would happen here in production.</small></div><div className={styles.review}><div><span>VEHICLE</span><b>{draft.year} {draft.make} {draft.model} {draft.trim}</b></div><div><span>PRICE</span><b>{draft.price} · {draft.down} down</b></div><div><span>MILEAGE</span><b>{draft.mileage}</b></div><div><span>PHOTOS</span><b>{photos.length} · primary #{primaryIndex+1}</b></div><div className={styles.reviewWide}><span>DESCRIPTION</span><b>{draft.description}</b></div></div>{photos.length>0&&<div className={styles.reviewPhoto}><img src={photos[primaryIndex]?.url} alt="Primary vehicle preview"/><div><span>PRIMARY STOREFRONT PHOTO</span><b>{photos[primaryIndex]?.file.name}</b></div></div>}<div className={styles.publishNote}>QA SAFE MODE: the production version will save/read back the draft, checkpoint every photo, enforce server readiness, publish, verify storefront visibility, and preserve the trace ID. This preview intentionally performs none of those writes.</div></section>}
 
     {message&&<div className={styles.message}>{message}</div>}
     <footer className={styles.actions}><button type="button" onClick={()=>step>1&&setStep(s=>s-1)} disabled={step===1}>← BACK</button><button type="button" className={styles.draft}>SAVE DRAFT PREVIEW</button>{step<5?<button type="button" className={styles.next} onClick={()=>go(step+1)}>CONTINUE →</button>:<button type="button" className={styles.publish} disabled={readiness<100} onClick={()=>setComplete(true)}>PUBLISH PREVIEW</button>}</footer>
