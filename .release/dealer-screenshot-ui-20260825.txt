@@ -1,0 +1,4 @@
+WDCC dealer screenshot UI release
+base=d1206553a0cf06f1b73c571f6ab56211d25cb2d0
+approved-reference=2026-08-25
+scope=dealer-ui-only
