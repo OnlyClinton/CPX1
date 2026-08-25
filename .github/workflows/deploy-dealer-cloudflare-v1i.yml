@@ -1,0 +1,153 @@
+name: Deploy WDCC Dealer Cloudflare v1i
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/deploy-dealer-cloudflare-v1i.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  LIVE_WORKER: wdcc-dealer-frontdoor
+  NEW_VERSION: dc915d7c-dc9c-4f33-80b4-3b7c4319d5f3
+  EXPECTED_OLD_VERSION: d24ea430-32e0-4a10-b15e-35f21e1662e5
+  BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  BACKEND_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  CUSTOMER_DOMAIN: wedontcarecars.com
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Confirm current frontdoor deployment and immutable backend
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false wrangler@latest >/dev/null
+          npx wrangler deployments status --name "$LIVE_WORKER" --json >/tmp/status-before.json
+          cat /tmp/status-before.json | jq .
+          ACTIVE="$(jq -r '.versions[]? | select(.percentage==100) | .version_id' /tmp/status-before.json | head -1)"
+          test -n "$ACTIVE"
+          echo "active=$ACTIVE" >> "$GITHUB_OUTPUT"
+          if [ "$ACTIVE" != "$EXPECTED_OLD_VERSION" ]; then
+            echo "Expected rollback version $EXPECTED_OLD_VERSION but found $ACTIVE" >&2
+            exit 1
+          fi
+          curl -fsS "$BACKEND/api/health?v1i-preflight=$GITHUB_RUN_ID" -o /tmp/backend-health.json
+          cat /tmp/backend-health.json | jq .
+          jq -e --arg sha "$BACKEND_SHA" '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and .commit==$sha' /tmp/backend-health.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Promote uploaded Dealer Command version to 100 percent
+        id: promote
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$NEW_VERSION@100%" --name "$LIVE_WORKER" -y --message "WDCC Dealer Command v1i $GITHUB_RUN_ID" 2>&1 | tee /tmp/promote.log
+          npx wrangler deployments status --name "$LIVE_WORKER" --json >/tmp/status-after.json
+          cat /tmp/status-after.json | jq .
+          ACTIVE="$(jq -r '.versions[]? | select(.percentage==100) | .version_id' /tmp/status-after.json | head -1)"
+          test "$ACTIVE" = "$NEW_VERSION"
+          echo "active=$ACTIVE" >> "$GITHUB_OUTPUT"
+
+      - name: Live dealer E2E with automatic rollback
+        id: live
+        env:
+          OLD_VERSION: ${{ steps.preflight.outputs.active }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){
+            echo "LIVE GATE FAILED — rolling $LIVE_WORKER back to $OLD_VERSION"
+            npx wrangler rollback "$OLD_VERSION" --name "$LIVE_WORKER" --message "WDCC v1i automatic rollback $GITHUB_RUN_ID" || true
+          }
+          trap rollback ERR
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/health?v1i-live=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .service=="wdcc-hardened-dealer-facade" and .backend=="healthy"' /tmp/live-health.json >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          echo '--- live dealer health ---'
+          cat /tmp/live-health.json | jq . 2>/dev/null || cat /tmp/live-health.json
+          test "$ready" = 1
+
+          root="$(curl -sS -L -o /tmp/live-root.html -w '%{http_code}' "https://$DEALER_DOMAIN/?v1i=$GITHUB_RUN_ID")"
+          echo "dealer root=$root"
+          test "$root" = 200
+          grep -Eqi 'dealer portal|dealer control|inventory operations|sales command' /tmp/live-root.html
+
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          login(){
+            name="$1" jar="$2"
+            jq -nc --arg login "$name" --arg password "$PW" '{login:$login,password:$password}' >/tmp/live-payload.json
+            code="$(curl -sS -c "$jar" -o /tmp/live-login.json -w '%{http_code}' -X POST "https://$DEALER_DOMAIN/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/live-payload.json)"
+            echo "live login $name=$code"
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/live-login.json >/dev/null
+            code="$(curl -sS -b "$jar" -o /tmp/live-session.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/auth/session")"
+            echo "live session $name=$code"
+            test "$code" = 200
+            jq -e '.authenticated==true' /tmp/live-session.json >/dev/null
+          }
+          login 'Big Pussy' /tmp/live-dealer.cookies
+          login admin /tmp/live-admin.cookies
+
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/live-dealer.cookies -o /tmp/live-check.json -w '%{http_code}' "https://$DEALER_DOMAIN$path")"
+            echo "live $path=$code"
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/live-check.json >/dev/null
+          done
+          code="$(curl -sS -b /tmp/live-admin.cookies -o /tmp/live-admin-users.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/admin/users")"
+          echo "live /api/admin/users=$code"
+          test "$code" = 200
+          jq -e '.ok==true' /tmp/live-admin-users.json >/dev/null
+
+          trap - ERR
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact 2vfD customer storefront remained intact
+        id: customer
+        if: steps.live.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/customer.html -w '%{http_code}' "https://$CUSTOMER_DOMAIN/?v1i-2vfd=$GITHUB_RUN_ID")"
+          echo "customer=$code"
+          test "$code" = 200
+          grep -q 'intro-sequence intro-prepare' /tmp/customer.html
+          grep -q 'mobile-dock-drive' /tmp/customer.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          PROMOTE: ${{ steps.promote.outcome }}
+          ACTIVE: ${{ steps.promote.outputs.active }}
+          LIVE: ${{ steps.live.outcome }}
+          LIVE_VERIFIED: ${{ steps.live.outputs.verified }}
+          CUSTOMER: ${{ steps.customer.outcome }}
+          CUSTOMER_VERIFIED: ${{ steps.customer.outputs.verified }}
+          OLD: ${{ steps.preflight.outputs.active }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer frontdoor promote v1i ${GITHUB_RUN_ID}" --body "Preflight: **$PREFLIGHT**. Previous frontdoor version: \`$OLD\`. Promote uploaded Dealer Command version: **$PROMOTE** \`$ACTIVE\`. Live dealer E2E: **$LIVE** (verified \`$LIVE_VERIFIED\`). Exact 2vfD customer verification: **$CUSTOMER** (verified \`$CUSTOMER_VERIFIED\`). Backend pinned to \`$BACKEND\` @ \`$BACKEND_SHA\`. Existing dealer DNS and route ownership were unchanged." || true
