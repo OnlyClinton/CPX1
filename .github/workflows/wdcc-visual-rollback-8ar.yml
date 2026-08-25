@@ -1,0 +1,90 @@
+name: WDCC Visual Rollback Exact 8AR
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/wdcc-visual-rollback-8ar.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-visual-rollback
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  DONOR: wdcc-v32-storefront-dkel7d5n2-cpxagency.vercel.app
+  DONOR_ID: dpl_8ARLPgiW4ZKC9qwQxJrwqc2hrZzX
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Vercel authority
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Pin apex and www to exact 8AR
+        id: alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR" "$APEX" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          vercel alias set "$DONOR" "$WWW" --token="$VERCEL_TOKEN" --scope="$TEAM"
+
+      - name: Verify full cinematic visual contract
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 30); do
+              curl -fsS "https://$host/?intro=1&visual-rollback=${GITHUB_RUN_ID}&try=$i" -o /tmp/live.html || true
+              if grep -q 'intro-sequence intro-reveal' /tmp/live.html \
+                && grep -q 'intro-scene' /tmp/live.html \
+                && grep -q 'intro-smoke smoke-one' /tmp/live.html \
+                && grep -q 'intro-smoke smoke-two' /tmp/live.html \
+                && grep -q 'intro-tagline' /tmp/live.html \
+                && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
+                && grep -q 'wdcc-hero-v2.webp' /tmp/live.html \
+                && grep -q 'Tampa Bay · Drive today' /tmp/live.html \
+                && grep -q 'featured-carousel' /tmp/live.html \
+                && grep -q 'Schedule a test drive' /tmp/live.html; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            test "$ok" = 1
+
+            curl -fsS -D /tmp/hero.headers "https://$host/wdcc-hero-v2.webp?visual-rollback=${GITHUB_RUN_ID}" -o /tmp/hero.webp
+            HERO_SIZE="$(wc -c < /tmp/hero.webp)"
+            HERO_MIME="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"",$0);print $2;exit}' /tmp/hero.headers)"
+            test "$HERO_MIME" = image/webp
+            test "$HERO_SIZE" -gt 10000
+            echo "$host hero_size=$HERO_SIZE mime=$HERO_MIME sha256=$(sha256sum /tmp/hero.webp | awk '{print $1}')"
+          done
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report exact 8AR visual rollback
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALIAS: ${{ steps.alias.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --title "WDCC exact 8AR visual rollback ${GITHUB_RUN_ID}" \
+            --body "Apex/www alias rollback to exact 8AR: **$ALIAS**. Full cinematic markers + hero asset verification: **$VERIFY** (verified \`$VERIFIED\`). Donor: \`$DONOR\` (\`$DONOR_ID\`). Dealer/admin/backend/DNS were not changed." || true
