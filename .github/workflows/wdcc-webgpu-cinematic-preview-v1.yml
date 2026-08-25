@@ -1,0 +1,122 @@
+name: WDCC WEBGPU CINEMATIC PREVIEW V1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-webgpu-cinematic-preview-v1.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-webgpu-cinematic-preview-v1
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CINEMATIC_BRANCH: wdcc-webgpu-cinematic-v1
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout cinematic branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CINEMATIC_BRANCH }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Refresh npm lockfile for Three + GSAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts
+          git config user.name 'wdcc-ci'
+          git config user.email 'wdcc-ci@users.noreply.github.com'
+          if ! git diff --quiet -- package-lock.json; then
+            git add package-lock.json
+            git commit -m 'build: lock WebGPU cinematic dependencies'
+            git push origin HEAD:${CINEMATIC_BRANCH}
+          fi
+
+      - name: Clean install
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Static cinematic contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'three/webgpu' app/WdccCinematicIntro.jsx
+          grep -q 'import("gsap")' app/WdccCinematicIntro.jsx
+          grep -q 'WebGPURenderer' app/WdccCinematicIntro.jsx
+          grep -q 'webgl2-fallback' app/WdccCinematicIntro.jsx
+          grep -q '/wdcc-hero-v2.webp' app/WdccCinematicIntro.jsx
+          grep -q '/wdcc-logo-transparent.webp' app/WdccCinematicIntro.jsx
+          grep -q 'WdccCinematicIntro' app/WebGpuHome.jsx
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Link storefront project
+        shell: bash
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
+
+      - name: Build Vercel preview
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
+
+      - name: Deploy preview
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency | tail -1 | tr -d '\r')"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "WEBGPU_PREVIEW_URL=$URL"
+
+      - name: Verify preview route and assets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='${{ steps.deploy.outputs.url }}'
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS -L -o /tmp/root.html -w '%{http_code}' "$URL/?webgpu_preview=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            if [ "$code" = 200 ]; then break; fi
+            sleep 2
+          done
+          test "$code" = 200
+          grep -q 'wdcc-webgpu-shell' /tmp/root.html || true
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$URL/wdcc-hero-v2.webp")" = 200
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$URL/wdcc-logo-transparent.webp")" = 200
+          echo 'WDCC_WEBGPU_CINEMATIC_PREVIEW=PASS'
