@@ -60,13 +60,13 @@ jobs:
           vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
           vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
 
-      - name: Upload and prove READY deployment
+      - name: Upload archived build and prove READY deployment
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
           set +e
-          output="$(vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          output="$(vercel deploy --prebuilt --prod --archive=tgz --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
           rc=$?
           set -e
           printf '%s\n' "$output"
