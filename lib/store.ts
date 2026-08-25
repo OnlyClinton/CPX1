@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import {get,list,put} from "@vercel/blob";
+import {blobAuthority} from "./wdccAuthority";
 
 export type User={
   id:string;
@@ -28,7 +29,7 @@ export type State={
 
 const PATH="private/state/platform-v3.json";
 const BACKUP_PREFIX="private/state/backups/platform-v3-r";
-const opt=()=>process.env.BLOB_READ_WRITE_TOKEN?{token:process.env.BLOB_READ_WRITE_TOKEN}:{};
+const opt=()=>blobAuthority().options as any;
 
 function normalizeState(value:any):State{
   return {
@@ -55,6 +56,11 @@ async function readBlobState(pathname:string):Promise<State>{
 }
 
 export async function readState():Promise<State>{
+  const authority=blobAuthority();
+  if(authority.mode==="missing"){
+    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:false,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    throw Error("STATE_AUTHORITY_MISSING");
+  }
   try{
     return await readBlobState(PATH);
   }catch(primaryError){
@@ -64,19 +70,21 @@ export async function readState():Promise<State>{
       for(const blob of backups.slice(0,20)){
         try{
           const recovered=await readBlobState(blob.pathname);
-          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,primaryError:primaryError instanceof Error?primaryError.message:"unknown"}));
+          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,authority:authority.mode,primaryError:primaryError instanceof Error?primaryError.message:"unknown"}));
           return recovered;
         }catch{}
       }
     }catch(backupError){
-      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({error:backupError instanceof Error?backupError.message:"unknown"}));
+      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({authority:authority.mode,error:backupError instanceof Error?backupError.message:"unknown"}));
     }
-    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,error:primaryError instanceof Error?primaryError.message:"unknown",hasBlobToken:Boolean(process.env.BLOB_READ_WRITE_TOKEN)}));
+    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,authority:authority.mode,error:primaryError instanceof Error?primaryError.message:"unknown"}));
     throw Error("STATE_READ_FAILED");
   }
 }
 
 export async function writeState(input:State){
+  const authority=blobAuthority();
+  if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   const state=normalizeState(input);
   state.revision=Number(state.revision||0)+1;
   state.updatedAt=new Date().toISOString();
