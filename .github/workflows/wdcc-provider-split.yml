@@ -1,0 +1,286 @@
+name: WDCC PROVIDER SPLIT
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'wrangler.jsonc'
+      - '.github/workflows/wdcc-provider-split.yml'
+
+concurrency:
+  group: wdcc-provider-split
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  VERCEL_SCOPE: cpxagency
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  RAILWAY_ENVIRONMENT: production
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Provider portability contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'WDCC_RUNTIME_ROLE' lib/dealerRuntime.ts
+          grep -q 'canonicalRuntime' app/api/health/route.ts
+          grep -q 'same-origin mutations' lib/dealerProxy.ts
+          test -f wrangler.jsonc
+          npm ci
+          npm run build
+          echo 'WDCC_PROVIDER_PORTABILITY=PASS'
+
+  railway-backend:
+    needs: preflight
+    runs-on: ubuntu-latest
+    outputs:
+      backend_url: ${{ steps.backend.outputs.url }}
+      deployed: ${{ steps.backend.outputs.deployed }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+      RAILWAY_SERVICE_SECRET: ${{ secrets.RAILWAY_SERVICE }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check backend deployment authority
+        id: creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${RAILWAY_TOKEN:-}" ] || missing+=(RAILWAY_TOKEN)
+          [ -n "${RAILWAY_PROJECT_ID:-}" ] || missing+=(RAILWAY_PROJECT_ID)
+          [ -n "${VERCEL_TOKEN:-}" ] || missing+=(VERCEL_TOKEN)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            printf 'Railway backend staged but not deployed; missing GitHub secrets: %s\n' "${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install deployment CLIs
+        if: steps.creds.outputs.ready == 'true'
+        run: npm install --global @railway/cli vercel@59.3.0
+
+      - name: Pull canonical state authority from Vercel
+        if: steps.creds.outputs.ready == 'true'
+        id: authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-phoenix/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$PHOENIX_PROJECT" > /tmp/wdcc-phoenix/.vercel/project.json
+          (cd /tmp/wdcc-phoenix && vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
+
+          read_value(){
+            local key="$1" line value
+            line="$(grep -m1 "^${key}=" /tmp/phoenix.env || true)"
+            value="${line#*=}"
+            value="${value#\"}"
+            value="${value%\"}"
+            printf '%s' "$value"
+          }
+
+          SESSION_VALUE="$(read_value SESSION_SECRET)"
+          BLOB_VALUE="$(read_value BLOB_READ_WRITE_TOKEN)"
+          [ -n "$SESSION_VALUE" ] || { echo 'SESSION_SECRET is missing from canonical Phoenix authority' >&2; exit 78; }
+          [ -n "$BLOB_VALUE" ] || { echo 'A portable BLOB_READ_WRITE_TOKEN is required before Railway can become canonical backend' >&2; exit 78; }
+
+          printf '%s' "$SESSION_VALUE" > /tmp/session.secret
+          printf '%s' "$BLOB_VALUE" > /tmp/blob.secret
+          chmod 600 /tmp/session.secret /tmp/blob.secret
+          echo 'authority=portable' >> "$GITHUB_OUTPUT"
+
+      - name: Stage Railway runtime variables
+        if: steps.creds.outputs.ready == 'true' && steps.authority.outputs.authority == 'portable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
+          railway variable set WDCC_RUNTIME_ROLE=backend NEXT_TELEMETRY_DISABLED=1 \
+            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+          cat /tmp/session.secret | railway variable set SESSION_SECRET --stdin \
+            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+          cat /tmp/blob.secret | railway variable set BLOB_READ_WRITE_TOKEN --stdin \
+            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+          rm -f /tmp/session.secret /tmp/blob.secret /tmp/phoenix.env
+
+      - name: Deploy Railway backend
+        if: steps.creds.outputs.ready == 'true' && steps.authority.outputs.authority == 'portable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
+          railway up --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --ci
+
+      - name: Resolve Railway backend URL
+        if: steps.creds.outputs.ready == 'true' && steps.authority.outputs.authority == 'portable'
+        id: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
+          railway domain list --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domains.json || true
+          DOMAIN="$(jq -r '.. | strings | select(test("(^https://)?[^/]+\\.up\\.railway\\.app/?$"))' /tmp/railway-domains.json 2>/dev/null | head -1 | sed 's#^https://##;s#/$##')"
+          if [ -z "$DOMAIN" ]; then
+            railway domain --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domain-created.json
+            DOMAIN="$(jq -r '.. | strings | select(test("(^https://)?[^/]+\\.up\\.railway\\.app/?$"))' /tmp/railway-domain-created.json 2>/dev/null | head -1 | sed 's#^https://##;s#/$##')"
+          fi
+          [ -n "$DOMAIN" ] || { echo 'Unable to resolve Railway service domain' >&2; exit 1; }
+          URL="https://$DOMAIN"
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$URL/api/health?provider-cutover=$GITHUB_RUN_ID" -o /tmp/backend-health.json; then
+              if jq -e '.ok == true and .state == "readable" and .backend == "local"' /tmp/backend-health.json >/dev/null; then
+                break
+              fi
+            fi
+            sleep 2
+          done
+          jq -e '.ok == true and .state == "readable" and .backend == "local"' /tmp/backend-health.json >/dev/null
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "Railway backend healthy: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  cloudflare-storefront:
+    needs: [preflight, railway-backend]
+    runs-on: ubuntu-latest
+    outputs:
+      storefront_url: ${{ steps.verify.outputs.url }}
+      deployed: ${{ steps.verify.outputs.deployed }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_WORKERS_URL: ${{ secrets.CLOUDFLARE_WORKERS_URL }}
+      BACKEND_URL: ${{ needs.railway-backend.outputs.backend_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Check storefront deployment authority
+        id: creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || missing+=(CLOUDFLARE_API_TOKEN)
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || missing+=(CLOUDFLARE_ACCOUNT_ID)
+          [ -n "${BACKEND_URL:-}" ] || missing+=(HEALTHY_RAILWAY_BACKEND)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            printf 'Cloudflare storefront staged but not deployed; missing: %s\n' "${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cloudflare adapter without mutating lockfile
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+
+      - name: Bind exact healthy Railway backend
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const path='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(path,'utf8'));
+          cfg.vars=cfg.vars||{};
+          cfg.vars.WDCC_RUNTIME_ROLE='frontend';
+          cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND_URL;
+          fs.writeFileSync(path,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+
+      - name: Build Cloudflare Worker
+        if: steps.creds.outputs.ready == 'true'
+        run: npx opennextjs-cloudflare build
+
+      - name: Deploy Cloudflare storefront
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy 2>&1 | tee /tmp/cloudflare-deploy.log
+
+      - name: Verify Cloudflare storefront against Railway
+        if: steps.creds.outputs.ready == 'true'
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="${CLOUDFLARE_WORKERS_URL:-}"
+          if [ -z "$URL" ]; then
+            URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/cloudflare-deploy.log | tail -1 || true)"
+          fi
+          URL="${URL%/}"
+          [ -n "$URL" ] || { echo 'Cloudflare deployed but workers.dev URL could not be resolved; set CLOUDFLARE_WORKERS_URL once' >&2; exit 1; }
+
+          curl -fsS "$URL/api/health?provider-cutover=$GITHUB_RUN_ID" -o /tmp/cf-health.json
+          jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null
+          content_type="$(curl -fsSI "$URL/api/inventory?provider-cutover=$GITHUB_RUN_ID" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
+          case "$content_type" in application/json*) ;; *) echo "Inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "Cloudflare storefront healthy: $URL -> $BACKEND_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  release-gate:
+    needs: [railway-backend, cloudflare-storefront]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Provider split status
+        shell: bash
+        env:
+          BACKEND_DEPLOYED: ${{ needs.railway-backend.outputs.deployed }}
+          BACKEND_URL: ${{ needs.railway-backend.outputs.backend_url }}
+          FRONTEND_DEPLOYED: ${{ needs.cloudflare-storefront.outputs.deployed }}
+          FRONTEND_URL: ${{ needs.cloudflare-storefront.outputs.storefront_url }}
+        run: |
+          {
+            echo '# WDCC provider split'
+            echo
+            echo "Railway backend deployed: ${BACKEND_DEPLOYED:-false}"
+            echo "Railway backend: ${BACKEND_URL:-not-created}"
+            echo "Cloudflare storefront deployed: ${FRONTEND_DEPLOYED:-false}"
+            echo "Cloudflare storefront: ${FRONTEND_URL:-not-created}"
+            echo
+            if [ "${BACKEND_DEPLOYED:-}" = true ] && [ "${FRONTEND_DEPLOYED:-}" = true ]; then
+              echo '**STAGING PROVIDER SPLIT READY. Production DNS remains unchanged.**'
+            else
+              echo '**PROVIDER AUTOMATION STAGED. Production DNS remains unchanged.**'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
