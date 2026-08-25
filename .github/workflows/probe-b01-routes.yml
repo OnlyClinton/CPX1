@@ -1,0 +1,32 @@
+name: Probe WDCC B01 Routes
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-b01-routes.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DEPLOYMENT_ID: dpl_xJCdtkRLYRGe7tuZxgBLHTgU7bPi
+    steps:
+      - name: List immutable deployment API/source paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments/$DEPLOYMENT_ID/files?teamId=$TEAM_ID" >/tmp/files.json
+          node <<'NODE'
+          const fs=require('fs'); const tree=JSON.parse(fs.readFileSync('/tmp/files.json','utf8'));
+          const paths=[];
+          function walk(nodes,p=''){for(const n of nodes||[]){const x=p?`${p}/${n.name}`:n.name;if(n.type==='directory')walk(n.children||[],x);else paths.push(x)}}
+          walk(tree);
+          const keep=paths.filter(p=>/(^|\/)(app\/api|api\/|route\.|auth|lead|inventory|state|backup|admin|crm)/i.test(p));
+          console.log('B01_ROUTE_FILE_COUNT='+keep.length);
+          for(const p of keep.slice(0,500))console.log(p);
+          NODE
