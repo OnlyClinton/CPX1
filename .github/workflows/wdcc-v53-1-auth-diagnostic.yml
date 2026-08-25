@@ -1,0 +1,99 @@
+name: WDCC V53.1 Auth Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v53-1-auth-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  SOURCE_SHA: 05eb60918e7bf305afbeb18303049f42d243e7a4
+  STAGE: https://wdcc-v53-1-staging.clico-global.workers.dev
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install canonical state runtime
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Create diagnostic identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-auth-diag-user.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import {get,head,put} from '@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;const a=await head(path),r=await get(path,{access:'private',useCache:false}),chunks=[];for await(const x of r.stream)chunks.push(x);const raw=Buffer.concat(chunks),s=JSON.parse(raw.toString('utf8')),salt=crypto.randomBytes(24),password=`Diag-${crypto.randomBytes(18).toString('base64url')}!`,digest=crypto.scryptSync(password,salt,64),id=`diag-${crypto.randomUUID()}`,email=`diag-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`Auth Diagnostic ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`});s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.auth_diag.create',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:a.etag});fs.writeFileSync('/tmp/authdiag.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nRUN_TAG=${run}\n`);console.log(JSON.stringify({ok:true,id,email}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-auth-diag-user.mjs
+          set -a; . /tmp/authdiag.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+      - name: Trace staging auth and protected feeds
+        id: trace
+        shell: bash
+        run: |
+          set -uo pipefail
+          set -a; . /tmp/authdiag.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/diag.cookies -D /tmp/login.headers -o /tmp/login.json -w '%{http_code}' -H "Origin: $STAGE" -H 'content-type: application/json' -X POST "$STAGE/api/auth/login" --data "$payload" || true)"
+          echo "LOGIN=$LOGIN"; cat /tmp/login.json; echo
+          echo 'SET_COOKIE:'; grep -i '^set-cookie:' /tmp/login.headers | sed 's/=.*/=<redacted>/' || true
+          for name in session dashboard leads inventory; do
+            case "$name" in session) path=/api/auth/session;; dashboard) path=/api/crm/dashboard;; leads) path=/api/leads;; inventory) path=/api/inventory;; esac
+            code="$(curl -sS -b /tmp/diag.cookies -o "/tmp/$name.json" -w '%{http_code}' "$STAGE$path" || true)"
+            echo "${name^^}=$code"; head -c 800 "/tmp/$name.json"; echo
+            echo "$name=$code" >> "$GITHUB_OUTPUT"
+          done
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+          test "$LOGIN" = 200
+      - name: Cleanup diagnostic identity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f /tmp/authdiag.env ] || exit 0
+          set -a; . /tmp/authdiag.env; set +a; export QA_ID RUN_TAG
+          cat > .wdcc-auth-diag-clean.mjs <<'NODE'
+          import crypto from 'node:crypto';import {get,head,put} from '@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG,a=await head(path),r=await get(path,{access:'private',useCache:false}),chunks=[];for await(const x of r.stream)chunks.push(x);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));s.users=(s.users||[]).filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.auth_diag.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:a.etag});console.log(JSON.stringify({ok:true}));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-auth-diag-clean.mjs
+      - name: Report diagnostic
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOGIN: ${{ steps.trace.outputs.login }}
+          SESSION: ${{ steps.trace.outputs.session }}
+          DASHBOARD: ${{ steps.trace.outputs.dashboard }}
+          LEADS: ${{ steps.trace.outputs.leads }}
+          INVENTORY: ${{ steps.trace.outputs.inventory }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V53.1 auth diagnostic ${GITHUB_RUN_ID}" --body "Exact source: \`$SOURCE_SHA\`
+          Login: \`${LOGIN:-not-run}\`
+          Session: \`${SESSION:-not-run}\`
+          CRM dashboard: \`${DASHBOARD:-not-run}\`
+          Leads: \`${LEADS:-not-run}\`
+          Inventory: \`${INVENTORY:-not-run}\`
+
+          No Cloudflare production version upload or traffic mutation is performed by this diagnostic." || true
