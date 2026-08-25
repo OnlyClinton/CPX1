@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import {get,put} from "@vercel/blob";
+import {get,list,put} from "@vercel/blob";
 
 export type User={
   id:string;
@@ -27,6 +27,7 @@ export type State={
 };
 
 const PATH="private/state/platform-v3.json";
+const BACKUP_PREFIX="private/state/backups/platform-v3-r";
 const opt=()=>process.env.BLOB_READ_WRITE_TOKEN?{token:process.env.BLOB_READ_WRITE_TOKEN}:{};
 
 function normalizeState(value:any):State{
@@ -41,12 +42,38 @@ function normalizeState(value:any):State{
   };
 }
 
-export async function readState():Promise<State>{
-  const response=await get(PATH,{access:"private",useCache:false,...opt()});
-  if(!response||response.statusCode!==200||!response.stream)throw Error("STATE_READ_FAILED");
+async function readBlobState(pathname:string):Promise<State>{
+  const response=await get(pathname,{access:"private",useCache:false,...opt()});
+  if(!response||response.statusCode!==200||!response.stream)throw Error(`STATE_BLOB_READ_FAILED:${pathname}`);
   const chunks:Uint8Array[]=[];
   for await(const chunk of response.stream as any)chunks.push(chunk);
-  return normalizeState(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+  const raw=Buffer.concat(chunks).toString("utf8");
+  const parsed=JSON.parse(raw);
+  const state=normalizeState(parsed);
+  if(!Number.isFinite(state.revision))throw Error(`STATE_BLOB_INVALID:${pathname}`);
+  return state;
+}
+
+export async function readState():Promise<State>{
+  try{
+    return await readBlobState(PATH);
+  }catch(primaryError){
+    try{
+      const result=await list({prefix:BACKUP_PREFIX,limit:1000,...opt()});
+      const backups=[...result.blobs].sort((a:any,b:any)=>String(b.uploadedAt||"").localeCompare(String(a.uploadedAt||"")));
+      for(const blob of backups.slice(0,20)){
+        try{
+          const recovered=await readBlobState(blob.pathname);
+          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,primaryError:primaryError instanceof Error?primaryError.message:"unknown"}));
+          return recovered;
+        }catch{}
+      }
+    }catch(backupError){
+      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({error:backupError instanceof Error?backupError.message:"unknown"}));
+    }
+    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,error:primaryError instanceof Error?primaryError.message:"unknown",hasBlobToken:Boolean(process.env.BLOB_READ_WRITE_TOKEN)}));
+    throw Error("STATE_READ_FAILED");
+  }
 }
 
 export async function writeState(input:State){
@@ -56,7 +83,6 @@ export async function writeState(input:State){
   const body=JSON.stringify(state,null,2)+"\n";
   const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
 
-  // Every mutation gets an immutable restore point before the canonical ledger moves.
   await put(backupPath,body,{
     access:"private",
     addRandomSuffix:false,
