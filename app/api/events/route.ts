@@ -3,6 +3,7 @@ import {currentUser} from "../../../lib/auth";
 import {readRecentAnalyticsEvents,recordAnalyticsEvent} from "../../../lib/analyticsAudit";
 import {recordDeadLetter} from "../../../lib/deadLetter";
 import {proxyDealer} from "../../../lib/dealerProxy";
+import {isLikelyBot,rateLimit} from "../../../lib/requestGuard";
 
 export const dynamic="force-dynamic";
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
@@ -33,6 +34,8 @@ export async function GET(request:Request){
 
 export async function POST(request:Request){
   if(!canonicalRuntime(request))return proxyDealer(request,"/api/events");
+  const gate=rateLimit(request,"events",180,60_000);
+  if(!gate.allowed)return NextResponse.json({ok:false,error:"rate_limited"},{status:429,headers:{"Retry-After":String(gate.retryAfterSeconds),"Cache-Control":"no-store"}});
   let body:any={};
   let event="";
   let eventId="";
@@ -55,7 +58,7 @@ export async function POST(request:Request){
       referralCode:text(body?.referralCode,160)||null,pagePath:text(body?.pagePath??body?.path,300)||null,
       landingPath:text(body?.landingPath,300)||null,referrer:text(body?.referrer,700)||null,
       channel:text(body?.channel,80)||null,cta:text(body?.cta,100)||null,
-      metadata:{...(metadata||{}),...(eventId?{eventId}:{})}
+      metadata:{...(metadata||{}),...(eventId?{eventId}:{}),botLikely:isLikelyBot(request)}
     });
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-WDCC-Event-ID":record.id}});
   }catch(error){
