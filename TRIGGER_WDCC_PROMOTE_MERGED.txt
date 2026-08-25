@@ -1,0 +1,2 @@
+promote=https://wdcc-v32-storefront-517ddd9cb-cpxagency.vercel.app
+source=da9517c2560ecf2d0cdb22ec12c5f9b7da73100a
