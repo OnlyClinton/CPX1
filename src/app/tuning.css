@@ -1,0 +1,114 @@
+/* WDCC 2vfD conversion/contrast tuning — user-approved visual refinement. */
+
+/* Make the primary brand mark read immediately. */
+.home-header-shell .site-header {
+  min-height: 92px;
+}
+.home-header-shell .site-header .brand-logo {
+  width: 104px;
+  height: 104px;
+  min-width: 104px;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.72)) drop-shadow(0 0 12px rgba(255,255,255,.08));
+}
+
+/* Reduce duplicate conversion chrome in the header and hero. */
+.header-cta,
+.hero-cta-contact {
+  display: none !important;
+}
+.hero-actions {
+  gap: 12px;
+}
+.hero-actions .btn {
+  min-width: 220px;
+  min-height: 52px;
+  padding-inline: 24px;
+}
+
+/* Darker cinematic field while keeping the car itself readable. */
+.hero::after {
+  background:
+    linear-gradient(90deg, #010407 0%, #010407 41%, rgba(1,4,7,.95) 50%, rgba(1,4,7,.30) 70%, rgba(1,4,7,.62) 100%),
+    radial-gradient(ellipse at 76% 52%, rgba(0,0,0,0) 0 26%, rgba(0,0,0,.16) 48%, rgba(0,0,0,.62) 100%);
+}
+.hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  box-shadow: inset 0 0 170px 48px rgba(0,0,0,.58);
+}
+.hero-car-glow {
+  right: 7%;
+  bottom: 13%;
+  width: 43%;
+  height: 22%;
+  background: rgba(237,17,25,.17);
+  filter: blur(68px);
+}
+.hero h1 {
+  text-shadow: 0 5px 24px rgba(0,0,0,.82), 0 1px 1px rgba(0,0,0,.9);
+}
+.hero-lead {
+  color: #f7f9fb;
+  text-shadow: 0 3px 14px rgba(0,0,0,.92);
+}
+
+@media (max-width: 760px) {
+  .home-header-shell .site-header {
+    min-height: 94px;
+  }
+  .home-header-shell .site-header .brand-logo {
+    width: 112px;
+    height: 112px;
+    min-width: 112px;
+  }
+  .home-header-shell .main-nav {
+    top: 94px;
+  }
+
+  .hero {
+    min-height: 680px;
+    padding-top: 54px;
+    background-position: 69% center;
+  }
+  .hero::after {
+    background:
+      linear-gradient(180deg, rgba(1,4,7,.96) 0%, rgba(1,4,7,.84) 43%, rgba(1,4,7,.38) 69%, rgba(1,4,7,.68) 100%),
+      radial-gradient(ellipse at 68% 55%, rgba(0,0,0,0) 0 24%, rgba(0,0,0,.20) 47%, rgba(0,0,0,.62) 100%);
+  }
+  .hero::before {
+    box-shadow: inset 0 0 120px 30px rgba(0,0,0,.56);
+  }
+  .hero-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .hero-actions .btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 54px;
+  }
+
+  /* Two persistent actions instead of three: Test Drive + Call Sean. */
+  .mobile-action-bar {
+    grid-template-columns: 1.18fr .82fr !important;
+    gap: 8px !important;
+  }
+  .mobile-action-bar .mobile-dock-qualify {
+    display: none !important;
+  }
+  .mobile-action-bar a {
+    font-size: 9px !important;
+    letter-spacing: .04em !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .home-header-shell .site-header .brand-logo {
+    width: 102px;
+    height: 102px;
+    min-width: 102px;
+  }
+}
