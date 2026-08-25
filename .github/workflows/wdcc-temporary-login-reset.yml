@@ -11,6 +11,7 @@ permissions:
 
 env:
   DEALER_URL: https://dealer.wedontcarecars.com
+  DEALER_DOMAIN: dealer.wedontcarecars.com
   CANDIDATE_URL: https://wdcc-dealer-portal-n9u8asox5-cpxagency.vercel.app
   ROLLBACK_URL: https://wdcc-dealer-portal-haaxzbb5n-cpxagency.vercel.app
 
@@ -24,17 +25,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Promote immutable pre-regression dealer artifact
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Point dealer domain at immutable pre-regression artifact without deploying
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          npm install --global vercel@59.3.0 >/dev/null
-          vercel promote "$CANDIDATE_URL" --yes --scope cpxagency --token "$VERCEL_TOKEN"
+          vercel alias set "$CANDIDATE_URL" "$DEALER_DOMAIN" --scope cpxagency --token "$VERCEL_TOKEN"
       - name: Confirm dealer alias moved
         run: |
           set -euo pipefail
-          for n in 1 2 3 4 5 6; do
+          for n in 1 2 3 4 5 6 7 8; do
             code="$(curl -sS -o /tmp/dealer.html -w '%{http_code}' "$DEALER_URL/dealer/login" || true)"
             if [ "$code" = 200 ] && grep -qi 'Dealer Sign In' /tmp/dealer.html; then exit 0; fi
             sleep 2
@@ -54,11 +56,10 @@ jobs:
           code="$(curl -sS -o /tmp/storefront.html -w '%{http_code}' https://wedontcarecars.com/)"
           test "$code" = 200
           grep -qi "WE DON.T CARE\|We Don.t Care" /tmp/storefront.html
-      - name: Roll back dealer only if any recovery gate failed
+      - name: Roll back dealer alias if any recovery gate failed
         if: ${{ failure() }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          npm install --global vercel@59.3.0 >/dev/null
-          vercel promote "$ROLLBACK_URL" --yes --scope cpxagency --token "$VERCEL_TOKEN"
+          vercel alias set "$ROLLBACK_URL" "$DEALER_DOMAIN" --scope cpxagency --token "$VERCEL_TOKEN"
