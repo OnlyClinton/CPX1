@@ -1,0 +1,314 @@
+name: WDCC CLOUDFLARE 2VFD LIVE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-2vfd-live.yml'
+
+concurrency:
+  group: wdcc-cloudflare-2vfd-live
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  BACKEND: https://wdcc-cpx-launch-cpxagency.vercel.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout exact 2vfD live branch
+        uses: actions/checkout@v4
+        with:
+          ref: wdcc-2vfd-live-cloudflare
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Prove locked visual donor identity
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const p=require('./package.json'); if(p.name!=='wdcc-storefront'||p.version!=='1.0.0'||p.dependencies.next!=='16.2.6') process.exit(1)"
+          test "$(wc -c < app/globals.css)" -gt 90000
+          grep -q 'wdcc-logo-handoff' app/globals.css
+          grep -q 'wdcc-hero-v2.webp' app/data.ts
+          grep -q 'wdcc-logo-transparent.webp' app/components/WDCCApp.tsx
+          echo '2VFD_VISUAL_DONOR=LOCKED'
+
+      - name: Install exact donor and compatible Cloudflare adapter
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+
+      - name: Add live backend facades without changing visual CSS
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/api/inventory app/api/leads app/api/media app/api/events app/api/health
+
+          cat > app/api/inventory/route.ts <<'EOF'
+          const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+          const qa=(item:any)=>{
+            const make=String(item?.make||"").trim().toUpperCase();
+            const model=String(item?.model||"").trim().toUpperCase();
+            const stock=String(item?.stock||"").trim().toUpperCase();
+            const description=String(item?.description||"").toLowerCase();
+            const badges=(Array.isArray(item?.badges)?item.badges:[]).map((x:any)=>String(x).toUpperCase());
+            return stock.startsWith("QA-")||stock.startsWith("R36TEST-")||make==="QA TEST"||model==="LOAD CAR"||badges.includes("R36-TEST")||description.includes("qa only")||description.includes("automated wdcc");
+          };
+          const eligible=(item:any)=>String(item?.status||"").toLowerCase()==="published"&&Number(item?.year)>1900&&String(item?.make||"").trim()!==""&&String(item?.model||"").trim()!==""&&Number(item?.price)>0&&!qa(item);
+          export const dynamic="force-dynamic";
+          export async function GET(request:Request){
+            try{
+              const source=new URL(request.url);
+              const target=new URL("/api/inventory",BACKEND); target.search=source.search;
+              const upstream=await fetch(target,{headers:{Accept:"application/json","User-Agent":request.headers.get("user-agent")||"wdcc-2vfd-cloudflare"},cache:"no-store",signal:AbortSignal.timeout(12000)});
+              const json=await upstream.json().catch(()=>({}));
+              if(!upstream.ok||json?.ok!==true)return Response.json({ok:false,items:[],error:json?.error||`inventory_${upstream.status}`},{status:upstream.status||503,headers:{"Cache-Control":"no-store"}});
+              const sourceItems=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
+              const items=sourceItems.filter(eligible);
+              return Response.json({ok:true,count:items.length,items},{headers:{"Cache-Control":"public,max-age=0,must-revalidate","X-WDCC-Public-Inventory-Filter":"strict-2vfd"}});
+            }catch(error){return Response.json({ok:false,items:[],error:error instanceof Error?error.message:"inventory_backend_unavailable"},{status:503,headers:{"Cache-Control":"no-store"}});}
+          }
+          EOF
+
+          cat > app/api/leads/route.ts <<'EOF'
+          const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+          export const dynamic="force-dynamic";
+          export async function POST(request:Request){
+            try{
+              const target=new URL("/api/leads",BACKEND);
+              const headers=new Headers({"Content-Type":request.headers.get("content-type")||"application/json",Accept:"application/json","User-Agent":request.headers.get("user-agent")||"wdcc-2vfd-cloudflare"});
+              const key=request.headers.get("idempotency-key"); if(key)headers.set("Idempotency-Key",key);
+              const upstream=await fetch(target,{method:"POST",headers,body:await request.arrayBuffer(),cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(15000)});
+              const outHeaders=new Headers({"Cache-Control":"no-store","Content-Type":upstream.headers.get("content-type")||"application/json","X-WDCC-Lead-Backend":"canonical-vercel"});
+              return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:outHeaders});
+            }catch(error){return Response.json({ok:false,persisted:false,error:error instanceof Error?error.message:"lead_backend_unavailable"},{status:503,headers:{"Cache-Control":"no-store"}});}
+          }
+          EOF
+
+          cat > app/api/media/route.ts <<'EOF'
+          const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+          export const dynamic="force-dynamic";
+          export async function GET(request:Request){
+            const source=new URL(request.url); const p=source.searchParams.get("p")||"";
+            if(!p.startsWith("media/wdcc/"))return new Response("Not found",{status:404});
+            try{
+              const target=new URL("/api/media",BACKEND); target.searchParams.set("p",p);
+              const upstream=await fetch(target,{cache:"no-store",signal:AbortSignal.timeout(12000)});
+              return new Response(upstream.body,{status:upstream.status,headers:{"Content-Type":upstream.headers.get("content-type")||"application/octet-stream","Cache-Control":upstream.ok?"public,max-age=3600":"no-store"}});
+            }catch{return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});}
+          }
+          EOF
+
+          cat > app/api/events/route.ts <<'EOF'
+          const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+          export const dynamic="force-dynamic";
+          export async function POST(request:Request){
+            try{
+              const upstream=await fetch(`${BACKEND}/api/events`,{method:"POST",headers:{"Content-Type":request.headers.get("content-type")||"application/json","User-Agent":request.headers.get("user-agent")||"wdcc-2vfd-cloudflare"},body:await request.arrayBuffer(),cache:"no-store",signal:AbortSignal.timeout(8000)});
+              return new Response(upstream.body,{status:upstream.status,headers:{"Cache-Control":"no-store"}});
+            }catch{return new Response(null,{status:204,headers:{"Cache-Control":"no-store"}});}
+          }
+          EOF
+
+          cat > app/api/health/route.ts <<'EOF'
+          const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+          export const dynamic="force-dynamic";
+          export async function GET(){
+            try{const r=await fetch(`${BACKEND}/api/health`,{cache:"no-store",signal:AbortSignal.timeout(8000)});const j=await r.json().catch(()=>({}));return Response.json({ok:r.ok&&j?.ok===true,service:"wdcc-2vfd-cloudflare",visualDonor:"2vfD",backend:r.ok?"healthy":"unhealthy",backendRelease:j?.release||null},{status:r.ok?200:503,headers:{"Cache-Control":"no-store"}});}catch{return Response.json({ok:false,service:"wdcc-2vfd-cloudflare",visualDonor:"2vfD",backend:"unavailable"},{status:503,headers:{"Cache-Control":"no-store"}});}
+          }
+          EOF
+
+      - name: Bridge live inventory into exact 2vfD components
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/components/WDCCApp.tsx')
+          s=p.read_text()
+          anchor='export function Logo({ compact = false }: { compact?: boolean }) {'
+          helper=r'''function liveSlug(value: string) {
+            return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-");
+          }
+
+          function normalizeLiveVehicle(item: any): Vehicle | null {
+            const year=Number(item?.year), make=String(item?.make||"").trim(), model=String(item?.model||"").trim();
+            if(!Number.isFinite(year)||!make||!model||Number(item?.price)<=0)return null;
+            const fallback=inventoryVehicles.find(v=>v.year===year&&v.make.toLowerCase()===make.toLowerCase()&&v.model.replace(/[^a-z0-9]/gi,"").toLowerCase()===model.replace(/[^a-z0-9]/gi,"").toLowerCase());
+            const photoPaths=Array.isArray(item?.photoPathnames)?item.photoPathnames.filter((x:any)=>String(x).startsWith("media/wdcc/")):[];
+            const primary=String(item?.primaryPhotoPathname||"");
+            const liveImages=[...(primary&&primary.startsWith("media/wdcc/")?[primary]:[]),...photoPaths.filter((x:any)=>String(x)!==primary)].map((x:any)=>`/api/media?p=${encodeURIComponent(String(x))}`);
+            const external=String(item?.primary_image_url||item?.primaryImageUrl||"").trim();
+            const images=liveImages.length?liveImages:external?[external]:(fallback?.images||["/wdcc-logo-transparent.webp"]);
+            const rawBody=String(item?.bodyStyle||item?.bodyType||item?.body_type||fallback?.bodyType||"Car").toLowerCase();
+            const bodyType:Vehicle["bodyType"]=rawBody.includes("truck")?"Truck":rawBody.includes("suv")||rawBody.includes("sportage")?"SUV":"Car";
+            const slug=fallback?.slug||liveSlug(`${year}-${make}-${model}-${item?.trim||""}-${String(item?.id||"").slice(0,8)}`);
+            return {
+              id:String(item?.id||slug),slug,year,make,model,trim:String(item?.trim||fallback?.trim||""),price:Number(item?.price||0),payment:Number(item?.payment||fallback?.payment||0),downPayment:Number(item?.downPayment??item?.down_payment??fallback?.downPayment??0),mileage:Number(item?.mileage||0),bodyType,
+              transmission:String(item?.transmission||fallback?.transmission||"Call for details"),drivetrain:String(item?.drivetrain||fallback?.drivetrain||"Call for details"),engine:String(item?.engine||fallback?.engine||"Call for details"),exterior:String(item?.exteriorColor||item?.exterior||fallback?.exterior||"Call for details"),interior:String(item?.interiorColor||item?.interior||fallback?.interior||"Call for details"),vin:String(item?.vin||fallback?.vin||"Call Sean"),
+              badges:fallback?.badges||["Available"],images,description:String(item?.description||fallback?.description||`Dealer-listed ${year} ${make} ${model}. Call or text Sean for current details.`),highlights:Array.isArray(item?.features)&&item.features.length?item.features.slice(0,6).map(String):(fallback?.highlights||["Dealer-published inventory","Direct help from Sean"]),featured:item?.featured!==false,status:"available"
+            };
+          }
+
+          '''
+          if helper not in s:
+            s=s.replace(anchor,helper+anchor,1)
+          old='  const vehicles = inventoryVehicles;'
+          new='  const [vehicles, setVehicles] = useState<Vehicle[]>(inventoryVehicles);'
+          if old not in s: raise SystemExit('vehicles anchor missing')
+          s=s.replace(old,new,1)
+          anchor2='  const finishIntro = useCallback(() => setIntroPhase("done"), []);\n\n'
+          bridge=r'''  useEffect(() => {
+            let active=true;
+            fetch("/api/inventory",{cache:"no-store"})
+              .then(r=>r.ok?r.json():Promise.reject(new Error(`inventory_${r.status}`)))
+              .then(j=>{if(!active||j?.ok!==true||!Array.isArray(j.items))return;const mapped=j.items.map(normalizeLiveVehicle).filter(Boolean) as Vehicle[];setVehicles(mapped);})
+              .catch(()=>undefined);
+            return()=>{active=false};
+          }, []);
+
+          '''
+          if bridge not in s:
+            if anchor2 not in s: raise SystemExit('intro anchor missing')
+            s=s.replace(anchor2,anchor2+bridge,1)
+          p.write_text(s)
+          PY
+
+      - name: Persist 2vfD lead forms through canonical backend
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > app/components/LeadRequestForm.tsx <<'EOF'
+          "use client";
+          import type { FormEvent } from "react";
+          import { useState } from "react";
+          import { inventoryVehicles } from "../data";
+          import { trackEvent } from "../lib/analytics";
+          type Mode="apply"|"test-drive"|"contact";
+          export default function LeadRequestForm({mode,selectedVehicle}:{mode:Mode;selectedVehicle?:string}){
+            const[sending,setSending]=useState(false),[error,setError]=useState("");
+            const submit=async(event:FormEvent<HTMLFormElement>)=>{
+              event.preventDefault(); if(sending)return; setSending(true);setError("");
+              const form=event.currentTarget; const data=Object.fromEntries(new FormData(form).entries());
+              const kind=mode==="apply"?"approval":mode==="test-drive"?"schedule":"contact";
+              const vehicleInterest=String(selectedVehicle||data.vehicle||"");
+              const extras=[data.incomeRange?`Income range: ${data.incomeRange}`:"",data.availableDownPayment?`Available down payment: ${data.availableDownPayment}`:"",data.message?String(data.message):""].filter(Boolean).join(" | ");
+              const params=new URLSearchParams(window.location.search);
+              const payload={kind,name:String(data.name||""),phone:String(data.phone||""),email:String(data.email||""),vehicleInterest,preferredTime:String(data.preferredTime||""),message:extras,consent:true,source:`2vfd-${mode}`,pagePath:window.location.pathname,referrer:document.referrer,utmSource:params.get("utm_source")||"",utmMedium:params.get("utm_medium")||"",utmCampaign:params.get("utm_campaign")||"",utmContent:params.get("utm_content")||""};
+              const key=`wdcc-2vfd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+              try{
+                const response=await fetch("/api/leads",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":key},body:JSON.stringify(payload)});
+                const json=await response.json().catch(()=>({}));
+                if(!response.ok||json?.ok!==true||json?.persisted===false)throw new Error(json?.error||`Request failed (${response.status})`);
+                trackEvent("lead_submit",{requestType:mode}); form.reset();
+                window.dispatchEvent(new CustomEvent("wdcc-toast",{detail:"Request sent to Sean"}));
+              }catch(e){setError(e instanceof Error?e.message:"Could not send request. Call Sean at 813-516-4752.");}
+              finally{setSending(false);}
+            };
+            return <form className="lead-request-form" onSubmit={submit}>
+              <div className="form-row"><label>Full name<input name="name" autoComplete="name" required placeholder="Your name" /></label><label>Phone<input name="phone" type="tel" autoComplete="tel" required placeholder="(813) 516-4752" /></label></div>
+              <label>Email<input name="email" type="email" autoComplete="email" required placeholder="you@email.com" /></label>
+              {mode!=="contact"&&<label>Vehicle<select name="vehicle" defaultValue={selectedVehicle||"Help me choose"}><option>Help me choose</option>{inventoryVehicles.map(vehicle=>{const label=`${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim}`.trim();return <option key={vehicle.id} value={vehicle.slug}>{label}</option>})}</select></label>}
+              {mode==="apply"&&<div className="form-row"><label>Monthly income range<select name="incomeRange" required defaultValue=""><option value="" disabled>Select range</option><option>$2,000–$3,499</option><option>$3,500–$4,999</option><option>$5,000+</option></select></label><label>Available down payment<select name="availableDownPayment" required defaultValue=""><option value="" disabled>Select amount</option><option>Under $1,000</option><option>$1,000–$1,999</option><option>$2,000+</option></select></label></div>}
+              {mode==="test-drive"&&<label>Preferred date and time<input name="preferredTime" type="datetime-local" required /></label>}
+              {mode==="contact"&&<label>What can we help with?<textarea name="message" rows={5} required placeholder="Tell Sean what you need…" /></label>}
+              <label className="consent"><input type="checkbox" required /> I agree WDCC may contact me about this request. Message and data rates may apply.</label>
+              <button className="btn btn-primary" type="submit" disabled={sending}>{sending?"Sending…":"Send request →"}</button>
+              {error&&<p className="form-privacy-note" role="alert">{error}</p>}
+              <p className="form-privacy-note">Your request is saved to WDCC so Sean can follow up. No SSN or banking password is collected here.</p>
+            </form>;
+          }
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+          for file in ['app/contact/page.tsx','app/get-approved/page.tsx']:
+            p=Path(file);s=p.read_text();
+            s=s.replace('const selectedVehicle = inventoryVehicles.some((item) => item.slug === vehicle) ? vehicle : undefined;','const selectedVehicle = typeof vehicle === "string" ? vehicle : undefined;')
+            p.write_text(s)
+          PY
+
+          cat > 'app/inventory/[slug]/page.tsx' <<'EOF'
+          import WDCCApp from "../../components/WDCCApp";
+          import type { Metadata } from "next";
+          export async function generateMetadata({params}:{params:Promise<{slug:string}>}):Promise<Metadata>{const{slug}=await params;return{title:"Vehicle | WDCC",description:"Current WDCC dealer-published vehicle inventory in Tampa Bay.",alternates:{canonical:`/inventory/${slug}`}};}
+          export default async function VehiclePage({params}:{params:Promise<{slug:string}>}){const{slug}=await params;return <WDCCApp initialRoute="detail" initialSlug={slug}/>;}
+          EOF
+
+      - name: Configure OpenNext Cloudflare runtime
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          cat > wrangler.jsonc <<EOF
+          {
+            "$schema":"./node_modules/wrangler/config-schema.json",
+            "name":"wdcc-2vfd-live",
+            "main":".open-next/worker.js",
+            "compatibility_date":"2026-08-25",
+            "compatibility_flags":["nodejs_compat"],
+            "workers_dev":true,
+            "assets":{"directory":".open-next/assets","binding":"ASSETS","run_worker_first":true},
+            "observability":{"enabled":true},
+            "vars":{"WDCC_DEALER_BACKEND_URL":"$BACKEND","WDCC_RUNTIME_ROLE":"frontend"}
+          }
+          EOF
+
+      - name: Build exact 2vfD visual with live backend bridge
+        working-directory: src
+        run: npx opennextjs-cloudflare build
+
+      - name: Deploy isolated live 2vfD Worker
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy 2>&1 | tee /tmp/wdcc-2vfd-live.log
+
+      - name: Gate visual parity and live backend behavior
+        working-directory: src
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-2vfd-live.log | tail -1)"
+          test -n "$URL"
+          for i in $(seq 1 30); do code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$URL/api/health?attempt=$i" || true)"; [ "$code" = 200 ] && jq -e '.ok==true and .visualDonor=="2vfD" and .backend=="healthy"' /tmp/health.json >/dev/null 2>&1 && break; sleep 2; done
+          [ "$code" = 200 ]; jq -e '.ok==true and .backend=="healthy"' /tmp/health.json >/dev/null
+          curl -fsS "$URL/" -o /tmp/home.html
+          grep -qi "we don.t care" /tmp/home.html
+          curl -fsSI "$URL/wdcc-logo-transparent.webp" | grep -qi '^content-type: image/'
+          curl -fsSI "$URL/wdcc-hero-v2.webp" | grep -qi '^content-type: image/'
+          curl -fsS "$URL/api/inventory" -o /tmp/inventory.json
+          jq -e '.ok==true and (.items|type=="array") and ([.items[]|select(((.make//"")|ascii_upcase)=="QA TEST" or ((.stock//"")|ascii_upcase|startswith("QA-")))]|length)==0' /tmp/inventory.json >/dev/null
+          lead_status="$(curl -sS -o /tmp/lead-invalid.json -w '%{http_code}' -X POST "$URL/api/leads" -H 'Content-Type: application/json' --data '{"kind":"contact","consent":true}')"
+          [ "$lead_status" = 400 ]
+          echo "2VFD_LIVE_URL=$URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Visual donor: exact recovered 2vfD" >> "$GITHUB_STEP_SUMMARY"
+          echo "Backend: $BACKEND" >> "$GITHUB_STEP_SUMMARY"
+          echo "QA inventory leak gate: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Lead facade contract gate: PASS" >> "$GITHUB_STEP_SUMMARY"
