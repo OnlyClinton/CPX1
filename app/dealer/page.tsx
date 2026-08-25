@@ -1,5 +1,5 @@
-import PortalExperience from "../PortalExperience";
+import DealerDashboard from "./DealerDashboard";
 
 export default function Dealer(){
-  return <PortalExperience mode="dealer"/>;
+  return <DealerDashboard/>;
 }
