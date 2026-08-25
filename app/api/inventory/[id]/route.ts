@@ -18,19 +18,31 @@ function json(body:any,status:number,rid:string,headers:Record<string,string>={}
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,...headers}});
 }
 async function verifyStorefront(id:string){
-  let visible=false;let verification="pending";
+  let visible=false;let verification="pending";const attempts:any[]=[];
   for(let attempt=0;attempt<4;attempt++){
     if(attempt)await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
+    const target=`https://wedontcarecars.com/api/inventory?verify=${Date.now()}-${attempt}`;
     try{
-      const publicResponse=await fetch(`https://wedontcarecars.com/api/inventory?verify=${Date.now()}-${attempt}`,{cache:"no-store",signal:AbortSignal.timeout(7000)});
-      const publicJson=await publicResponse.json().catch(()=>({}));
+      const publicResponse=await fetch(target,{cache:"no-store",redirect:"follow",signal:AbortSignal.timeout(7000)});
+      const contentType=publicResponse.headers.get("content-type")||"";
+      const raw=await publicResponse.text();
+      let publicJson:any=null;let parseError:string|null=null;
+      try{publicJson=JSON.parse(raw);}catch(error){parseError=error instanceof Error?error.message:"json_parse_failed";}
+      const hasItems=Array.isArray(publicJson?.items)||Array.isArray(publicJson?.inventory);
       const items=Array.isArray(publicJson?.items)?publicJson.items:Array.isArray(publicJson?.inventory)?publicJson.inventory:[];
-      visible=publicResponse.ok&&items.some((item:any)=>String(item?.id)===String(id));
+      visible=publicResponse.ok&&hasItems&&items.some((item:any)=>String(item?.id)===String(id));
+      attempts.push({attempt,status:publicResponse.status,ok:publicResponse.ok,redirected:publicResponse.redirected,url:publicResponse.url||target,contentType,contractValid:hasItems,itemCount:items.length,parseError,bodyPrefix:hasItems?undefined:raw.slice(0,180)});
       if(visible){verification="verified";break;}
-      verification=publicResponse.ok?"not_yet_visible":"storefront_unavailable";
-    }catch{verification="storefront_unreachable";}
+      if(!publicResponse.ok)verification=`storefront_http_${publicResponse.status}`;
+      else if(!hasItems)verification="storefront_invalid_payload";
+      else verification="not_yet_visible";
+    }catch(error){
+      const message=error instanceof Error?`${error.name}:${error.message}`:"storefront_fetch_failed";
+      attempts.push({attempt,error:message,url:target});
+      verification="storefront_unreachable";
+    }
   }
-  return {visible,verification,vehicleId:id};
+  return {visible,verification,vehicleId:id,attempts};
 }
 
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
@@ -121,7 +133,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     let storefront:any=undefined;
     if(statusChanged&&next.status==="published"){
       storefront=await verifyStorefront(id);
-      await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.visible?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:storefront.verification});
+      const lastAttempt=Array.isArray(storefront.attempts)&&storefront.attempts.length?storefront.attempts[storefront.attempts.length-1]:null;
+      await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.visible?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${storefront.verification}:${JSON.stringify(lastAttempt||{})}`});
     }
     return json({ok:true,item:next,revision:saved.revision,requestId:rid,storefront},200,rid,storefront?{"X-WDCC-Storefront-Verified":storefront.visible?"1":"0"}:{});
   }catch(error){
