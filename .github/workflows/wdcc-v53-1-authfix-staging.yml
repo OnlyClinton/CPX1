@@ -1,0 +1,111 @@
+name: WDCC V53.1 Auth Fix Staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v53-1-authfix-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-v53-1-authfix-staging
+  cancel-in-progress: true
+
+env:
+  SOURCE_SHA: 1d96e68c26fcecae2c7fee156307608c304720e9
+  BACKEND: https://wdcc-cpx-launch-cpxagency.vercel.app
+  CUSTOMER: https://wedontcarecars.com
+  WORKER: wdcc-v53-1-staging
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Exact-source and customer preflight
+        id: preflight
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -n "$CLOUDFLARE_API_TOKEN"; test -n "$CLOUDFLARE_ACCOUNT_ID"
+          curl -fsS "$BACKEND/api/health?authfix-stage=$GITHUB_RUN_ID" | jq -e '.ok==true and .degraded==false' >/dev/null
+          curl -fsS -L "$CUSTOMER/?authfix-stage-before=$GITHUB_RUN_ID" -o /tmp/customer-before.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-before.html
+          grep -q 'mobile-action-bar' /tmp/customer-before.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-before.html
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Build exact V53.1 auth-fix worker
+        id: build
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs'),p='wrangler.jsonc',c=JSON.parse(fs.readFileSync(p,'utf8'));c.name=process.env.WORKER;c.workers_dev=true;c.preview_urls=false;c.keep_vars=true;delete c.route;delete c.routes;c.vars=c.vars||{};c.vars.WDCC_RUNTIME_ROLE='frontend';c.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx opennextjs-cloudflare build
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Deploy isolated staging worker
+        id: deploy
+        run: |
+          set -euo pipefail
+          npx wrangler deploy 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/deploy.log | tail -1 || true)"
+          [ -n "$URL" ] || URL='https://wdcc-v53-1-staging.clico-global.workers.dev'
+          echo "url=${URL%/}" >> "$GITHUB_OUTPUT"
+      - name: Verify auth-fix staging transport
+        id: verify
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          ok=0; for i in $(seq 1 20); do code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$URL/api/health?authfix=$GITHUB_RUN_ID-$i" || true)"; if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .release=="WDCC-V53-OPS-HARDENED" and .backend=="healthy"' /tmp/health.json >/dev/null 2>&1; then ok=1; break; fi; sleep 2; done; test "$ok" = 1
+          curl -fsS "$URL/api/inventory?authfix=$GITHUB_RUN_ID" | jq -e '.ok==true and (.items|type=="array")' >/dev/null
+          curl -fsS -L "$URL/dealer" -o /tmp/dealer.html; grep -q 'SALES COMMAND' /tmp/dealer.html
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Re-prove customer unchanged
+        id: customer
+        run: |
+          set -euo pipefail
+          curl -fsS -L "$CUSTOMER/?authfix-stage-after=$GITHUB_RUN_ID" -o /tmp/customer-after.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-after.html; grep -q 'mobile-action-bar' /tmp/customer-after.html; grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
+          echo unchanged=true >> "$GITHUB_OUTPUT"
+      - name: Publish staging proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+          P: ${{ steps.preflight.outcome }}
+          B: ${{ steps.build.outcome }}
+          D: ${{ steps.deploy.outcome }}
+          V: ${{ steps.verify.outcome }}
+          C: ${{ steps.customer.outputs.unchanged }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC V53.1 auth-fix staging $GITHUB_RUN_ID" --body "Exact source: \`$SOURCE_SHA\`
+          Preflight: **$P**
+          Build: **$B**
+          Isolated staging deploy: **$D**
+          Runtime contract: **$V**
+          Customer baseline unchanged: **${C:-false}**
+          Staging URL: \`${URL:-not-resolved}\`
+
+          No production DNS or dealer route mutation is performed." || true
