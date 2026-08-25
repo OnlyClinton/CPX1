@@ -17,28 +17,36 @@ function provider(){
   return "portable";
 }
 
+function integrations(){
+  const email=Boolean((process.env.RESEND_API_KEY||"").trim());
+  const sms=Boolean((process.env.TWILIO_ACCOUNT_SID||"").trim()&&(process.env.TWILIO_AUTH_TOKEN||"").trim()&&(process.env.TWILIO_FROM_NUMBER||"").trim()&&(process.env.WDCC_LEAD_NOTIFICATION_PHONE||"").trim());
+  const webhook=Boolean((process.env.WDCC_LEAD_WEBHOOK_URL||"").trim());
+  return{email:{configured:email},sms:{configured:sms},webhook:{configured:webhook},dashboard:{configured:true}};
+}
+
 export async function GET(){
   const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
 
   if(canonicalRuntime()){
     const storage=blobAuthority();
     const session=Boolean((process.env.SESSION_SECRET||"").trim());
+    const notificationIntegrations=integrations();
     if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",provider:provider(),commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
     }
     try{
       const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,provider:provider(),commit},{status:200,headers});
+      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
     }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
     }
   }
 
   try{
     const {response,json}=await backendHealth();
     const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,commit},{status:ok?200:503,headers});
+    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:json?.integrations||null,provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
-    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V52-LEAD-INVENTORY-CONTRACT",backend:"unreachable",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
+    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:null,error:error instanceof Error?error.message:"backend_health_failed",provider:provider(),commit},{status:503,headers});
   }
 }
