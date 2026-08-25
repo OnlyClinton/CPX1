@@ -16,9 +16,14 @@ async function bytes(path){
 report.assetChecks.logo=await bytes('/wdcc-logo-transparent.webp');
 report.assetChecks.headerLogo=await bytes('/wdcc-official-logo.webp');
 report.assetChecks.hero=await bytes('/wdcc-hero-v2.webp');
+report.assetChecks.vehicleImages={};
+for(const file of ['2004-nissan-350z-1.webp','2016-ford-f150-limited-1.webp','2019-honda-pilot-1.webp','2019-kia-sportage-1.webp','2019-toyota-rav4-1.webp']){
+  report.assetChecks.vehicleImages[file]=await bytes(`/assets/cars/${file}`);
+}
 if(report.assetChecks.logo.status!==200||report.assetChecks.logo.magic!=='RIFF') throw new Error('canonical_logo_not_served');
 if(report.assetChecks.headerLogo.status!==200||report.assetChecks.headerLogo.magic!=='RIFF') throw new Error('r31_header_logo_not_served');
 if(report.assetChecks.hero.status!==200||report.assetChecks.hero.magic!=='RIFF') throw new Error('canonical_hero_not_served');
+for(const [file,check] of Object.entries(report.assetChecks.vehicleImages))if(check.status!==200||check.magic!=='RIFF'||check.bytes<1000)throw new Error(`vehicle_image_not_served:${file}`);
 
 const invResp=await fetch(base+'/api/inventory',{headers:{accept:'application/json'}});
 const invJson=await invResp.json().catch(()=>({}));
@@ -63,7 +68,6 @@ for(const cfg of [
   await context.close();
 }
 
-// Real read-only inventory browser: search/filter and screenshots.
 {
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   const page=await context.newPage();
@@ -87,7 +91,6 @@ for(const cfg of [
   await context.close();
 }
 
-// Three-stage financing preview. Assert it never posts to the real lead endpoint.
 {
   const context=await browser.newContext({viewport:{width:1000,height:900},deviceScaleFactor:1});
   const page=await context.newPage();
@@ -111,7 +114,6 @@ for(const cfg of [
   await context.close();
 }
 
-// Dealer editor QA: exercise all five steps with an in-memory image and no API writes.
 {
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   const page=await context.newPage();
@@ -119,7 +121,6 @@ for(const cfg of [
   page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&new URL(r.url()).pathname.startsWith('/api/inventory'))inventoryWrites++});
   const response=await page.goto(base+'/r31-preview/dealer-editor',{waitUntil:'networkidle',timeout:30000});
   if(!response||response.status()>=400) throw new Error(`dealer_editor_preview_${response?.status()||'no_response'}`);
-  const inputs=page.locator('input');
   await page.getByPlaceholder('2020').fill('2020');
   await page.getByPlaceholder('Dodge').fill('Dodge');
   await page.getByPlaceholder('Challenger').fill('Challenger');
