@@ -1,0 +1,108 @@
+name: WDCC DEALER ROOT HOTFIX
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-root-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-root-hotfix
+  cancel-in-progress: true
+
+env:
+  DEALER_HOST: dealer.wedontcarecars.com
+  PRIMARY_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Require Cloudflare auth
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Prove dealer origin
+        run: |
+          set -euo pipefail
+          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path")"
+            test "$code" = 200
+          done
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.90.0 >/dev/null
+
+      - name: Deploy root redirect proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-dealer-root
+          cat > /tmp/wdcc-dealer-root/worker.js <<'EOF'
+          const ORIGIN='https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app';
+          export default {
+            async fetch(request) {
+              const incoming=new URL(request.url);
+              if (incoming.pathname==='/' || incoming.pathname==='') {
+                return Response.redirect(new URL('/dealer/login',incoming),302);
+              }
+              const target=new URL(incoming.pathname+incoming.search,ORIGIN);
+              const headers=new Headers(request.headers);
+              headers.set('x-forwarded-host',incoming.host);
+              headers.set('x-forwarded-proto','https');
+              headers.set('x-wdcc-frontdoor','cloudflare-dealer-hotfix');
+              const init={method:request.method,headers,redirect:'manual'};
+              if(!['GET','HEAD'].includes(request.method))init.body=request.body;
+              const upstream=await fetch(new Request(target.toString(),init));
+              const out=new Headers(upstream.headers);
+              const location=out.get('location');
+              if(location){
+                try{
+                  const loc=new URL(location,target);
+                  if(loc.hostname===new URL(ORIGIN).hostname){
+                    loc.protocol=incoming.protocol;loc.hostname=incoming.hostname;loc.port=incoming.port;
+                    out.set('location',loc.toString());
+                  }
+                }catch{}
+              }
+              out.set('x-wdcc-edge','cloudflare-dealer-hotfix');
+              return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:out});
+            }
+          };
+          EOF
+          cat > /tmp/wdcc-dealer-root/wrangler.jsonc <<'EOF'
+          {
+            "name":"wdcc-dealer-frontdoor",
+            "main":"worker.js",
+            "compatibility_date":"2026-08-25",
+            "routes":[{"pattern":"dealer.wedontcarecars.com/*","zone_name":"wedontcarecars.com"}],
+            "observability":{"enabled":true}
+          }
+          EOF
+          cd /tmp/wdcc-dealer-root
+          wrangler deploy
+
+      - name: Verify live root and dealer routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 5
+          code="$(curl -sS -D /tmp/root.h -o /dev/null -w '%{http_code}' "https://$DEALER_HOST/")"
+          test "$code" = 302
+          grep -qi '^location: https://dealer.wedontcarecars.com/dealer/login' /tmp/root.h
+          for path in /dealer/login /dealer /dealer/inventory /dealer/inventory/new; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$DEALER_HOST$path")"
+            test "$code" = 200
+          done
+          curl -sS -D /tmp/edge.h -o /dev/null "https://$DEALER_HOST/dealer/login"
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-hotfix' /tmp/edge.h
+          echo 'WDCC_DEALER_ROOT_HOTFIX=PASS'
