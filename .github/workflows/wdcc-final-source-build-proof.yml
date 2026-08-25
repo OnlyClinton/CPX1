@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
-      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
+      FINAL_SHA: 3101a4fc38e85e56d5b4c9a2171be820cf16886b
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,6 +36,8 @@ jobs:
           set -euo pipefail
           grep -q 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
           grep -q 'WDCC_CANONICAL_BLOB_STORE_ID' lib/wdccAuthority.ts
+          grep -q 'oidc-auto' lib/wdccAuthority.ts
+          grep -q 'options:{storeId}' lib/wdccAuthority.ts
           grep -q 'VERCEL_OIDC_TOKEN' lib/wdccAuthority.ts
           grep -q 'STOREFRONT_PROJECT_ID' lib/dealerRuntime.ts
           grep -q 'canonicalDealerBackend' lib/legacyAuthProxy.ts
@@ -45,6 +47,14 @@ jobs:
           grep -q 'handleUploadPresigned' app/api/upload/route.ts
           grep -q 'issueSignedToken' app/api/upload/route.ts
           grep -q 'uploadPresigned' app/dealer/inventory/new/page.tsx
+          node - <<'NODE'
+          const fs=require('fs');
+          const s=fs.readFileSync('lib/wdccAuthority.ts','utf8');
+          const auto=s.indexOf('if(vercelBackendRuntime&&storeId)return {mode:"oidc-auto"');
+          const token=s.indexOf('const token=(process.env.BLOB_READ_WRITE_TOKEN');
+          if(auto<0||token<0||auto>token)throw Error('STATIC_TOKEN_PRECEDES_AUTO_OIDC');
+          console.log('OIDC_AUTH_ORDER=PASS');
+          NODE
           echo 'WDCC_FINAL_SOURCE_CONTRACT=PASS'
       - name: Report source proof
         if: always()
@@ -52,4 +62,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final source build ${GITHUB_RUN_ID}" --body "Exact SHA: \`$FINAL_SHA\`\nStatus: **$STATUS**\nNo Vercel deployment, Blob mutation, alias move, DNS change, or Cloudflare route change was performed." || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC final source build ${GITHUB_RUN_ID}" --body "Exact SHA: \`$FINAL_SHA\`\nStatus: **$STATUS**\nRequest-context OIDC is ordered ahead of static Blob token fallback for Vercel backend runtime. No Vercel deployment, Blob mutation, alias move, DNS change, or Cloudflare route change was performed." || true
