@@ -1,0 +1,46 @@
+{
+  "release": "wdcc-188392c-ready",
+  "candidateSha": "188392c81696da5d0d61f5c6f0bec45f490a232d",
+  "candidateBranch": "release/wdcc-188392c-ready",
+  "canonical": {
+    "storefrontProjectId": "prj_We7xkAkB5Qy31Pt17USSkQFE0u7h",
+    "dealerProjectId": "prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB",
+    "phoenixProjectId": "prj_a3oclCcy4sbA2tge4BX7VAKXE4KR",
+    "backendUrl": "https://wdcc-cpx-launch-cpxagency.vercel.app",
+    "storefrontDomain": "https://wedontcarecars.com",
+    "dealerDomain": "https://dealer.wedontcarecars.com"
+  },
+  "brand": {
+    "logo": "public/wdcc-logo-transparent.webp",
+    "hero": "public/wdcc-hero-v2.webp"
+  },
+  "requiredRoutes": [
+    "/",
+    "/api/health",
+    "/api/inventory",
+    "/api/leads",
+    "/dealer",
+    "/dealer/inventory",
+    "/dealer/inventory/new",
+    "/dealer/leads",
+    "/dealer/crm",
+    "/admin",
+    "/admin/users",
+    "/schedule-test-drive",
+    "/get-approved",
+    "/contact",
+    "/privacy",
+    "/terms"
+  ],
+  "rollback": {
+    "dealerFallback": "wdcc-cpx-launch-b01un0onc-cpxagency.vercel.app",
+    "storefrontPromotionCandidateId": "dpl_MPK5UEsE5YN3vupz45Ac8kkBphBu"
+  },
+  "releasePolicy": {
+    "allowDeploymentDuringPreflight": false,
+    "requireJsonInventoryContract": true,
+    "requireBrandLock": true,
+    "requireLocalE2E": true,
+    "requireLiveAcceptanceBeforeAliasMove": true
+  }
+}
