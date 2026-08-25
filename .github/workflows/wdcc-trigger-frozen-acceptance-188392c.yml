@@ -17,4 +17,6 @@ jobs:
       - name: Dispatch frozen candidate acceptance
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run wdcc-frozen-candidate-acceptance-188392c.yml --repo "$GITHUB_REPOSITORY" --ref main
+        run: |
+          echo 'dispatch revision 2: module-resolution repair'
+          gh workflow run wdcc-frozen-candidate-acceptance-188392c.yml --repo "$GITHUB_REPOSITORY" --ref main
