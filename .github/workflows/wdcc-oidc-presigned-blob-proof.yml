@@ -1,0 +1,83 @@
+name: WDCC OIDC Presigned Blob Proof
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-oidc-presigned-blob-proof.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+      FINAL_SHA: d7b56f3e67a971ffd10ca7189a86a5850f8f21af
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FINAL_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact source dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          npm ci
+      - name: Generate storefront project OIDC token
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data '{"source":"vercel-cli:pull"}' \
+            "https://api.vercel.com/v1/projects/$STOREFRONT_ID/token?teamId=$TEAM_ID" \
+            -o /tmp/project-oidc.json
+          OIDC="$(jq -r '.token // empty' /tmp/project-oidc.json)"
+          test -n "$OIDC"
+          printf '::add-mask::%s\n' "$OIDC"
+          printf '%s' "$OIDC" > /tmp/oidc-token
+      - name: Issue signed URL upload readback and delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OIDC_TOKEN="$(cat /tmp/oidc-token)"
+          printf '::add-mask::%s\n' "$OIDC_TOKEN"
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import {del,get,issueSignedToken,presignUrl} from '@vercel/blob';
+          const oidcToken=process.env.OIDC_TOKEN,storeId=process.env.STORE_ID;
+          const pathname=`media/wdcc/oidc-proof/${Date.now()}-${crypto.randomUUID()}.png`;
+          const signed=await issueSignedToken({pathname,operations:['put'],validUntil:Date.now()+5*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,oidcToken,storeId});
+          if(!signed?.delegationToken||!signed?.clientSigningToken)throw Error('SIGNED_TOKEN_MISSING');
+          const {presignedUrl}=presignUrl(signed,{operation:'put',pathname,access:'private',validUntil:Date.now()+4*60*1000,allowedContentTypes:['image/png'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:false});
+          if(!presignedUrl)throw Error('PRESIGNED_URL_MISSING');
+          const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');
+          const putResponse=await fetch(presignedUrl,{method:'PUT',headers:{'content-type':'image/png'},body:png});
+          const putBody=await putResponse.text();
+          if(!putResponse.ok)throw Error(`PRESIGNED_PUT_${putResponse.status}_${putBody.slice(0,500)}`);
+          const read=await get(pathname,{access:'private',useCache:false,oidcToken,storeId});
+          if(!read||read.statusCode!==200||!read.stream)throw Error('OIDC_READBACK_FAILED');
+          const chunks=[];for await(const chunk of read.stream)chunks.push(chunk);
+          const bytes=Buffer.concat(chunks).length;if(bytes!==png.length)throw Error(`READBACK_SIZE_${bytes}_${png.length}`);
+          await del(pathname,{oidcToken,storeId});
+          console.log('OIDC_PRESIGNED_PROOF='+JSON.stringify({ok:true,pathname,bytes,putStatus:putResponse.status,deleted:true}));
+          NODE
+      - name: Report proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC OIDC presigned Blob proof ${GITHUB_RUN_ID}" --body "Exact source: \`$FINAL_SHA\`\nStatus: **$STATUS**\nStorefront project OIDC was used; no Vercel deployment, alias, DNS, or Cloudflare route move was performed. The proof path is deleted by the test on success." || true
