@@ -1,0 +1,92 @@
+name: WDCC SALES COMMAND ALIAS CUTOVER
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TRIGGER_WDCC_SALES_COMMAND_ALIAS.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-sales-command-alias
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  VERCEL_SCOPE: cpxagency
+  DEPLOY_URL: https://wdcc-v32-storefront-h8tc9l0qh-cpxagency.vercel.app
+  RELEASE_SHA: 5d52cc6d2691310d0d5a19eafe95bd6b01805703
+  APEX: https://wedontcarecars.com
+  DEALER: https://dealer.wedontcarecars.com
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Promote and alias exact READY deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel promote "$DEPLOY_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" || true
+          for domain in wedontcarecars.com www.wedontcarecars.com dealer.wedontcarecars.com; do
+            vercel alias set "$DEPLOY_URL" "$domain" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          done
+
+      - name: Verify live storefront dealer and APIs
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 40); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?intro=1&sales-command=$GITHUB_RUN_ID" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health?sales-command=$GITHUB_RUN_ID" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory?sales-command=$GITHUB_RUN_ID" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$DEALER/dealer?sales-command=$GITHUB_RUN_ID" || true)"
+            leads_code="$(curl -sS -L -o /tmp/leads.html -w '%{http_code}' "$DEALER/dealer/leads?stage=new&sales-command=$GITHUB_RUN_ID" || true)"
+            live_inv_code="$(curl -sS -L -o /tmp/dealer-inv.html -w '%{http_code}' "$DEALER/dealer/inventory?status=published&sales-command=$GITHUB_RUN_ID" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$leads_code" = 200 ] && [ "$live_inv_code" = 200 ]; then
+              if jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
+                && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1 \
+                && grep -q 'wdcc-logo-transparent.webp' /tmp/home.html \
+                && grep -q 'TEST DRIVE' /tmp/home.html \
+                && grep -q 'GET APPROVED' /tmp/home.html \
+                && grep -q 'CALL SEAN' /tmp/home.html \
+                && grep -q 'SALES COMMAND' /tmp/dealer.html \
+                && grep -q 'ACCOUNT TABLE' /tmp/leads.html; then
+                  ok=1
+                  break
+              fi
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo verified=true >> "$GITHUB_OUTPUT"
+
+      - name: Report cutover
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Release: `%s`\nREADY deployment: `%s`\nApex/www/dealer alias cutover: attempted\nLive verification: `%s`' "$RELEASE_SHA" "$DEPLOY_URL" "${VERIFIED:-false}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Sales Command alias ${GITHUB_RUN_ID}" --body "$body" || true
