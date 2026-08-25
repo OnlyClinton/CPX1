@@ -1,0 +1,208 @@
+name: WDCC Infra Closeout
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    env:
+      CF_API: https://api.cloudflare.com/client/v4
+      ZONE_NAME: wedontcarecars.com
+      EXPECTED_ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+      DEALER_NAME: dealer.wedontcarecars.com
+      DEALER_TARGET: wdcc-dealer-portal.vercel.app
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require least-privilege Cloudflare zone token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}" || { echo 'Missing CLOUDFLARE_ZONE_API_TOKEN'; exit 2; }
+
+      - name: Resolve and pin Cloudflare zone
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones?name=$ZONE_NAME&status=active" \
+            -H "Authorization: Bearer $CF_ZONE_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/zone.json
+          jq -e '.success == true and (.result|length) == 1' /tmp/zone.json >/dev/null
+          ZONE_ID="$(jq -r '.result[0].id' /tmp/zone.json)"
+          test "$ZONE_ID" = "$EXPECTED_ZONE_ID"
+          echo "ZONE_ID=$ZONE_ID" >> "$GITHUB_ENV"
+          echo "Cloudflare zone pinned: $ZONE_ID"
+
+      - name: Snapshot authoritative DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" \
+            -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns-before.json
+          jq -e '.success == true' /tmp/dns-before.json >/dev/null
+          jq -r '.result[] | [.type,.name,.content,(.proxied|tostring),(.priority//"-")] | @tsv' /tmp/dns-before.json | sort > /tmp/dns-before.tsv
+          echo '### DNS before' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/dns-before.tsv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guarded dealer Cloudflare proxy cutover
+        id: dealer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t IDS < <(jq -r --arg n "$DEALER_NAME" --arg t "$DEALER_TARGET" '.result[] | select(.type=="CNAME" and .name==$n and .content==$t) | .id' /tmp/dns-before.json)
+          test "${#IDS[@]}" -eq 1 || { echo "Expected exactly one dealer CNAME to $DEALER_TARGET"; exit 3; }
+          RID="${IDS[0]}"
+          PREV="$(jq -r --arg id "$RID" '.result[] | select(.id==$id) | .proxied' /tmp/dns-before.json)"
+          echo "record_id=$RID" >> "$GITHUB_OUTPUT"
+          echo "previous_proxy=$PREV" >> "$GITHUB_OUTPUT"
+          if [ "$PREV" != "true" ]; then
+            curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dns_records/$RID" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data '{"proxied":true}' > /tmp/dealer-patch.json
+            jq -e '.success == true and .result.proxied == true' /tmp/dealer-patch.json >/dev/null
+          fi
+          echo "dealer_proxy_before=$PREV dealer_proxy_after=true"
+
+      - name: Ensure Let's Encrypt CAA authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          refresh(){ curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns-now.json; }
+          ensure_caa(){
+            tag="$1"; value="$2"; refresh
+            if jq -e --arg n "$ZONE_NAME" --arg tag "$tag" --arg val "$value" '.result[] | select(.type=="CAA" and .name==$n and .data.tag==$tag and .data.value==$val)' /tmp/dns-now.json >/dev/null; then
+              echo "CAA $tag $value already present"; return
+            fi
+            jq -nc --arg n "$ZONE_NAME" --arg tag "$tag" --arg val "$value" '{type:"CAA",name:$n,ttl:3600,data:{flags:0,tag:$tag,value:$val}}' > /tmp/caa-create.json
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' \
+              --data-binary @/tmp/caa-create.json | jq -e '.success == true' >/dev/null
+          }
+          ensure_caa issue letsencrypt.org
+          ensure_caa issuewild letsencrypt.org
+
+      - name: Audit and safely repair Proton mail DNS
+        id: mail
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/mail-blockers.txt
+          refresh(){ curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dns-mail.json; }
+          refresh
+
+          mapfile -t MX_ALL < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n) | "\(.priority) \(.content)"' /tmp/dns-mail.json | sort -n)
+          if [ "${#MX_ALL[@]}" -eq 0 ]; then
+            for rec in '10 mail.protonmail.ch' '20 mailsec.protonmail.ch'; do
+              pri="${rec%% *}"; host="${rec#* }"
+              jq -nc --arg n "$ZONE_NAME" --arg h "$host" --argjson p "$pri" '{type:"MX",name:$n,content:$h,priority:$p,ttl:3600}' > /tmp/mx.json
+              curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/mx.json | jq -e '.success==true' >/dev/null
+            done
+            refresh
+          fi
+          mapfile -t MX_ALL < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n) | "\(.priority) \(.content)"' /tmp/dns-mail.json | sort -n)
+          printf '%s\n' "${MX_ALL[@]}" | grep -qx '10 mail.protonmail.ch' || echo 'Missing Proton MX priority 10' >> /tmp/mail-blockers.txt
+          printf '%s\n' "${MX_ALL[@]}" | grep -qx '20 mailsec.protonmail.ch' || echo 'Missing Proton MX priority 20' >> /tmp/mail-blockers.txt
+          if printf '%s\n' "${MX_ALL[@]}" | grep -Ev '^(10 mail\.protonmail\.ch|20 mailsec\.protonmail\.ch)$' | grep -q .; then
+            echo 'Unexpected non-Proton MX record present; not modified automatically' >> /tmp/mail-blockers.txt
+          fi
+
+          mapfile -t SPF < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .content' /tmp/dns-mail.json)
+          if [ "${#SPF[@]}" -eq 0 ]; then
+            jq -nc --arg n "$ZONE_NAME" '{type:"TXT",name:$n,content:"v=spf1 include:_spf.protonmail.ch mx ~all",ttl:3600}' > /tmp/spf.json
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/spf.json | jq -e '.success==true' >/dev/null
+            refresh
+          elif [ "${#SPF[@]}" -gt 1 ]; then
+            echo 'Multiple SPF records present; manual consolidation required' >> /tmp/mail-blockers.txt
+          elif [ "${SPF[0]}" != 'v=spf1 include:_spf.protonmail.ch mx ~all' ]; then
+            echo "SPF differs from canonical Proton policy: ${SPF[0]}" >> /tmp/mail-blockers.txt
+          fi
+
+          DMARC_NAME="_dmarc.$ZONE_NAME"
+          mapfile -t DMARC < <(jq -r --arg n "$DMARC_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=DMARC1"))) | .content' /tmp/dns-mail.json)
+          if [ "${#DMARC[@]}" -eq 0 ]; then
+            jq -nc --arg n "$DMARC_NAME" '{type:"TXT",name:$n,content:"v=DMARC1; p=none",ttl:3600}' > /tmp/dmarc.json
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/dmarc.json | jq -e '.success==true' >/dev/null
+            refresh
+          elif [ "${#DMARC[@]}" -gt 1 ]; then
+            echo 'Multiple DMARC records present' >> /tmp/mail-blockers.txt
+          fi
+
+          DKIM_COUNT="$(jq -r '.result[] | select(.type=="CNAME" and (.name|contains("._domainkey."))) | .name' /tmp/dns-mail.json | sort -u | wc -l | tr -d ' ')"
+          if [ "$DKIM_COUNT" -eq 0 ]; then
+            echo 'No DKIM CNAME selectors found; Proton selectors must be copied from Proton Admin (selectors are not guessed)' >> /tmp/mail-blockers.txt
+          fi
+          echo "dkim_count=$DKIM_COUNT" >> "$GITHUB_OUTPUT"
+          echo '### Mail DNS' >> "$GITHUB_STEP_SUMMARY"
+          jq -r --arg n "$ZONE_NAME" '.result[] | select((.name==$n and (.type=="MX" or .type=="TXT")) or (.name|contains("._domainkey.")) or (.name==("_dmarc."+$n))) | [.type,.name,.content,(.priority//"-")] | @tsv' /tmp/dns-mail.json | sort >> "$GITHUB_STEP_SUMMARY"
+          if [ -s /tmp/mail-blockers.txt ]; then
+            echo '### Mail blockers' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/mail-blockers.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Enable Cloudflare DNSSEC and capture parent DS
+        id: dnssec
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dnssec-before.json
+          jq -e '.success==true' /tmp/dnssec-before.json >/dev/null
+          STATUS="$(jq -r '.result.status // "disabled"' /tmp/dnssec-before.json)"
+          if [ "$STATUS" != "active" ]; then
+            curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dnssec" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' \
+              --data '{"status":"active"}' > /tmp/dnssec-enable.json
+            jq -e '.success==true' /tmp/dnssec-enable.json >/dev/null
+          fi
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" -H "Authorization: Bearer $CF_ZONE_TOKEN" > /tmp/dnssec.json
+          jq -e '.success==true and .result.status=="active"' /tmp/dnssec.json >/dev/null
+          echo '### DNSSEC — install this DS at the registrar if the parent DS is absent' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq '.result | {status,key_tag,algorithm,digest_algorithm,digest,ds}' /tmp/dnssec.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Live gate dealer and customer storefront
+        id: live
+        shell: bash
+        run: |
+          set -u
+          DEALER_OK=false
+          STOREFRONT_OK=false
+          if curl -fsS --max-time 20 https://dealer.wedontcarecars.com/api/health -o /tmp/dealer-health.json && jq -e '.ok==true and .degraded==false' /tmp/dealer-health.json >/dev/null; then DEALER_OK=true; fi
+          if curl -fsSL --max-time 20 -o /tmp/apex.html -w '%{http_code}' https://wedontcarecars.com/ | grep -Eq '^200$'; then STOREFRONT_OK=true; fi
+          echo "dealer_ok=$DEALER_OK" >> "$GITHUB_OUTPUT"
+          echo "storefront_ok=$STOREFRONT_OK" >> "$GITHUB_OUTPUT"
+          if [ "$DEALER_OK" != true ]; then
+            RID='${{ steps.dealer.outputs.record_id }}'
+            PREV='${{ steps.dealer.outputs.previous_proxy }}'
+            if [ -n "$RID" ] && [ "$PREV" = false ]; then
+              echo 'Dealer gate failed — rolling dealer DNS proxy back to false'
+              curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dns_records/$RID" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' --data '{"proxied":false}' >/tmp/rollback.json || true
+            fi
+            exit 1
+          fi
+          test "$STOREFRONT_OK" = true
+
+      - name: Publish closeout report
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          DEALER='${{ steps.live.outputs.dealer_ok }}'
+          STOREFRONT='${{ steps.live.outputs.storefront_ok }}'
+          DKIM='${{ steps.mail.outputs.dkim_count }}'
+          DS='unavailable'
+          [ -f /tmp/dnssec.json ] && DS="$(jq -c '.result | {key_tag,algorithm,digest_algorithm,digest,ds}' /tmp/dnssec.json)"
+          BLOCKERS='none'
+          [ -s /tmp/mail-blockers.txt ] && BLOCKERS="$(sed ':a;N;$!ba;s/\n/; /g' /tmp/mail-blockers.txt)"
+          BODY=$(printf 'Dealer live gate: **%s**\nStorefront live gate: **%s**\nDKIM selectors found: `%s`\nDNSSEC DS: `%s`\nMail blockers: `%s`\n\nRemaining external closeout after this workflow: install the exact DS at the registrar if parent DS is absent; create/enable `sean@wedontcarecars.com` in Proton if it still returns 550; copy Proton DKIM selectors only if the audit reports them missing.' "$DEALER" "$STOREFRONT" "$DKIM" "$DS" "$BLOCKERS")
+          gh issue comment 317 --repo "$GITHUB_REPOSITORY" --body "$BODY" || true
