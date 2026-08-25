@@ -1,0 +1,131 @@
+name: WDCC RELEASE READY
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-release-ready-188392c
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      CANDIDATE_SHA: 188392c81696da5d0d61f5c6f0bec45f490a232d
+      PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      CANONICAL_BACKEND: https://wdcc-cpx-launch-cpxagency.vercel.app
+    steps:
+      - name: Checkout frozen release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 188392c81696da5d0d61f5c6f0bec45f490a232d
+          fetch-depth: 0
+
+      - name: Prove exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$CANDIDATE_SHA"
+          echo "WDCC_RELEASE_SHA=PASS:$actual"
+
+      - name: Brand and route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/wdcc-logo-transparent.webp
+          test -s public/wdcc-hero-v2.webp
+          test -f app/api/inventory/route.ts
+          test -f app/api/leads/route.ts
+          test -f app/api/health/route.ts
+          test -f app/dealer/page.tsx
+          test -f app/admin/page.tsx
+          test -f app/dealer/inventory/page.tsx
+          test -f app/dealer/inventory/new/page.tsx
+          test -f app/dealer/leads/page.tsx
+          test -f app/privacy/page.tsx
+          test -f app/terms/page.tsx
+          if grep -R --line-number --exclude-dir=node_modules --exclude-dir=.next 'wdcc-official-logo\.webp' app components lib public 2>/dev/null; then
+            echo 'Retired WDCC logo path detected' >&2
+            exit 1
+          fi
+          echo "WDCC_BRAND_ROUTE_CONTRACT=PASS"
+
+      - name: Production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          echo "WDCC_PRODUCTION_BUILD=PASS"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Verify canonical environment authority without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN missing' >&2; exit 78; }
+          pull_env(){
+            project="$1"; out="$2"; dir="/tmp/wdcc-$project"
+            mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$project" > "$dir/.vercel/project.json"
+            (cd "$dir" && vercel env pull "$out" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
+          }
+          pull_env "$PHOENIX_PROJECT" /tmp/phoenix.env
+          pull_env "$DEALER_PROJECT" /tmp/dealer.env
+          pull_env "$STOREFRONT_PROJECT" /tmp/storefront.env
+
+          grep -q '^SESSION_SECRET=' /tmp/phoenix.env || { echo 'Phoenix SESSION_SECRET missing' >&2; exit 1; }
+          if ! grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix.env && ! grep -q '^BLOB_STORE_ID=' /tmp/phoenix.env; then
+            echo 'Phoenix Blob authority missing' >&2; exit 1
+          fi
+
+          verify_backend(){
+            file="$1"; name="$2"
+            value="$(sed -n 's/^WDCC_DEALER_BACKEND_URL=//p' "$file" | tail -1 | sed 's/^"//;s/"$//')"
+            if [ -n "$value" ] && [ "${value%/}" != "$CANONICAL_BACKEND" ]; then
+              echo "$name backend drift detected" >&2
+              exit 1
+            fi
+          }
+          verify_backend /tmp/dealer.env dealer
+          verify_backend /tmp/storefront.env storefront
+          echo "WDCC_ENV_AUTHORITY=PASS"
+
+      - name: Full candidate local E2E against canonical services
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/wdcc-candidate-local-e2e.sh
+          echo "WDCC_LOCAL_E2E=PASS"
+
+      - name: Release readiness summary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          # WDCC RELEASE READY — PASS
+
+          Candidate: `188392c81696da5d0d61f5c6f0bec45f490a232d`
+
+          This workflow performed no Vercel deployment or alias promotion.
+
+          Passed:
+          - exact candidate SHA
+          - canonical WDCC logo and hero
+          - required route source contract
+          - production Next.js build / TypeScript
+          - canonical Phoenix session + Blob authority
+          - dealer/storefront backend drift check
+          - full local E2E against canonical WDCC services
+
+          Next action: spend one Vercel deployment slot on the frozen release candidate, then execute the live acceptance checklist before moving aliases.
+          EOF
