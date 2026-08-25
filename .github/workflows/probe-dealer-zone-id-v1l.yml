@@ -1,0 +1,110 @@
+name: Probe WDCC Dealer Zone ID v1l
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-dealer-zone-id-v1l.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  NODE_VERSION: '22'
+  SOURCE_SHA: 62be4b2ac124ac1a8a7e5fedb1f568559808612f
+  BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  CUSTOMER_DOMAIN: wedontcarecars.com
+  WORKER_NAME: wdcc-dealer-command
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_LOG: debug
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Build conflict-only route probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs');const p='wrangler.jsonc';const cfg=JSON.parse(fs.readFileSync(p,'utf8'));
+          cfg.name=process.env.WORKER_NAME;cfg.workers_dev=true;
+          cfg.routes=[{pattern:`${process.env.DEALER_DOMAIN}/*`,zone_name:process.env.CUSTOMER_DOMAIN}];
+          cfg.vars=cfg.vars||{};cfg.vars.WDCC_RUNTIME_ROLE='frontend';cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;
+          fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          npx opennextjs-cloudflare build
+
+      - name: Recover zone id from expected route conflict
+        id: zone
+        shell: bash
+        run: |
+          set +e
+          npx wrangler deploy > /tmp/wrangler-debug.log 2>&1
+          rc=$?
+          set -e
+          sed -E 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' /tmp/wrangler-debug.log | tail -300
+          grep -q 'already exists' /tmp/wrangler-debug.log
+          ZONE_ID="$(grep -Eo '/zones/[0-9a-f]{32}/' /tmp/wrangler-debug.log | head -1 | cut -d/ -f3 || true)"
+          if [ -z "$ZONE_ID" ]; then
+            ZONE_ID="$(grep -Eo 'zones/[0-9a-f]{32}' /tmp/wrangler-debug.log | head -1 | cut -d/ -f2 || true)"
+          fi
+          echo "route_probe_rc=$rc"
+          echo "zone_id=$ZONE_ID"
+          test -n "$ZONE_ID"
+          echo "id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Query dealer DNS directly by recovered zone id
+        id: dns
+        env:
+          ZONE_ID: ${{ steps.zone.outputs.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100"
+          code="$(curl -sS -o /tmp/dns.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API")"
+          echo "dns_http=$code"
+          cat /tmp/dns.json | jq '{success,errors,result:[.result[]? | {id,type,name,content,proxied,ttl}]}' 2>/dev/null || cat /tmp/dns.json
+          echo "http=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = 200 ]; then
+            COUNT="$(jq '.result|length' /tmp/dns.json)"
+            test "$COUNT" -eq 1
+            echo "record_id=$(jq -r '.result[0].id' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+            echo "type=$(jq -r '.result[0].type' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+            echo "content=$(jq -r '.result[0].content' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+            echo "proxied=$(jq -r '.result[0].proxied // false' /tmp/dns.json)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZONE_ID: ${{ steps.zone.outputs.id }}
+          DNS_HTTP: ${{ steps.dns.outputs.http }}
+          RECORD_ID: ${{ steps.dns.outputs.record_id }}
+          TYPE: ${{ steps.dns.outputs.type }}
+          CONTENT: ${{ steps.dns.outputs.content }}
+          PROXIED: ${{ steps.dns.outputs.proxied }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer zone-id probe v1l ${GITHUB_RUN_ID}" --body "Recovered zone id: \`$ZONE_ID\`. Direct dealer DNS query HTTP: \`$DNS_HTTP\`. Record: \`$RECORD_ID\` type \`$TYPE\` content \`$CONTENT\` proxied \`$PROXIED\`. Probe expected the pre-existing route conflict and made no DNS or route changes." || true
