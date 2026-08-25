@@ -1,0 +1,76 @@
+name: Probe WDCC Dealer Cloudflare DNS v1k
+
+on:
+  push:
+    branches: [release/dealer-cloudflare-v1]
+    paths:
+      - '.github/workflows/probe-dealer-cloudflare-dns-v1k.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  LIVE_WORKER: wdcc-dealer-frontdoor
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Capture public DNS and current live response
+        id: dns
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq dnsutils >/dev/null
+          echo '--- CNAME ---'
+          CNAME="$(dig +short CNAME "$DEALER_DOMAIN" | head -1 | sed 's/\.$//')"
+          echo "${CNAME:-<none>}"
+          echo '--- A ---'
+          dig +short A "$DEALER_DOMAIN" || true
+          echo '--- AAAA ---'
+          dig +short AAAA "$DEALER_DOMAIN" || true
+          echo '--- HTTP HEADERS ---'
+          curl -sS -D - -o /tmp/current-body "https://$DEALER_DOMAIN/api/health?v1k=$GITHUB_RUN_ID" | sed -n '1,30p'
+          echo '--- HEALTH BODY ---'
+          cat /tmp/current-body | jq . 2>/dev/null || head -c 2000 /tmp/current-body
+          echo "cname=$CNAME" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect account-level Worker custom domains
+        id: domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains"
+          code="$(curl -sS -o /tmp/domains.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API")"
+          echo "workers_domains_http=$code"
+          cat /tmp/domains.json | jq . 2>/dev/null || cat /tmp/domains.json
+          echo "http=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = 200 ]; then
+            jq -r --arg h "$DEALER_DOMAIN" '.result[]? | select(.hostname==$h)' /tmp/domains.json >/tmp/dealer-domain.json
+            if [ -s /tmp/dealer-domain.json ]; then
+              echo 'dealer_custom_domain=true' >> "$GITHUB_OUTPUT"
+              cat /tmp/dealer-domain.json
+            else
+              echo 'dealer_custom_domain=false' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CNAME: ${{ steps.dns.outputs.cname }}
+          DOMAINS_HTTP: ${{ steps.domains.outputs.http }}
+          CUSTOM_DOMAIN: ${{ steps.domains.outputs.dealer_custom_domain }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer DNS probe v1k ${GITHUB_RUN_ID}" --body "Dealer public CNAME: \`$CNAME\`. Account Worker domains API HTTP: \`$DOMAINS_HTTP\`. Dealer already a Worker Custom Domain: \`$CUSTOM_DOMAIN\`. No DNS, route, Worker deployment, or storefront mutation was performed." || true
