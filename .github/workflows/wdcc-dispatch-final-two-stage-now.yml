@@ -1,0 +1,64 @@
+name: WDCC Dispatch Final Two-Stage Now
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-dispatch-final-two-stage-now.yml']
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
+      LIVE_APEX: https://wedontcarecars.com
+    steps:
+      - name: Re-prove exact source and live baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(gh issue view 205 --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          printf '%s' "$body" | grep -q "$FINAL_SHA"
+          printf '%s' "$body" | grep -q 'NO-GO FOR PROMOTION YET'
+          curl -fsS "$LIVE_APEX/api/health?dispatch=$GITHUB_RUN_ID" -o /tmp/health.json
+          jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?dispatch=$GITHUB_RUN_ID" -o /tmp/inventory.json
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/inventory.json >/dev/null
+
+      - name: Recheck rolling 24h Vercel count
+        id: cap
+        shell: bash
+        run: |
+          set -euo pipefail
+          since="$(( $(date -u +%s) * 1000 - 24 * 60 * 60 * 1000 ))"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&limit=100&since=$since" \
+            -o /tmp/deployments.json
+          count="$(jq '.deployments|length' /tmp/deployments.json)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          test "$count" -le 94 || { echo "Capacity moved back to $count; refusing dispatch" >&2; exit 78; }
+          echo "CAPACITY_RECHECK=PASS:$count"
+
+      - name: Lock and dispatch exact cert
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COUNT: ${{ steps.cap.outputs.count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'WDCC FINAL CERT AUTO DISPATCH in:title' --json number --jq 'length')"
+          test "$existing" = 0 || { echo 'Final-cert dispatch lock already exists; refusing duplicate.'; exit 0; }
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC FINAL CERT AUTO DISPATCH ${GITHUB_RUN_ID}" \
+            --body "Exact SHA: \`$FINAL_SHA\`\nCapacity recheck: \`$COUNT\` deployments in rolling 24h.\nLive health and QA isolation passed.\nDispatching the manual-only two-stage no-alias certification workflow."
+          gh workflow run wdcc-final-two-stage-cert-v1.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo 'FINAL_TWO_STAGE_DISPATCHED=YES'
