@@ -55,14 +55,41 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes vercel@59.3.0 curl / --deployment "$CANDIDATE_URL" > /tmp/home.html
-          grep -q 'intro-sequence' /tmp/home.html
-          grep -q 'intro-smoke' /tmp/home.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
-          grep -q 'wdcc-hero-v2.webp' /tmp/home.html
-          grep -qi 'schedule a test drive' /tmp/home.html
-          grep -qi 'get qualified\|get pre-approved\|get approved' /tmp/home.html
-          grep -qi 'contact us\|call sean' /tmp/home.html
+          missing=0
+          check() {
+            local label="$1" pattern="$2" flags="${3:-}"
+            if grep $flags -q -- "$pattern" /tmp/home.html; then
+              echo "PASS: $label"
+            else
+              echo "FAIL: $label (pattern: $pattern)" >&2
+              missing=1
+            fi
+          }
+          echo "Candidate HTML bytes: $(wc -c < /tmp/home.html)"
+          check "intro sequence" 'intro-sequence'
+          check "intro smoke" 'intro-smoke'
+          check "transparent logo asset" 'wdcc-logo-transparent.webp'
+          check "hero asset" 'wdcc-hero-v2.webp'
+          check "schedule test drive CTA" 'schedule a test drive' '-i'
+          if grep -Eqi 'get qualified|get pre-approved|get approved' /tmp/home.html; then
+            echo "PASS: approval CTA"
+          else
+            echo "FAIL: approval CTA" >&2
+            missing=1
+          fi
+          if grep -Eqi 'contact us|call sean' /tmp/home.html; then
+            echo "PASS: contact CTA"
+          else
+            echo "FAIL: contact CTA" >&2
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "--- relevant candidate tokens ---" >&2
+            grep -Eio 'intro[-_a-z0-9]*|wdcc[-_a-z0-9.]*|schedule[^<]{0,80}|qualified[^<]{0,80}|approved[^<]{0,80}|contact[^<]{0,80}|call sean[^<]{0,80}' /tmp/home.html | head -n 120 >&2 || true
+            exit 1
+          fi
           npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
+          echo "Health response: $(cat /tmp/health.json)"
           jq -e '.ok == true' /tmp/health.json >/dev/null
 
       - name: Capture current production rollback target
@@ -138,3 +165,4 @@ jobs:
 # This workflow validates the immutable candidate before promotion and restores
 # the previous production deployment automatically if post-promotion checks fail.
 # Harness fix: Vercel curl reads VERCEL_TOKEN from environment; do not forward CLI auth flags to curl.
+# Diagnostics: report each candidate contract marker before promotion.
