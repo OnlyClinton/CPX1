@@ -83,6 +83,19 @@ jobs:
         if: steps.creds.outputs.ready == 'true'
         run: npm install --global @railway/cli vercel@59.3.0
 
+      - name: Link or create Railway backend service
+        if: steps.creds.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
+          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --json >/tmp/railway-link.json
+          railway service list --json >/tmp/railway-services.json
+          if ! jq -e --arg service "$SERVICE" '.. | objects | select((.name? // "") == $service)' /tmp/railway-services.json >/dev/null; then
+            railway add --service "$SERVICE" --json >/tmp/railway-service-created.json
+          fi
+          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json >/tmp/railway-service-link.json
+
       - name: Pull canonical state authority from Vercel
         if: steps.creds.outputs.ready == 'true'
         id: authority
@@ -119,11 +132,11 @@ jobs:
           set -euo pipefail
           SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
           railway variable set WDCC_RUNTIME_ROLE=backend NEXT_TELEMETRY_DISABLED=1 \
-            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+            --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
           cat /tmp/session.secret | railway variable set SESSION_SECRET --stdin \
-            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+            --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
           cat /tmp/blob.secret | railway variable set BLOB_READ_WRITE_TOKEN --stdin \
-            --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
+            --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --skip-deploys
           rm -f /tmp/session.secret /tmp/blob.secret /tmp/phoenix.env
 
       - name: Deploy Railway backend
@@ -132,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
-          railway up --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --ci
+          railway up --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --ci
 
       - name: Resolve Railway backend URL
         if: steps.creds.outputs.ready == 'true' && steps.authority.outputs.authority == 'portable'
@@ -141,10 +154,10 @@ jobs:
         run: |
           set -euo pipefail
           SERVICE="${RAILWAY_SERVICE_SECRET:-wdcc-backend}"
-          railway domain list --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domains.json || true
+          railway domain list --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domains.json || true
           DOMAIN="$(jq -r '.. | strings | select(test("(^https://)?[^/]+\\.up\\.railway\\.app/?$"))' /tmp/railway-domains.json 2>/dev/null | head -1 | sed 's#^https://##;s#/$##')"
           if [ -z "$DOMAIN" ]; then
-            railway domain --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domain-created.json
+            railway domain --environment "$RAILWAY_ENVIRONMENT" --service "$SERVICE" --json > /tmp/railway-domain-created.json
             DOMAIN="$(jq -r '.. | strings | select(test("(^https://)?[^/]+\\.up\\.railway\\.app/?$"))' /tmp/railway-domain-created.json 2>/dev/null | head -1 | sed 's#^https://##;s#/$##')"
           fi
           [ -n "$DOMAIN" ] || { echo 'Unable to resolve Railway service domain' >&2; exit 1; }
@@ -250,8 +263,10 @@ jobs:
 
           curl -fsS "$URL/api/health?provider-cutover=$GITHUB_RUN_ID" -o /tmp/cf-health.json
           jq -e '.ok == true and .backend == "healthy"' /tmp/cf-health.json >/dev/null
-          content_type="$(curl -fsSI "$URL/api/inventory?provider-cutover=$GITHUB_RUN_ID" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
+          curl -fsS -D /tmp/inventory.headers -o /tmp/inventory.json "$URL/api/inventory?provider-cutover=$GITHUB_RUN_ID"
+          content_type="$(tr -d '\r' </tmp/inventory.headers | awk -F': ' 'tolower($1)=="content-type"{print tolower($2)}' | tail -1)"
           case "$content_type" in application/json*) ;; *) echo "Inventory endpoint is not JSON: $content_type" >&2; exit 1;; esac
+          jq -e '.ok == true and (.items | type == "array")' /tmp/inventory.json >/dev/null
 
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "deployed=true" >> "$GITHUB_OUTPUT"
