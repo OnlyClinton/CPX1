@@ -1,0 +1,188 @@
+name: WDCC Phoenix OIDC Archive Final
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-phoenix-oidc-archive-final.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-phoenix-oidc-archive-final
+  cancel-in-progress: false
+
+env:
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  REPAIR_SHA: 1b5fbf7fea54f88ee4eefcb622ca7f1a19cc94d8
+  LIVE_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+  LIVE: https://wdcc-cpx-launch.vercel.app
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REPAIR_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prepare and prove OIDC authority
+        id: proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          code="$(curl -sS -o /tmp/live-before.json -w '%{http_code}' "$LIVE/api/health?archive_final=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$LIVE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-before.json >/dev/null
+
+          mkdir -p /tmp/p/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT" > /tmp/p/.vercel/project.json
+          (cd /tmp/p && vercel env pull /tmp/p/prod.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
+          set -a; . /tmp/p/prod.env; set +a
+          test -n "${BLOB_READ_WRITE_TOKEN:-}"
+          echo "::add-mask::$BLOB_READ_WRITE_TOKEN"
+          printf '%s' "$BLOB_READ_WRITE_TOKEN" > /tmp/original-token
+
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          OIDC="$(curl -fsS -X POST "$api/v1/projects/$PROJECT/token?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data '{"source":"wdcc-phoenix-archive-final"}' | jq -r '.token // empty')"
+          test -n "$OIDC"
+          echo "::add-mask::$OIDC"
+          OIDC_TOKEN="$OIDC" BLOB_STORE_ID="$STORE_ID" node --input-type=module <<'NODE'
+          import {get} from '@vercel/blob';
+          const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,oidcToken:process.env.OIDC_TOKEN,storeId:process.env.BLOB_STORE_ID});
+          if(!r||r.statusCode!==200||!r.stream)throw Error('OIDC_STATE_READ_FAILED');
+          const a=[];for await(const c of r.stream)a.push(c);const s=JSON.parse(Buffer.concat(a).toString());
+          if(!Array.isArray(s.users)||!Array.isArray(s.vehicles)||!Array.isArray(s.leads))throw Error('OIDC_STATE_CONTRACT_INVALID');
+          console.log(JSON.stringify({oidcReadable:true,revision:s.revision,users:s.users.length,vehicles:s.vehicles.length,leads:s.leads.length}));
+          NODE
+          echo proven=true >> "$GITHUB_OUTPUT"
+
+      - name: Make future Phoenix production OIDC-first
+        if: steps.proof.outputs.proven == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          curl -fsS "$api/v10/projects/$PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env.json
+          mapfile -t token_ids < <(jq -r '.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target//[])|index("production"))) | .id' /tmp/env.json)
+          test "${#token_ids[@]}" -ge 1
+          touch /tmp/env-mutated
+          for id in "${token_ids[@]}"; do
+            targets="$(jq -c --arg id "$id" '.envs[]|select(.id==$id)|(.target//[])' /tmp/env.json)"
+            remaining="$(printf '%s' "$targets" | jq -c '[.[]|select(.!="production")]')"
+            if [ "$(printf '%s' "$remaining" | jq length)" -eq 0 ]; then
+              curl -fsS -X DELETE "$api/v9/projects/$PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" >/dev/null
+            else
+              jq -n --argjson target "$remaining" '{target:$target}' >/tmp/token-patch.json
+              curl -fsS -X PATCH "$api/v9/projects/$PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/token-patch.json >/dev/null
+            fi
+          done
+          curl -fsS "$api/v10/projects/$PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env2.json
+          mapfile -t store_ids < <(jq -r '.envs[]? | select(.key=="BLOB_STORE_ID" and ((.target//[])|index("production"))) | .id' /tmp/env2.json)
+          if [ "${#store_ids[@]}" -eq 0 ]; then
+            jq -n --arg value "$STORE_ID" '[{key:"BLOB_STORE_ID",value:$value,type:"plain",target:["production"]}]' >/tmp/store-create.json
+            curl -fsS -X POST "$api/v10/projects/$PROJECT/env?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/store-create.json >/dev/null
+          else
+            for id in "${store_ids[@]}"; do
+              targets="$(jq -c --arg id "$id" '.envs[]|select(.id==$id)|.target' /tmp/env2.json)"
+              jq -n --arg value "$STORE_ID" --argjson target "$targets" '{key:"BLOB_STORE_ID",value:$value,type:"plain",target:$target}' >/tmp/store-patch.json
+              curl -fsS -X PATCH "$api/v9/projects/$PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/store-patch.json >/dev/null
+            done
+          fi
+          curl -fsS "$api/v10/projects/$PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env3.json
+          jq -e '[.envs[]?|select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target//[])|index("production")))]|length==0' /tmp/env3.json >/dev/null
+          jq -e '[.envs[]?|select(.key=="BLOB_STORE_ID" and ((.target//[])|index("production")))]|length>=1' /tmp/env3.json >/dev/null
+
+      - name: Build exact commit under OIDC-first production env
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REPAIR_SHA"
+          rm -rf .vercel .next
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          ! grep -q '^BLOB_READ_WRITE_TOKEN=' .vercel/.env.production.local
+          grep -q '^BLOB_STORE_ID=' .vercel/.env.production.local
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+
+      - name: Deploy one archived skip-domain candidate
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel deploy --prebuilt --prod --skip-domain --archive=tgz --yes --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
+          test -n "$url"
+          printf '%s' "$url" > /tmp/candidate
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Gate candidate and unchanged live production
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(cat /tmp/candidate)"
+          good=0
+          for i in $(seq 1 20); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$url/api/health?archive_final=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e --arg sha "$REPAIR_SHA" '.ok==true and .degraded==false and .storage=="oidc" and .state=="readable" and .commit==$sha' /tmp/health.json >/dev/null 2>&1; then good=1; break; fi
+            sleep 2
+          done
+          cat /tmp/health.json
+          test "$good" = 1
+          curl -fsS "$url/api/inventory?archive_final=$GITHUB_RUN_ID" > /tmp/inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
+
+          curl -fsS "$LIVE/api/health?archive_final_after=$GITHUB_RUN_ID" > /tmp/live-after.json
+          jq -e --arg sha "$LIVE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-after.json >/dev/null
+          test "$(curl -sS -o /tmp/dealer-health.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/health)" = 200
+          jq -e '.ok==true and .degraded==false' /tmp/dealer-health.json >/dev/null
+          test "$(curl -sS -o /tmp/dealer-inventory.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/inventory)" = 200
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/dealer-inventory.json >/dev/null
+          test "$(curl -sS -o /tmp/leads.json -w '%{http_code}' https://wedontcarecars.com/api/leads)" = 401
+          jq -e 'type=="object"' /tmp/leads.json >/dev/null
+          echo accepted=true >> "$GITHUB_OUTPUT"
+
+      - name: Restore static production token if any post-mutation step failed
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f /tmp/env-mutated ] && [ -f /tmp/original-token ] || exit 0
+          tok="$(cat /tmp/original-token)"
+          echo "::add-mask::$tok"
+          jq -n --arg value "$tok" '[{key:"BLOB_READ_WRITE_TOKEN",value:$value,type:"encrypted",target:["production"],comment:"Automatic rollback after WDCC archived OIDC repair failure"}]' > /tmp/restore.json
+          curl -fsS -X POST "https://api.vercel.com/v10/projects/$PROJECT/env?upsert=true&teamId=$ORG_ID" -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/restore.json > /tmp/restore-response.json
+          jq -e '((.failed//[])|length)==0' /tmp/restore-response.json >/dev/null
+          echo 'Static production Blob token restored.'
+
+      - name: Publish repair evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          CANDIDATE: ${{ steps.deploy.outputs.url }}
+          ACCEPTED: ${{ steps.gate.outputs.accepted }}
+        shell: bash
+        run: |
+          h='not captured'; [ -f /tmp/health.json ] && h="$(cat /tmp/health.json)"
+          body=$(printf 'Status: **%s**\nCandidate: `%s`\nOIDC accepted: `%s`\nHealth: `%s`\n\nArchived upload (`--archive=tgz`) avoids the Vercel api-upload-free file-count ceiling. No production alias or DNS move is performed.' "$STATUS" "${CANDIDATE:-not-created}" "${ACCEPTED:-false}" "$h")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Phoenix OIDC archive final ${GITHUB_RUN_ID}" --body "$body" || true
