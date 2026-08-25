@@ -1,0 +1,102 @@
+name: WDCC Lint Hardening v2
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/wdcc-lint-hardening-v2.yml'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    env:
+      CANDIDATE_SHA: 04041fba351895b36e9bbe18b1d90d4c9ef51373
+      TARGET_BRANCH: qa/wdcc-lint-hardening-v2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Checkout exact candidate
+        run: git checkout --detach "$CANDIDATE_SHA"
+      - run: npm ci
+      - name: Capture baseline lint
+        shell: bash
+        run: |
+          set +e
+          npx --yes @biomejs/biome@1.9.4 lint --max-diagnostics=1000 app lib scripts 2>&1 | tee /tmp/before.txt
+          true
+      - name: Apply safe Biome fixes only
+        shell: bash
+        run: npx --yes @biomejs/biome@1.9.4 check --write --max-diagnostics=1000 app lib scripts || true
+      - name: Validate after safe fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          npm run build
+      - name: Capture remaining lint and rule counts
+        id: after
+        shell: bash
+        run: |
+          set +e
+          npx --yes @biomejs/biome@1.9.4 lint --max-diagnostics=1000 app lib scripts 2>&1 | tee /tmp/after.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          before="$(grep -Eo 'Found [0-9]+ error' /tmp/before.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"
+          after="$(grep -Eo 'Found [0-9]+ error' /tmp/after.txt | tail -1 | grep -Eo '[0-9]+' || echo 0)"
+          python3 - <<'PY'
+          import re,collections
+          text=open('/tmp/after.txt',errors='replace').read()
+          rules=collections.Counter(re.findall(r'lint/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+',text))
+          with open('/tmp/rules.txt','w') as f:
+              for rule,count in rules.most_common(30): f.write(f'{count:4d} {rule}\n')
+          PY
+          echo "before=$before" >> "$GITHUB_OUTPUT"
+          echo "after=$after" >> "$GITHUB_OUTPUT"
+          echo "lint_rc=$rc" >> "$GITHUB_OUTPUT"
+          cat /tmp/rules.txt
+      - name: Commit safe-fix branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B "$TARGET_BRANCH"
+          git config user.name 'WDCC QA Bot'
+          git config user.email 'wdcc-qa@users.noreply.github.com'
+          git add app lib scripts
+          git commit -m 'Apply safe WDCC lint and formatter fixes' || true
+          git push --force origin HEAD:"$TARGET_BRANCH"
+      - name: Report lint hardening
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BEFORE: ${{ steps.after.outputs.before }}
+          AFTER: ${{ steps.after.outputs.after }}
+        shell: bash
+        run: |
+          rules='not captured'; [ -f /tmp/rules.txt ] && rules="$(cat /tmp/rules.txt)"
+          body=$(cat <<EOF
+          Candidate source: \`$CANDIDATE_SHA\`
+          Safe-fix branch: \`$TARGET_BRANCH\`
+          Status: **$STATUS**
+          Lint errors before: **${BEFORE:-unknown}**
+          Lint errors after safe fixes: **${AFTER:-unknown}**
+          TypeScript + production build must pass before the branch is pushed.
+
+          Remaining rules:
+          \`\`\`
+          $rules
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC lint hardening v2 ${GITHUB_RUN_ID}" --body "$body" || true
+
+# Candidate-only quality lane. No Vercel deployment or production mutation.
