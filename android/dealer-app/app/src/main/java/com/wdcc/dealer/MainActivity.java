@@ -17,14 +17,23 @@ import android.webkit.WebViewClient;
 
 import androidx.core.content.FileProvider;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4013;
-    private static final String DEALER_URL = "https://wdcc-cpx-launch-cpxagency.vercel.app/dealer";
+    private static final String[] DEALER_ENDPOINTS = new String[]{
+            "https://dealer.wedontcarecars.com/dealer",
+            "https://wdcc-cpx-launch-cpxagency.vercel.app/dealer",
+            "https://wdcc-v32-storefront-7bw9v7387-cpxagency.vercel.app/dealer"
+    };
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
@@ -33,7 +42,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         webView = new WebView(this);
         setContentView(webView);
 
@@ -47,7 +55,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " WDCCDealerApp/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " WDCCDealerApp/1.1");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -59,22 +67,13 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase();
                 String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
-
-                if ((scheme.equals("https") || scheme.equals("http")) && isTrustedHost(host)) {
-                    return false;
-                }
+                if ((scheme.equals("https") || scheme.equals("http")) && isTrustedHost(host)) return false;
                 if (scheme.equals("tel") || scheme.equals("sms") || scheme.equals("mailto")) {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
-                    } catch (Exception ignored) {
-                    }
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) {}
                     return true;
                 }
                 if (scheme.equals("https") || scheme.equals("http")) {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
-                    } catch (Exception ignored) {
-                    }
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) {}
                     return true;
                 }
                 return false;
@@ -103,9 +102,7 @@ public class MainActivity extends Activity {
                         camera.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         camera.setClipData(ClipData.newRawUri("WDCC vehicle photo", cameraUri));
                         initial.add(camera);
-                    } catch (IOException ignored) {
-                        cameraUri = null;
-                    }
+                    } catch (IOException ignored) { cameraUri = null; }
                 }
 
                 Intent chooser = Intent.createChooser(gallery, "Add vehicle photos");
@@ -115,12 +112,49 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState == null) webView.loadUrl(DEALER_URL);
+        if (savedInstanceState == null) resolveAndLoad();
         else webView.restoreState(savedInstanceState);
+    }
+
+    private void resolveAndLoad() {
+        new Thread(() -> {
+            String target = DEALER_ENDPOINTS[1];
+            for (String endpoint : DEALER_ENDPOINTS) {
+                if (isRealDealerPortal(endpoint)) { target = endpoint; break; }
+            }
+            String resolved = target;
+            runOnUiThread(() -> webView.loadUrl(resolved));
+        }).start();
+    }
+
+    private boolean isRealDealerPortal(String endpoint) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(endpoint).openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(6000);
+            connection.setRequestProperty("User-Agent", "WDCCDealerApp-Probe/1.1");
+            int code = connection.getResponseCode();
+            if (code < 200 || code >= 400) return false;
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8));
+            StringBuilder body = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null && body.length() < 160000) body.append(line);
+            String html = body.toString().toLowerCase();
+            boolean dealerMarker = html.contains("checking secure session") || html.contains("dealer sign in") || html.contains("dealer portal") || html.contains("dealer operations");
+            boolean wrongSalesPage = html.contains("see real inventory") && html.contains("text sean") && !html.contains("checking secure session");
+            return dealerMarker && !wrongSalesPage;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
     }
 
     private boolean isTrustedHost(String host) {
         return host.equals("wdcc-cpx-launch-cpxagency.vercel.app")
+                || host.equals("wdcc-v32-storefront-7bw9v7387-cpxagency.vercel.app")
                 || host.equals("dealer.wedontcarecars.com")
                 || host.equals("wedontcarecars.com")
                 || host.equals("www.wedontcarecars.com")
@@ -133,42 +167,21 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != FILE_CHOOSER_REQUEST || fileCallback == null) return;
-
         Uri[] result = null;
         if (resultCode == RESULT_OK) {
             if (data != null && data.getClipData() != null) {
                 ClipData clip = data.getClipData();
                 result = new Uri[clip.getItemCount()];
                 for (int i = 0; i < clip.getItemCount(); i++) result[i] = clip.getItemAt(i).getUri();
-            } else if (data != null && data.getData() != null) {
-                result = new Uri[]{data.getData()};
-            } else if (cameraUri != null) {
-                result = new Uri[]{cameraUri};
-            }
+            } else if (data != null && data.getData() != null) result = new Uri[]{data.getData()};
+            else if (cameraUri != null) result = new Uri[]{cameraUri};
         }
-
         fileCallback.onReceiveValue(result);
         fileCallback = null;
         cameraUri = null;
     }
 
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        webView.saveState(outState);
-        super.onSaveInstanceState(outState);
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (fileCallback != null) fileCallback.onReceiveValue(null);
-        fileCallback = null;
-        if (webView != null) webView.destroy();
-        super.onDestroy();
-    }
+    @Override protected void onSaveInstanceState(Bundle outState) { webView.saveState(outState); super.onSaveInstanceState(outState); }
+    @Override public void onBackPressed() { if (webView != null && webView.canGoBack()) webView.goBack(); else super.onBackPressed(); }
+    @Override protected void onDestroy() { if (fileCallback != null) fileCallback.onReceiveValue(null); fileCallback = null; if (webView != null) webView.destroy(); super.onDestroy(); }
 }
