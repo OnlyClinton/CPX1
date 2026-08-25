@@ -1,0 +1,223 @@
+name: WDCC HOME 8AR EDGE HOTFIX
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-home-8ar-edge-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-home-8ar-edge-hotfix
+  cancel-in-progress: true
+
+env:
+  ORIGIN: https://www.wedontcarecars.com
+  APEX: https://wedontcarecars.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Require Cloudflare authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Prove source assets before edge change
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$ORIGIN/?edge_hotfix=$GITHUB_RUN_ID" -o /tmp/origin.html
+          grep -q 'intro-sequence' /tmp/origin.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/origin.html
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN/wdcc-hero-v2.webp")" = 200
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$ORIGIN/wdcc-logo-transparent.webp")" = 200
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.90.0 >/dev/null
+
+      - name: Build corrected 8AR edge worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-home-8ar-edge
+          cat > /tmp/wdcc-home-8ar-edge/worker.js <<'EOF'
+          const ORIGIN = "https://www.wedontcarecars.com";
+          const ROOT_FIX = `
+          <style id="wdcc-8ar-edge-hotfix">
+          .hero{
+            background-image:radial-gradient(circle at 74% 40%,#e2231a32,#0000 30%),linear-gradient(105deg,#05080ccf 0,#05080c9e 43%,#05080c38 70%,#0000 88%),url('/wdcc-hero-v2.webp')!important;
+            background-position:68% center!important;
+            background-size:cover!important;
+            background-repeat:no-repeat!important;
+          }
+          .logo-button{background-image:url('/wdcc-logo-transparent.webp')!important;background-position:left center!important;background-repeat:no-repeat!important;background-size:contain!important}
+          @media(max-width:900px){
+            .home-header-shell{background:#02070ceb!important;border-bottom:1px solid #ffffff12!important;backdrop-filter:blur(16px)!important}
+            .utility-bar{height:30px!important;min-height:30px!important;padding:0 14px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;background:#02070c!important;border-bottom:1px solid #ffffff12!important;font-size:8px!important;letter-spacing:.075em!important}
+            .utility-bar>span{white-space:nowrap!important}.utility-bar>span:nth-child(2){display:none!important}
+            .site-header{height:78px!important;min-height:78px!important;padding:0 14px!important;display:grid!important;grid-template-columns:minmax(0,1fr) 44px!important;align-items:center!important;gap:12px!important;background:transparent!important}
+            .logo-button{grid-column:1!important;justify-self:start!important;width:108px!important;height:82px!important;margin:0!important;padding:0!important;filter:drop-shadow(0 5px 15px #000b)!important}
+            .logo-button>span{display:none!important}.mobile-call{display:none!important}
+            .mobile-menu{grid-column:2!important;justify-self:end!important;position:relative!important;inset:auto!important;display:grid!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;margin:0!important;padding:0!important;border:1px solid #ffffff24!important;border-radius:12px!important;background:#0a1621e8!important;color:#fff!important;box-shadow:none!important}
+            .mobile-menu>span{display:grid!important;width:18px!important;height:14px!important;align-content:space-between!important}.mobile-menu i{display:block!important;width:18px!important;height:2px!important;margin:0!important;border:0!important;border-radius:3px!important;background:#e8eef3!important;opacity:1!important}
+            .main-nav{position:absolute!important;z-index:520!important;top:70px!important;left:10px!important;right:10px!important;width:auto!important;margin:0!important;padding:8px!important;display:none!important;grid-template-columns:1fr 1fr!important;gap:2px!important;background:#07131ff7!important;border:1px solid #ffffff20!important;border-radius:14px!important;box-shadow:0 22px 60px #000d!important;backdrop-filter:blur(18px)!important}.main-nav.open{display:grid!important}
+            .main-nav a{min-height:46px!important;display:flex!important;align-items:center!important;padding:0 13px!important;border:0!important;border-radius:8px!important;color:#dfe8ef!important;font-size:10px!important;font-weight:900!important;letter-spacing:.05em!important;text-transform:uppercase!important}
+            .hero{min-height:calc(100svh - 108px)!important;background-position:73% center!important;align-items:end!important}
+            .hero:after{background:linear-gradient(180deg,#02050912 0,#02050926 40%,#020509b8 76%,#020509f0 100%)!important}
+            .hero-copy{z-index:3!important;max-width:92%!important;padding:0 14px 54px!important}
+            .hero h1{font-size:clamp(50px,13vw,78px)!important;line-height:.88!important;margin:12px 0 18px!important}
+            .hero-lead{color:#dce3e9!important;font-size:15px!important;line-height:1.45!important}
+            .hero-actions{display:none!important}
+            .benefit-strip{background:#071522!important;border-top:1px solid #173149!important;border-bottom:1px solid #173149!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:1px!important;padding:1px!important;display:grid!important}
+            .benefit-strip article{background:#0a1824!important;border:0!important;display:grid!important;grid-template-columns:42px minmax(0,1fr)!important;align-items:center!important;gap:10px!important;min-height:112px!important;padding:14px 12px!important}
+            .benefit-strip .icon{border:1px solid #6e7d8a!important;border-radius:50%!important;place-items:center!important;width:42px!important;height:42px!important;font-size:18px!important;display:grid!important}
+            .benefit-strip strong{display:block!important;font-size:11px!important;text-transform:uppercase!important}.benefit-strip article div>span{color:#aeb9c3!important;margin-top:4px!important;font-size:10px!important;line-height:1.3!important;display:block!important}
+            .mobile-action-bar{z-index:620!important;grid-template-columns:1fr 1fr!important;background:#050c13f7!important;border-top:1px solid #ffffff1c!important;box-shadow:0 -12px 32px #0008!important;backdrop-filter:blur(14px)!important}.mobile-action-bar a{min-height:58px!important;font-size:10px!important;font-weight:950!important}.mobile-action-bar a:nth-child(3){display:none!important}
+          }
+          @media(max-width:560px){
+            .site-header{height:74px!important;min-height:74px!important;padding:0 11px!important;grid-template-columns:minmax(0,1fr) 42px!important}.logo-button{width:100px!important;height:78px!important}.mobile-menu{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border-radius:11px!important}.main-nav{top:66px!important;left:7px!important;right:7px!important}.hero{min-height:calc(100svh - 104px)!important;background-position:74% center!important}.hero-copy{padding:0 12px 48px!important}.benefit-strip article{min-height:104px!important;padding:12px 10px!important}}
+          </style>`;
+
+          function target(request){
+            const incoming=new URL(request.url);
+            const out=new URL(ORIGIN);
+            out.pathname=incoming.pathname;
+            out.search=incoming.search;
+            return out;
+          }
+
+          function rewriteLocation(headers,incoming){
+            const location=headers.get('location');
+            if(!location)return;
+            try{
+              const loc=new URL(location,ORIGIN);
+              if(loc.hostname==='www.wedontcarecars.com'){
+                loc.protocol='https:'; loc.hostname=incoming.hostname; loc.port='';
+                headers.set('location',loc.toString());
+              }
+            }catch{}
+          }
+
+          async function proxy(request){
+            const incoming=new URL(request.url);
+            const headers=new Headers(request.headers);
+            headers.set('x-forwarded-host',incoming.host);
+            headers.set('x-forwarded-proto','https');
+            headers.delete('cf-worker');
+            const init={method:request.method,headers,redirect:'manual'};
+            if(!['GET','HEAD'].includes(request.method))init.body=request.body;
+            const response=await fetch(new Request(target(request).toString(),init));
+            const outHeaders=new Headers(response.headers);
+            rewriteLocation(outHeaders,incoming);
+            return {incoming,response,outHeaders};
+          }
+
+          class HeadInjector{element(el){el.append(ROOT_FIX,{html:true});}}
+
+          export default{
+            async fetch(request){
+              const {incoming,response,outHeaders}=await proxy(request);
+              const type=(response.headers.get('content-type')||'').toLowerCase();
+
+              if(type.includes('text/css')){
+                const css=(await response.text()).replaceAll('/hero-recovered.jpg','/wdcc-hero-v2.webp');
+                outHeaders.delete('content-length');
+                outHeaders.set('cache-control','no-store');
+                outHeaders.set('x-wdcc-edge','cloudflare-home-8ar-hotfix');
+                return new Response(css,{status:response.status,statusText:response.statusText,headers:outHeaders});
+              }
+
+              if(incoming.pathname==='/' && type.includes('text/html')){
+                const transformed=new HTMLRewriter().on('head',new HeadInjector()).transform(response);
+                const h=new Headers(transformed.headers);
+                rewriteLocation(h,incoming);
+                h.set('cache-control','no-store');
+                h.set('x-wdcc-edge','cloudflare-home-8ar-hotfix');
+                h.set('x-wdcc-origin','www.wedontcarecars.com');
+                return new Response(transformed.body,{status:transformed.status,statusText:transformed.statusText,headers:h});
+              }
+
+              outHeaders.set('x-wdcc-edge','cloudflare-home-8ar-hotfix');
+              return new Response(response.body,{status:response.status,statusText:response.statusText,headers:outHeaders});
+            }
+          };
+          EOF
+
+          cat > /tmp/wdcc-home-8ar-edge/wrangler.jsonc <<'EOF'
+          {
+            "$schema":"node_modules/wrangler/config-schema.json",
+            "name":"wdcc-home-sleek-edge",
+            "main":"worker.js",
+            "compatibility_date":"2026-08-25",
+            "workers_dev":true,
+            "observability":{"enabled":true}
+          }
+          EOF
+
+      - name: Deploy and verify candidate
+        id: stage
+        working-directory: /tmp/wdcc-home-8ar-edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy 2>&1 | tee /tmp/wrangler.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS -D /tmp/root.h -o /tmp/root.html -w '%{http_code}' "$URL/?hotfix=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            if [ "$code" = 200 ] && grep -q 'wdcc-8ar-edge-hotfix' /tmp/root.html && grep -q 'intro-sequence' /tmp/root.html; then break; fi
+            sleep 2
+          done
+          grep -qi '^x-wdcc-edge: cloudflare-home-8ar-hotfix' /tmp/root.h
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$URL/wdcc-hero-v2.webp")" = 200
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$URL/wdcc-logo-transparent.webp")" = 200
+          CSS_PATH="$(grep -Eo '/_next/static/chunks/[^\" ]+\.css' /tmp/root.html | head -1)"
+          test -n "$CSS_PATH"
+          test "$(curl -sS -o /tmp/live.css -w '%{http_code}' "$URL$CSS_PATH")" = 200
+          ! grep -q '/hero-recovered.jpg' /tmp/live.css
+          grep -q '/wdcc-hero-v2.webp' /tmp/live.css
+
+      - name: Bind apex route
+        working-directory: /tmp/wdcc-home-8ar-edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs'); const p='wrangler.jsonc'; const c=JSON.parse(fs.readFileSync(p,'utf8'));
+          c.routes=[{pattern:'wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];
+          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          wrangler deploy
+          sleep 5
+
+      - name: Double verify live apex
+        shell: bash
+        run: |
+          set -euo pipefail
+          for round in 1 2; do
+            curl -sS -D /tmp/live-$round.h -o /tmp/live-$round.html "$APEX/?intro=1&edge_hotfix=$GITHUB_RUN_ID&round=$round"
+            grep -qi '^x-wdcc-edge: cloudflare-home-8ar-hotfix' /tmp/live-$round.h
+            grep -q 'intro-sequence' /tmp/live-$round.html
+            grep -q 'wdcc-8ar-edge-hotfix' /tmp/live-$round.html
+            test "$(curl -sS -o /dev/null -w '%{http_code}' "$APEX/wdcc-hero-v2.webp?round=$round")" = 200
+            test "$(curl -sS -o /dev/null -w '%{http_code}' "$APEX/wdcc-logo-transparent.webp?round=$round")" = 200
+            CSS_PATH="$(grep -Eo '/_next/static/chunks/[^\" ]+\.css' /tmp/live-$round.html | head -1)"
+            test -n "$CSS_PATH"
+            curl -fsS "$APEX$CSS_PATH?edge_hotfix=$GITHUB_RUN_ID&round=$round" -o /tmp/live-$round.css
+            ! grep -q '/hero-recovered.jpg' /tmp/live-$round.css
+            grep -q '/wdcc-hero-v2.webp' /tmp/live-$round.css
+            sleep 2
+          done
+          echo 'WDCC_HOME_8AR_EDGE_HOTFIX=PASS'
