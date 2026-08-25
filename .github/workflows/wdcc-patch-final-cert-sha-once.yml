@@ -1,0 +1,32 @@
+name: WDCC Patch Final Cert SHA Once
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-patch-final-cert-sha-once.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Advance only frozen final-cert SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=.github/workflows/wdcc-final-cert-candidate-v1.yml
+          old=2cfb4c42237c49ee7294bb44390c5558ffa9b62f
+          new=4d229b6c04c641edc4798285a2fca7ad9cc97274
+          grep -q "$old" "$file"
+          sed -i "s/$old/$new/g" "$file"
+          test "$(grep -c "$new" "$file")" -ge 1
+          git config user.name github-actions
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$file"
+          git commit -m "Advance WDCC final certification to compile-fixed SHA"
+          git push origin HEAD:main
