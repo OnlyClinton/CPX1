@@ -1,4 +1,4 @@
-name: WDCC Phoenix Blob Repair Once
+name: WDCC Phoenix OIDC Repair Once
 
 on:
   push:
@@ -11,15 +11,13 @@ permissions:
   issues: write
 
 concurrency:
-  group: wdcc-phoenix-blob-repair-once
+  group: wdcc-phoenix-oidc-repair-once
   cancel-in-progress: false
 
 env:
   TEAM: cpxagency
   ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
-  DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
-  STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
   REPAIR_SHA: 1b5fbf7fea54f88ee4eefcb622ca7f1a19cc94d8
   LIVE_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
   CANONICAL_LIVE: https://wdcc-cpx-launch.vercel.app
@@ -42,206 +40,246 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Prove healthy live authority is pinned
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -o /tmp/live-before.json -w '%{http_code}' "$CANONICAL_LIVE/api/health?repair=${GITHUB_RUN_ID}")"
-          test "$code" = 200
-          jq -e --arg sha "$LIVE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-before.json >/dev/null
-          echo "Healthy live authority preserved at $LIVE_SHA"
-
-      - name: Resolve one proven readable Blob authority
-        id: authority
+      - name: Install exact dependencies and Vercel CLI
         shell: bash
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}"
           npm ci
           npm install --global vercel@59.3.0 >/dev/null
-          rm -rf /tmp/node_modules
-          ln -s "$PWD/node_modules" /tmp/node_modules
 
-          # Preserve the currently configured Phoenix session secret; only Blob authority is being repaired.
-          pdir=/tmp/current-phoenix
-          rm -rf "$pdir" && mkdir -p "$pdir/.vercel"
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > "$pdir/.vercel/project.json"
-          (cd "$pdir" && vercel env pull "$pdir/env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
-          grep -q '^SESSION_SECRET=' "$pdir/env"
-          set -a; . "$pdir/env"; set +a
+      - name: Prove live canonical authority is still healthy and pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/live-before.json -w '%{http_code}' "$CANONICAL_LIVE/api/health?oidc_repair=${GITHUB_RUN_ID}")"
+          test "$code" = 200
+          jq -e --arg sha "$LIVE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-before.json >/dev/null
+          echo "Live authority guard PASS: $LIVE_SHA"
+
+      - name: Prove current static token and generated Phoenix OIDC both read canonical Blob
+        id: proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+
+          mkdir -p /tmp/phoenix-env/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > /tmp/phoenix-env/.vercel/project.json
+          (cd /tmp/phoenix-env && vercel env pull /tmp/phoenix-env/prod.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
+          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/phoenix-env/prod.env
+          grep -q '^SESSION_SECRET=' /tmp/phoenix-env/prod.env
+          set -a; . /tmp/phoenix-env/prod.env; set +a
+          ORIGINAL_STATIC_TOKEN="$BLOB_READ_WRITE_TOKEN"
           CURRENT_SESSION_SECRET="$SESSION_SECRET"
-          CURRENT_STORE_ID="${BLOB_STORE_ID:-$STORE_ID}"
+          echo "::add-mask::$ORIGINAL_STATIC_TOKEN"
           echo "::add-mask::$CURRENT_SESSION_SECRET"
-          unset SESSION_SECRET BLOB_READ_WRITE_TOKEN VERCEL_OIDC_TOKEN BLOB_STORE_ID || true
+          printf '%s' "$ORIGINAL_STATIC_TOKEN" > /tmp/original-static-token
+          printf '%s' "$CURRENT_SESSION_SECRET" > /tmp/current-session-secret
 
-          cat >/tmp/wdcc-blob-probe.mjs <<'NODE'
+          BLOB_READ_WRITE_TOKEN="$ORIGINAL_STATIC_TOKEN" node --input-type=module <<'NODE'
           import {get} from '@vercel/blob';
           const r=await get('private/state/platform-v3.json',{access:'private',useCache:false});
-          if(!r||r.statusCode!==200||!r.stream) throw Error('STATE_READ_FAILED');
-          const chunks=[]; for await(const x of r.stream) chunks.push(x);
-          const state=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          if(!Array.isArray(state.users)||!Array.isArray(state.vehicles)||!Array.isArray(state.leads)) throw Error('STATE_CONTRACT_INVALID');
-          console.log(JSON.stringify({ok:true,revision:Number(state.revision||0),users:state.users.length,vehicles:state.vehicles.length,leads:state.leads.length}));
+          if(!r||r.statusCode!==200||!r.stream)throw Error('STATIC_STATE_READ_FAILED');
+          let bytes=0;for await(const c of r.stream)bytes+=c.length;
+          if(bytes<100)throw Error('STATIC_STATE_TOO_SMALL');
+          console.log(JSON.stringify({staticTokenReadable:true,bytes}));
           NODE
 
-          source_project=''
-          for project in "$DEALER_PROJECT" "$STOREFRONT_PROJECT" "$PHOENIX_PROJECT"; do
-            d="/tmp/authority-$project"
-            rm -rf "$d" && mkdir -p "$d/.vercel"
-            printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$project" > "$d/.vercel/project.json"
-            (cd "$d" && vercel env pull "$d/env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1) || continue
-            grep -q '^BLOB_READ_WRITE_TOKEN=' "$d/env" || continue
-            set +u
-            set -a; . "$d/env"; set +a
-            set -u
-            if [ -n "${BLOB_READ_WRITE_TOKEN:-}" ] && node /tmp/wdcc-blob-probe.mjs > "$d/probe.json" 2>/dev/null && jq -e '.ok==true' "$d/probe.json" >/dev/null; then
-              AUTH_BLOB_TOKEN="$BLOB_READ_WRITE_TOKEN"
-              source_project="$project"
-              break
-            fi
-            unset BLOB_READ_WRITE_TOKEN VERCEL_OIDC_TOKEN BLOB_STORE_ID SESSION_SECRET || true
-          done
-          test -n "$source_project" || { echo 'NO_PROVEN_READABLE_BLOB_AUTHORITY' >&2; exit 78; }
-          echo "::add-mask::$AUTH_BLOB_TOKEN"
-          printf '%s' "$AUTH_BLOB_TOKEN" > /tmp/repaired-blob-token
-          printf '%s' "$CURRENT_SESSION_SECRET" > /tmp/current-session-secret
-          printf '%s' "$CURRENT_STORE_ID" > /tmp/current-store-id
-          echo "source_project=$source_project" >> "$GITHUB_OUTPUT"
-          echo "Readable Blob authority proven from project $source_project"
+          oidc_json="$(curl -fsS -X POST "$api/v1/projects/$PHOENIX_PROJECT/token?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data '{"source":"wdcc-phoenix-oidc-repair"}')"
+          OIDC_TOKEN="$(printf '%s' "$oidc_json" | jq -r '.token // empty')"
+          test -n "$OIDC_TOKEN"
+          echo "::add-mask::$OIDC_TOKEN"
+          OIDC_TOKEN="$OIDC_TOKEN" BLOB_STORE_ID="$STORE_ID" node --input-type=module <<'NODE'
+          import {get} from '@vercel/blob';
+          const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,oidcToken:process.env.OIDC_TOKEN,storeId:process.env.BLOB_STORE_ID});
+          if(!r||r.statusCode!==200||!r.stream)throw Error('OIDC_STATE_READ_FAILED');
+          const chunks=[];for await(const c of r.stream)chunks.push(c);
+          const state=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if(!Array.isArray(state.users)||!Array.isArray(state.vehicles)||!Array.isArray(state.leads))throw Error('OIDC_STATE_CONTRACT_INVALID');
+          console.log(JSON.stringify({oidcReadable:true,revision:Number(state.revision||0),users:state.users.length,vehicles:state.vehicles.length,leads:state.leads.length}));
+          NODE
+          echo 'oidc_proven=true' >> "$GITHUB_OUTPUT"
 
-      - name: Build exact bad commit and deploy one isolated no-domain candidate
-        id: candidate
+      - name: Inspect Blob env metadata without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          curl -fsS "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env-meta.json
+          jq '[.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" or .key=="BLOB_STORE_ID") | {id,key,target,type,gitBranch,configurationId,contentHint,comment}]' /tmp/env-meta.json | tee /tmp/env-meta-safe.json
+          token_prod_count="$(jq '[.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target // []) | index("production")))] | length' /tmp/env-meta.json)"
+          echo "production_static_blob_entries=$token_prod_count"
+          test "$token_prod_count" -ge 1
+
+      - name: Remove only production scope from static Blob token and pin canonical store ID
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          test -f /tmp/original-static-token
+          test "${{ steps.proof.outputs.oidc_proven }}" = true
+
+          curl -fsS "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env-before-scope.json
+          mapfile -t TOKEN_IDS < <(jq -r '.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target // []) | index("production"))) | .id' /tmp/env-before-scope.json)
+          test "${#TOKEN_IDS[@]}" -ge 1
+          touch /tmp/blob-scope-mutation-started
+
+          for id in "${TOKEN_IDS[@]}"; do
+            targets="$(jq -c --arg id "$id" '.envs[] | select(.id==$id) | (.target // [])' /tmp/env-before-scope.json)"
+            remaining="$(printf '%s' "$targets" | jq -c '[.[] | select(. != "production")]')"
+            remain_count="$(printf '%s' "$remaining" | jq 'length')"
+            if [ "$remain_count" -gt 0 ]; then
+              jq -n --argjson target "$remaining" '{target:$target}' > /tmp/remove-prod-scope.json
+              curl -fsS -X PATCH "$api/v9/projects/$PHOENIX_PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/remove-prod-scope.json > /tmp/remove-prod-scope-response.json
+              jq -e '(.id|type)=="string"' /tmp/remove-prod-scope-response.json >/dev/null
+            else
+              curl -fsS -X DELETE "$api/v9/projects/$PHOENIX_PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" > /tmp/remove-prod-token-response.json
+            fi
+          done
+
+          # Ensure the OIDC fallback has the exact canonical store id in production.
+          curl -fsS "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env-mid.json
+          mapfile -t STORE_IDS < <(jq -r '.envs[]? | select(.key=="BLOB_STORE_ID" and ((.target // []) | index("production"))) | .id' /tmp/env-mid.json)
+          if [ "${#STORE_IDS[@]}" -eq 0 ]; then
+            jq -n --arg value "$STORE_ID" '[{key:"BLOB_STORE_ID",value:$value,type:"plain",target:["production"],comment:"Canonical WDCC Blob store for OIDC authority"}]' > /tmp/store-create.json
+            curl -fsS -X POST "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/store-create.json > /tmp/store-create-response.json
+            jq -e '((.failed // [])|length)==0' /tmp/store-create-response.json >/dev/null
+          else
+            for id in "${STORE_IDS[@]}"; do
+              type="$(jq -r --arg id "$id" '.envs[] | select(.id==$id) | .type' /tmp/env-mid.json)"
+              targets="$(jq -c --arg id "$id" '.envs[] | select(.id==$id) | .target' /tmp/env-mid.json)"
+              jq -n --arg value "$STORE_ID" --arg type "$type" --argjson target "$targets" '{key:"BLOB_STORE_ID",value:$value,type:$type,target:$target,comment:"Canonical WDCC Blob store for OIDC authority"}' > /tmp/store-update.json
+              curl -fsS -X PATCH "$api/v9/projects/$PHOENIX_PROJECT/env/$id?teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/store-update.json > /tmp/store-update-response.json
+              jq -e '.key=="BLOB_STORE_ID"' /tmp/store-update-response.json >/dev/null
+            done
+          fi
+
+          curl -fsS "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env-after-scope.json
+          jq -e '[.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target // []) | index("production")))] | length == 0' /tmp/env-after-scope.json >/dev/null
+          jq -e '[.envs[]? | select(.key=="BLOB_STORE_ID" and ((.target // []) | index("production")))] | length >= 1' /tmp/env-after-scope.json >/dev/null
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo 'Phoenix production storage authority is now OIDC-first; live deployments are immutable and unchanged.'
+
+      - name: Build exact failing commit under repaired production environment
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$REPAIR_SHA"
-          AUTH_BLOB_TOKEN="$(cat /tmp/repaired-blob-token)"
-          CURRENT_SESSION_SECRET="$(cat /tmp/current-session-secret)"
-          CURRENT_STORE_ID="$(cat /tmp/current-store-id)"
-          echo "::add-mask::$AUTH_BLOB_TOKEN"
-          echo "::add-mask::$CURRENT_SESSION_SECRET"
-
           rm -rf .vercel .next
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_PROJECT" > .vercel/project.json
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          ! grep -q '^BLOB_READ_WRITE_TOKEN=' .vercel/.env.production.local
+          grep -q '^BLOB_STORE_ID=' .vercel/.env.production.local
           vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
 
-          set +e
-          vercel deploy --prebuilt --prod --skip-domain --yes \
-            --env "BLOB_READ_WRITE_TOKEN=$AUTH_BLOB_TOKEN" \
-            --env "SESSION_SECRET=$CURRENT_SESSION_SECRET" \
-            --env "BLOB_STORE_ID=$CURRENT_STORE_ID" \
-            --token="$VERCEL_TOKEN" --scope="$TEAM" > /tmp/deploy.log 2>&1
-          rc=$?
-          set -e
-          sed -E 's/(BLOB_READ_WRITE_TOKEN|SESSION_SECRET)=[^ ]+/\1=***MASKED***/g' /tmp/deploy.log
-          test "$rc" = 0
-          candidate="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
-          test -n "$candidate"
-          echo "$candidate" > /tmp/candidate-url
-          echo "url=$candidate" >> "$GITHUB_OUTPUT"
-          echo "One isolated candidate created: $candidate"
-
-      - name: Gate repaired candidate before changing project environment
+      - name: Deploy exactly one isolated OIDC candidate with no alias move
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          candidate="$(cat /tmp/candidate-url)"
+          set +e
+          vercel deploy --prebuilt --prod --skip-domain --yes --token="$VERCEL_TOKEN" --scope="$TEAM" > /tmp/oidc-deploy.log 2>&1
+          rc=$?
+          set -e
+          cat /tmp/oidc-deploy.log
+          test "$rc" = 0
+          candidate="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/oidc-deploy.log | tail -1 || true)"
+          test -n "$candidate"
+          printf '%s' "$candidate" > /tmp/oidc-candidate-url
+          echo "url=$candidate" >> "$GITHUB_OUTPUT"
+          echo "OIDC candidate=$candidate"
+
+      - name: Gate OIDC candidate state and inventory
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$(cat /tmp/oidc-candidate-url)"
           good=0
           for i in $(seq 1 20); do
-            code="$(curl -sS -o /tmp/candidate-health.json -w '%{http_code}' "$candidate/api/health?repair=${GITHUB_RUN_ID}&try=$i" || true)"
-            if [ "$code" = 200 ] && jq -e --arg sha "$REPAIR_SHA" '.ok==true and .degraded==false and .state=="readable" and .commit==$sha' /tmp/candidate-health.json >/dev/null 2>&1; then
+            code="$(curl -sS -o /tmp/oidc-health.json -w '%{http_code}' "$candidate/api/health?oidc_repair=${GITHUB_RUN_ID}&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e --arg sha "$REPAIR_SHA" '.ok==true and .degraded==false and .storage=="oidc" and .state=="readable" and .commit==$sha' /tmp/oidc-health.json >/dev/null 2>&1; then
               good=1
               break
             fi
             sleep 2
           done
-          cat /tmp/candidate-health.json
+          cat /tmp/oidc-health.json
           test "$good" = 1
-          curl -fsS "$candidate/api/inventory?repair=${GITHUB_RUN_ID}" -o /tmp/candidate-inventory.json
-          jq -e '.ok==true and (.items|type)=="array"' /tmp/candidate-inventory.json >/dev/null
-          echo 'Candidate state and inventory contract PASS.'
+          curl -fsS "$candidate/api/inventory?oidc_repair=${GITHUB_RUN_ID}" -o /tmp/oidc-inventory.json
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/oidc-inventory.json >/dev/null
+          echo 'candidate_ok=true' >> "$GITHUB_OUTPUT"
+          echo 'OIDC candidate PASS.'
 
-      - name: Repair Phoenix production Blob token for future deployments
-        id: envrepair
+      - name: Restore static production token automatically if OIDC candidate failed
+        if: failure()
         shell: bash
         run: |
           set -euo pipefail
-          AUTH_BLOB_TOKEN="$(cat /tmp/repaired-blob-token)"
-          echo "::add-mask::$AUTH_BLOB_TOKEN"
-          api="https://api.vercel.com"
-          auth="Authorization: Bearer $VERCEL_TOKEN"
-
-          curl -fsS "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" -H "$auth" > /tmp/env-meta.json
-          ENV_ID="$(jq -r '[.envs[]? | select(.key=="BLOB_READ_WRITE_TOKEN" and ((.target // []) | index("production")))] | first | .id // empty' /tmp/env-meta.json)"
-
-          if [ -n "$ENV_ID" ]; then
-            ENV_TYPE="$(jq -r --arg id "$ENV_ID" '.envs[] | select(.id==$id) | .type' /tmp/env-meta.json)"
-            TARGETS="$(jq -c --arg id "$ENV_ID" '.envs[] | select(.id==$id) | (.target // ["production"])' /tmp/env-meta.json)"
-            case "$ENV_TYPE" in encrypted|sensitive) ;; *) ENV_TYPE=encrypted ;; esac
-            jq -n --arg value "$AUTH_BLOB_TOKEN" --arg type "$ENV_TYPE" --argjson target "$TARGETS" \
-              '{key:"BLOB_READ_WRITE_TOKEN",value:$value,type:$type,target:$target,comment:"WDCC Phoenix Blob authority repaired after isolated candidate verification"}' > /tmp/env-update.json
-            curl -fsS -X PATCH "$api/v9/projects/$PHOENIX_PROJECT/env/$ENV_ID?teamId=$ORG_ID" \
-              -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/env-update.json > /tmp/env-update-response.json
-            jq -e '.key=="BLOB_READ_WRITE_TOKEN" and (.id|type)=="string"' /tmp/env-update-response.json >/dev/null
-            echo "mode=updated" >> "$GITHUB_OUTPUT"
-          else
-            jq -n --arg value "$AUTH_BLOB_TOKEN" \
-              '[{key:"BLOB_READ_WRITE_TOKEN",value:$value,type:"encrypted",target:["production"],comment:"WDCC Phoenix Blob authority repaired after isolated candidate verification"}]' > /tmp/env-create.json
-            curl -fsS -X POST "$api/v10/projects/$PHOENIX_PROJECT/env?teamId=$ORG_ID" \
-              -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/env-create.json > /tmp/env-create-response.json
-            jq -e '((.failed // [])|length)==0' /tmp/env-create-response.json >/dev/null
-            echo "mode=created" >> "$GITHUB_OUTPUT"
+          if [ ! -f /tmp/blob-scope-mutation-started ] || [ ! -f /tmp/original-static-token ]; then
+            echo 'No storage-scope mutation to roll back.'
+            exit 0
           fi
-          echo 'Phoenix production BLOB_READ_WRITE_TOKEN repaired for future deployments.'
+          ORIGINAL_STATIC_TOKEN="$(cat /tmp/original-static-token)"
+          echo "::add-mask::$ORIGINAL_STATIC_TOKEN"
+          api=https://api.vercel.com
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          jq -n --arg value "$ORIGINAL_STATIC_TOKEN" '[{key:"BLOB_READ_WRITE_TOKEN",value:$value,type:"encrypted",target:["production"],comment:"Automatic rollback after WDCC OIDC candidate failure"}]' > /tmp/restore-static.json
+          curl -fsS -X POST "$api/v10/projects/$PHOENIX_PROJECT/env?upsert=true&teamId=$ORG_ID" -H "$auth" -H 'Content-Type: application/json' --data-binary @/tmp/restore-static.json > /tmp/restore-static-response.json
+          jq -e '((.failed // [])|length)==0' /tmp/restore-static-response.json >/dev/null
+          echo 'Static production Blob token restored because OIDC candidate did not pass.'
 
-      - name: Prove live alias never moved and front doors remain healthy
+      - name: Prove healthy live alias and customer/dealer routes never moved
+        if: steps.gate.outputs.candidate_ok == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -o /tmp/live-after.json -w '%{http_code}' "$CANONICAL_LIVE/api/health?repair_after=${GITHUB_RUN_ID}")"
+          code="$(curl -sS -o /tmp/live-after.json -w '%{http_code}' "$CANONICAL_LIVE/api/health?oidc_repair_after=${GITHUB_RUN_ID}")"
           test "$code" = 200
           jq -e --arg sha "$LIVE_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-after.json >/dev/null
 
-          dealer_code="$(curl -sS -o /tmp/dealer-health.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/health)"
-          test "$dealer_code" = 200
+          dealer_health="$(curl -sS -o /tmp/dealer-health.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/health)"
+          test "$dealer_health" = 200
           jq -e '.ok==true and .degraded==false' /tmp/dealer-health.json >/dev/null
 
-          inv_code="$(curl -sS -o /tmp/dealer-inventory.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/inventory)"
-          test "$inv_code" = 200
+          dealer_inventory="$(curl -sS -o /tmp/dealer-inventory.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/inventory)"
+          test "$dealer_inventory" = 200
           jq -e '.ok==true and (.items|type)=="array"' /tmp/dealer-inventory.json >/dev/null
 
           lead_code="$(curl -sS -o /tmp/leads-safe.json -w '%{http_code}' https://wedontcarecars.com/api/leads)"
           test "$lead_code" = 401
           jq -e 'type=="object"' /tmp/leads-safe.json >/dev/null
-          echo 'Live alias, dealer health, dealer inventory, and safe lead GET PASS.'
+          echo 'Live production contract PASS; no real lead was created.'
 
-      - name: Publish repair evidence
+      - name: Publish OIDC repair evidence
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
-          AUTHORITY: ${{ steps.authority.outputs.source_project }}
           CANDIDATE: ${{ steps.candidate.outputs.url }}
-          ENV_MODE: ${{ steps.envrepair.outputs.mode }}
+          CANDIDATE_OK: ${{ steps.gate.outputs.candidate_ok }}
         shell: bash
         run: |
           live_before='not captured'; [ -f /tmp/live-before.json ] && live_before="$(cat /tmp/live-before.json)"
-          candidate_health='not captured'; [ -f /tmp/candidate-health.json ] && candidate_health="$(cat /tmp/candidate-health.json)"
+          oidc_health='not captured'; [ -f /tmp/oidc-health.json ] && oidc_health="$(cat /tmp/oidc-health.json)"
           live_after='not captured'; [ -f /tmp/live-after.json ] && live_after="$(cat /tmp/live-after.json)"
           body=$(cat <<EOF
-          Repair SHA: \`$REPAIR_SHA\`
+          Exact repair SHA: \`$REPAIR_SHA\`
           Status: **$STATUS**
-          Proven Blob authority source project: \`${AUTHORITY:-not-found}\`
-          Isolated candidate: \`${CANDIDATE:-not-created}\`
-          Phoenix production env repair: \`${ENV_MODE:-not-run}\`
+          OIDC candidate: \`${CANDIDATE:-not-created}\`
+          OIDC candidate accepted: \`${CANDIDATE_OK:-false}\`
 
-          No production alias, DNS, Cloudflare route, storefront deployment, or dealer deployment was changed by this repair.
+          Repair design: prove project OIDC can read the canonical private Blob, remove only production scope from the shadowing static token, pin BLOB_STORE_ID, deploy one skip-domain candidate, and restore the static token automatically if the OIDC candidate fails. No production alias, DNS, Cloudflare route, storefront deployment, or dealer deployment is moved by this workflow.
 
           Live before: \`$live_before\`
-          Candidate health: \`$candidate_health\`
+          Candidate health: \`$oidc_health\`
           Live after: \`$live_after\`
           EOF
           )
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Phoenix Blob repair ${GITHUB_RUN_ID}" --body "$body" || true
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Phoenix OIDC repair ${GITHUB_RUN_ID}" --body "$body" || true
