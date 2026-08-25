@@ -21,18 +21,17 @@ jobs:
           set -euo pipefail
           EMAIL="wdcc-auth-probe-${GITHUB_RUN_ID}@example.invalid"
           PASSWORD="$(openssl rand -base64 30 | tr -d '\n')Aa1!"
-          redact_cookies(){
-            tr -d '\r' | sed -E 's/^(set-cookie: [^=]+=)[^;]*/\1[REDACTED]/I'
-          }
+          redact_cookies(){ tr -d '\r' | sed -E 's/^(set-cookie: [^=]+=)[^;]*/\1[REDACTED]/I'; }
 
-          printf '== SIGNUP NO ORIGIN ==\n'
-          code=$(curl -sS -D /tmp/signup-no.headers -o /tmp/signup-no.body -w '%{http_code}' \
+          printf '== SIGNUP WITH CLOUDFLARE ORIGIN ==\n'
+          code=$(curl -sS -D /tmp/signup.headers -o /tmp/signup.body -w '%{http_code}' \
             -X POST "$AUTH_BASE/sign-up/email" \
             -H 'content-type: application/json' \
+            -H "origin: $CF_ORIGIN" \
             --data "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"name\":\"WDCC Auth Probe\"}")
           echo "HTTP=$code"
-          cat /tmp/signup-no.headers | grep -iE '^(set-cookie|location|content-type):' | redact_cookies || true
-          jq -c '{code,message,error}' /tmp/signup-no.body 2>/dev/null || head -c 300 /tmp/signup-no.body; echo
+          cat /tmp/signup.headers | grep -iE '^(set-cookie|location|content-type):' | redact_cookies || true
+          jq -c '{code,message,error,user:(.user|if type=="object" then {id,email} else . end)}' /tmp/signup.body 2>/dev/null || head -c 300 /tmp/signup.body; echo
 
           printf '== SIGNIN WITH CLOUDFLARE ORIGIN ==\n'
           code=$(curl -sS -D /tmp/signin-cf.headers -o /tmp/signin-cf.body -w '%{http_code}' \
@@ -54,4 +53,4 @@ jobs:
           jq -c '{code,message,error,user:(.user|if type=="object" then {id,email} else . end)}' /tmp/signin-no.body 2>/dev/null || head -c 300 /tmp/signin-no.body; echo
 
           printf '== COOKIE ATTRIBUTES ==\n'
-          grep -i '^set-cookie:' /tmp/signin-no.headers | sed -E 's/(=[^;]*)/=[REDACTED]/' || true
+          grep -i '^set-cookie:' /tmp/signin-cf.headers | sed -E 's/(=[^;]*)/=[REDACTED]/' || true
