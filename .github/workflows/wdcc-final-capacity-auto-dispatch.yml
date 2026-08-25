@@ -26,6 +26,7 @@ jobs:
       TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
       LIVE_APEX: https://wedontcarecars.com
+      SAFE_MAX: '94'
     steps:
       - name: Require exact release-control source
         env:
@@ -61,12 +62,12 @@ jobs:
           count="$(jq '.deployments|length' /tmp/deployments.json)"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Rolling 24h deployment sample count: $count"
-          if [ "$count" -gt 90 ]; then
+          if [ "$count" -gt "$SAFE_MAX" ]; then
             echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'CAPACITY=HOLD — preserving at least ten slots of safety margin.'
+            echo "CAPACITY=HOLD — exact count $count exceeds safe max $SAFE_MAX."
           else
             echo 'ready=true' >> "$GITHUB_OUTPUT"
-            echo 'CAPACITY=SAFE_MARGIN'
+            echo "CAPACITY=SAFE_MARGIN — exact count $count leaves at least $((100-count)) slots."
           fi
 
       - name: Report immediate hold count once
@@ -78,7 +79,7 @@ jobs:
         run: |
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "WDCC CAPACITY HOLD ${GITHUB_RUN_ID}" \
-            --body "Exact SHA remains \`$FINAL_SHA\`. Rolling 24h Vercel deployment sample count is \`${COUNT:-unknown}\`; safe auto-cert threshold is <= 90. Live health and QA isolation passed. No Vercel deployment was created by this capacity check. Hourly scheduled checks remain silent until the safe margin is reached."
+            --body "Exact SHA remains \`$FINAL_SHA\`. Rolling 24h Vercel deployment sample count is \`${COUNT:-unknown}\`; safe auto-cert threshold is <= $SAFE_MAX. Live health and QA isolation passed. No Vercel deployment was created by this capacity check. Hourly scheduled checks remain silent until the safe margin is reached."
 
       - name: Prevent duplicate final-cert dispatch
         id: duplicate
@@ -106,7 +107,7 @@ jobs:
           set -euo pipefail
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "WDCC FINAL CERT AUTO DISPATCH ${GITHUB_RUN_ID}" \
-            --body "Exact SHA: \`$FINAL_SHA\`\nRolling 24h Vercel deployment count: \`$COUNT\` (safe-margin threshold <= 90).\nLive health and QA isolation passed before dispatch.\nThis lock prevents repeated hourly dispatches. No production aliases are moved by the candidate workflow."
+            --body "Exact SHA: \`$FINAL_SHA\`\nRolling 24h Vercel deployment count: \`$COUNT\` (safe threshold <= $SAFE_MAX).\nLive health and QA isolation passed before dispatch.\nTwo no-alias candidate deployments leave at least four slots below the 100/day ceiling at the observed count.\nThis lock prevents repeated hourly dispatches. No production aliases are moved by the candidate workflow."
           gh workflow run wdcc-final-two-stage-cert-v1.yml --repo "$GITHUB_REPOSITORY" --ref main
           echo 'FINAL_CERT_DISPATCHED=YES'
 
@@ -117,5 +118,6 @@ jobs:
           COUNT: ${{ steps.capacity.outputs.count }}
         run: |
           echo "Vercel rolling-24h count: ${COUNT:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Safe threshold: <= $SAFE_MAX" >> "$GITHUB_STEP_SUMMARY"
           echo "Safe-margin ready: ${READY:-false}" >> "$GITHUB_STEP_SUMMARY"
           echo 'This workflow never creates a Vercel deployment itself; it only dispatches the exact no-alias certification workflow after the safe-margin gate.' >> "$GITHUB_STEP_SUMMARY"
