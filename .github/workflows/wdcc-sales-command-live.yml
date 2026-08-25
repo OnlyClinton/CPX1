@@ -1,0 +1,161 @@
+name: WDCC SALES COMMAND LIVE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'TRIGGER_WDCC_SALES_COMMAND_LIVE.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-sales-command-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  VERCEL_SCOPE: cpxagency
+  APEX: https://wedontcarecars.com
+  DEALER: https://dealer.wedontcarecars.com
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Lock exact release SHA
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$GITHUB_SHA"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Release SHA: $sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify requested UI contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/wdcc-brand-lock.sh
+          grep -q 'mobileCallButton{display:none' app/header-sleek.css
+          grep -q 'premiumHero .actions' app/header-sleek.css
+          grep -q 'stickyPrimary' app/components.tsx
+          grep -q 'stickySecondary' app/components.tsx
+          grep -q 'stickyContact' app/components.tsx
+          grep -q 'salesMetric' app/dealer/DealerDashboard.tsx
+          grep -q 'pipelineTile' app/dealer/DealerDashboard.tsx
+          grep -q '/dealer/leads?stage=' app/dealer/DealerDashboard.tsx
+          grep -q 'ACCOUNT TABLE' app/dealer/leads/page.tsx
+          grep -q 'These are the exact records behind the selected dashboard number' app/dealer/leads/page.tsx
+          grep -q 'status=published' app/dealer/DealerDashboard.tsx
+          grep -q 'requested=new URLSearchParams' app/dealer/inventory/page.tsx
+
+      - name: Install and compile
+        run: |
+          npm ci
+          npm run build
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.3.0
+
+      - name: Link canonical storefront project
+        shell: bash
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull production environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel production bundle
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy exact prebuilt production bundle
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin storefront www and dealer aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel promote "$DEPLOY_URL" --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" || true
+          for domain in wedontcarecars.com www.wedontcarecars.com dealer.wedontcarecars.com; do
+            vercel alias set "$DEPLOY_URL" "$domain" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          done
+
+      - name: Verify live production contract
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 40); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$APEX/?intro=1&sales-command=$GITHUB_RUN_ID" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$APEX/api/health?sales-command=$GITHUB_RUN_ID" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$APEX/api/inventory?sales-command=$GITHUB_RUN_ID" || true)"
+            dealer_code="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$DEALER/dealer?sales-command=$GITHUB_RUN_ID" || true)"
+            leads_code="$(curl -sS -L -o /tmp/leads.html -w '%{http_code}' "$DEALER/dealer/leads?stage=new&sales-command=$GITHUB_RUN_ID" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] && [ "$dealer_code" = 200 ] && [ "$leads_code" = 200 ]; then
+              if jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
+                && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1 \
+                && grep -q 'wdcc-logo-transparent.webp' /tmp/home.html \
+                && grep -q 'TEST DRIVE' /tmp/home.html \
+                && grep -q 'GET APPROVED' /tmp/home.html \
+                && grep -q 'CALL SEAN' /tmp/home.html; then
+                  ok=1
+                  break
+              fi
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo verified=true >> "$GITHUB_OUTPUT"
+
+      - name: Report exact release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.source.outputs.sha }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          body=$(printf 'Sales Command source: `%s`\nDeployment: `%s`\nLive verification: `%s`\n\nIncludes sleek storefront mobile header, single bottom CTA surface, clickable dealer count tiles, exact filtered lead tables, and published-inventory drilldown.' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFIED:-false}")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Sales Command live ${GITHUB_RUN_ID}" --body "$body" || true
