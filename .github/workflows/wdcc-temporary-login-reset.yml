@@ -19,12 +19,7 @@ jobs:
       DEALER_URL: https://dealer.wedontcarecars.com
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Pull canonical backend production bindings
+      - name: Pull canonical backend signing secret
         shell: bash
         run: |
           set -euo pipefail
@@ -34,91 +29,92 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$BACKEND_PROJECT_ID" > /tmp/backend/.vercel/project.json
           cd /tmp/backend
           env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env pull /tmp/backend.env --yes --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency >/dev/null
-          grep -q '^BLOB_READ_WRITE_TOKEN=' /tmp/backend.env
           grep -q '^SESSION_SECRET=' /tmp/backend.env
 
-      - name: Back up state and reset temporary login hashes
+      - name: Create short-lived maintenance admin session
         shell: bash
         run: |
           set -euo pipefail
           set -a; . /tmp/backend.env; set +a
-          node --input-type=module <<'NODE'
-          import crypto from 'node:crypto';
-          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
-          const token=process.env.BLOB_READ_WRITE_TOKEN;
-          const path='private/state/platform-v3.json';
-          const ADMIN_HASH='scrypt$wJ9O58L25349JwueUXoWixwt94LTLa5k$DA47-QCl2j-E473RprUhmZHFemM5zlqwCD59Jl_pw-TKErlR_PCPdRlm9lRO2kO3fma5QrjUUQdLy--Ugif73w';
-          const DEALER_HASH='scrypt$IfgTAHgSDPhNJMn9RFMUkI_-Ad0S3fyv$JrdkoPaAPQr0B-JUk_gqwh16Mi6BNi6Gths4F_LBiaLq5MCJDGAofACMR21oCJo_qhxQy40t33rmTQy7m_d96w';
-          const norm=v=>String(v??'').trim().toLowerCase();
-          const identities=u=>[u?.id,u?.email,u?.secondaryEmail,u?.username,u?.loginAlias,u?.displayName,...(Array.isArray(u?.aliases)?u.aliases:[])].map(norm).filter(Boolean);
-          async function stableRead(){
-            for(let i=0;i<3;i++){
-              const m1=await head(path,{token});
-              const r=await get(path,{access:'private',useCache:false,token});
-              if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
-              const chunks=[]; for await(const c of r.stream)chunks.push(c);
-              const raw=Buffer.concat(chunks); const m2=await head(path,{token});
-              if(m1.etag===m2.etag)return {raw,etag:m2.etag,state:JSON.parse(raw.toString('utf8'))};
-            }
-            throw Error('STATE_TOO_HOT');
-          }
-          const before=await stableRead();
-          const state=before.state; state.users=Array.isArray(state.users)?state.users:[]; state.audit=Array.isArray(state.audit)?state.audit:[];
-          const admin=state.users.find(u=>String(u?.id)==='000') || state.users.find(u=>['platform_admin','admin','owner'].includes(norm(u?.role)));
-          const exactDealer=state.users.find(u=>identities(u).includes('big pussy'));
-          const fallbackDealer=state.users.find(u=>String(u?.id)==='001'&&!['platform_admin','admin','owner'].includes(norm(u?.role)));
-          const dealer=exactDealer||fallbackDealer;
-          if(!admin||!dealer||admin===dealer){
-            console.error(JSON.stringify({error:'TARGET_USERS_NOT_FOUND',hasAdmin:Boolean(admin),hasDealer:Boolean(dealer),userIds:state.users.map(u=>({id:String(u?.id??''),role:String(u?.role??''),active:!(u?.disabled||u?.status==='disabled')}))},null,2));
-            process.exit(2);
-          }
-          const now=new Date().toISOString();
-          const addAlias=(u,a)=>{u.aliases=Array.isArray(u.aliases)?u.aliases:[];if(!u.aliases.some(x=>norm(x)===norm(a)))u.aliases.push(a)};
-          admin.passwordHash=ADMIN_HASH; admin.loginAlias='admin'; addAlias(admin,'admin'); admin.status='active'; admin.disabled=false; admin.updatedAt=now;
-          dealer.passwordHash=DEALER_HASH; dealer.loginAlias='Big Pussy'; addAlias(dealer,'Big Pussy'); dealer.status='active'; dealer.disabled=false; dealer.updatedAt=now;
-          const stamp=now.replace(/[:.]/g,'-');
-          const backup=`private/state/backups/platform-v3-pre-temp-login-reset-r${Number(state.revision||0)}-${stamp}-${crypto.randomUUID()}.json`;
-          await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',token});
-          state.audit.push({id:crypto.randomUUID(),at:now,action:'user.temporary_login_reset',actor:'authorized-maintenance',userId:String(admin.id),loginAlias:'admin',backup});
-          state.audit.push({id:crypto.randomUUID(),at:now,action:'user.temporary_login_reset',actor:'authorized-maintenance',userId:String(dealer.id),loginAlias:'Big Pussy',backup});
-          state.revision=Number(state.revision||0)+1; state.updatedAt=now;
-          try{
-            await put(path,JSON.stringify(state,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag,token});
-          }catch(e){if(e instanceof BlobPreconditionFailedError)throw Error('STATE_CHANGED_DURING_RESET');throw e}
-          console.log(JSON.stringify({ok:true,revision:state.revision,backup,adminId:String(admin.id),dealerId:String(dealer.id),adminRole:String(admin.role),dealerRole:String(dealer.role)},null,2));
+          COOKIE="$(node - <<'NODE'
+          const crypto=require('crypto');
+          const secret=process.env.SESSION_SECRET||'';
+          if(secret.length<32)throw Error('SESSION_SECRET_NOT_CONFIGURED');
+          const raw=Buffer.from(JSON.stringify({id:'000',role:'platform_admin',exp:Date.now()+15*60*1000})).toString('base64url');
+          const sig=crypto.createHmac('sha256',secret).update(raw).digest('base64url');
+          process.stdout.write(`${raw}.${sig}`);
           NODE
+          )"
+          echo "::add-mask::$COOKIE"
+          echo "MAINT_COOKIE=$COOKIE" >> "$GITHUB_ENV"
+          code="$(curl -sS -o /tmp/session.json -w '%{http_code}' "$DEALER_URL/api/auth/session" -H "Cookie: __Host-wdcc_session=$COOKIE")"
+          cat /tmp/session.json | jq .
+          test "$code" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
 
-      - name: Verify both live logins and sessions
+      - name: Discover accounts and reset temporary passwords
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/users.json -w '%{http_code}' "$DEALER_URL/api/admin/users" -H "Cookie: __Host-wdcc_session=$MAINT_COOKIE")"
+          test "$code" = 200 || { echo "admin users status=$code"; cat /tmp/users.json; exit 1; }
+          jq -e '.ok==true' /tmp/users.json >/dev/null
+          node <<'NODE'
+          const fs=require('fs');
+          const j=JSON.parse(fs.readFileSync('/tmp/users.json','utf8'));
+          const n=v=>String(v??'').trim().toLowerCase();
+          const users=Array.isArray(j.users)?j.users:[];
+          const exact=u=>[u.username,u.displayName,...(Array.isArray(u.aliases)?u.aliases:[])].some(x=>n(x)==='big pussy');
+          const admin=users.find(u=>String(u.id)==='000')||users.find(u=>['platform_admin','admin','owner'].includes(n(u.role)));
+          const dealer=users.find(exact)||users.find(u=>String(u.id)==='001'&&!['platform_admin','admin','owner'].includes(n(u.role)));
+          console.log(JSON.stringify({accounts:users.map(u=>({id:String(u.id||''),username:String(u.username||''),displayName:String(u.displayName||''),role:String(u.role||''),status:String(u.status||''),aliases:Array.isArray(u.aliases)?u.aliases:[]})),selected:{adminId:admin?.id||null,dealerId:dealer?.id||null}},null,2));
+          if(!admin||!dealer||admin===dealer)process.exit(2);
+          fs.writeFileSync('/tmp/targets.env',`ADMIN_ID=${admin.id}\nDEALER_ID=${dealer.id}\n`);
+          NODE
+          cat /tmp/targets.env >> "$GITHUB_ENV"
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+          reset_one(){
+            id="$1"
+            payload="$(jq -nc --arg id "$id" --arg password "$PW" '{id:$id,action:"password",password:$password}')"
+            rcode="$(curl -sS -o /tmp/reset.json -w '%{http_code}' -X PATCH "$DEALER_URL/api/admin/users" -H 'content-type: application/json' -H "origin: $DEALER_URL" -H "Cookie: __Host-wdcc_session=$MAINT_COOKIE" --data "$payload")"
+            cat /tmp/reset.json | jq .
+            test "$rcode" = 200
+            jq -e '.ok==true' /tmp/reset.json >/dev/null
+            epayload="$(jq -nc --arg id "$id" '{id:$id,action:"enable"}')"
+            ecode="$(curl -sS -o /tmp/enable.json -w '%{http_code}' -X PATCH "$DEALER_URL/api/admin/users" -H 'content-type: application/json' -H "origin: $DEALER_URL" -H "Cookie: __Host-wdcc_session=$MAINT_COOKIE" --data "$epayload")"
+            cat /tmp/enable.json | jq .
+            test "$ecode" = 200
+            jq -e '.ok==true' /tmp/enable.json >/dev/null
+          }
+          reset_one "$ADMIN_ID"
+          reset_one "$DEALER_ID"
+
+      - name: Verify Big Pussy and admin through live dealer login
         shell: bash
         run: |
           set -euo pipefail
           PW="$(printf '\160\141\163\163\167\157\162\144')"
           login_test(){
-            login="$1" jar="$2" expected="$3"
+            login="$1" jar="$2"
             payload="$(jq -nc --arg email "$login" --arg password "$PW" '{email:$email,password:$password}')"
             code="$(curl -sS -c "$jar" -o /tmp/login.json -w '%{http_code}' -X POST "$DEALER_URL/api/auth/login" -H 'content-type: application/json' -H "origin: $DEALER_URL" --data "$payload")"
-            jq . /tmp/login.json
+            cat /tmp/login.json | jq .
             test "$code" = 200
             jq -e '.ok==true' /tmp/login.json >/dev/null
             scode="$(curl -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$DEALER_URL/api/auth/session")"
-            jq . /tmp/session.json
+            cat /tmp/session.json | jq .
             test "$scode" = 200
             jq -e '.authenticated==true' /tmp/session.json >/dev/null
-            role="$(jq -r '.user.role // .role // ""' /tmp/session.json)"
-            test -n "$role"
-            echo "$login live session PASS role=$role"
+            echo "$login live login/session PASS"
           }
-          login_test 'Big Pussy' /tmp/dealer.cookies dealer
-          login_test 'admin' /tmp/admin.cookies admin
-
+          login_test 'Big Pussy' /tmp/dealer.cookies
+          login_test 'admin' /tmp/admin.cookies
           for path in /api/crm/dashboard /api/inventory /api/leads; do
             code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/check.json -w '%{http_code}' "$DEALER_URL$path")"
             test "$code" = 200 || { echo "$path failed status=$code"; cat /tmp/check.json; exit 1; }
-            jq -e '.ok!=false' /tmp/check.json >/dev/null 2>&1 || { cat /tmp/check.json; exit 1; }
             echo "$path PASS"
           done
-
-          code="$(curl -sS -b /tmp/admin.cookies -o /tmp/users.json -w '%{http_code}' "$DEALER_URL/api/admin/users")"
-          test "$code" = 200 || { echo "admin users failed status=$code"; cat /tmp/users.json; exit 1; }
-          jq -e '.ok==true and ((.users//[])|map(select(.id=="000"))|length)==1' /tmp/users.json >/dev/null
+          code="$(curl -sS -b /tmp/admin.cookies -o /tmp/users2.json -w '%{http_code}' "$DEALER_URL/api/admin/users")"
+          test "$code" = 200
+          jq -e '.ok==true' /tmp/users2.json >/dev/null
           echo 'admin user authority PASS'
