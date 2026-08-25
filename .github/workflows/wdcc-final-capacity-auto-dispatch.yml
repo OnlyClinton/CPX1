@@ -1,0 +1,107 @@
+name: WDCC Final Capacity Gate
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-final-capacity-gate
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      FINAL_SHA: 7c93e998d2661d78cdc295239132f75fbaf7520c
+      LIVE_APEX: https://wedontcarecars.com
+    steps:
+      - name: Require exact release-control source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(gh issue view 205 --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          printf '%s' "$body" | grep -q "$FINAL_SHA"
+          printf '%s' "$body" | grep -q 'NO-GO FOR PROMOTION YET'
+          echo 'RELEASE_CONTROL=PASS'
+
+      - name: Prove live rollback baseline is healthy and QA-clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$LIVE_APEX/api/health?capacity_gate=$GITHUB_RUN_ID" -o /tmp/live-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?capacity_gate=$GITHUB_RUN_ID" -o /tmp/live-inventory.json
+          jq -e '.ok==true and (.items|type=="array") and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-inventory.json >/dev/null
+          echo 'LIVE_BASELINE=PASS'
+
+      - name: Count Vercel team deployments in rolling 24h without deploying
+        id: capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+          since="$(( $(date -u +%s) * 1000 - 24 * 60 * 60 * 1000 ))"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?teamId=$TEAM_ID&limit=100&since=$since" \
+            -o /tmp/deployments.json
+          count="$(jq '.deployments|length' /tmp/deployments.json)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Rolling 24h deployment sample count: $count"
+          if [ "$count" -gt 90 ]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'CAPACITY=HOLD — preserving at least ten slots of safety margin.'
+          else
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'CAPACITY=SAFE_MARGIN'
+          fi
+
+      - name: Prevent duplicate final-cert dispatch
+        id: duplicate
+        if: steps.capacity.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'WDCC FINAL CERT AUTO DISPATCH in:title' --json number --jq 'length')"
+          if [ "$existing" -gt 0 ]; then
+            echo 'blocked=true' >> "$GITHUB_OUTPUT"
+            echo 'DISPATCH=SKIP_DUPLICATE'
+          else
+            echo 'blocked=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lock and dispatch exact two-stage certification
+        if: steps.capacity.outputs.ready == 'true' && steps.duplicate.outputs.blocked == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COUNT: ${{ steps.capacity.outputs.count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC FINAL CERT AUTO DISPATCH ${GITHUB_RUN_ID}" \
+            --body "Exact SHA: \`$FINAL_SHA\`\nRolling 24h Vercel deployment count: \`$COUNT\` (safe-margin threshold <= 90).\nLive health and QA isolation passed before dispatch.\nThis lock prevents repeated hourly dispatches. No production aliases are moved by the candidate workflow."
+          gh workflow run wdcc-final-two-stage-cert-v1.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo 'FINAL_CERT_DISPATCHED=YES'
+
+      - name: Capacity gate summary
+        if: always()
+        env:
+          READY: ${{ steps.capacity.outputs.ready }}
+          COUNT: ${{ steps.capacity.outputs.count }}
+        run: |
+          echo "Vercel rolling-24h count: ${COUNT:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Safe-margin ready: ${READY:-false}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'This workflow never creates a Vercel deployment itself; it only dispatches the exact no-alias certification workflow after the safe-margin gate.' >> "$GITHUB_STEP_SUMMARY"
