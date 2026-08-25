@@ -1,0 +1,139 @@
+name: WDCC DESCRIPTION FIELD LIVE FIX
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-description-field-live-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-description-field-live-fix
+  cancel-in-progress: false
+
+jobs:
+  fix-deploy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      VERCEL_PROJECT: wdcc-v32-storefront
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      RELEASE_BRANCH: release/wdcc-live-screenshot-dealer-20260825
+      APEX: wedontcarecars.com
+      WWW: www.wedontcarecars.com
+    steps:
+      - name: Checkout merged release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_BRANCH }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Persist description field contract on release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='app/dealer/inventory/new/page.tsx'
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/dealer/inventory/new/page.tsx')
+          s=p.read_text()
+          old='<textarea value={formState.description} onChange={e=>setField("description",e.target.value)}/>'
+          new='<textarea name="description" value={formState.description} onChange={e=>setField("description",e.target.value)}/>'
+          if old in s:
+              s=s.replace(old,new,1)
+              p.write_text(s)
+          elif new not in s:
+              raise SystemExit('DESCRIPTION_TEXTAREA_PATTERN_NOT_FOUND')
+          PY
+          grep -q '<textarea name="description"' "$file"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- "$file"; then
+            git add "$file"
+            git commit -m 'Fix mobile dealer description field contract'
+            git push origin HEAD:"$RELEASE_BRANCH"
+          fi
+          echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Install and link Vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Build fixed merged release locally
+        run: vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt fixed release
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --prod --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$output"
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://wdcc-v32-storefront-[a-z0-9-]+-cpxagency\.vercel\.app' | tail -n1 || true)"
+          test -n "$url"
+          if [ "$rc" -ne 0 ] && ! printf '%s\n' "$output" | grep -q 'Deployment completed'; then exit "$rc"; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Pin apex and www to fixed deployment
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$URL" "$APEX" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel alias set "$URL" "$WWW" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Verify live fixed release
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            home_code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "https://$APEX/?descfix=$GITHUB_RUN_ID-$i" || true)"
+            health_code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "https://$APEX/api/health?descfix=$GITHUB_RUN_ID-$i" || true)"
+            inv_code="$(curl -sS -L -o /tmp/inv.json -w '%{http_code}' "https://$APEX/api/inventory?descfix=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$home_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inv_code" = 200 ] \
+              && grep -q 'screenshotContract' /tmp/home.html \
+              && grep -q 'header-logo-image' /tmp/home.html \
+              && grep -q 'mobile-action-bar' /tmp/home.html \
+              && jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
+              && jq -e '.ok==true and (.items|type)=="array"' /tmp/inv.json >/dev/null 2>&1; then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = 1
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch authenticated dealer listing acceptance again
+        if: steps.verify.outputs.verified == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh workflow run wdcc-listing-only-e2e.yml --ref main
+
+      - name: Report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.url }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC description live fix $GITHUB_RUN_ID" --body "Source: \`${SOURCE_SHA:-unknown}\`\nDeployment: \`${URL:-not-created}\`\nPublic verification: \`${VERIFIED:-false}\`" || true
