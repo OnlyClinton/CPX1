@@ -1,0 +1,96 @@
+:root {
+  --wdcc-black: #05090d;
+  --wdcc-ink: #0a1118;
+  --wdcc-panel: #0e1720;
+  --wdcc-panel-2: #111d28;
+  --wdcc-white: #ffffff;
+  --wdcc-canvas: #f5f6f7;
+  --wdcc-line: #d9dde2;
+  --wdcc-muted: #6d7680;
+  --wdcc-red: #f20d18;
+  --wdcc-red-dark: #c90812;
+  --wdcc-blue: #0a76ff;
+  --wdcc-success: #15883e;
+  --wdcc-warning: #f59e0b;
+
+  --wdcc-radius-sm: 8px;
+  --wdcc-radius-md: 12px;
+  --wdcc-radius-lg: 18px;
+
+  --wdcc-shadow-card: 0 8px 22px rgb(5 9 13 / 10%);
+  --wdcc-shadow-shell: 0 24px 60px rgb(0 0 0 / 28%);
+
+  --wdcc-space-1: 4px;
+  --wdcc-space-2: 8px;
+  --wdcc-space-3: 12px;
+  --wdcc-space-4: 16px;
+  --wdcc-space-5: 20px;
+  --wdcc-space-6: 24px;
+  --wdcc-space-8: 32px;
+  --wdcc-space-10: 40px;
+  --wdcc-space-12: 48px;
+
+  --wdcc-content-max: 1440px;
+  --wdcc-dealer-sidebar: 248px;
+  --wdcc-touch-min: 44px;
+}
+
+.wdcc-shell {
+  min-height: 100dvh;
+  background: var(--wdcc-canvas);
+  color: var(--wdcc-ink);
+}
+
+.wdcc-card {
+  border: 1px solid var(--wdcc-line);
+  border-radius: var(--wdcc-radius-md);
+  background: var(--wdcc-white);
+  box-shadow: var(--wdcc-shadow-card);
+}
+
+.wdcc-button {
+  min-height: var(--wdcc-touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wdcc-space-2);
+  border-radius: var(--wdcc-radius-sm);
+  padding: 0 var(--wdcc-space-5);
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.wdcc-button--primary {
+  background: var(--wdcc-red);
+  color: var(--wdcc-white);
+}
+
+.wdcc-button--primary:hover {
+  background: var(--wdcc-red-dark);
+}
+
+.wdcc-button--secondary {
+  background: var(--wdcc-ink);
+  color: var(--wdcc-white);
+}
+
+.wdcc-button--outline {
+  background: var(--wdcc-white);
+  color: var(--wdcc-ink);
+  border-color: var(--wdcc-line);
+}
+
+.wdcc-status--success { color: var(--wdcc-success); }
+.wdcc-status--warning { color: var(--wdcc-warning); }
+.wdcc-status--danger { color: var(--wdcc-red); }
+
+@media (max-width: 767px) {
+  :root {
+    --wdcc-radius-md: 10px;
+    --wdcc-space-8: 24px;
+    --wdcc-space-10: 32px;
+    --wdcc-space-12: 36px;
+  }
+}
