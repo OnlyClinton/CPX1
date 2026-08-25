@@ -1,4 +1,4 @@
-import Exact2vfDHome from "./Exact2vfDHome";
+import WebGpuHome from "./WebGpuHome";
 
-// Production visual contract: exact 2vfD storefront + 8AR intro only.
-export default function Home(){return <Exact2vfDHome/>}
+// Experimental cinematic branch: Three.js WebGPU + WebGL2 fallback + GSAP.
+export default function Home(){return <WebGpuHome/>}
