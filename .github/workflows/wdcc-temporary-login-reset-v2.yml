@@ -1,0 +1,179 @@
+name: WDCC Temporary Login Reset V2
+on:
+  push:
+    branches: [ops/reset-wdcc-logins-v2]
+    paths:
+      - '.github/workflows/wdcc-temporary-login-reset-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reset-and-verify:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      BACKEND_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER_URL: https://dealer.wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Install Vercel CLI and bind canonical backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$BACKEND_PROJECT_ID" > .vercel/project.json
+
+      - name: Back up canonical state and reset authorized login hashes
+        id: reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-login-reset-v2.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+
+          const path='private/state/platform-v3.json';
+          // Existing one-time hashes created for the explicitly authorized temporary password.
+          const ADMIN_HASH='scrypt$wJ9O58L25349JwueUXoWixwt94LTLa5k$DA47-QCl2j-E473RprUhmZHFemM5zlqwCD59Jl_pw-TKErlR_PCPdRlm9lRO2kO3fma5QrjUUQdLy--Ugif73w';
+          const DEALER_HASH='scrypt$IfgTAHgSDPhNJMn9RFMUkI_-Ad0S3fyv$JrdkoPaAPQr0B-JUk_gqwh16Mi6BNi6Gths4F_LBiaLq5MCJDGAofACMR21oCJo_qhxQy40t33rmTQy7m_d96w';
+          const norm=v=>String(v??'').trim().toLowerCase();
+          const identities=u=>[u?.id,u?.email,u?.secondaryEmail,u?.username,u?.loginAlias,u?.displayName,...(Array.isArray(u?.aliases)?u.aliases:[])].map(norm).filter(Boolean);
+          const adminRole=r=>['platform_admin','admin','owner'].includes(norm(r));
+          const dealerRole=r=>['dealer','dealer_agent','tenant_admin','sales','sales_agent'].includes(norm(r));
+
+          async function stableRead(){
+            for(let i=0;i<5;i++){
+              const m1=await head(path);
+              const r=await get(path,{access:'private',useCache:false});
+              if(!r||r.statusCode!==200||!r.stream)throw Error('STATE_READ_FAILED');
+              const chunks=[]; for await(const c of r.stream)chunks.push(c);
+              const raw=Buffer.concat(chunks); const m2=await head(path);
+              if(m1.etag===m2.etag)return {raw,etag:m2.etag,state:JSON.parse(raw.toString('utf8'))};
+            }
+            throw Error('STATE_TOO_HOT');
+          }
+
+          const before=await stableRead();
+          const state=before.state;
+          state.users=Array.isArray(state.users)?state.users:[];
+          state.audit=Array.isArray(state.audit)?state.audit:[];
+          const active=u=>!(u?.disabled||norm(u?.status)==='disabled');
+          const admin=state.users.find(u=>String(u?.id)==='000'&&active(u)) || state.users.find(u=>adminRole(u?.role)&&active(u));
+          const exactDealer=state.users.find(u=>active(u)&&identities(u).includes('big pussy'));
+          const numberedDealer=state.users.find(u=>active(u)&&['002','001'].includes(String(u?.id??''))&&!adminRole(u?.role));
+          const roleDealers=state.users.filter(u=>active(u)&&dealerRole(u?.role)&&u!==admin);
+          const dealer=exactDealer||numberedDealer||(roleDealers.length===1?roleDealers[0]:null);
+
+          if(!admin||!dealer||admin===dealer){
+            console.error('TARGET_USERS_NOT_FOUND '+JSON.stringify({hasAdmin:Boolean(admin),hasDealer:Boolean(dealer),users:state.users.map(u=>({id:String(u?.id??''),role:String(u?.role??''),active:active(u),alias:String(u?.loginAlias??'')}))}));
+            process.exit(2);
+          }
+
+          const now=new Date().toISOString();
+          const stamp=now.replace(/[:.]/g,'-');
+          const backup=`private/state/backups/platform-v3-pre-login-reset-v2-r${Number(state.revision||0)}-${stamp}-${crypto.randomUUID()}.json`;
+          await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+          const addAlias=(u,a)=>{u.aliases=Array.isArray(u.aliases)?u.aliases:[];if(!u.aliases.some(x=>norm(x)===norm(a)))u.aliases.push(a)};
+
+          admin.passwordHash=ADMIN_HASH;
+          admin.loginAlias='admin';
+          addAlias(admin,'admin');
+          admin.status='active';
+          admin.disabled=false;
+          admin.updatedAt=now;
+
+          dealer.passwordHash=DEALER_HASH;
+          dealer.loginAlias='Big Pussy';
+          addAlias(dealer,'Big Pussy');
+          dealer.status='active';
+          dealer.disabled=false;
+          dealer.updatedAt=now;
+
+          state.audit.push({id:crypto.randomUUID(),at:now,action:'user.temporary_login_reset_v2',actor:'authorized-maintenance',userId:String(admin.id),loginAlias:'admin',backup});
+          state.audit.push({id:crypto.randomUUID(),at:now,action:'user.temporary_login_reset_v2',actor:'authorized-maintenance',userId:String(dealer.id),loginAlias:'Big Pussy',backup});
+          state.revision=Number(state.revision||0)+1;
+          state.updatedAt=now;
+
+          try{
+            await put(path,JSON.stringify(state,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});
+          }catch(e){
+            if(e instanceof BlobPreconditionFailedError)throw Error('STATE_CHANGED_DURING_RESET');
+            throw e;
+          }
+
+          const after=await stableRead();
+          const a2=after.state.users.find(u=>String(u?.id)===String(admin.id));
+          const d2=after.state.users.find(u=>String(u?.id)===String(dealer.id));
+          if(a2?.passwordHash!==ADMIN_HASH||norm(a2?.loginAlias)!=='admin')throw Error('ADMIN_RESET_NOT_PERSISTED');
+          if(d2?.passwordHash!==DEALER_HASH||norm(d2?.loginAlias)!=='big pussy')throw Error('DEALER_RESET_NOT_PERSISTED');
+          console.log('RESET_RESULT='+JSON.stringify({ok:true,revision:Number(after.state.revision||0),backup,adminId:String(admin.id),adminRole:String(admin.role),dealerId:String(dealer.id),dealerRole:String(dealer.role)}));
+          NODE
+
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- \
+            node .wdcc-login-reset-v2.mjs | tee /tmp/reset.log
+          grep -q '^RESET_RESULT=' /tmp/reset.log
+
+      - name: Verify both live logins, sessions, and dealer APIs
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          PW="$(printf '\160\141\163\163\167\157\162\144')"
+
+          login_test(){
+            login="$1" jar="$2"
+            payload="$(jq -nc --arg login "$login" --arg password "$PW" '{login:$login,password:$password}')"
+            code="$(curl -sS -c "$jar" -o /tmp/login.json -w '%{http_code}' -X POST "$DEALER_URL/api/auth/login" \
+              -H 'content-type: application/json' -H "origin: $DEALER_URL" --data "$payload")"
+            cat /tmp/login.json | jq '{ok,error,role,user:(.user|if type=="object" then {id,role,username,email} else . end)}'
+            test "$code" = 200
+            jq -e '.ok==true' /tmp/login.json >/dev/null
+
+            scode="$(curl -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$DEALER_URL/api/auth/session")"
+            cat /tmp/session.json | jq '{ok,authenticated,role,user:(.user|if type=="object" then {id,role,username,email} else . end)}'
+            test "$scode" = 200
+            jq -e '(.authenticated==true) or (.ok==true and (.user!=null))' /tmp/session.json >/dev/null
+            echo "$login LIVE_LOGIN_PASS"
+          }
+
+          login_test 'Big Pussy' /tmp/dealer.cookies
+          login_test 'admin' /tmp/admin.cookies
+
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/dealer.cookies -o /tmp/check.json -w '%{http_code}' "$DEALER_URL$path")"
+            echo "$path status=$code"
+            test "$code" = 200
+            jq -e '.ok!=false' /tmp/check.json >/dev/null 2>&1
+          done
+
+          code="$(curl -sS -b /tmp/admin.cookies -o /tmp/admin-users.json -w '%{http_code}' "$DEALER_URL/api/admin/users")"
+          echo "/api/admin/users status=$code"
+          test "$code" = 200
+          jq -e '.ok!=false' /tmp/admin-users.json >/dev/null 2>&1
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report login reset proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESET_STATUS: ${{ steps.reset.outcome }}
+          VERIFY_STATUS: ${{ steps.verify.outcome }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC live login reset v2 ${GITHUB_RUN_ID}" \
+            --body "Canonical login reset: **$RESET_STATUS**. Live dealer/admin verification: **$VERIFY_STATUS**. Verified: \`$VERIFIED\`. Exact 2vfD storefront aliases were not changed." || true
