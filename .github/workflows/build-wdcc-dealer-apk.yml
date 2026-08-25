@@ -1,0 +1,74 @@
+name: BUILD WDCC DEALER APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/dealer-app/**'
+      - '.github/workflows/build-wdcc-dealer-apk.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-dealer-apk
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build installable APK
+        working-directory: android/dealer-app
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Stage dealer APK
+        run: |
+          cp android/dealer-app/app/build/outputs/apk/debug/app-debug.apk WDCC-Dealer.apk
+          sha256sum WDCC-Dealer.apk | tee WDCC-Dealer.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WDCC-Dealer-APK
+          path: |
+            WDCC-Dealer.apk
+            WDCC-Dealer.apk.sha256
+          retention-days: 30
+
+      - name: Publish stable download release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wdcc-dealer-app-v1
+          name: WDCC Dealer Android App
+          body: |
+            Installable Android dealer portal.
+
+            Entry point: canonical WDCC dealer application.
+            Includes persistent portal cookies, camera/file picker support, multiple-photo selection, and secure external-link handling.
+            Build commit: ${{ github.sha }}
+          files: |
+            WDCC-Dealer.apk
+            WDCC-Dealer.apk.sha256
+          make_latest: true
+          prerelease: false
+          draft: false
+          overwrite_files: true
