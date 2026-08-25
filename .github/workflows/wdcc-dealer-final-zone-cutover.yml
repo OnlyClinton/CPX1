@@ -3,6 +3,10 @@ name: WDCC Dealer Final Zone Cutover
 on:
   workflow_dispatch:
 
+concurrency:
+  group: wdcc-dealer-final-zone-cutover
+  cancel-in-progress: false
+
 permissions:
   contents: read
   issues: write
@@ -16,7 +20,6 @@ env:
   CUSTOMER_DOMAIN: wedontcarecars.com
   LIVE_WORKER: wdcc-dealer-frontdoor
   EXPECTED_ORIGIN: wdcc-dealer-portal.vercel.app
-  EXPECTED_ROUTE_ID: 245de2b4dbe642fbabe5ebe2dc6f7fb5
 
 jobs:
   cutover:
@@ -44,20 +47,23 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ZONE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          ZONE_TOKEN="${CLOUDFLARE_ZONE_API_TOKEN:-$CLOUDFLARE_API_TOKEN}"
-          test -n "$ZONE_TOKEN"
-          echo "zone_token=$ZONE_TOKEN" >> "$GITHUB_OUTPUT"
 
           curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            https://api.cloudflare.com/client/v4/user/tokens/verify | jq -e '.success==true and .result.status=="active"' >/dev/null
-          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify \
+            | jq -e '.success==true and .result.status=="active"' >/dev/null
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify \
+            | jq -e '.success==true and .result.status=="active"' >/dev/null
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/zones?name=$CUSTOMER_DOMAIN&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50" >/tmp/zones.json
           jq -e '.success==true and (.result|length)==1' /tmp/zones.json >/dev/null
           ZONE_ID="$(jq -r '.result[0].id' /tmp/zones.json)"
           test -n "$ZONE_ID"
 
-          curl -fsS -H "Authorization: Bearer $ZONE_TOKEN" \
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$DEALER_DOMAIN&per_page=100" >/tmp/dns.json
           jq -e '.success==true and (.result|length)==1' /tmp/dns.json >/dev/null
           jq '.result[0]' /tmp/dns.json >/tmp/dns-before.json
@@ -71,9 +77,15 @@ jobs:
           echo "Dealer DNS before cutover: id=$DNS_ID type=$TYPE content=$CONTENT proxied=$PROXIED"
 
           ROUTE_API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$LIVE_WORKER/routes"
-          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$ROUTE_API" >/tmp/routes.json
-          jq -e --arg id "$EXPECTED_ROUTE_ID" --arg p "$DEALER_DOMAIN/*" --arg s "$LIVE_WORKER" \
-            '.success==true and any(.result[]?; .id==$id and .pattern==$p and .script==$s)' /tmp/routes.json >/dev/null
+          ROUTE_HTTP="$(curl -sS -o /tmp/routes.json -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$ROUTE_API")"
+          echo "Worker route metadata HTTP=$ROUTE_HTTP"
+          test "$ROUTE_HTTP" = 200
+          jq -e '.success==true' /tmp/routes.json >/dev/null
+          ROUTE_COUNT="$(jq -r --arg p "$DEALER_DOMAIN/*" --arg s "$LIVE_WORKER" '[.result[]? | select(.pattern==$p and .script==$s)] | length' /tmp/routes.json)"
+          test "$ROUTE_COUNT" = 1
+          ROUTE_ID="$(jq -r --arg p "$DEALER_DOMAIN/*" --arg s "$LIVE_WORKER" '.result[]? | select(.pattern==$p and .script==$s) | .id' /tmp/routes.json)"
+          test -n "$ROUTE_ID"
+          echo "Dealer Worker route: id=$ROUTE_ID pattern=$DEALER_DOMAIN/* owner=$LIVE_WORKER"
 
           npm install --no-save --package-lock=false wrangler@latest >/dev/null
           npx wrangler deployments status --name "$LIVE_WORKER" --json >/tmp/frontdoor-status.json
@@ -93,6 +105,7 @@ jobs:
           echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
           echo "dns_id=$DNS_ID" >> "$GITHUB_OUTPUT"
           echo "dns_proxied_before=$PROXIED" >> "$GITHUB_OUTPUT"
+          echo "route_id=$ROUTE_ID" >> "$GITHUB_OUTPUT"
           echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
           echo 'verified=true' >> "$GITHUB_OUTPUT"
 
@@ -130,9 +143,9 @@ jobs:
       - name: Promote frontdoor and orange-cloud only dealer DNS
         id: mutate
         env:
-          ZONE_TOKEN: ${{ steps.preflight.outputs.zone_token }}
           ZONE_ID: ${{ steps.preflight.outputs.zone_id }}
           DNS_ID: ${{ steps.preflight.outputs.dns_id }}
+          PROXIED_BEFORE: ${{ steps.preflight.outputs.dns_proxied_before }}
           UPLOADED_VERSION: ${{ steps.build.outputs.uploaded_version }}
         shell: bash
         run: |
@@ -140,19 +153,27 @@ jobs:
           npx wrangler versions deploy "$UPLOADED_VERSION@100%" --name "$LIVE_WORKER" -y \
             --message "WDCC final dealer cutover $GITHUB_RUN_ID" 2>&1 | tee /tmp/promote.log
 
-          curl -fsS -X PATCH \
-            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
-            -H "Authorization: Bearer $ZONE_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data '{"proxied":true}' >/tmp/dns-proxy.json
-          cat /tmp/dns-proxy.json | jq '{success,errors,result:{id:.result.id,type:.result.type,name:.result.name,content:.result.content,proxied:.result.proxied}}'
-          jq -e --arg origin "$EXPECTED_ORIGIN" '.success==true and .result.proxied==true and (.result.content|rtrimstr("."))==$origin' /tmp/dns-proxy.json >/dev/null
+          if [ "$PROXIED_BEFORE" != true ]; then
+            curl -fsS -X PATCH \
+              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data '{"proxied":true}' >/tmp/dns-proxy.json
+            jq -e '.success==true and .result.proxied==true' /tmp/dns-proxy.json >/dev/null
+            echo 'Dealer DNS changed from DNS-only to proxied.'
+          else
+            echo 'Dealer DNS is already proxied; leaving target and proxy state unchanged.'
+          fi
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" >/tmp/dns-after.json
+          jq -e --arg origin "$EXPECTED_ORIGIN" '.success==true and .result.proxied==true and .result.type=="CNAME" and (.result.content|rtrimstr("."))==$origin' /tmp/dns-after.json >/dev/null
+          jq '{success,result:{id:.result.id,type:.result.type,name:.result.name,content:.result.content,proxied:.result.proxied}}' /tmp/dns-after.json
           echo 'activated=true' >> "$GITHUB_OUTPUT"
 
       - name: Live dealer E2E and automatic full rollback
         id: live
         env:
-          ZONE_TOKEN: ${{ steps.preflight.outputs.zone_token }}
           ZONE_ID: ${{ steps.preflight.outputs.zone_id }}
           DNS_ID: ${{ steps.preflight.outputs.dns_id }}
           PROXIED_BEFORE: ${{ steps.preflight.outputs.dns_proxied_before }}
@@ -166,10 +187,10 @@ jobs:
               --message "WDCC final cutover automatic rollback $GITHUB_RUN_ID" || true
             curl -sS -X PATCH \
               "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
-              -H "Authorization: Bearer $ZONE_TOKEN" \
+              -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
               -H 'Content-Type: application/json' \
               --data "{\"proxied\":$PROXIED_BEFORE}" >/tmp/dns-rollback.json || true
-            cat /tmp/dns-rollback.json | jq '{success,errors,result:{name:.result.name,content:.result.content,proxied:.result.proxied}}' 2>/dev/null || true
+            jq '{success,errors,result:{name:.result.name,content:.result.content,proxied:.result.proxied}}' /tmp/dns-rollback.json 2>/dev/null || true
           }
           trap rollback ERR
 
@@ -235,10 +256,11 @@ jobs:
           MUTATE: ${{ steps.mutate.outcome }}
           LIVE: ${{ steps.live.outcome }}
           VERIFIED: ${{ steps.live.outputs.verified }}
+          ROUTE_ID: ${{ steps.preflight.outputs.route_id }}
           OLD_VERSION: ${{ steps.preflight.outputs.old_version }}
           UPLOADED_VERSION: ${{ steps.build.outputs.uploaded_version }}
         shell: bash
         run: |
           gh issue create --repo "$GITHUB_REPOSITORY" \
             --title "WDCC dealer final zone cutover ${GITHUB_RUN_ID}" \
-            --body "Preflight/rollback capture: **$PREFLIGHT**. Frontdoor build/upload: **$BUILD** \`$UPLOADED_VERSION\`. Dealer-only DNS proxy + Worker promotion: **$MUTATE**. Live dealer/admin E2E + exact 2vfD: **$LIVE** (verified \`$VERIFIED\`). Previous Worker rollback version: \`$OLD_VERSION\`. Only \`$DEALER_DOMAIN\` DNS proxy state is eligible for mutation; apex Worker routing is never configured." || true
+            --body "Preflight/rollback capture: **$PREFLIGHT**. Current dealer route: \`$ROUTE_ID\`. Frontdoor build/upload: **$BUILD** \`$UPLOADED_VERSION\`. Dealer DNS proxy + Worker promotion: **$MUTATE**. Live dealer/admin E2E + exact 2vfD: **$LIVE** (verified \`$VERIFIED\`). Previous Worker rollback version: \`$OLD_VERSION\`. Dealer CNAME target remains \`$EXPECTED_ORIGIN\`; apex Worker routing is never configured." || true
