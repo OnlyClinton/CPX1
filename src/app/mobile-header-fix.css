@@ -1,0 +1,5 @@
+@media (max-width: 760px) {
+  .home-header-shell .logo-button {
+    display: none !important;
+  }
+}
