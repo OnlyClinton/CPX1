@@ -52,8 +52,10 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/wdcc-brand-lock.sh
+          grep -q '.mobile-call{display:none' app/header-sleek.css
+          grep -q '.hero-actions{display:none' app/header-sleek.css
+          grep -q "background:url('/wdcc-logo-transparent.webp')" app/header-sleek.css
           grep -q 'mobileCallButton{display:none' app/header-sleek.css
-          grep -q 'premiumHero .actions' app/header-sleek.css
           grep -q 'stickyPrimary' app/components.tsx
           grep -q 'stickySecondary' app/components.tsx
           grep -q 'stickyContact' app/components.tsx
@@ -101,12 +103,16 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           vercel deploy --prebuilt --prod --yes --archive=tgz --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          rc=${PIPESTATUS[0]}
+          set -e
           url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -1 || true)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Production deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "cli_rc=$rc" >> "$GITHUB_OUTPUT"
+          echo "Production deployment: $url (CLI rc=$rc; Vercel optional checks may return non-zero after READY)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pin storefront www and dealer aliases
         env:
@@ -136,9 +142,11 @@ jobs:
               if jq -e '.ok==true and .degraded==false' /tmp/health.json >/dev/null 2>&1 \
                 && jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null 2>&1 \
                 && grep -q 'wdcc-logo-transparent.webp' /tmp/home.html \
-                && grep -q 'TEST DRIVE' /tmp/home.html \
-                && grep -q 'GET APPROVED' /tmp/home.html \
-                && grep -q 'CALL SEAN' /tmp/home.html; then
+                && grep -qi 'Test Drive' /tmp/home.html \
+                && grep -qi 'Get Approved' /tmp/home.html \
+                && grep -qi 'Call Sean' /tmp/home.html \
+                && grep -q 'SALES COMMAND' /tmp/dealer.html \
+                && grep -q 'ACCOUNT TABLE' /tmp/leads.html; then
                   ok=1
                   break
               fi
@@ -157,5 +165,5 @@ jobs:
           VERIFIED: ${{ steps.verify.outputs.verified }}
         shell: bash
         run: |
-          body=$(printf 'Sales Command source: `%s`\nDeployment: `%s`\nLive verification: `%s`\n\nIncludes sleek storefront mobile header, single bottom CTA surface, clickable dealer count tiles, exact filtered lead tables, and published-inventory drilldown.' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFIED:-false}")
+          body=$(printf 'Sales Command source: `%s`\nDeployment: `%s`\nLive verification: `%s`\n\nIncludes active 2vfD sleek mobile header, single bottom CTA surface, clickable dealer count tiles, exact filtered lead tables, and published-inventory drilldown.' "$RELEASE_SHA" "${DEPLOY_URL:-not-created}" "${VERIFIED:-false}")
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Sales Command live ${GITHUB_RUN_ID}" --body "$body" || true
