@@ -16,7 +16,7 @@ jobs:
       issues: write
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      CANDIDATE_SHA: 78fa97095fec229f673c1eb5f14388dee0ed5d92
+      CANDIDATE_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,5 +69,3 @@ jobs:
           EOF
           )
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC candidate local E2E ${GITHUB_RUN_ID}" --body "$body" || true
-
-# manual acceptance retrigger: 2026-08-25T00:23:00-04:00
