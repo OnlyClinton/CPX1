@@ -41,8 +41,8 @@ jobs:
           import {get,put} from '@vercel/blob';
 
           const PATH='private/state/platform-v3.json';
-          const ADMIN_HASH='scrypt$Qa68zYS_v5mbOILTuEc8lA$QBLxEFPuDR6yJAFD9CFl2rK-krJDxvW8CD45FPb-tDXF6UJEGAeO0kzDHEDRi8n4mbJPJkQC-YEdDMLsb5NUog';
-          const DEALER_HASH='scrypt$1Ny0VuMBDahBpCmomM6rew$RZXt0YQvmLT6A-gMGaDigXBqw6X3zasfw20SxiaXS5MN4HI-zwFuRAmGWlIa1evzFjDmwwkETQ-mY5CO_DzrvA';
+          const ADMIN_HASH='scrypt$mzYI43Hg16Eh9pQUaYloXq1jVQM2Fgkl$-iieI4GtzOyFrFTRXJIA46Hd3FKDUURA7HJyIXQV_EO3FVsMBiRAprD48GxS4D6CBPf6VQOevuiUf4VLoyjNJw';
+          const DEALER_HASH='scrypt$Jl4iKkttlVKDT2HNXx2gF0rDmN4ACi56$INZ-uyUptk1Kus2ypcyn7_li0S0VLd61dzGRuuKy8vglNzgr6K8kW24yO1yUHgiCvcfxspQCngnnZyHV90rLkA';
           const norm=v=>String(v??'').trim().toLowerCase();
           const ids=u=>[u?.id,u?.email,u?.secondaryEmail,u?.username,u?.loginAlias,...(Array.isArray(u?.aliases)?u.aliases:[])].map(norm).filter(Boolean);
 
@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PW="$(printf '%s' 'cGFzc3dvcmQ=' | base64 -d)"
+          PW="$(printf '%s' 'UGFzc3dvcmQ=' | base64 -d)"
           test_login(){
             label="$1"; login="$2"; expected="$3"
             payload="$(jq -nc --arg u "$login" --arg p "$PW" '{email:$u,password:$p}')"
