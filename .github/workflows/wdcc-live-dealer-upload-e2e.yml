@@ -4,6 +4,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/wdcc-live-dealer-upload-e2e.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ops/wdcc-live-dealer-upload-e2e-trigger.txt'
   workflow_dispatch:
 
 jobs:
@@ -102,3 +106,4 @@ jobs:
 
 # Deep-QA acceptance trigger: 2026-08-24. This workflow does not deploy application code.
 # Isolated listing acceptance retrigger: 2026-08-25.
+# PR-only live E2E trigger added 2026-08-25.
