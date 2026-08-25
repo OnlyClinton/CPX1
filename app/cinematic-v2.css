@@ -1,138 +1,57 @@
-/* WDCC Cinematic V2
-   Adds a separately moving Challenger layer using the exact approved hero artwork.
-   Loaded last. No backend/API/lead/inventory behavior is changed. */
+/* WDCC Cinematic V2 — real independent Challenger layer over the approved 8AR Tampa scene. */
+.intro-sequence .intro-scene{overflow:hidden!important;isolation:isolate!important}
 
-.intro-sequence .intro-scene{
-  overflow:hidden!important;
-  isolation:isolate!important;
-}
-
-/* Temporarily shade the Challenger's resting position so the moving layer does not double. */
+/* Hide the Challenger baked into the base image just long enough for the moving cutout to arrive. */
 .intro-sequence .intro-scene::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  z-index:1;
-  pointer-events:none;
-  background:radial-gradient(ellipse 45% 31% at 73% 66%,rgba(2,7,12,.97) 0 31%,rgba(2,7,12,.88) 42%,rgba(2,7,12,.32) 61%,transparent 76%);
-  opacity:1;
-  animation:wdccCarRestReveal 1.3s .34s ease-out both;
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse 43% 27% at 65% 54%,rgba(2,7,12,.985) 0 39%,rgba(2,7,12,.92) 52%,rgba(2,7,12,.48) 68%,transparent 83%);
+  opacity:1;animation:wdccCarRestReveal 1.48s .18s ease-out both
 }
 
-/* Independent Challenger layer, cut from the exact same Tampa/Challenger hero. */
+/* 936×377 transparent cutout generated from the immutable approved 8AR hero. */
 .intro-sequence .intro-scene::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  z-index:2;
-  pointer-events:none;
-  background-image:url('/wdcc-hero-v2.webp');
-  background-size:cover;
-  background-position:center 48%;
-  background-repeat:no-repeat;
-  clip-path:polygon(39% 42%,52% 33%,80% 35%,96% 45%,100% 66%,93% 83%,76% 91%,48% 88%,38% 72%);
-  -webkit-mask-image:radial-gradient(ellipse 43% 31% at 73% 65%,#000 0 60%,rgba(0,0,0,.96) 68%,transparent 88%);
-  mask-image:radial-gradient(ellipse 43% 31% at 73% 65%,#000 0 60%,rgba(0,0,0,.96) 68%,transparent 88%);
-  transform-origin:73% 68%;
-  opacity:0;
-  will-change:transform,opacity,filter;
-  animation:wdccChallengerSweep 1.28s .34s cubic-bezier(.14,.88,.22,1) both;
+  content:"";position:absolute;z-index:2;pointer-events:none;
+  width:62.1%;aspect-ratio:936/377;right:5.2%;bottom:25.3%;
+  background:url('/wdcc-challenger-layer.webp') center/contain no-repeat;
+  transform-origin:70% 72%;opacity:0;will-change:transform,opacity,filter;
+  animation:wdccChallengerSweep 1.42s .24s cubic-bezier(.13,.88,.2,1) both
 }
 
-/* Logo/car impact beat. The existing React intro still owns the real logo docking coordinates. */
+/* Quick ring/flare when the car crosses the centered logo. */
 .intro-sequence::before{
-  content:"";
-  position:absolute;
-  z-index:4;
-  left:50%;
-  top:43%;
-  width:min(42vw,520px);
-  aspect-ratio:1;
-  transform:translate(-50%,-50%) scale(.28);
-  border-radius:50%;
-  border:2px solid rgba(255,255,255,.64);
-  box-shadow:0 0 34px rgba(22,138,244,.48),0 0 76px rgba(239,32,47,.27);
-  opacity:0;
-  pointer-events:none;
-  animation:wdccLogoImpact .58s 1.03s cubic-bezier(.16,1,.3,1) both;
+  content:"";position:absolute;z-index:4;left:50%;top:49%;width:min(38vw,450px);aspect-ratio:1;
+  transform:translate(-50%,-50%) scale(.2);border-radius:50%;border:2px solid rgba(255,255,255,.7);
+  box-shadow:0 0 34px rgba(22,138,244,.52),0 0 78px rgba(239,32,47,.3);opacity:0;pointer-events:none;
+  animation:wdccLogoImpact .55s 1.03s cubic-bezier(.16,1,.3,1) both
 }
 
-/* More directional tire/smoke movement without replacing the approved smoke treatment. */
-.intro-sequence .smoke-one{
-  transform-origin:65% 68%!important;
-  animation:wdccV2SmokeA 2.7s ease-in-out both!important;
-}
-.intro-sequence .smoke-two{
-  transform-origin:72% 70%!important;
-  animation:wdccV2SmokeB 2.75s .08s ease-in-out both!important;
-}
+/* Directional smoke follows the car and clears as the logo docks. */
+.intro-sequence .smoke-one{transform-origin:60% 70%!important;animation:wdccV2SmokeA 2.55s .02s ease-out both!important}
+.intro-sequence .smoke-two{transform-origin:72% 70%!important;animation:wdccV2SmokeB 2.6s .12s ease-out both!important}
+.intro-dock .intro-scene::before{filter:saturate(1.1) contrast(1.08) brightness(1) drop-shadow(-14px 18px 22px rgba(0,0,0,.35))}
 
 @keyframes wdccChallengerSweep{
-  0%{
-    opacity:0;
-    transform:translate3d(46vw,3.5vh,0) scale(.84) rotate(-1.4deg);
-    filter:saturate(1.02) contrast(1.06) brightness(.72) blur(2.2px) drop-shadow(-34px 30px 30px rgba(0,0,0,.42));
-  }
+  0%{opacity:0;transform:translate3d(52vw,3vh,0) scale(.84) rotate(-1.25deg);filter:saturate(1.02) contrast(1.06) brightness(.74) blur(2.2px) drop-shadow(-36px 30px 30px rgba(0,0,0,.45))}
   10%{opacity:1}
-  58%{
-    transform:translate3d(9vw,.7vh,0) scale(.975) rotate(-.25deg);
-    filter:saturate(1.18) contrast(1.12) brightness(1.06) blur(.35px) drop-shadow(-24px 24px 27px rgba(0,0,0,.5));
-  }
-  80%{transform:translate3d(-1.25vw,0,0) scale(1.012) rotate(.08deg)}
-  100%{
-    opacity:1;
-    transform:translate3d(0,0,0) scale(1) rotate(0);
-    filter:saturate(1.1) contrast(1.08) brightness(1) drop-shadow(-16px 19px 22px rgba(0,0,0,.38));
-  }
+  55%{transform:translate3d(10vw,.5vh,0) scale(.97) rotate(-.2deg);filter:saturate(1.18) contrast(1.12) brightness(1.07) blur(.35px) drop-shadow(-25px 24px 28px rgba(0,0,0,.5))}
+  78%{transform:translate3d(-1.2vw,0,0) scale(1.012) rotate(.08deg)}
+  100%{opacity:1;transform:translate3d(0,0,0) scale(1) rotate(0);filter:saturate(1.1) contrast(1.08) brightness(1) drop-shadow(-14px 18px 22px rgba(0,0,0,.35))}
 }
-
-@keyframes wdccCarRestReveal{
-  0%,34%{opacity:1}
-  72%{opacity:.7}
-  100%{opacity:0}
-}
-
-@keyframes wdccLogoImpact{
-  0%{opacity:0;transform:translate(-50%,-50%) scale(.28)}
-  28%{opacity:.88}
-  100%{opacity:0;transform:translate(-50%,-50%) scale(1.18)}
-}
-
-@keyframes wdccV2SmokeA{
-  0%{opacity:0;transform:translate(-62%,-42%) scale(.5)}
-  29%{opacity:.64}
-  61%{opacity:.46;transform:translate(-48%,-49%) scale(1.06)}
-  100%{opacity:.12;transform:translate(-29%,-57%) scale(1.48)}
-}
-
-@keyframes wdccV2SmokeB{
-  0%{opacity:0;transform:translate(-34%,-50%) scale(.46)}
-  35%{opacity:.44}
-  68%{opacity:.3;transform:translate(-48%,-50%) scale(.98)}
-  100%{opacity:.08;transform:translate(-68%,-47%) scale(1.3)}
-}
+@keyframes wdccCarRestReveal{0%,42%{opacity:1}78%{opacity:.64}100%{opacity:0}}
+@keyframes wdccLogoImpact{0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}30%{opacity:.92}100%{opacity:0;transform:translate(-50%,-50%) scale(1.16)}}
+@keyframes wdccV2SmokeA{0%{opacity:0;transform:scale(.62) translate3d(-10%,14%,0)}27%{opacity:.78}68%{opacity:.4}100%{opacity:0;transform:scale(1.55) translate3d(23%,-7%,0)}}
+@keyframes wdccV2SmokeB{0%{opacity:0;transform:scale(.62) translate3d(15%,12%,0)}31%{opacity:.7}72%{opacity:.32}100%{opacity:0;transform:scale(1.48) translate3d(-17%,-8%,0)}}
 
 @media(max-width:600px){
-  .intro-sequence .intro-scene::before{
-    background-size:auto 100%;
-    background-position:66% center;
-    clip-path:polygon(26% 39%,45% 30%,88% 37%,100% 52%,100% 76%,84% 90%,41% 92%,23% 72%);
-    -webkit-mask-image:radial-gradient(ellipse 51% 31% at 70% 65%,#000 0 61%,rgba(0,0,0,.96) 70%,transparent 90%);
-    mask-image:radial-gradient(ellipse 51% 31% at 70% 65%,#000 0 61%,rgba(0,0,0,.96) 70%,transparent 90%);
-  }
-  .intro-sequence .intro-scene::after{
-    background:radial-gradient(ellipse 53% 31% at 70% 66%,rgba(2,7,12,.97) 0 30%,rgba(2,7,12,.88) 43%,rgba(2,7,12,.3) 62%,transparent 78%);
-  }
-  .intro-sequence::before{top:40%;width:min(72vw,360px)}
-  @keyframes wdccChallengerSweep{
-    0%{opacity:0;transform:translate3d(62vw,2.5vh,0) scale(.82) rotate(-1.2deg);filter:saturate(1.02) contrast(1.06) brightness(.72) blur(2px)}
-    10%{opacity:1}
-    60%{transform:translate3d(12vw,.5vh,0) scale(.97) rotate(-.18deg);filter:saturate(1.16) contrast(1.1) brightness(1.04) blur(.3px)}
-    82%{transform:translate3d(-1.5vw,0,0) scale(1.012)}
-    100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:saturate(1.1) contrast(1.08) brightness(1)}
-  }
+ .intro-sequence .intro-scene::after{background:radial-gradient(ellipse 114% 27% at 58% 55%,rgba(2,7,12,.985) 0 37%,rgba(2,7,12,.92) 53%,rgba(2,7,12,.46) 70%,transparent 86%)}
+ .intro-sequence .intro-scene::before{width:215%;right:-47%;bottom:25.3%;aspect-ratio:936/377}
+ .intro-sequence::before{top:49%;width:min(74vw,330px)}
+ @keyframes wdccChallengerSweep{
+   0%{opacity:0;transform:translate3d(112vw,2.5vh,0) scale(.84) rotate(-1.1deg);filter:saturate(1.02) contrast(1.06) brightness(.74) blur(2px)}
+   10%{opacity:1}
+   58%{transform:translate3d(20vw,.4vh,0) scale(.97) rotate(-.15deg);filter:saturate(1.16) contrast(1.1) brightness(1.05) blur(.25px)}
+   80%{transform:translate3d(-2vw,0,0) scale(1.012)}
+   100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:saturate(1.1) contrast(1.08) brightness(1)}
+ }
 }
-
-@media(prefers-reduced-motion:reduce){
-  .intro-sequence .intro-scene::before,.intro-sequence .intro-scene::after,.intro-sequence::before{animation:none!important;display:none!important}
-}
+@media(prefers-reduced-motion:reduce){.intro-sequence .intro-scene::before,.intro-sequence .intro-scene::after,.intro-sequence::before{animation:none!important;display:none!important}}
