@@ -69,7 +69,6 @@ jobs:
           check "intro sequence" 'intro-sequence'
           check "intro smoke" 'intro-smoke'
           check "transparent logo asset" 'wdcc-logo-transparent.webp'
-          check "hero asset" 'wdcc-hero-v2.webp'
           check "schedule test drive CTA" 'schedule a test drive' '-i'
           if grep -Eqi 'get qualified|get pre-approved|get approved' /tmp/home.html; then
             echo "PASS: approval CTA"
@@ -88,6 +87,11 @@ jobs:
             grep -Eio 'intro[-_a-z0-9]*|wdcc[-_a-z0-9.]*|schedule[^<]{0,80}|qualified[^<]{0,80}|approved[^<]{0,80}|contact[^<]{0,80}|call sean[^<]{0,80}' /tmp/home.html | head -n 120 >&2 || true
             exit 1
           fi
+
+          npx --yes vercel@59.3.0 curl /wdcc-hero-v2.webp --deployment "$CANDIDATE_URL" > /tmp/hero.webp
+          test -s /tmp/hero.webp
+          echo "PASS: hero asset ($(wc -c < /tmp/hero.webp) bytes)"
+
           npx --yes vercel@59.3.0 curl /api/health --deployment "$CANDIDATE_URL" > /tmp/health.json
           echo "Health response: $(cat /tmp/health.json)"
           jq -e '.ok == true' /tmp/health.json >/dev/null
@@ -123,8 +127,9 @@ jobs:
             if curl -fsS https://wedontcarecars.com/ -o /tmp/live.html \
               && grep -q 'intro-sequence' /tmp/live.html \
               && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html \
-              && grep -q 'wdcc-hero-v2.webp' /tmp/live.html \
               && grep -qi 'schedule a test drive' /tmp/live.html \
+              && curl -fsS https://wedontcarecars.com/wdcc-hero-v2.webp -o /tmp/live-hero.webp \
+              && test -s /tmp/live-hero.webp \
               && curl -fsS https://wedontcarecars.com/api/health -o /tmp/live-health.json \
               && jq -e '.ok == true' /tmp/live-health.json >/dev/null; then
               exit 0
@@ -164,5 +169,5 @@ jobs:
 # Canonical composite: exact 2vfD storefront structure + exact 8AR intro.
 # This workflow validates the immutable candidate before promotion and restores
 # the previous production deployment automatically if post-promotion checks fail.
-# Harness fix: Vercel curl reads VERCEL_TOKEN from environment; do not forward CLI auth flags to curl.
-# Diagnostics: report each candidate contract marker before promotion.
+# Recovery fix: hero is CSS-bound, so validate the real asset endpoint instead
+# of requiring its filename to be literal server-rendered HTML.
