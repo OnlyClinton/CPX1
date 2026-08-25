@@ -1,0 +1,352 @@
+name: WDCC Dealer Final Zone Cutover
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-final-zone-cutover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-final-zone-cutover
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  SOURCE_SHA: 62be4b2ac124ac1a8a7e5fedb1f568559808612f
+  BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  BACKEND_SHA: b8e0ba97f34e79591c20fd334c45a8f6e810fb96
+  DEALER_DOMAIN: dealer.wedontcarecars.com
+  CUSTOMER_DOMAIN: wedontcarecars.com
+  WWW_DOMAIN: www.wedontcarecars.com
+  LIVE_WORKER: wdcc-dealer-frontdoor
+  EXPECTED_ORIGIN: wdcc-dealer-portal.vercel.app
+  EXPECTED_ROUTE_ID: 245de2b4dbe642fbabe5ebe2dc6f7fb5
+
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - name: Checkout exact green Dealer Command source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Rollback-first preflight, zone audit, and immutable proofs
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'missing CLOUDFLARE_API_TOKEN' >&2; exit 20; }
+          test -n "${CLOUDFLARE_ZONE_API_TOKEN:-}" || { echo 'missing CLOUDFLARE_ZONE_API_TOKEN' >&2; exit 21; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'missing CLOUDFLARE_ACCOUNT_ID' >&2; exit 22; }
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}" || { echo 'missing WDCC_DEALER_E2E_PASSWORD' >&2; exit 23; }
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify >/tmp/cf-worker-token.json
+          jq -e '.success==true and .result.status=="active"' /tmp/cf-worker-token.json >/dev/null
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones?name=$CUSTOMER_DOMAIN&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50" >/tmp/zones.json
+          jq -e '.success==true and (.result|length)==1 and .result[0].status=="active"' /tmp/zones.json >/dev/null
+          ZONE_ID="$(jq -r '.result[0].id' /tmp/zones.json)"
+          test -n "$ZONE_ID"
+          echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?per_page=5000" >/tmp/records-before.json
+          jq -e '.success==true' /tmp/records-before.json >/dev/null
+
+          jq -e --arg n "$DEALER_DOMAIN" --arg o "$EXPECTED_ORIGIN" '
+            [.result[] | select(.name==$n)] as $r |
+            ($r|length)==1 and $r[0].type=="CNAME" and (($r[0].content|rtrimstr("."))==$o)
+          ' /tmp/records-before.json >/dev/null
+          DNS_ID="$(jq -r --arg n "$DEALER_DOMAIN" '.result[] | select(.name==$n) | .id' /tmp/records-before.json)"
+          DNS_PROXIED_BEFORE="$(jq -r --arg n "$DEALER_DOMAIN" '.result[] | select(.name==$n) | (.proxied // false)' /tmp/records-before.json)"
+          echo "dns_id=$DNS_ID" >> "$GITHUB_OUTPUT"
+          echo "dns_proxied_before=$DNS_PROXIED_BEFORE" >> "$GITHUB_OUTPUT"
+
+          ROUTE_API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$LIVE_WORKER/routes"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$ROUTE_API" >/tmp/routes.json
+          jq -e --arg id "$EXPECTED_ROUTE_ID" --arg p "$DEALER_DOMAIN/*" --arg s "$LIVE_WORKER" '
+            .success==true and any(.result[]?; .id==$id and .pattern==$p and .script==$s)
+          ' /tmp/routes.json >/dev/null
+
+          npm install --no-save --package-lock=false wrangler@latest >/dev/null
+          npx wrangler deployments status --name "$LIVE_WORKER" --json >/tmp/frontdoor-before.json
+          OLD_VERSION="$(jq -r '[.. | objects | .version_id? // .versionId? // empty] | map(select(type=="string" and length>0)) | first // empty' /tmp/frontdoor-before.json)"
+          if [ -z "$OLD_VERSION" ]; then
+            OLD_VERSION="$(jq -r '[.. | strings | select(test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"))] | first // empty' /tmp/frontdoor-before.json)"
+          fi
+          test -n "$OLD_VERSION"
+          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Rollback captured: Worker=$OLD_VERSION dealer proxied=$DNS_PROXIED_BEFORE"
+
+          command -v dig >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils >/dev/null; }
+          mapfile -t CF_NS < <(jq -r '.result[0].name_servers[]' /tmp/zones.json | tr '[:upper:]' '[:lower:]' | sed 's/\.$//' | sort)
+          mapfile -t PUB_NS < <(dig +short NS "$CUSTOMER_DOMAIN" @1.1.1.1 | tr '[:upper:]' '[:lower:]' | sed 's/\.$//' | sort)
+          test "${#CF_NS[@]}" -gt 0
+          test "${#CF_NS[@]}" = "${#PUB_NS[@]}"
+          test "$(printf '%s\n' "${CF_NS[@]}")" = "$(printf '%s\n' "${PUB_NS[@]}")"
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dnssec" >/tmp/dnssec-before.json
+          jq -e '.success==true' /tmp/dnssec-before.json >/dev/null
+          DNSSEC_STATUS="$(jq -r '.result.status // "disabled"' /tmp/dnssec-before.json)"
+          PARENT_DS="$(dig +short DS "$CUSTOMER_DOMAIN" @1.1.1.1 | head -1 | tr '[:lower:]' '[:upper:]')"
+          if [ "$DNSSEC_STATUS" = active ]; then
+            :
+          elif [ -z "$PARENT_DS" ]; then
+            curl -fsS -X PATCH \
+              "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dnssec" \
+              -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data '{"status":"active"}' >/tmp/dnssec-enable.json
+            jq -e '.success==true and .result.status=="active"' /tmp/dnssec-enable.json >/dev/null
+            cp /tmp/dnssec-enable.json /tmp/dnssec-before.json
+            DNSSEC_STATUS=active
+          else
+            echo 'Unsafe DNSSEC state: parent DS exists while Cloudflare signing is not active.' >&2
+            exit 24
+          fi
+          CF_DS="$(jq -r '[.result.key_tag,.result.algorithm,.result.digest_type,.result.digest] | map(tostring) | join(" ")' /tmp/dnssec-before.json | tr '[:lower:]' '[:upper:]')"
+          if [ "$DNSSEC_STATUS" = active ] && [ -n "$PARENT_DS" ]; then
+            test "$PARENT_DS" = "$CF_DS"
+          fi
+          echo "dnssec_status=$DNSSEC_STATUS" >> "$GITHUB_OUTPUT"
+          {
+            echo 'ds_record<<EOF'
+            echo "$CF_DS"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "$PARENT_DS" ]; then echo 'parent_ds=absent' >> "$GITHUB_OUTPUT"; else echo 'parent_ds=present' >> "$GITHUB_OUTPUT"; fi
+
+          # Routing audit only. Apex/www targets are never mutated here.
+          jq -e --arg n "$CUSTOMER_DOMAIN" 'any(.result[]; .name==$n and (.type=="A" or .type=="AAAA" or .type=="CNAME"))' /tmp/records-before.json >/dev/null
+          jq -e --arg n "$WWW_DOMAIN" 'any(.result[]; .name==$n and (.type=="A" or .type=="AAAA" or .type=="CNAME"))' /tmp/records-before.json >/dev/null
+
+          # Proton mail audit. Existing DKIM selectors are enumerated only; none are guessed or changed.
+          jq -e --arg n "$CUSTOMER_DOMAIN" 'any(.result[]; .name==$n and .type=="MX" and (.priority==10) and ((.content|ascii_downcase|rtrimstr("."))=="mail.protonmail.ch"))' /tmp/records-before.json >/dev/null
+          jq -e --arg n "$CUSTOMER_DOMAIN" 'any(.result[]; .name==$n and .type=="MX" and (.priority==20) and ((.content|ascii_downcase|rtrimstr("."))=="mailsec.protonmail.ch"))' /tmp/records-before.json >/dev/null
+          SPF_COUNT="$(jq -r --arg n "$CUSTOMER_DOMAIN" '[.result[] | select(.name==$n and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=spf1")))] | length' /tmp/records-before.json)"
+          test "$SPF_COUNT" = 1
+          jq -e --arg n "$CUSTOMER_DOMAIN" 'any(.result[]; .name==$n and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=spf1")) and ((.content|ascii_downcase)|contains("include:_spf.protonmail.ch")))' /tmp/records-before.json >/dev/null
+          jq -e --arg n "_dmarc.$CUSTOMER_DOMAIN" '([.result[] | select(.name==$n and .type=="TXT" and ((.content|ascii_downcase)|startswith("v=dmarc1")))] | length)==1' /tmp/records-before.json >/dev/null
+          DKIM_COUNT="$(jq -r --arg z "$CUSTOMER_DOMAIN" '[.result[] | select(.type=="CNAME" and (.name|ascii_downcase|contains("._domainkey.")) and (.name|ascii_downcase|endswith($z|ascii_downcase)))] | length' /tmp/records-before.json)"
+          test "$DKIM_COUNT" -ge 3
+          jq -r --arg z "$CUSTOMER_DOMAIN" '.result[] | select(.type=="CNAME" and (.name|ascii_downcase|contains("._domainkey.")) and (.name|ascii_downcase|endswith($z|ascii_downcase))) | [.name,.content,(.proxied//false)] | @tsv' /tmp/records-before.json >/tmp/dkim-existing.tsv
+          CAA_COUNT="$(jq -r --arg n "$CUSTOMER_DOMAIN" '[.result[] | select(.name==$n and .type=="CAA")] | length' /tmp/records-before.json)"
+          echo "dkim_count=$DKIM_COUNT" >> "$GITHUB_OUTPUT"
+          echo "caa_count=$CAA_COUNT" >> "$GITHUB_OUTPUT"
+
+          curl -fsS "$BACKEND/api/health?infra-pre=$GITHUB_RUN_ID" -o /tmp/backend-health.json
+          jq -e --arg sha "$BACKEND_SHA" '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and .commit==$sha' /tmp/backend-health.json >/dev/null
+
+          auth_gate(){
+            base="$1"; label="$2"
+            login(){
+              name="$1" jar="$2"
+              jq -nc --arg login "$name" --arg password "$WDCC_DEALER_E2E_PASSWORD" '{login:$login,password:$password}' >/tmp/${label}-payload.json
+              code="$(curl -sS -c "$jar" -o /tmp/${label}-login.json -w '%{http_code}' -X POST "$base/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/${label}-payload.json)"
+              echo "$label login $name=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/${label}-login.json >/dev/null
+              code="$(curl -sS -b "$jar" -o /tmp/${label}-session.json -w '%{http_code}' "$base/api/auth/session")"
+              echo "$label session $name=$code"; test "$code" = 200; jq -e '.authenticated==true' /tmp/${label}-session.json >/dev/null
+            }
+            login 'Big Pussy' /tmp/${label}-dealer.cookies
+            login admin /tmp/${label}-admin.cookies
+            for path in /api/crm/dashboard /api/leads /api/inventory; do
+              code="$(curl -sS -b /tmp/${label}-dealer.cookies -o /tmp/${label}-check.json -w '%{http_code}' "$base$path")"; echo "$label $path=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/${label}-check.json >/dev/null
+            done
+            code="$(curl -sS -b /tmp/${label}-admin.cookies -o /tmp/${label}-admin-users.json -w '%{http_code}' "$base/api/admin/users")"; echo "$label /api/admin/users=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/${label}-admin-users.json >/dev/null
+          }
+          auth_gate "$BACKEND" backend
+          auth_gate "https://$DEALER_DOMAIN" dealer_pre
+
+          code="$(curl -sS -L -o /tmp/customer-before.html -w '%{http_code}' "https://$CUSTOMER_DOMAIN/?infra-pre=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          grep -q 'intro-sequence intro-prepare' /tmp/customer-before.html
+          grep -q 'mobile-dock-drive' /tmp/customer-before.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-before.html
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Build frontdoor replacement from proven source
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs');
+          const p='wrangler.jsonc';
+          const cfg=JSON.parse(fs.readFileSync(p,'utf8'));
+          cfg.name=process.env.LIVE_WORKER;
+          cfg.workers_dev=false;
+          cfg.preview_urls=false;
+          cfg.keep_vars=true;
+          delete cfg.route;
+          delete cfg.routes;
+          cfg.vars=cfg.vars||{};
+          cfg.vars.WDCC_RUNTIME_ROLE='frontend';
+          cfg.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;
+          fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          npx opennextjs-cloudflare build
+          npx wrangler deploy 2>&1 | tee /tmp/upload.log
+          UPLOADED_VERSION="$(grep -Eo 'Current Version ID: [0-9a-f-]{36}' /tmp/upload.log | tail -1 | awk '{print $4}' || true)"
+          test -n "$UPLOADED_VERSION"
+          echo "uploaded_version=$UPLOADED_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Atomic dealer-only cutover, live gate, and rollback
+        id: cutover
+        env:
+          ZONE_ID: ${{ steps.preflight.outputs.zone_id }}
+          DNS_ID: ${{ steps.preflight.outputs.dns_id }}
+          DNS_PROXIED_BEFORE: ${{ steps.preflight.outputs.dns_proxied_before }}
+          OLD_VERSION: ${{ steps.preflight.outputs.old_version }}
+          UPLOADED_VERSION: ${{ steps.build.outputs.uploaded_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          rollback(){
+            rc=$?
+            echo "CUTOVER FAILURE rc=$rc — restoring dealer DNS proxied=$DNS_PROXIED_BEFORE and Worker=$OLD_VERSION"
+            curl -sS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" -H 'Content-Type: application/json' \
+              --data "{\"proxied\":$DNS_PROXIED_BEFORE}" >/tmp/dns-rollback.json || true
+            npx wrangler rollback "$OLD_VERSION" --name "$LIVE_WORKER" --message "WDCC dealer cutover rollback $GITHUB_RUN_ID" || true
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+
+          npx wrangler versions deploy "$UPLOADED_VERSION@100%" --name "$LIVE_WORKER" -y --message "WDCC final dealer cutover $GITHUB_RUN_ID" >/tmp/promote.log 2>&1
+          cat /tmp/promote.log
+          npx wrangler deployments status --name "$LIVE_WORKER" --json >/tmp/frontdoor-after-promote.json
+          NEW_ACTIVE="$(jq -r '.versions[]? | select(.percentage==100) | .version_id' /tmp/frontdoor-after-promote.json | head -1)"
+          test -n "$NEW_ACTIVE"
+          test "$NEW_ACTIVE" != "$OLD_VERSION"
+          echo "new_active=$NEW_ACTIVE" >> "$GITHUB_OUTPUT"
+
+          curl -fsS -X PATCH "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$DNS_ID" \
+            -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" -H 'Content-Type: application/json' \
+            --data '{"proxied":true}' >/tmp/dns-proxy.json
+          jq -e --arg o "$EXPECTED_ORIGIN" '.success==true and .result.type=="CNAME" and ((.result.content|rtrimstr("."))==$o) and .result.proxied==true' /tmp/dns-proxy.json >/dev/null
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/health?infra-live=$GITHUB_RUN_ID&try=$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .service=="wdcc-hardened-dealer-facade" and .backend=="healthy"' /tmp/live-health.json >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" = 1
+
+          login(){
+            name="$1" jar="$2"
+            jq -nc --arg login "$name" --arg password "$WDCC_DEALER_E2E_PASSWORD" '{login:$login,password:$password}' >/tmp/live-payload.json
+            code="$(curl -sS -c "$jar" -o /tmp/live-login.json -w '%{http_code}' -X POST "https://$DEALER_DOMAIN/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/live-payload.json)"
+            echo "live login $name=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/live-login.json >/dev/null
+            code="$(curl -sS -b "$jar" -o /tmp/live-session.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/auth/session")"
+            echo "live session $name=$code"; test "$code" = 200; jq -e '.authenticated==true' /tmp/live-session.json >/dev/null
+          }
+          login 'Big Pussy' /tmp/live-dealer.cookies
+          login admin /tmp/live-admin.cookies
+          for path in /api/crm/dashboard /api/leads /api/inventory; do
+            code="$(curl -sS -b /tmp/live-dealer.cookies -o /tmp/live-check.json -w '%{http_code}' "https://$DEALER_DOMAIN$path")"; echo "live $path=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/live-check.json >/dev/null
+          done
+          code="$(curl -sS -b /tmp/live-admin.cookies -o /tmp/live-admin-users.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/admin/users")"; echo "live /api/admin/users=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/live-admin-users.json >/dev/null
+
+          curl -fsS "$BACKEND/api/health?infra-post=$GITHUB_RUN_ID" -o /tmp/backend-post.json
+          jq -e --arg sha "$BACKEND_SHA" '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and .commit==$sha' /tmp/backend-post.json >/dev/null
+
+          code="$(curl -sS -L -o /tmp/customer-after.html -w '%{http_code}' "https://$CUSTOMER_DOMAIN/?infra-post=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          grep -q 'intro-sequence intro-prepare' /tmp/customer-after.html
+          grep -q 'mobile-dock-drive' /tmp/customer-after.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
+
+          trap - ERR INT TERM
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Final DNS, TLS, and zone certification
+        id: final
+        env:
+          ZONE_ID: ${{ steps.preflight.outputs.zone_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?per_page=5000" >/tmp/records-after.json
+          jq -e --arg n "$DEALER_DOMAIN" --arg o "$EXPECTED_ORIGIN" '
+            [.result[] | select(.name==$n)] as $r | ($r|length)==1 and $r[0].type=="CNAME" and (($r[0].content|rtrimstr("."))==$o) and $r[0].proxied==true
+          ' /tmp/records-after.json >/dev/null
+
+          for host in "$CUSTOMER_DOMAIN" "$WWW_DOMAIN" "$DEALER_DOMAIN"; do
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --output /dev/null "https://$host/"
+            echo | openssl s_client -connect "$host:443" -servername "$host" -verify_return_error 2>/tmp/${host}.tls.err | openssl x509 -noout -subject -issuer -dates >/tmp/${host}.cert.txt
+          done
+          dig +short A "$CUSTOMER_DOMAIN" @1.1.1.1 >/tmp/apex-a.txt
+          dig +short A "$WWW_DOMAIN" @1.1.1.1 >/tmp/www-a.txt
+          dig +short A "$DEALER_DOMAIN" @1.1.1.1 >/tmp/dealer-a.txt
+          test -s /tmp/apex-a.txt
+          test -s /tmp/www-a.txt
+          test -s /tmp/dealer-a.txt
+
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dnssec" >/tmp/dnssec-final.json
+          jq -e '.success==true and .result.status=="active"' /tmp/dnssec-final.json >/dev/null
+          FINAL_DS="$(jq -r '[.result.key_tag,.result.algorithm,.result.digest_type,.result.digest] | map(tostring) | join(" ")' /tmp/dnssec-final.json | tr '[:lower:]' '[:upper:]')"
+          PARENT_DS="$(dig +short DS "$CUSTOMER_DOMAIN" @1.1.1.1 | head -1 | tr '[:lower:]' '[:upper:]')"
+          if [ -n "$PARENT_DS" ]; then test "$PARENT_DS" = "$FINAL_DS"; fi
+          {
+            echo 'ds_record<<EOF'
+            echo "$FINAL_DS"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "$PARENT_DS" ]; then echo 'parent_ds=absent' >> "$GITHUB_OUTPUT"; else echo 'parent_ds=present' >> "$GITHUB_OUTPUT"; fi
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Report infrastructure closeout
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRE: ${{ steps.preflight.outcome }}
+          PRE_VERIFIED: ${{ steps.preflight.outputs.verified }}
+          BUILD: ${{ steps.build.outcome }}
+          CUTOVER: ${{ steps.cutover.outcome }}
+          CUTOVER_VERIFIED: ${{ steps.cutover.outputs.verified }}
+          FINAL: ${{ steps.final.outcome }}
+          FINAL_VERIFIED: ${{ steps.final.outputs.verified }}
+          OLD_VERSION: ${{ steps.preflight.outputs.old_version }}
+          NEW_ACTIVE: ${{ steps.cutover.outputs.new_active }}
+          PARENT_DS: ${{ steps.final.outputs.parent_ds || steps.preflight.outputs.parent_ds }}
+          DS_RECORD: ${{ steps.final.outputs.ds_record || steps.preflight.outputs.ds_record }}
+          DKIM_COUNT: ${{ steps.preflight.outputs.dkim_count }}
+          CAA_COUNT: ${{ steps.preflight.outputs.caa_count }}
+        shell: bash
+        run: |
+          set +e
+          if [ "$PRE" = success ] && [ "$BUILD" = success ] && [ "$CUTOVER" = success ] && [ "$FINAL" = success ]; then STATUS=PASS; else STATUS=FAIL; fi
+          body="Status: **$STATUS**\n\nRollback-first preflight: **$PRE** (verified \`$PRE_VERIFIED\`). Frontdoor build: **$BUILD**. Dealer-only Worker/DNS cutover: **$CUTOVER** (verified \`$CUTOVER_VERIFIED\`). Final public DNS/TLS certification: **$FINAL** (verified \`$FINAL_VERIFIED\`). Worker rollback version: \`$OLD_VERSION\`; final active version: \`$NEW_ACTIVE\`. Dealer CNAME target was required to remain \`$EXPECTED_ORIGIN\`; no apex Worker route mutation exists in this workflow. Proton MX/SPF/DMARC passed preflight; existing DKIM CNAME count: \`$DKIM_COUNT\`; apex CAA count: \`$CAA_COUNT\`. DNSSEC parent DS: **$PARENT_DS**. Cloudflare DS: \`$DS_RECORD\`.\n\nThe workflow contains no embedded E2E credential; it requires \`WDCC_DEALER_E2E_PASSWORD\` from repository secrets."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC infrastructure closeout $STATUS ${GITHUB_RUN_ID}" --body "$body" || true
