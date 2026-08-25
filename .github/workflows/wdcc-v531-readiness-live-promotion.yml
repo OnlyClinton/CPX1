@@ -1,0 +1,219 @@
+name: WDCC V53.1 Readiness Live Promotion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-v531-readiness-live-promotion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-v531-readiness-live-promotion
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 55bb35ac9065772d70c7e51ff9a4fd43331d6938
+  BACKEND: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  DEALER: https://dealer.wedontcarecars.com
+  CUSTOMER: https://wedontcarecars.com
+  LIVE_WORKER: wdcc-dealer-frontdoor
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Health-only source and live baseline preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VERCEL_TOKEN; do test -n "${!v:-}" || { echo "missing $v" >&2; exit 20; }; done
+          curl -fsS "$DEALER/api/health?readiness-pre=$GITHUB_RUN_ID" -o /tmp/dealer-before.json
+          jq -e '.ok==true and .degraded==false and .release=="WDCC-V53-OPS-HARDENED" and .backend=="healthy"' /tmp/dealer-before.json >/dev/null
+          curl -fsS "$BACKEND/api/health?readiness-pre=$GITHUB_RUN_ID" -o /tmp/backend.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/backend.json >/dev/null
+          curl -fsS -L "$CUSTOMER/?readiness-pre=$GITHUB_RUN_ID" -o /tmp/customer-before.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-before.html
+          grep -q 'mobile-action-bar' /tmp/customer-before.html
+          grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-before.html
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Install promotion runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Capture live rollback point and route
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify -o /tmp/cf-token.json
+          jq -e '.success==true and .result.status=="active"' /tmp/cf-token.json >/dev/null
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50" -o /tmp/zones.json
+          jq -e '.success==true and (.result|length)==1' /tmp/zones.json >/dev/null
+          ZONE_ID="$(jq -r '.result[0].id' /tmp/zones.json)"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=dealer.wedontcarecars.com" -o /tmp/dns.json
+          jq -e '.success==true and (.result|length)==1 and .result[0].proxied==true' /tmp/dns.json >/dev/null
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$LIVE_WORKER/routes" -o /tmp/routes.json
+          jq -e --arg p 'dealer.wedontcarecars.com/*' --arg s "$LIVE_WORKER" '.success==true and any(.result[]?;.pattern==$p and .script==$s)' /tmp/routes.json >/dev/null
+          npx wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/deployments.json
+          OLD="$(python - <<'PY'
+          import json
+          data=json.load(open('/tmp/deployments.json')); rows=[]
+          def walk(x):
+              if isinstance(x,dict):
+                  vid=x.get('version_id') or x.get('versionId')
+                  if vid: rows.append((x.get('percentage'),str(vid)))
+                  for v in x.values(): walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(data); chosen=''
+          for pct,vid in rows:
+              if pct in (100,100.0,'100','100.0',1,1.0,'1','1.0'): chosen=vid; break
+          if not chosen and rows: chosen=rows[0][1]
+          print(chosen)
+          PY
+          )"
+          test -n "$OLD"
+          echo "old_version=$OLD" >> "$GITHUB_OUTPUT"
+          echo "Captured rollback $OLD"
+
+      - name: Build and zero-traffic upload readiness Worker
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs'),p='wrangler.jsonc',c=JSON.parse(fs.readFileSync(p,'utf8'));c.name=process.env.LIVE_WORKER;c.workers_dev=false;c.preview_urls=true;c.keep_vars=true;delete c.route;delete c.routes;c.vars=c.vars||{};c.vars.WDCC_RUNTIME_ROLE='frontend';c.vars.WDCC_DEALER_BACKEND_URL=process.env.BACKEND;fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx opennextjs-cloudflare build
+          TAG="wdcc-v531-readiness-${GITHUB_RUN_ID}"
+          WRANGLER_OUTPUT_FILE_PATH=/tmp/wrangler-output.jsonl npx wrangler versions upload --name "$LIVE_WORKER" --tag "$TAG" --message "WDCC truthful notification readiness $GITHUB_RUN_ID" 2>&1 | tee /tmp/upload.log
+          NEW="$(python - <<'PY'
+          import json,re
+          out=''
+          try:
+              for line in open('/tmp/wrangler-output.jsonl'):
+                  try: x=json.loads(line)
+                  except: continue
+                  if x.get('type')=='version-upload' and x.get('version_id'): out=x['version_id']
+          except FileNotFoundError: pass
+          if not out:
+              m=re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',open('/tmp/upload.log').read())
+              if m: out=m[-1]
+          print(out)
+          PY
+          )"
+          test -n "$NEW"; test "$NEW" != "${{ steps.rollback.outputs.old_version }}"
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Create temporary protected-route verifier
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-readiness-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`Ready-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`ready-${crypto.randomUUID()}`,email=`ready-${run}@invalid.example`,backup=`private/state/backups/platform-v3-pre-ready-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`Readiness Verify ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.readiness.create',actor:'github-actions',run,userId:id,backup});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/ready.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-readiness-user.mjs
+          set -a; . /tmp/ready.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Atomic readiness cutover with rollback
+        id: cutover
+        env:
+          OLD_VERSION: ${{ steps.rollback.outputs.old_version }}
+          NEW_VERSION: ${{ steps.upload.outputs.new_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){ rc=$?; trap - ERR INT TERM; npx wrangler versions deploy "$OLD_VERSION@100%" --name "$LIVE_WORKER" -y --message "WDCC readiness rollback $GITHUB_RUN_ID" || true; exit "$rc"; }
+          trap rollback ERR INT TERM
+          npx wrangler versions deploy "$NEW_VERSION@100%" --name "$LIVE_WORKER" -y --message "WDCC readiness truth promotion $GITHUB_RUN_ID"
+          ok=false; for i in $(seq 1 25); do code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "$DEALER/api/health?readiness-live=$GITHUB_RUN_ID-$i" || true)"; if [ "$code" = 200 ] && jq -e '.ok==true and .degraded==false and .release=="WDCC-V53-OPS-HARDENED" and .backend=="healthy" and .integrations.email.configured==false and .integrations.sms.configured==false and .integrations.webhook.configured==false and .integrations.dashboard.configured==true and .integrationReadinessSource=="facade-runtime"' /tmp/live-health.json >/dev/null 2>&1; then ok=true; break; fi; sleep 2; done; test "$ok" = true
+          set -a; . /tmp/ready.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/ready.cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $DEALER" -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$payload")"
+          SESSION="$(curl -sS -b /tmp/ready.cookies -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session")"
+          DASHBOARD="$(curl -sS -b /tmp/ready.cookies -o /tmp/dashboard.json -w '%{http_code}' "$DEALER/api/crm/dashboard")"
+          LEADS="$(curl -sS -b /tmp/ready.cookies -o /tmp/leads.json -w '%{http_code}' "$DEALER/api/leads")"
+          INVENTORY="$(curl -sS -b /tmp/ready.cookies -o /tmp/inventory.json -w '%{http_code}' "$DEALER/api/inventory")"
+          test "$LOGIN" = 200; test "$SESSION" = 200; test "$DASHBOARD" = 200; test "$LEADS" = 200; test "$INVENTORY" = 200
+          curl -fsS -L "$CUSTOMER/?readiness-after=$GITHUB_RUN_ID" -o /tmp/customer-after.html
+          grep -q 'intro-sequence intro-impact' /tmp/customer-after.html; grep -q 'mobile-action-bar' /tmp/customer-after.html; grep -q '/assets/cars/2016-ford-f150-limited-1.webp' /tmp/customer-after.html
+          trap - ERR INT TERM
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"; echo "session=$SESSION" >> "$GITHUB_OUTPUT"; echo "dashboard=$DASHBOARD" >> "$GITHUB_OUTPUT"; echo "leads=$LEADS" >> "$GITHUB_OUTPUT"; echo "inventory=$INVENTORY" >> "$GITHUB_OUTPUT"; echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup temporary verifier
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f /tmp/ready.env ] || { echo ok=true >> "$GITHUB_OUTPUT"; exit 0; }
+          set -a; . /tmp/ready.env; set +a; export QA_ID RUN_TAG
+          cat > .wdcc-readiness-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=Array.isArray(s.users)?s.users:[];s.users=u.filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.readiness.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removed:u.length-s.users.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-readiness-clean.mjs
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Publish readiness promotion evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD: ${{ steps.rollback.outputs.old_version }}
+          NEW: ${{ steps.upload.outputs.new_version }}
+          CUTOVER: ${{ steps.cutover.outcome }}
+          L: ${{ steps.cutover.outputs.login }}
+          S: ${{ steps.cutover.outputs.session }}
+          D: ${{ steps.cutover.outputs.dashboard }}
+          E: ${{ steps.cutover.outputs.leads }}
+          I: ${{ steps.cutover.outputs.inventory }}
+          CLEAN: ${{ steps.cleanup.outcome }}
+        shell: bash
+        run: |
+          READY='not-live'; [ -f /tmp/live-health.json ] && READY="$(jq -c '{integrations,integrationReadinessSource}' /tmp/live-health.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC readiness live promotion $GITHUB_RUN_ID" --body "Exact source: \`$SOURCE_SHA\`
+          Previous Worker: \`${OLD:-unknown}\`
+          Promoted Worker: \`${NEW:-not-uploaded}\`
+          Cutover: **$CUTOVER**
+          Protected Login/Session/CRM/Leads/Inventory: \`${L:-?}/${S:-?}/${D:-?}/${E:-?}/${I:-?}\`
+          Temporary verifier cleanup: **$CLEAN**
+          Live readiness: \`$READY\`
+
+          No provider credentials are created or exposed; this makes their actual absence visible. Customer baseline is re-proved after the dealer-only cutover." || true
