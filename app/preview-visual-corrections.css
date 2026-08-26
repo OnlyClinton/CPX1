@@ -8,6 +8,17 @@
   filter:none!important;
 }
 
+/* Owner review: keep the Challenger static for now; preserve logo handoff and intro timing. */
+.li .li-car,
+.li-reveal .li-car,
+.li-dock .li-car{
+  animation:none!important;
+  transform:none!important;
+  opacity:1!important;
+  transition:none!important;
+  will-change:auto!important;
+}
+
 @media(max-width:430px){
   .locked-storefront h1 .white{
     font-size:.90em!important;
