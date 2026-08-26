@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p visual-proof
-          cat > /tmp/capture.mjs <<'NODE'
+          cat > visual-proof/capture.mjs <<'NODE'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
           async function capture(name,width,height){
@@ -80,7 +80,7 @@ jobs:
           await capture('mobile',390,844);
           await browser.close();
           NODE
-          node /tmp/capture.mjs
+          node visual-proof/capture.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: wdcc-cinematic-visual-proof
