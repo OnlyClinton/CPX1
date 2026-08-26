@@ -1,74 +1,76 @@
-name: WDCC CLOUDFLARE DEALER LIVE
+name: WDCC Dealer API Origin QA
 
-# Dealer front door pinned to direct Vercel origin to avoid Cloudflare->Cloudflare fallback drift.
 on:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-cloudflare-dealer-live.yml'
+    branches: ['qa/wdcc-dealer-api-origin-fix-20260825']
+    paths: ['.github/workflows/wdcc-cloudflare-dealer-live.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: write
   issues: write
 
 concurrency:
-  group: wdcc-cloudflare-dealer-live
-  cancel-in-progress: false
+  group: wdcc-dealer-api-origin-qa
+  cancel-in-progress: true
 
 env:
-  PRIMARY_ORIGIN: https://www.wedontcarecars.com
-  FALLBACK_ORIGIN: https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app
-  EXPECTED_SHA: d49210a02b70411376e1f2506ab67050bf719eb9
-  EXPECTED_ADD_CHUNK: 41lk83p0an81v.js
-  DEALER_HOST: dealer.wedontcarecars.com
+  UI_ORIGIN: https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app
+  API_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  STOREFRONT: https://wedontcarecars.com
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
 
 jobs:
-  deploy:
+  stage:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
     steps:
-      - name: Require Cloudflare authorization
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Preflight exact UI and canonical API origins
         shell: bash
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$VERCEL_TOKEN"
+          curl -fsS "$API_ORIGIN/api/health?qa_origin=$GITHUB_RUN_ID" -o /tmp/api-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/api-health.json >/dev/null
+          curl -fsS "$UI_ORIGIN/dealer/login?qa_origin=$GITHUB_RUN_ID" -o /tmp/login.html
+          curl -fsS "$UI_ORIGIN/dealer/inventory/new?qa_origin=$GITHUB_RUN_ID" -o /tmp/add.html
+          grep -q 'Checking secure dealer session' /tmp/add.html
 
-      - name: Prove current direct Vercel dealer origin
+      - name: Install QA tooling
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$PRIMARY_ORIGIN/api/health?cf_dealer=$GITHUB_RUN_ID")"
-          test "$code" = 200
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
-          curl -fsSL "$PRIMARY_ORIGIN/api/inventory?cf_dealer=$GITHUB_RUN_ID" -o /tmp/inventory.json
-          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
-          for path in /dealer /dealer/login /dealer/inventory /dealer/inventory/new; do
-            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path?cf_dealer=$GITHUB_RUN_ID")"
-            test "$code" = 200
-          done
-          curl -fsSL "$PRIMARY_ORIGIN/dealer/inventory/new?cf_dealer=$GITHUB_RUN_ID" -o /tmp/add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/add.html
-          curl -fsSL "$PRIMARY_ORIGIN/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_dealer=$GITHUB_RUN_ID" -o /tmp/add.js
-          grep -q 'name:"description"' /tmp/add.js
-          echo 'DIRECT_VERCEL_ORIGIN_PREFLIGHT=PASS'
+          npm ci
+          npm install --global vercel@59.5.0 wrangler@4.90.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/wdcc-dealer-api-qa
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
 
-      - name: Install Wrangler
-        run: npm install --global wrangler@4.90.0 >/dev/null
-
-      - name: Build current-source dealer reverse-proxy Worker
+      - name: Build path-aware QA Worker
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/wdcc-dealer-cf
-          cat > /tmp/wdcc-dealer-cf/worker.js <<'EOF'
-          const PRIMARY = "https://www.wedontcarecars.com";
-          const FALLBACK = "https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app";
+          cat > /tmp/wdcc-dealer-api-qa/worker.js <<'EOF'
+          const UI = "https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app";
+          const API = "https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
+          const LIVE_ORIGIN = "https://dealer.wedontcarecars.com";
 
           function targetUrl(request, base) {
             const incoming = new URL(request.url);
@@ -78,130 +80,183 @@ jobs:
             return target;
           }
 
-          async function proxy(request, base) {
+          async function proxy(request, base, api=false) {
             const incoming = new URL(request.url);
             const target = targetUrl(request, base);
             const headers = new Headers(request.headers);
             headers.set("x-forwarded-host", "dealer.wedontcarecars.com");
             headers.set("x-forwarded-proto", "https");
-            headers.set("x-wdcc-frontdoor", "cloudflare-dealer");
+            headers.set("x-wdcc-frontdoor", "cloudflare-dealer-api-qa");
             headers.delete("cf-worker");
-            const init = { method: request.method, headers, redirect: "manual" };
-            if (!['GET','HEAD'].includes(request.method)) init.body = request.body;
+            if(api && !['GET','HEAD'].includes(request.method)) headers.set("origin", LIVE_ORIGIN);
+            const init = {method: request.method, headers, redirect: "manual"};
+            if(!['GET','HEAD'].includes(request.method)) init.body = request.body;
             const response = await fetch(new Request(target.toString(), init));
             const outHeaders = new Headers(response.headers);
             const location = outHeaders.get("location");
-            if (location) {
-              try {
-                const loc = new URL(location, target);
-                if (loc.hostname === new URL(base).hostname) {
-                  loc.protocol = incoming.protocol;
-                  loc.hostname = incoming.hostname;
-                  loc.port = incoming.port;
-                  outHeaders.set("location", loc.toString());
+            if(location){
+              try{
+                const loc = new URL(location,target);
+                if(loc.hostname===new URL(base).hostname){
+                  loc.protocol=incoming.protocol;
+                  loc.hostname=incoming.hostname;
+                  loc.port=incoming.port;
+                  outHeaders.set("location",loc.toString());
                 }
-              } catch {}
+              }catch{}
             }
-            outHeaders.set("x-wdcc-edge", "cloudflare-dealer-sales-command");
-            outHeaders.set("x-wdcc-origin", new URL(base).hostname);
-            if (incoming.pathname.startsWith('/dealer') || incoming.pathname.startsWith('/api/')) {
-              outHeaders.set('cache-control','private, no-store, max-age=0');
-            }
-            return new Response(response.body, {status: response.status, statusText: response.statusText, headers: outHeaders});
+            outHeaders.set("x-wdcc-edge","cloudflare-dealer-api-qa");
+            outHeaders.set("x-wdcc-origin",new URL(base).hostname);
+            if(incoming.pathname.startsWith('/dealer')||incoming.pathname.startsWith('/api/')) outHeaders.set('cache-control','private, no-store, max-age=0');
+            return new Response(response.body,{status:response.status,statusText:response.statusText,headers:outHeaders});
           }
 
           export default {
-            async fetch(request) {
+            async fetch(request){
               const incoming = new URL(request.url);
-              if (incoming.pathname === "/") return Response.redirect(new URL("/dealer", incoming), 302);
-              try {
-                const response = await proxy(request, PRIMARY);
-                if (response.status < 500) return response;
-              } catch {}
-              try { return await proxy(request, FALLBACK); }
-              catch { return new Response("Dealer portal temporarily unavailable", {status: 503, headers:{"cache-control":"no-store"}}); }
+              if(incoming.pathname==="/") return Response.redirect(new URL("/dealer",incoming),302);
+              if(incoming.pathname.startsWith('/api/')) return proxy(request,API,true);
+              return proxy(request,UI,false);
             }
           };
           EOF
-          cat > /tmp/wdcc-dealer-cf/wrangler.jsonc <<'EOF'
+
+          cat > /tmp/wdcc-dealer-api-qa/wrangler.jsonc <<EOF
           {
             "$schema": "node_modules/wrangler/config-schema.json",
-            "name": "wdcc-dealer-frontdoor",
+            "name": "wdcc-dealer-api-origin-qa",
             "main": "worker.js",
             "compatibility_date": "2026-08-25",
             "workers_dev": true,
+            "preview_urls": true,
             "observability": {"enabled": true}
           }
           EOF
 
-      - name: Deploy and verify workers.dev candidate
-        id: stage
-        working-directory: /tmp/wdcc-dealer-cf
+      - name: Deploy workers.dev candidate only
+        id: worker
+        working-directory: /tmp/wdcc-dealer-api-qa
         shell: bash
         run: |
           set -euo pipefail
-          wrangler deploy 2>&1 | tee /tmp/wrangler-stage.log
-          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler-stage.log | tail -1 || true)"
+          wrangler deploy 2>&1 | tee /tmp/wrangler.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler.log | tail -n1 || true)"
           test -n "$URL"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          for attempt in $(seq 1 20); do
-            code="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?cf_stage=$GITHUB_RUN_ID&attempt=$attempt" || true)"
-            if [ "$code" = 200 ] && jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null
-          curl -fsS "$URL/dealer/inventory/new?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/cf-add.html
-          curl -fsS "$URL/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-add.js
-          grep -q 'name:"description"' /tmp/cf-add.js
-          echo 'CLOUDFLARE_STAGE_CURRENT_BUNDLE=PASS'
+          echo "QA_WORKER=$URL"
+          curl -fsS -D /tmp/qa-health.h "$URL/api/health?qa_worker=$GITHUB_RUN_ID" -o /tmp/qa-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/qa-health.json >/dev/null
+          grep -qi '^x-wdcc-origin: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' /tmp/qa-health.h
+          curl -fsS "$URL/dealer/inventory/new?qa_worker=$GITHUB_RUN_ID" -o /tmp/qa-add.html
+          grep -q 'Checking secure dealer session' /tmp/qa-add.html
 
-      - name: Bind dealer.wedontcarecars.com route
-        working-directory: /tmp/wdcc-dealer-cf
+      - name: Create disposable QA dealer with backup
+        id: identity
         shell: bash
         run: |
           set -euo pipefail
-          node - <<'NODE'
-          const fs=require('fs');
-          const p='wrangler.jsonc';
-          const c=JSON.parse(fs.readFileSync(p,'utf8'));
-          c.routes=[{pattern:'dealer.wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];
-          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-api-qa-user.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=4;n++){
+            const before=await stable(),s=before.s,now=new Date().toISOString();
+            const password=`ApiQa-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+            const id=`api-qa-${crypto.randomUUID()}`,email=`api-qa-${run}@invalid.example`,stock=`R36TEST-APIQA-${run}`,backup=`private/state/backups/platform-v3-pre-apiqa-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;
+            await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`API Origin QA ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/apiqa.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,stock,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}
+          }
           NODE
-          wrangler deploy
-          sleep 5
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-api-qa-user.mjs
+          set -a; . /tmp/apiqa.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
 
-      - name: Verify live dealer uses exact current bundle and API
-        id: live
+      - name: Prove candidate auth listing photo publish and authenticated readback
+        id: proof
+        env:
+          QA_URL: ${{ steps.worker.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -sS -D /tmp/live-health.h -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cf_live=$GITHUB_RUN_ID")"
-          test "$code" = 200
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null
-          grep -qi '^x-wdcc-edge: cloudflare-dealer-sales-command' /tmp/live-health.h
-          grep -qi '^x-wdcc-origin: www.wedontcarecars.com' /tmp/live-health.h
-          curl -fsS "https://$DEALER_HOST/dealer/inventory/new?cf_live=$GITHUB_RUN_ID" -o /tmp/live-add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/live-add.html
-          ! grep -q '1vekog7nwnog3.js' /tmp/live-add.html
-          curl -fsS "https://$DEALER_HOST/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_live=$GITHUB_RUN_ID" -o /tmp/live-add.js
-          grep -q 'name:"description"' /tmp/live-add.js
-          curl -fsS "https://$DEALER_HOST/api/auth/session?cf_live=$GITHUB_RUN_ID" -o /tmp/live-session.json
-          jq -e '.authenticated==false' /tmp/live-session.json >/dev/null
-          echo 'WDCC_CLOUDFLARE_DEALER_CURRENT_SOURCE=PASS'
-          echo 'verified=true' >> "$GITHUB_OUTPUT"
+          set -a; . /tmp/apiqa.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          const base=process.env.QA_URL,store=process.env.STOREFRONT,run=process.env.RUN_TAG,stock=process.env.STOCK;
+          const clean=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};
+          async function text(r){try{return (await r.text()).slice(0,3000)}catch{return ''}}
+          const result={ok:false,base,run,stock,stages:{},trace:[]};
+          fs.writeFileSync('/tmp/apiqa.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();
+          p.on('response',r=>{if(/\/api\/(?:auth|inventory|upload)/.test(r.url()))result.trace.push({method:r.request().method(),url:clean(r.url()),status:r.status()})});
+          await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});
+          const u=p.locator('input[autocomplete="username"]').first(),pw=p.locator('input[autocomplete="current-password"]').first();await u.waitFor({state:'visible',timeout:20000});await pw.waitFor({state:'visible',timeout:20000});await u.fill(process.env.QA_EMAIL);await pw.fill(process.env.QA_PASSWORD);await p.getByRole('button',{name:'SIGN IN'}).click();await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
+          const session=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{credentials:'include',cache:'no-store'});return{status:r.status,body:await r.text()}});result.stages.session={status:session.status};if(session.status!==200||!JSON.parse(session.body).authenticated)throw Error(`SESSION_${session.status}_${session.body}`);
+          const before=await p.evaluate(async()=>{const r=await fetch(`/api/inventory?before=${Date.now()}`,{credentials:'include',cache:'no-store'});return{status:r.status,text:await r.text()}});const beforeJson=JSON.parse(before.text);result.stages.inventoryBefore={status:before.status,count:(beforeJson.items||[]).length};if(before.status!==200||(beforeJson.items||[]).length<=5)throw Error(`AUTH_INVENTORY_STILL_PUBLIC_${before.status}_${before.text.slice(0,1000)}`);
+          await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});
+          async function fill(n,v){let x=p.locator(`input[name="${n}"]`).first();if(n==='description')x=p.locator('label.description textarea, textarea').first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}
+          await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`API QA ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description',`Path-aware API origin QA ${run}`);
+          const file=p.locator('input[type=file][multiple]').first();if(!await file.count())throw Error('FILE_INPUT_MISSING');await file.setInputFiles('/tmp/apiqa.png');
+          const pub=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();if(!await pub.count())throw Error('PUBLISH_BUTTON_MISSING');
+          const draftP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000});await pub.click();const draft=await draftP,dt=await text(draft);result.stages.draft={status:draft.status()};if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),id=String(dj.item?.id||'');if(!id)throw Error('DRAFT_ID_MISSING');result.vehicleId=id;const upload=await uploadP,ut=await text(upload);result.stages.upload={status:upload.status()};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);
+          const nav=await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:40000}).then(()=>true).catch(()=>false);if(!nav)throw Error(`NAV_TIMEOUT_${await p.locator('.statusMessage').first().textContent().catch(()=> '')}`);result.stages.navigation={ok:true};
+          const inv=await p.evaluate(async()=>{const r=await fetch(`/api/inventory?after=${Date.now()}`,{credentials:'include',cache:'no-store'});return{status:r.status,text:await r.text()}});const ij=JSON.parse(inv.text),item=(ij.items||[]).find(x=>x.id===id||x.stock===stock);result.stages.inventoryAfter={status:inv.status,count:(ij.items||[]).length};if(inv.status!==200||!item)throw Error(`AUTH_READBACK_MISSING_${inv.status}_${inv.text.slice(0,1000)}`);if(String(item.status).toLowerCase()!=='published')throw Error(`STATUS_${item.status}`);if(!(item.photoPathnames||[]).length)throw Error('PHOTO_PATH_MISSING');result.vehicle={id:item.id,stock:item.stock,status:item.status,photos:item.photoPathnames.length};
+          const publicResp=await fetch(`${store}/api/inventory?apiqa=${Date.now()}`,{cache:'no-store'}),publicText=await publicResp.text(),publicJson=JSON.parse(publicText);if((publicJson.items||[]).some(x=>x.id===id||x.stock===stock))throw Error('QA_VEHICLE_PUBLIC');result.qaHiddenPublic=true;
+          await p.screenshot({path:'/tmp/apiqa-dealer.png',fullPage:true});result.ok=true;fs.writeFileSync('/tmp/apiqa-result.json',JSON.stringify(result,null,2));}catch(e){result.error=String(e?.message||e);fs.writeFileSync('/tmp/apiqa-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
 
-      - name: Dispatch authenticated listing proof
-        if: steps.live.outputs.verified == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run wdcc-listing-only-e2e.yml --ref main
+      - name: Cleanup disposable QA data
+        if: always() && steps.identity.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/apiqa.env; set +a
+          cat > .wdcc-apiqa-clean.mjs <<'NODE'
+          import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(Buffer.concat(c).toString())}}throw Error('HOT')}for(let n=1;n<=4;n++){const before=await stable(),s=before.s,v=(s.vehicles||[]).filter(x=>String(x.stock||'')===stock),media=[...new Set(v.flatMap(x=>x.photoPathnames||[]).filter(Boolean))],users=s.users||[];s.users=users.filter(x=>x.id!==id);s.vehicles=(s.vehicles||[]).filter(x=>!v.some(y=>y.id===x.id));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,removedUsers:users.length-s.users.length,removedVehicles:v.length,removedMedia:media.length,stock}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-apiqa-clean.mjs | tee /tmp/apiqa-clean.json
 
-      - name: Publish cutover evidence
+      - name: Publish QA candidate evidence
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          LIVE: ${{ steps.live.outputs.verified }}
+          STATUS: ${{ job.status }}
+          QA_URL: ${{ steps.worker.outputs.url }}
         shell: bash
         run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Cloudflare dealer current-source $GITHUB_RUN_ID" --body "Expected source: \`$EXPECTED_SHA\`\nPrimary: \`$PRIMARY_ORIGIN\`\nFallback: \`$FALLBACK_ORIGIN\`\nLive current-bundle verification: \`${LIVE:-false}\`\nExpected Add Vehicle chunk: \`$EXPECTED_ADD_CHUNK\`." || true
+          result='not captured'; [ -f /tmp/apiqa-result.json ] && result="$(cat /tmp/apiqa-result.json)"
+          cleanup='not captured'; [ -f /tmp/apiqa-clean.json ] && cleanup="$(tail -1 /tmp/apiqa-clean.json)"
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Candidate: \`${QA_URL:-not-created}\`
+          UI origin: \`$UI_ORIGIN\`
+          API origin: \`$API_ORIGIN\`
+
+          This workflow deploys a workers.dev QA candidate only. It does **not** bind dealer.wedontcarecars.com, change DNS, move Vercel aliases, or alter storefront traffic.
+
+          Result:
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Cleanup:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer API origin QA ${GITHUB_RUN_ID}" --body "$body" || true
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dealer-api-origin-qa-${{ github.run_id }}
+          path: |
+            /tmp/apiqa-result.json
+            /tmp/apiqa-dealer.png
+          if-no-files-found: ignore
+          retention-days: 3
