@@ -1,0 +1,53 @@
+name: WDCC Notification Provider Audit PR472
+
+on:
+  push:
+    branches: [fix/wdcc-visual-inventory-closeout-20260826]
+    paths:
+      - '.github/workflows/wdcc-notification-provider-audit-pr472.yml'
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  PHOENIX_PROJECT: wdcc-cpx-launch
+  GH_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+  GH_TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+  GH_TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+  GH_TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+  GH_WDCC_LEAD_NOTIFICATION_EMAILS: ${{ secrets.WDCC_LEAD_NOTIFICATION_EMAILS }}
+  GH_WDCC_LEAD_NOTIFICATION_SMS: ${{ secrets.WDCC_LEAD_NOTIFICATION_SMS }}
+  GH_WDCC_LEAD_NOTIFICATION_WEBHOOK_URL: ${{ secrets.WDCC_LEAD_NOTIFICATION_WEBHOOK_URL }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect provider availability as booleans only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          vercel link --yes --project="$PHOENIX_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          vercel env pull /tmp/phoenix.env --environment=production --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          has_env(){ grep -qE "^$1=" /tmp/phoenix.env; }
+          yn(){ if "$@"; then printf true; else printf false; fi; }
+          printf 'Phoenix RESEND_API_KEY: %s\n' "$(yn has_env RESEND_API_KEY)"
+          printf 'Phoenix TWILIO_ACCOUNT_SID: %s\n' "$(yn has_env TWILIO_ACCOUNT_SID)"
+          printf 'Phoenix TWILIO_AUTH_TOKEN: %s\n' "$(yn has_env TWILIO_AUTH_TOKEN)"
+          printf 'Phoenix TWILIO_FROM_NUMBER: %s\n' "$(yn has_env TWILIO_FROM_NUMBER)"
+          printf 'Phoenix WDCC_LEAD_NOTIFICATION_EMAILS: %s\n' "$(yn has_env WDCC_LEAD_NOTIFICATION_EMAILS)"
+          printf 'Phoenix WDCC_LEAD_NOTIFICATION_SMS: %s\n' "$(yn has_env WDCC_LEAD_NOTIFICATION_SMS)"
+          printf 'Phoenix WDCC_LEAD_NOTIFICATION_WEBHOOK_URL: %s\n' "$(yn has_env WDCC_LEAD_NOTIFICATION_WEBHOOK_URL)"
+          printf 'GitHub RESEND_API_KEY available: %s\n' "$([ -n "${GH_RESEND_API_KEY:-}" ] && echo true || echo false)"
+          printf 'GitHub TWILIO_ACCOUNT_SID available: %s\n' "$([ -n "${GH_TWILIO_ACCOUNT_SID:-}" ] && echo true || echo false)"
+          printf 'GitHub TWILIO_AUTH_TOKEN available: %s\n' "$([ -n "${GH_TWILIO_AUTH_TOKEN:-}" ] && echo true || echo false)"
+          printf 'GitHub TWILIO_FROM_NUMBER available: %s\n' "$([ -n "${GH_TWILIO_FROM_NUMBER:-}" ] && echo true || echo false)"
+          printf 'GitHub notification email recipients available: %s\n' "$([ -n "${GH_WDCC_LEAD_NOTIFICATION_EMAILS:-}" ] && echo true || echo false)"
+          printf 'GitHub notification SMS recipients available: %s\n' "$([ -n "${GH_WDCC_LEAD_NOTIFICATION_SMS:-}" ] && echo true || echo false)"
+          printf 'GitHub webhook URL available: %s\n' "$([ -n "${GH_WDCC_LEAD_NOTIFICATION_WEBHOOK_URL:-}" ] && echo true || echo false)"
+          rm -f /tmp/phoenix.env
