@@ -41,11 +41,14 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+          test -s public/wdcc-official-logo.webp
           test -s public/wdcc-logo-transparent.webp
           test -s app/LockedIntro.tsx
           test -s app/ReferenceCloneHome.tsx
           test -s app/visual-perfect.css
           test -f 'app/vehicle/[id]/page.tsx'
+          grep -Eq 'wdcc-(official-logo|logo-transparent)\.webp' app/LockedIntro.tsx
+          grep -q 'clip-path:circle' app/LockedIntro.tsx
 
       - name: Build isolated Cloudflare artifact
         shell: bash
@@ -101,7 +104,7 @@ jobs:
           grep -qi "we don.t care" /tmp/home.html
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
+          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?proof=$GITHUB_RUN_ID")" = 200
           test -s /tmp/logo.webp
           test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?proof=$GITHUB_RUN_ID")" = 200
           test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?proof=$GITHUB_RUN_ID")" = 200
@@ -121,6 +124,12 @@ jobs:
             const browser=await chromium.launch({headless:true});
             const proof={url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{},dealer:{}};
             const waitImg=async(p,s,w=100)=>{await p.locator(s).waitFor({state:'visible',timeout:12000});await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return i&&i.complete&&i.naturalWidth>=w},{s,w},{timeout:12000});};
+            const waitIntroDone=async p=>{
+              const intro=p.locator('.li');
+              if(await intro.count()) await intro.waitFor({state:'detached',timeout:5000}).catch(async()=>{if(await intro.count()) await p.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:1500}).catch(()=>{})});
+              await p.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});
+            };
+            const acceptedBadge=src=>/wdcc-(official-logo|logo-transparent)\.webp/.test(String(src||''));
             try{
               const m=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
               const p=await m.newPage(); const failures=[]; const consoleErrors=[];
@@ -129,14 +138,14 @@ jobs:
               p.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text())});
               p.on('pageerror',e=>consoleErrors.push(String(e)));
               await p.goto(`${url}/?m=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              await waitImg(p,'.li-scene img',1000); await waitImg(p,'.li-badge img',200); await p.waitForTimeout(1000);
-              const introLogo=await p.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}});
-              if(!String(introLogo.src).includes('wdcc-logo-transparent.webp')||Number(introLogo.opacity)<.9||introLogo.visibility==='hidden'||introLogo.w<120) throw Error(`INTRO_LOGO_BAD ${JSON.stringify(introLogo)}`);
+              await waitImg(p,'.li-scene img',1000); await waitImg(p,'.li-badge img',200); await p.waitForTimeout(700);
+              const introLogo=await p.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),clipPath:s.clipPath,opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}});
+              if(!acceptedBadge(introLogo.src)||!String(introLogo.clipPath).includes('circle')||Number(introLogo.opacity)<.9||introLogo.visibility==='hidden'||introLogo.w<120) throw Error(`INTRO_LOGO_BAD ${JSON.stringify(introLogo)}`);
               await p.screenshot({path:'visual-proof/mobile-intro.png'});
-              await p.getByRole('button',{name:/skip intro/i}).click(); await p.waitForTimeout(250);
+              await waitIntroDone(p);
               await waitImg(p,'.rh-hero-art',1000);
               const logo=await p.locator('.rh-logo img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}});
-              if(!String(logo.src).includes('wdcc-logo-transparent.webp')||Number(logo.opacity)<.9||logo.visibility==='hidden'||logo.w<45) throw Error(`MOBILE_HEADER_LOGO_BAD ${JSON.stringify(logo)}`);
+              if(!acceptedBadge(logo.src)||Number(logo.opacity)<.9||logo.visibility==='hidden'||logo.w<62) throw Error(`MOBILE_HEADER_LOGO_BAD ${JSON.stringify(logo)}`);
               const pseudo=await p.locator('.rh-logo').evaluate(el=>getComputedStyle(el,'::after').display);
               if(pseudo!=='none') throw Error(`STALE_HEADER_PSEUDO_${pseudo}`);
               const h1=p.locator('.rh-copy h1'), hb=await h1.boundingBox();
@@ -145,15 +154,22 @@ jobs:
               if(await p.getByRole('link',{name:/call sean/i}).count()<1) throw Error('CALL_SEAN_MISSING');
               const heroArt=await p.locator('.rh-hero-art').boundingBox(); const copy=await p.locator('.rh-copy').boundingBox();
               if(!heroArt||!copy||heroArt.height>410||copy.y<285) throw Error(`MOBILE_HERO_COMPOSITION_BAD ${JSON.stringify({heroArt,copy})}`);
+              const mobileLayout=await p.evaluate(()=>{
+                const header=document.querySelector('.rh-header'),utility=document.querySelector('.rh-utility'),menu=document.querySelector('.rh-menu'),grid=document.querySelector('.rh-grid'),card=document.querySelector('.rh-card');
+                const style=e=>e?getComputedStyle(e):null;
+                return{viewport:innerWidth,headerPosition:style(header)?.position,utilityPosition:style(utility)?.position,menuDisplay:style(menu)?.display,gridDisplay:style(grid)?.display,cardWidth:card?.getBoundingClientRect().width||0,headerLogoWidth:document.querySelector('.rh-logo img')?.getBoundingClientRect().width||0};
+              });
+              if(mobileLayout.headerPosition!=='sticky'||mobileLayout.utilityPosition!=='sticky') throw Error(`MOBILE_STICKY_BAD ${JSON.stringify(mobileLayout)}`);
+              if(mobileLayout.menuDisplay==='none'||mobileLayout.gridDisplay!=='flex'||mobileLayout.cardWidth>360) throw Error(`MOBILE_BREAKPOINT_BAD ${JSON.stringify(mobileLayout)}`);
               const critical=failures.filter(x=>x.status>=500||(x.status===404&&/\/(vehicle|inventory)\//.test(x.url||'')));
               if(critical.length||consoleErrors.length) throw Error(`MOBILE_RUNTIME_ERRORS ${JSON.stringify({critical,consoleErrors})}`);
               await p.screenshot({path:'visual-proof/mobile-hero.png'}); await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-              proof.mobile={introLogo,logo,pseudo,hb,heroArt,copy,placeholders:await p.locator('.rh-photo-placeholder').count(),failures,consoleErrors}; await m.close();
+              proof.mobile={introLogo,logo,pseudo,hb,heroArt,copy,layout:mobileLayout,placeholders:await p.locator('.rh-photo-placeholder').count(),failures,consoleErrors}; await m.close();
 
               const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1}); const q=await d.newPage(); const derrors=[];
               q.on('console',msg=>{if(msg.type()==='error')derrors.push(msg.text())}); q.on('pageerror',e=>derrors.push(String(e)));
-              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(1000); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await q.getByRole('button',{name:/skip intro/i}).click(); await q.waitForTimeout(250); await waitImg(q,'.rh-hero-art',1000);
-              const dl=await q.locator('.rh-logo img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}}); if(Number(dl.opacity)<.9||dl.visibility==='hidden'||dl.w<50)throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
+              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(700); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await waitIntroDone(q); await waitImg(q,'.rh-hero-art',1000);
+              const dl=await q.locator('.rh-logo img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}}); if(!acceptedBadge(dl.src)||Number(dl.opacity)<.9||dl.visibility==='hidden'||dl.w<50)throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
               const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox(); if(!db||db.x<0||db.x+db.width>1440)throw Error('DESKTOP_HEADLINE_BAD'); if(await q.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count())throw Error('DESKTOP_INVENTORY_HERO_REUSE'); if(derrors.length)throw Error(`DESKTOP_CONSOLE_ERRORS ${JSON.stringify(derrors)}`);
               await q.screenshot({path:'visual-proof/desktop-hero.png'}); await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true}); proof.desktop={logo:dl,headline:db,placeholders:await q.locator('.rh-photo-placeholder').count(),consoleErrors:derrors};
               const dealer=await d.newPage(); await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await dealer.waitForTimeout(800); await dealer.screenshot({path:'visual-proof/dealer.png'}); proof.dealer={url:dealer.url(),title:await dealer.title()}; await d.close();
@@ -171,6 +187,7 @@ jobs:
           echo '### WDCC final-perfect visual proof' >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Round WDCC badge, sticky mobile header, mobile carousel and short static intro are enforced.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No production route, alias, DNS, or provider setting changed.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
