@@ -114,13 +114,16 @@ html body main.dcPage.dealerDashboardLocked .dcShell > .dcContent.dashboardConte
 }
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{display:none!important}
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before{
-  content:""!important;
+  content:url('/wdcc-official-logo.webp')!important;
   display:block!important;
   flex:0 0 58px!important;
   width:58px!important;
   height:58px!important;
+  overflow:hidden!important;
+  object-fit:cover!important;
   border-radius:50%!important;
-  background:url('/wdcc-official-logo.webp') center/contain no-repeat!important;
+  clip-path:circle(49% at 50% 50%)!important;
+  background:transparent!important;
   border:2px solid rgba(255,255,255,.78)!important;
   box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
 }
