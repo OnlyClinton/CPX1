@@ -8,7 +8,25 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const[id,setId]=useState("");
   const[v,setV]=useState<any>();
   useEffect(()=>{params.then(x=>setId(x.id))},[params]);
-  useEffect(()=>{if(id)fetch(`/api/inventory/${id}`).then(r=>r.json()).then(j=>setV(j.item))},[id]);
+  useEffect(()=>{
+    if(!id)return;
+    let live=true;
+    const load=async()=>{
+      try{
+        const direct=await fetch(`/api/inventory/${encodeURIComponent(id)}`,{cache:"no-store"});
+        if(direct.ok){const j=await direct.json();if(live&&j?.item){setV(j.item);return}}
+      }catch{}
+      try{
+        const list=await fetch(`/api/inventory?vdp=${Date.now()}`,{cache:"no-store"});
+        if(!list.ok)return;
+        const j=await list.json();const items=Array.isArray(j?.items)?j.items:Array.isArray(j?.inventory)?j.inventory:[];
+        const item=items.find((x:any)=>String(x?.id||x?.slug||"")===id);
+        if(live&&item)setV(item);
+      }catch{}
+    };
+    load();
+    return()=>{live=false};
+  },[id]);
   const q=id?`?vehicle=${encodeURIComponent(id)}&source=vdp`:"";
   return <>
     <Header/>
