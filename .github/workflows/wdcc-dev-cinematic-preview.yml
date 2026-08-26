@@ -51,7 +51,7 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Capture desktop/mobile visual proof
+      - name: Capture and enforce desktop/mobile visual proof
         shell: bash
         run: |
           mkdir -p visual-proof
@@ -61,14 +61,49 @@ jobs:
           async function capture(name,width,height){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
             page.setDefaultTimeout(10000);
+            // Keep the visual contract deterministic: use the known static mockup inventory donor.
+            await page.route('**/api/inventory**', route=>route.abort());
+            const failed=[];
+            page.on('requestfailed',r=>{if(!r.url().includes('/api/inventory')) failed.push(`${r.failure()?.errorText||'failed'} ${r.url()}`)});
             await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
             await page.waitForSelector('[data-wdcc-intro="challenger-tampa-v1"]');
             await page.waitForTimeout(850);
+            const introState=await page.locator('.cinematic-v2 .cinScene').evaluate(e=>({
+              background:getComputedStyle(e).backgroundImage,
+              width:e.getBoundingClientRect().width,
+              height:e.getBoundingClientRect().height
+            }));
+            if(!introState.background.includes('wdcc-hero-v2.webp')||introState.width<width*.95||introState.height<height*.95){
+              throw new Error(`${name}: Tampa/Challenger intro canvas invalid ${JSON.stringify(introState)}`);
+            }
             await page.screenshot({path:`visual-proof/${name}-intro.png`,fullPage:false});
-            const intro=await page.locator('[data-wdcc-intro="challenger-tampa-v1"]').count();
-            if(!intro) throw new Error(`${name}: cinematic intro missing`);
             await page.waitForTimeout(3200);
-            await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
+            await page.waitForSelector('.screenshotHero');
+            const visual=await page.evaluate(()=>{
+              const hero=document.querySelector('.screenshotHero');
+              const copy=document.querySelector('.hero-copy');
+              const heading=document.querySelector('.hero h1');
+              const visibleImgs=[...document.querySelectorAll('img')].filter(i=>{const r=i.getBoundingClientRect();const s=getComputedStyle(i);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'});
+              return {
+                innerWidth:window.innerWidth,
+                scrollWidth:document.documentElement.scrollWidth,
+                heroBackground:hero?getComputedStyle(hero).backgroundImage:'',
+                heroRect:hero?.getBoundingClientRect().toJSON(),
+                copyRect:copy?.getBoundingClientRect().toJSON(),
+                headingRect:heading?.getBoundingClientRect().toJSON(),
+                headingFont:heading?getComputedStyle(heading).fontSize:'',
+                brokenImages:visibleImgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),
+                visibleImageCount:visibleImgs.length
+              };
+            });
+            console.log(`${name} visual=${JSON.stringify(visual)}`);
+            if(!visual.heroBackground.includes('wdcc-hero-v2.webp')) throw new Error(`${name}: hero Tampa/Challenger background missing`);
+            if(visual.scrollWidth>visual.innerWidth+3) throw new Error(`${name}: horizontal overflow ${visual.scrollWidth}>${visual.innerWidth}`);
+            if(visual.brokenImages.length) throw new Error(`${name}: broken visible images ${JSON.stringify(visual.brokenImages)}`);
+            if(visual.visibleImageCount<5) throw new Error(`${name}: too few rendered images ${visual.visibleImageCount}`);
+            if(!visual.copyRect||visual.copyRect.y<100||visual.copyRect.y+visual.copyRect.height>(visual.heroRect?.y||0)+(visual.heroRect?.height||0)-12){
+              throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
+            }
             const checks={
               logo:await page.locator('.header-logo-image').count(),
               hero:await page.locator('.screenshotHero').count(),
@@ -77,6 +112,8 @@ jobs:
               inventory:await page.locator('.screenshotInventory').count()
             };
             if(Object.values(checks).some(v=>v<1)) throw new Error(`${name}: mockup contract missing ${JSON.stringify(checks)}`);
+            if(failed.length) throw new Error(`${name}: unexpected resource failures ${JSON.stringify(failed)}`);
+            await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
             await page.close();
           }
           await capture('desktop',1440,1000);
