@@ -1,0 +1,80 @@
+/* WDCC final optical sizing layer. Loaded last; visual-only. */
+
+/* Desktop: use viewport width, not hover capability, to avoid accidental tablet/desktop hybrids. */
+@media(min-width:1101px){
+  .locked-storefront .rh-header{height:90px!important;min-height:90px!important}
+  .locked-storefront .rh-header-inner{height:90px!important;grid-template-columns:150px minmax(0,1fr) auto!important;gap:26px!important}
+  .locked-storefront .rh-logo{width:136px!important;height:88px!important}
+  .locked-storefront .rh-logo img{width:88px!important;height:88px!important;transform:scale(1.04)!important;filter:drop-shadow(0 7px 16px rgba(0,0,0,.5))!important}
+  .locked-storefront .rh-menu,.locked-storefront .rh-call{display:none!important}
+  .locked-storefront .rh-nav{display:flex!important;gap:32px!important}
+  .locked-storefront .rh-header-actions{display:flex!important}
+  .locked-storefront .rh-header-phone{height:44px!important;padding:0 18px!important;font-size:12px!important}
+  .locked-storefront .rh-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important;overflow:visible!important;padding:0!important}
+  .locked-storefront .rh-card{min-width:0!important;max-width:none!important}
+  .locked-storefront .rh-mobile-dots{display:none!important}
+}
+
+/* Phone/tablet: comes after desktop so coarse-touch devices always get mobile composition. */
+@media(max-width:1100px),(hover:none) and (pointer:coarse){
+  .locked-storefront{--utility-h:26px!important}
+  .locked-storefront .rh-utility{height:26px!important;min-height:26px!important;position:sticky!important;top:0!important}
+  .locked-storefront .rh-utility-inner{font-size:10px!important;gap:17px!important;padding:0 12px!important}
+
+  .locked-storefront .rh-header{height:80px!important;min-height:80px!important;top:26px!important;position:sticky!important}
+  .locked-storefront .rh-header-inner{height:80px!important;grid-template-columns:60px 1fr 94px!important;padding:0 11px!important}
+  .locked-storefront .rh-menu{width:46px!important;height:46px!important;font-size:28px!important}
+  .locked-storefront .rh-logo{width:104px!important;height:80px!important;overflow:visible!important}
+  .locked-storefront .rh-logo img{width:86px!important;height:86px!important;transform:scale(1.08)!important;transform-origin:center!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))!important}
+  .locked-storefront .rh-call{min-width:90px!important;height:44px!important;padding:0 12px!important;font-size:11.5px!important}
+  .locked-storefront .rh-nav{top:106px!important}
+
+  .locked-storefront .rh-hero{padding-top:282px!important}
+  .locked-storefront .rh-hero-art,.locked-storefront .rh-hero-shade,.locked-storefront .rh-hero:after{height:346px!important}
+  .locked-storefront .rh-copy{padding:22px 17px 29px!important}
+  .locked-storefront .rh-kicker{font-size:11.5px!important;line-height:1.2!important}
+  .locked-storefront h1{font-size:clamp(38px,10.2vw,44px)!important;line-height:.94!important;letter-spacing:-.044em!important;max-width:372px!important;margin-bottom:17px!important}
+  .locked-storefront .rh-lead{font-size:15.5px!important;line-height:1.48!important;max-width:365px!important}
+  .locked-storefront .rh-btn{font-size:12px!important;min-height:50px!important}
+  .locked-storefront .rh-phone{font-size:12px!important}
+
+  .locked-storefront .rh-benefit{min-height:96px!important;padding:14px 13px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:10px!important}
+  .locked-storefront .rh-benefit strong{font-size:14px!important;line-height:1.18!important}
+  .locked-storefront .rh-benefit small{font-size:12px!important;line-height:1.34!important;margin-top:3px!important}
+
+  .locked-storefront .rh-inventory{padding:38px 0 44px!important}
+  .locked-storefront .rh-section-head{padding:0 17px!important;margin-bottom:18px!important}
+  .locked-storefront .rh-section-head small{font-size:11px!important}
+  .locked-storefront .rh-section-head h2{font-size:32px!important;line-height:1.02!important;margin:6px 0 8px!important}
+  .locked-storefront .rh-section-head p{font-size:13px!important;line-height:1.44!important}
+  .locked-storefront .rh-view-all{font-size:11.5px!important}
+  .locked-storefront .rh-card{flex:0 0 84vw!important;min-width:84vw!important;max-width:84vw!important}
+  .locked-storefront .rh-card-body{padding:16px 17px 18px!important}
+  .locked-storefront .rh-eyebrow{font-size:10px!important}
+  .locked-storefront .rh-title{font-size:18.5px!important;line-height:1.1!important}
+  .locked-storefront .rh-price{font-size:30px!important}
+  .locked-storefront .rh-payment{font-size:12.5px!important}
+  .locked-storefront .rh-pills span{font-size:9.5px!important}
+
+  .locked-storefront .rh-finance{padding:40px 15px 44px!important}
+  .locked-storefront .finance-heading h2{font-size:30px!important;line-height:1.04!important}
+  .locked-storefront .finance-heading p{font-size:12.5px!important;line-height:1.4!important}
+  .locked-storefront .rh-step{min-height:98px!important;padding:16px 17px!important}
+  .locked-storefront .rh-step strong{font-size:14.5px!important}
+  .locked-storefront .rh-step small{font-size:12px!important;line-height:1.38!important}
+
+  .locked-storefront .rh-trust-grid article{min-height:78px!important;padding:14px 17px!important}
+  .locked-storefront .rh-trust-grid b{font-size:14px!important}
+  .locked-storefront .rh-trust-grid span{font-size:12px!important;line-height:1.36!important}
+  .locked-storefront .rh-footer-inner{font-size:11.5px!important;line-height:1.45!important}
+}
+
+@media(max-width:430px){
+  .locked-storefront .rh-header-inner{grid-template-columns:56px 1fr 90px!important;padding:0 9px!important}
+  .locked-storefront .rh-logo{width:100px!important}
+  .locked-storefront .rh-logo img{width:84px!important;height:84px!important;transform:scale(1.08)!important}
+  .locked-storefront .rh-hero{padding-top:270px!important}
+  .locked-storefront .rh-hero-art,.locked-storefront .rh-hero-shade,.locked-storefront .rh-hero:after{height:334px!important}
+  .locked-storefront h1{font-size:clamp(37px,10.4vw,42px)!important;max-width:360px!important}
+  .locked-storefront .rh-lead{font-size:15px!important}
+}
