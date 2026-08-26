@@ -1,0 +1,90 @@
+name: WDCC Cloudflare Exact Mockup Preview
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - '.github/workflows/wdcc-cloudflare-exact-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-cloudflare-exact-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify isolated exact-mockup source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/Exact2vfDHome.tsx
+          test -s app/dealer-reference.css
+          test -s app/dealer-dashboard-reference.css
+          test -s public/wdcc-hero-v2.webp
+          test -s public/wdcc-logo-transparent.webp
+          grep -q '2vfD is the visual source of truth' WDCC_VISUAL_BASELINE.md
+      - name: Install app and Cloudflare adapter
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest wrangler@latest
+      - name: Configure isolated Worker
+        shell: bash
+        run: |
+          cat > open-next.config.ts <<'EOF'
+          import { defineCloudflareConfig } from '@opennextjs/cloudflare';
+          export default defineCloudflareConfig();
+          EOF
+          node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          p.name='wdcc-exact-mockup-preview';
+          p.workers_dev=true;
+          p.vars={...(p.vars||{}),WDCC_RUNTIME_ROLE:'preview',WDCC_DEALER_BACKEND_URL:'https://wdcc-cpx-launch-cpxagency.vercel.app'};
+          fs.writeFileSync('wrangler.jsonc',JSON.stringify(p,null,2)+'\n');
+          NODE
+      - name: Build Cloudflare Worker
+        run: npx opennextjs-cloudflare build
+      - name: Deploy isolated preview
+        shell: bash
+        run: |
+          set -o pipefail
+          npx wrangler deploy --config wrangler.jsonc 2>&1 | tee /tmp/cf-deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/cf-deploy.log | tail -1)"
+          test -n "$url"
+          printf '%s\n' "$url" | tee cloudflare-preview-url.txt
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+      - name: Smoke exact preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 5 --retry-delay 3 "$PREVIEW_URL/" -o /tmp/home.html
+          grep -qi "we don.t care" /tmp/home.html
+          curl -fsS --retry 5 --retry-delay 3 "$PREVIEW_URL/dealer" -o /tmp/dealer.html
+          grep -qi "dealer" /tmp/dealer.html
+          curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/wdcc-hero-v2.webp" | grep -qi '200'
+          echo "CLOUDFLARE_EXACT_PREVIEW=PASS"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-cloudflare-exact-preview-url
+          path: cloudflare-preview-url.txt
+          retention-days: 7
+      - name: Summary
+        run: |
+          echo '### WDCC exact mockup — Cloudflare preview' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production domains were not changed.' >> "$GITHUB_STEP_SUMMARY"
