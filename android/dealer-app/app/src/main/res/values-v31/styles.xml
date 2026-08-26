@@ -2,9 +2,11 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">#02070D</item>
+        <item name="android:windowSplashScreenBackground">#02070D</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_wdcc</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#02070D</item>
         <item name="android:statusBarColor">#02070D</item>
         <item name="android:navigationBarColor">#02070D</item>
         <item name="android:windowLightStatusBar">false</item>

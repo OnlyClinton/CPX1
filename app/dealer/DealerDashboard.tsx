@@ -7,7 +7,7 @@ import{appointmentIntent,createdAtOf,firstContactDue,leadScore,notificationState
 type Vehicle=Record<string,any>;
 
 const isQaVehicle=(v:Vehicle)=>{const stock=String(v?.stock||"").trim().toUpperCase(),id=String(v?.id||"").trim().toUpperCase(),badges=Array.isArray(v?.badges)?v.badges.map((x:any)=>String(x||"").toUpperCase()):[];return v?.qa===true||/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||/^(WDCC[-_]QA|QA)[-_]/.test(id)||badges.some((x:string)=>x==="R36-TEST"||x==="QA"||x==="TEST"||x.includes("CERTIFICATION"));};
-const customerVisible=(v:Vehicle)=>String(v?.status||"").toLowerCase()==="published"&&!isQaVehicle(v)&&Number(v?.year)>1900&&Boolean(String(v?.make||"").trim())&&Boolean(String(v?.model||"").trim())&&Number(v?.price)>0;
+const customerVisible=(v:Vehicle)=>String(v?.status||"").toLowerCase()==="published"&&!isQaVehicle(v)&&v?.internalOnly!==true&&String(v?.visibility||"").toLowerCase()!=="internal"&&Number(v?.year)>1900&&Boolean(String(v?.make||"").trim())&&Boolean(String(v?.model||"").trim())&&Number(v?.price)>0;
 
 export default function DealerDashboard(){
   const[session,setSession]=useState<any>(null);

@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
-import {isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
+import {isInternalVehicleRecord,isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
 import {recordVehicleAudit} from "../../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
@@ -57,7 +57,9 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     const item=state.vehicles.find(vehicle=>vehicle.id===id);
-    if(!item||((item.status!=="published")&&!canEdit(user,item)))return json({ok:false,error:"Not found"},404,rid);
+    if(!item)return json({ok:false,error:"Not found"},404,rid);
+    const publicReadable=String(item.status||"").toLowerCase()==="published"&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
+    if(!publicReadable&&!canEdit(user,item))return json({ok:false,error:"Not found"},404,rid);
     return json({ok:true,item,revision:state.revision},200,rid);
   }catch(error){return json({ok:false,error:error instanceof Error?error.message:"read_failed"},500,rid);}
 }
@@ -71,7 +73,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const response=await proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
     if(!response.ok||String(body?.status||"").toLowerCase()!=="published")return response;
     const upstreamText=await response.text();let upstreamJson:any={};try{upstreamJson=JSON.parse(upstreamText);}catch{}
-    const expected=isQaVehicleRecord(upstreamJson?.item)?"hidden":"visible";
+    const expected=isQaVehicleRecord(upstreamJson?.item)||isInternalVehicleRecord(upstreamJson?.item)?"hidden":"visible";
     const storefront=await verifyStorefront(id,expected);
     return Response.json({...upstreamJson,storefront},{status:response.status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid,"X-WDCC-Storefront-Verified":storefront.verified?"1":"0","X-WDCC-Storefront-Expected":expected}});
   }
@@ -101,7 +103,19 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(body.downPayment!==undefined)next.downPayment=Number(body.downPayment);
     if(body.mileage!==undefined)next.mileage=Math.trunc(Number(body.mileage));
     if(body.stock!==undefined)next.stock=text(body.stock,80);
+    if(body.vin!==undefined)next.vin=text(body.vin,40);
+    if(body.bodyStyle!==undefined)next.bodyStyle=text(body.bodyStyle,40);
+    if(body.condition!==undefined)next.condition=text(body.condition,40);
+    if(body.transmission!==undefined)next.transmission=text(body.transmission,40);
+    if(body.exteriorColor!==undefined)next.exteriorColor=text(body.exteriorColor,40);
+    if(body.interiorColor!==undefined)next.interiorColor=text(body.interiorColor,40);
+    if(body.drivetrain!==undefined)next.drivetrain=text(body.drivetrain,40);
+    if(body.fuelType!==undefined)next.fuelType=text(body.fuelType,40);
     if(body.description!==undefined)next.description=text(body.description,3000);
+    if(body.internalOnly!==undefined||body.visibility!==undefined){
+      next.internalOnly=body.internalOnly===true||String(body.visibility||"").toLowerCase()==="internal";
+      next.visibility=next.internalOnly?"internal":"public";
+    }
 
     if(Array.isArray(body.photoPathnames)){
       const requested=body.photoPathnames.map((value:unknown)=>text(value,500)).filter((value:string)=>value.startsWith(`media/wdcc/${id}/`));
@@ -138,7 +152,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 
     let storefront:any=undefined;
     if(statusChanged&&next.status==="published"){
-      const expected=isQaVehicleRecord(next)?"hidden":"visible";
+      const expected=isQaVehicleRecord(next)||isInternalVehicleRecord(next)?"hidden":"visible";
       storefront=await verifyStorefront(id,expected);
       const lastAttempt=Array.isArray(storefront.attempts)&&storefront.attempts.length?storefront.attempts[storefront.attempts.length-1]:null;
       await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.verified?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${storefront.verification};expected:${expected}:${JSON.stringify(lastAttempt||{})}`});

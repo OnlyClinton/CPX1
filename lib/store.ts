@@ -128,6 +128,11 @@ export function isQaVehicleRecord(vehicle:any){
     description.includes("dealer upload qa");
 }
 
+export function isInternalVehicleRecord(vehicle:any){
+  const visibility=String(vehicle?.visibility||vehicle?.listingVisibility||"").trim().toLowerCase();
+  return vehicle?.internalOnly===true||visibility==="internal"||visibility==="dealer_only";
+}
+
 export function publicVehicles(state:State){
   const nextYear=new Date().getUTCFullYear()+1;
   return state.vehicles.filter(vehicle=>
@@ -136,6 +141,7 @@ export function publicVehicles(state:State){
     Boolean(String(vehicle.make||"").trim())&&
     Boolean(String(vehicle.model||"").trim())&&
     Number(vehicle.price||vehicle.cashPrice)>0&&
-    !isQaVehicleRecord(vehicle)
+    !isQaVehicleRecord(vehicle)&&
+    !isInternalVehicleRecord(vehicle)
   );
 }

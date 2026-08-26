@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_vehicle"
+        android:enabled="true"
+        android:icon="@drawable/ic_wdcc"
+        android:shortcutShortLabel="@string/shortcut_add_vehicle"
+        android:shortcutLongLabel="@string/shortcut_add_vehicle">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.wdcc.dealer"
+            android:targetClass="com.wdcc.dealer.MainActivity"
+            android:data="https://dealer.wedontcarecars.com/dealer/inventory/new" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="inventory"
+        android:enabled="true"
+        android:icon="@drawable/ic_wdcc"
+        android:shortcutShortLabel="@string/shortcut_inventory"
+        android:shortcutLongLabel="@string/shortcut_inventory">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.wdcc.dealer"
+            android:targetClass="com.wdcc.dealer.MainActivity"
+            android:data="https://dealer.wedontcarecars.com/dealer/inventory" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="leads"
+        android:enabled="true"
+        android:icon="@drawable/ic_wdcc"
+        android:shortcutShortLabel="@string/shortcut_leads"
+        android:shortcutLongLabel="@string/shortcut_leads">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.wdcc.dealer"
+            android:targetClass="com.wdcc.dealer.MainActivity"
+            android:data="https://dealer.wedontcarecars.com/dealer/leads" />
+    </shortcut>
+</shortcuts>

@@ -1,0 +1,93 @@
+name: BUILD WDCC DEALER V2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/wdcc-dealer-android-v2]
+    paths:
+      - "android/dealer-app/**"
+      - ".github/workflows/build-wdcc-dealer-v2-preview.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-dealer-v2-apk
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build installable APK
+        working-directory: android/dealer-app
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Stage dealer APK
+        run: |
+          cp android/dealer-app/app/build/outputs/apk/debug/app-debug.apk WDCC-Dealer-v2.apk
+          test "$(stat -c%s WDCC-Dealer-v2.apk)" -gt 10000
+          sha256sum WDCC-Dealer-v2.apk | tee WDCC-Dealer-v2.apk.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WDCC-Dealer-v2-APK
+          path: |
+            WDCC-Dealer-v2.apk
+            WDCC-Dealer-v2.apk.sha256
+          retention-days: 30
+
+      - name: Publish Android installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wdcc-dealer-app-v2
+          name: WDCC Dealer Android App 2.0
+          body: |
+            Installable Android build of the WDCC Dealer Portal.
+
+            Includes dealer-dashboard validation, inventory and photo-upload support,
+            secure session persistence, deep links, app shortcuts and recovery controls.
+            Build commit: ${{ github.sha }}
+          files: |
+            WDCC-Dealer-v2.apk
+            WDCC-Dealer-v2.apk.sha256
+          make_latest: false
+          prerelease: true
+          draft: false
+          overwrite_files: true
+
+      - name: Verify public installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v2/WDCC-Dealer-v2.apk"
+          for attempt in $(seq 1 12); do
+            if curl -fL --retry 2 --retry-delay 2 "$URL" -o /tmp/WDCC-Dealer-v2.apk; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/WDCC-Dealer-v2.apk
+          test "$(stat -c%s /tmp/WDCC-Dealer-v2.apk)" -gt 10000
+          RELEASE_SHA="$(sha256sum /tmp/WDCC-Dealer-v2.apk | awk '{print $1}')"
+          LOCAL_SHA="$(awk '{print $1}' WDCC-Dealer-v2.apk.sha256)"
+          test "$RELEASE_SHA" = "$LOCAL_SHA"

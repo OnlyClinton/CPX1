@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
-import {isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
+import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
@@ -20,7 +20,7 @@ function publicEligible(item:any){
   const mileage=Number(item?.mileage||0);
   const downPayment=Number(item?.downPayment||0);
   const maxYear=new Date().getUTCFullYear()+1;
-  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item);
+  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
 }
 
 async function proxyPublicInventory(request:Request){
@@ -68,7 +68,16 @@ export async function POST(request:Request){
     const downPayment=Number(body?.downPayment||0);
     const mileage=Math.trunc(Number(body?.mileage||0));
     const stock=text(body?.stock,80);
+    const vin=text(body?.vin,40);
+    const bodyStyle=text(body?.bodyStyle,40);
+    const condition=text(body?.condition,40);
+    const transmission=text(body?.transmission,40);
+    const exteriorColor=text(body?.exteriorColor,40);
+    const interiorColor=text(body?.interiorColor,40);
+    const drivetrain=text(body?.drivetrain,40);
+    const fuelType=text(body?.fuelType,40);
     const description=text(body?.description,3000);
+    const internalOnly=body?.internalOnly===true||String(body?.visibility||"").toLowerCase()==="internal";
     const maxYear=new Date().getUTCFullYear()+1;
     const fail=async(error:string,status=400)=>{
       await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,detail:error});
@@ -85,7 +94,7 @@ export async function POST(request:Request){
     const state=await readState();
     if(stock&&state.vehicles.some(vehicle=>String(vehicle.tenantId||"wdcc")===tenantId&&String(vehicle.stock||"").toLowerCase()===stock.toLowerCase()&&String(vehicle.status||"").toLowerCase()!=="archived"))return fail("stock_number_already_exists",409);
 
-    const item={id:crypto.randomUUID(),tenantId,year,make,model,trim,price,downPayment,mileage,stock,description,status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now,createdBy:user.id,uploadSource:"dealer-ui"};
+    const item={id:crypto.randomUUID(),tenantId,year,make,model,trim,price,downPayment,mileage,stock,vin,bodyStyle,condition,transmission,exteriorColor,interiorColor,drivetrain,fuelType,description,internalOnly,visibility:internalOnly?"internal":"public",status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now,createdBy:user.id,uploadSource:"dealer-ui"};
     state.vehicles.push(item);
     state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,actorRole:user.role,vehicleId:item.id,requestId:rid,year,make,model,mileage,stock});
     const saved=await writeState(state);
