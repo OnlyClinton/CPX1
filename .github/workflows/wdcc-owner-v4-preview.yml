@@ -1,0 +1,191 @@
+name: WDCC Owner V4 Preview
+
+on:
+  push:
+    branches:
+      - freeze/wdcc-owner-v4-20260826
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-v4-preview
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HERO_SIZE: '145504'
+  EXPECTED_HERO_SHA256: 1d7a0e4fced7450f2bbc66443d44b1f35bd9e24a6366308362aafa65576d3eb2
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard V4 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+          test -s public/wdcc-official-logo.webp
+          test -s app/owner-review-v4.css
+          grep -q 'owner-review-v4.css' app/layout.tsx
+          grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
+          grep -q 'wdccScenePush' app/owner-review-v4.css
+          grep -q 'wdccBadgePop' app/owner-review-v4.css
+          ! grep -Eqi 'WebGPU|requestAdapter|getContext\("webgpu"\)|createRenderPipeline|<canvas|\.animate\(' app/LockedIntro.tsx
+          test "$(grep -o 'wdcc-hero-v2.webp' app/LockedIntro.tsx | wc -l | tr -d ' ')" = 1
+          grep -q '@media(min-width:1101px)' app/owner-review-v4.css
+          grep -q '@media(max-width:600px)' app/owner-review-v4.css
+
+      - name: Build exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create isolated config
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name='wdcc-owner-v4';
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.v4.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.v4.jsonc
+
+      - name: Deploy isolated V4 preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.v4.jsonc 2>&1 | tee /tmp/v4.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/v4.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" | tee preview-url.txt
+
+      - name: Smoke preview
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?v4=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+          grep -qi "we don.t care" /tmp/home.html
+          test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?v4=$GITHUB_RUN_ID")" = 200
+          test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
+          test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?v4=$GITHUB_RUN_ID")" = 200
+          jq -e '((.items // .inventory // []) | length) >= 1' /tmp/inventory.json >/dev/null
+          test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?v4=$GITHUB_RUN_ID")" = 200
+
+      - name: Browser proof sizing and animation
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-proof
+          node - <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          (async()=>{
+            const url=process.env.URL;
+            const browser=await chromium.launch({headless:true});
+            const proof={url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{},dealer:{}};
+            const waitImg=async(p,s,w=100)=>{await p.locator(s).waitFor({state:'visible',timeout:12000});await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return i&&i.complete&&i.naturalWidth>=w},{s,w},{timeout:12000});};
+            const waitIntroDone=async p=>{const i=p.locator('.li');if(await i.count())await i.waitFor({state:'detached',timeout:5000});await p.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});};
+            try{
+              const m=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+              const p=await m.newPage();const errs=[];
+              p.on('console',msg=>{if(msg.type()==='error')errs.push(msg.text())});p.on('pageerror',e=>errs.push(String(e)));
+              await p.goto(`${url}/?mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              await waitImg(p,'.li-scene img',1000);await waitImg(p,'.li-badge img',200);
+              const introCount=await p.locator('.li-scene img').count(),canvasCount=await p.locator('canvas').count();
+              if(introCount!==1||canvasCount!==0)throw Error(`INTRO_LAYER_BAD ${JSON.stringify({introCount,canvasCount})}`);
+              await p.waitForTimeout(90);
+              const a=await p.evaluate(()=>{const b=document.querySelector('.li-badge').getBoundingClientRect(),s=document.querySelector('.li-scene img').getBoundingClientRect();return{bcx:b.x+b.width/2,bcy:b.y+b.height/2,bw:b.width,sw:s.width,sh:s.height}});
+              await p.waitForTimeout(620);
+              const b=await p.evaluate(()=>{const x=document.querySelector('.li-badge').getBoundingClientRect(),s=document.querySelector('.li-scene img').getBoundingClientRect();return{bcx:x.x+x.width/2,bcy:x.y+x.height/2,bw:x.width,sw:s.width,sh:s.height}});
+              if(Math.abs(a.bcx-b.bcx)>2||Math.abs(a.bcy-b.bcy)>2||b.bw<a.bw*1.25)throw Error(`INTRO_BADGE_WEAK ${JSON.stringify({a,b})}`);
+              if(b.sw<a.sw*1.015||b.sh<a.sh*1.015)throw Error(`INTRO_SCENE_PUSH_WEAK ${JSON.stringify({a,b})}`);
+              await p.screenshot({path:'visual-proof/mobile-intro.png'});
+              await waitIntroDone(p);await waitImg(p,'.rh-logo img',200);
+              const mob=await p.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>getComputedStyle(q(s)),r=s=>q(s).getBoundingClientRect(),white=q('.rh-copy h1 .white');return{logoW:r('.rh-logo img').width,utilityH:r('.rh-utility').height,utilityFont:parseFloat(st('.rh-utility-inner').fontSize),headerH:r('.rh-header').height,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card').width,heroH:r('.rh-hero-art').height,h1:parseFloat(st('.rh-copy h1').fontSize),whiteH:r('.rh-copy h1 .white').height,whiteRight:r('.rh-copy h1 .white').right,sectionH2:parseFloat(st('.rh-section-head h2').fontSize),financeH2:parseFloat(st('.finance-heading h2').fontSize),benefitTitle:parseFloat(st('.rh-benefit strong').fontSize),stepTitle:parseFloat(st('.rh-step strong').fontSize),utilityPos:st('.rh-utility').position,headerPos:st('.rh-header').position}});
+              if(mob.logoW<110||mob.utilityH<30||mob.utilityFont<10.25||mob.headerH<86)throw Error(`MOBILE_HEADER_SCALE_BAD ${JSON.stringify(mob)}`);
+              if(mob.menu==='none'||mob.grid!=='flex'||mob.cardW<290||mob.cardW>335)throw Error(`MOBILE_COMPOSITION_BAD ${JSON.stringify(mob)}`);
+              if(mob.heroH<335||mob.heroH>365||mob.h1<41||mob.h1>46||mob.whiteH<mob.h1*.82||mob.whiteRight>390)throw Error(`MOBILE_HERO_TYPE_BAD ${JSON.stringify(mob)}`);
+              if(mob.sectionH2<32||mob.financeH2<30||mob.benefitTitle<12||mob.stepTitle<13)throw Error(`MOBILE_SECTION_TYPE_BAD ${JSON.stringify(mob)}`);
+              if(!['fixed','sticky'].includes(mob.utilityPos)||!['fixed','sticky'].includes(mob.headerPos))throw Error(`MOBILE_PIN_MODE_BAD ${JSON.stringify(mob)}`);
+              await p.evaluate(()=>scrollTo(0,700));await p.waitForTimeout(180);
+              const pin=await p.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top}});
+              if(Math.abs(pin.uTop)>2||Math.abs(pin.hTop-pin.uH)>3)throw Error(`MOBILE_NOT_PINNED ${JSON.stringify(pin)}`);
+              await p.evaluate(()=>scrollTo(0,0));await p.waitForTimeout(100);
+              if(errs.length)throw Error(`MOBILE_RUNTIME_ERRORS ${JSON.stringify(errs)}`);
+              await p.screenshot({path:'visual-proof/mobile-hero.png'});await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});proof.mobile={a,b,mob,pin,errs};await m.close();
+
+              const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});const q=await d.newPage();
+              await q.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitImg(q,'.li-scene img',1000);await q.waitForTimeout(720);await q.screenshot({path:'visual-proof/desktop-intro.png'});await waitIntroDone(q);await waitImg(q,'.rh-logo img',200);
+              const desk=await q.evaluate(()=>{const st=s=>getComputedStyle(document.querySelector(s)),r=s=>document.querySelector(s).getBoundingClientRect();return{logoW:r('.rh-logo img').width,nav:st('.rh-nav').display,menu:st('.rh-menu').display,grid:st('.rh-grid').display,heroH:r('.rh-hero-art').height,h1:parseFloat(st('.rh-copy h1').fontSize),sectionH2:parseFloat(st('.rh-section-head h2').fontSize),financeH2:parseFloat(st('.finance-heading h2').fontSize),lead:parseFloat(st('.rh-lead').fontSize)}});
+              if(desk.logoW<108||desk.nav!=='flex'||desk.menu!=='none'||desk.grid!=='grid')throw Error(`DESKTOP_COMPOSITION_BAD ${JSON.stringify(desk)}`);
+              if(desk.heroH<610||desk.h1<70||desk.sectionH2<44||desk.financeH2<40||desk.lead<17)throw Error(`DESKTOP_SCALE_BAD ${JSON.stringify(desk)}`);
+              await q.screenshot({path:'visual-proof/desktop-hero.png'});await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true});proof.desktop=desk;
+              const dealer=await d.newPage();await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await dealer.waitForTimeout(800);await dealer.screenshot({path:'visual-proof/dealer.png'});proof.dealer={url:dealer.url(),title:await dealer.title()};await d.close();
+            }finally{await browser.close()}
+            fs.writeFileSync('visual-proof/metrics.json',JSON.stringify(proof,null,2)+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Summary
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo '### WDCC Owner V4 visual proof' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Single-scene intro, stronger logo pop/camera push, large sticky badge, responsive typography and desktop/mobile composition measured.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production untouched.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-v4-proof
+          path: |
+            preview-url.txt
+            visual-proof/
+          if-no-files-found: warn
+          retention-days: 7
