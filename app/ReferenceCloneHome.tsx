@@ -14,7 +14,7 @@ const fallback:Vehicle[]=[
 ];
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase(),stock=String(v?.stock||v?.stock_id||"").trim().toUpperCase(),visibility=String(v?.visibility||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x||"").toUpperCase());const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!qa&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"}
 const photo=(v:Vehicle)=>v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:(v.primary_image_url||v.image||"/wdcc-hero-v2.webp");
-const href=(v:Vehicle)=>v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`;
+const href=(v:Vehicle)=>`/vehicle/${encodeURIComponent(String(v.id||v.slug||""))}`;
 
 export default function ReferenceCloneHome(){
  const[open,setOpen]=useState(false),[items,setItems]=useState<Vehicle[]>(fallback),[active,setActive]=useState(0);
@@ -25,7 +25,7 @@ export default function ReferenceCloneHome(){
    <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ Tampa Bay</span><span>★</span><span>In-house financing</span><span>★</span><span>Low payments</span><span>★</span><span>Drive today</span><span className="utility-sales">Sales: <b>(813) 516-4752</b></span></div></div>
    <header className="rh-header"><div className="rh-header-inner">
      <button className="rh-menu" aria-label="Open navigation" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>☰</button>
-     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
+     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
      <nav className={`rh-nav${open?" open":""}`} aria-label="Main navigation"><Link href="/inventory" onClick={()=>setOpen(false)}>Inventory</Link><Link href="/get-approved?source=nav-financing" onClick={()=>setOpen(false)}>Financing</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>How it works</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>Reviews</Link><Link href="/#about" onClick={()=>setOpen(false)}>About us</Link><Link href="/contact?source=nav-contact" onClick={()=>setOpen(false)}>Contact</Link></nav>
      <div className="rh-header-actions"><a className="rh-header-phone" href="tel:+18135164752">☎ (813) 516-4752</a><Link className="rh-header-cta" href="/get-approved?source=header-get-approved">Get pre-approved</Link></div>
      <a className="rh-call" href="tel:+18135164752" aria-label="Call Sean">☎</a>
