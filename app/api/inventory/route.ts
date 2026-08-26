@@ -24,12 +24,16 @@ function publicEligible(item:any){
 }
 
 async function proxyPublicInventory(request:Request){
-  const upstream=await proxyDealer(request,"/api/inventory");
+  let upstream=await proxyDealer(request,"/api/inventory");
+  if(!upstream.ok&&[502,503,504].includes(upstream.status)){
+    await new Promise(resolve=>setTimeout(resolve,250));
+    upstream=await proxyDealer(request,"/api/inventory");
+  }
   if(!upstream.ok)return upstream;
   const json=await upstream.json().catch(()=>({}));
   const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
   const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Public-Inventory-Retry":"1"}});
 }
 
 export async function GET(request:Request){
