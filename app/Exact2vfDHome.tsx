@@ -145,7 +145,6 @@ export default function Exact2vfDHome() {
             <div>
               <span className="section-kicker">Featured inventory</span>
               <h2>Vehicles ready now.</h2>
-              <p className="section-deck">Cash price and down payment shown clearly.</p>
             </div>
             <Link className="text-link" href="/inventory">View all inventory →</Link>
           </div>
@@ -168,6 +167,7 @@ export default function Exact2vfDHome() {
                         <strong className="vehicle-price">${Number(vehicle.price || 0).toLocaleString()}</strong>
                         <p className="vehicle-payment">{down ? `$${down.toLocaleString()} down` : "Call for down payment"} · {Number(vehicle.mileage || 0).toLocaleString()} miles</p>
                         <div className="spec-pills">{tags.map((tag, tagIndex) => <span key={tagIndex}>{String(tag)}</span>)}</div>
+                        <Link className="vehicle-details-cta" href={vehicleHref(vehicle)}>View details <span>→</span></Link>
                       </div>
                     </article>
                   </div>
@@ -184,7 +184,6 @@ export default function Exact2vfDHome() {
               <span className="section-kicker">One simple process. No hoops. No hassle.</span>
               <h2>In-house financing <strong>made easy.</strong></h2>
             </div>
-            <Link className="how-cta" href="/get-approved?source=steps-get-approved">Start pre-approval →</Link>
           </div>
           <div className="steps-grid">
             <article><span>01</span><h3>Apply online</h3><p>Send basic details securely.</p></article>
@@ -209,9 +208,9 @@ export default function Exact2vfDHome() {
       </footer>
 
       <div className="mobile-action-bar" aria-label="Quick actions">
-        <Link href="/get-approved?source=mobile-sticky-get-approved"><span>✓</span>Get approved</Link>
-        <Link href="/inventory?source=mobile-sticky-inventory"><span>▣</span>Inventory</Link>
-        <a href="tel:+18135164752" aria-label="Call Sean"><span>☎</span>Call Sean</a>
+        <a href="tel:+18135164752" aria-label="Call Sean"><span>☎</span>Call</a>
+        <a href="sms:+18135164752" aria-label="Text Sean"><span>▢</span>Text</a>
+        <Link href="/get-approved?source=mobile-sticky-apply"><span>⚑</span>Apply</Link>
       </div>
     </div>
   );

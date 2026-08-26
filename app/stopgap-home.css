@@ -350,7 +350,7 @@
   margin: 0 auto !important;
   padding: 0 24px !important;
   display: grid !important;
-  grid-template-columns: 112px minmax(0, 1fr) auto !important;
+  grid-template-columns: 150px minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 24px !important;
   background: transparent !important;
@@ -358,8 +358,8 @@
 
 .wdcc-app .logo-button {
   display: block !important;
-  width: 96px !important;
-  height: 96px !important;
+  width: 136px !important;
+  height: 136px !important;
   margin: 0 !important;
   background: none !important;
   filter: drop-shadow(0 6px 16px #000c) !important;
@@ -384,7 +384,7 @@
 
 .wdcc-app .main-nav a {
   color: #f7fafc !important;
-  font-size: 10px !important;
+  font-size: 11px !important;
   font-weight: 900 !important;
   letter-spacing: .04em !important;
   text-transform: uppercase !important;
@@ -418,12 +418,12 @@
 .wdcc-app .hero {
   position: relative !important;
   isolation: isolate !important;
-  min-height: 720px !important;
+  min-height: 700px !important;
   display: block !important;
   overflow: hidden !important;
   background-image: var(--hero-image) !important;
-  background-position: 59% center !important;
-  background-size: cover !important;
+  background-position: left top !important;
+  background-size: 115% auto !important;
   background-repeat: no-repeat !important;
 }
 
@@ -475,9 +475,9 @@
   z-index: 3 !important;
   top: auto !important;
   left: auto !important;
-  width: min(680px, 52vw) !important;
+  width: min(590px, 48vw) !important;
   margin: 0 0 0 max(0px, calc((100vw - 1500px) / 2)) !important;
-  padding: 186px 0 76px 32px !important;
+  padding: 154px 0 52px 32px !important;
   transform: none !important;
 }
 
@@ -503,7 +503,7 @@
 .wdcc-app .hero h1 {
   margin: 0 0 20px !important;
   color: var(--wdcc-red) !important;
-  font-size: clamp(56px, 6.25vw, 96px) !important;
+  font-size: clamp(52px, 4.8vw, 76px) !important;
   font-weight: 950 !important;
   letter-spacing: -.062em !important;
   line-height: .87 !important;
@@ -525,8 +525,8 @@
 }
 
 .wdcc-app .hero-actions {
-  width: min(570px, 100%) !important;
-  margin: 25px 0 0 !important;
+  width: min(500px, 100%) !important;
+  margin: 22px 0 0 !important;
   display: grid !important;
   grid-template-columns: 1.12fr 1fr !important;
   gap: 12px !important;
@@ -584,20 +584,22 @@
 .wdcc-app .benefit-strip {
   position: relative !important;
   z-index: 8 !important;
-  width: min(1468px, calc(100% - 32px)) !important;
-  margin: -18px auto 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   color: #fff !important;
   background: var(--wdcc-navy) !important;
   border: 1px solid #274156 !important;
-  border-radius: 10px !important;
+  border-right: 0 !important;
+  border-left: 0 !important;
+  border-radius: 0 !important;
   overflow: hidden !important;
-  box-shadow: 0 18px 42px #0006 !important;
+  box-shadow: 0 12px 30px #0004 !important;
 }
 
 .wdcc-app .benefit-strip article {
-  min-height: 104px !important;
+  min-height: 112px !important;
   padding: 18px 18px !important;
   display: grid !important;
   grid-template-columns: 46px minmax(0, 1fr) !important;
@@ -643,14 +645,14 @@
 .wdcc-app .inventory-showcase {
   position: relative !important;
   z-index: 2 !important;
-  padding: 66px 24px 64px !important;
+  padding: 38px 24px 50px !important;
   color: var(--wdcc-text) !important;
   background: var(--wdcc-paper) !important;
 }
 
 .wdcc-app .section-heading {
   width: min(1460px, 100%) !important;
-  margin: 0 auto 24px !important;
+  margin: 0 auto 18px !important;
   display: flex !important;
   align-items: end !important;
   justify-content: space-between !important;
@@ -659,7 +661,7 @@
 
 .wdcc-app .section-kicker {
   display: block !important;
-  color: #53606d !important;
+  color: var(--wdcc-red) !important;
   font-size: 10px !important;
   font-weight: 950 !important;
   letter-spacing: .1em !important;
@@ -669,7 +671,7 @@
 .wdcc-app .inventory-showcase h2,
 .wdcc-app .how-section h2 {
   margin: 5px 0 !important;
-  font-size: clamp(34px, 4vw, 54px) !important;
+  font-size: clamp(34px, 3.25vw, 46px) !important;
   font-weight: 950 !important;
   letter-spacing: -.05em !important;
   line-height: .98 !important;
@@ -762,6 +764,24 @@
 .wdcc-app .spec-pills { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; }
 .wdcc-app .spec-pills span { padding: 4px 6px !important; color: #35414c !important; background: #edf1f4 !important; border-radius: 4px !important; font-size: 8px !important; font-weight: 850 !important; text-transform: uppercase !important; }
 
+.wdcc-app .vehicle-details-cta {
+  min-height: 38px !important;
+  margin-top: 12px !important;
+  padding: 0 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  color: #fff !important;
+  background: var(--wdcc-red-cta) !important;
+  border: 1px solid #f33145 !important;
+  border-radius: 4px !important;
+  font-size: 9px !important;
+  font-weight: 950 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+
 .wdcc-app .carousel-arrow {
   position: absolute !important;
   z-index: 4 !important;
@@ -782,9 +802,9 @@
 .wdcc-app .carousel-prev { left: -18px !important; }
 .wdcc-app .carousel-next { right: -18px !important; }
 
-/* How it works: dark section and single supporting CTA. */
+/* How it works: dark section with a compact four-step process. */
 .wdcc-app .how-section {
-  padding: 64px 24px 70px !important;
+  padding: 48px 24px 54px !important;
   color: #fff !important;
   background: linear-gradient(145deg, #071522, #03101a) !important;
   border-top: 1px solid #23384a !important;
@@ -794,22 +814,6 @@
 .wdcc-app .how-section .section-kicker { color: #aebdca !important; }
 .wdcc-app .how-section h2 { color: #fff !important; }
 .wdcc-app .how-section h2 strong { color: var(--wdcc-red) !important; }
-
-.wdcc-app .how-cta {
-  min-height: 44px !important;
-  padding: 0 17px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  color: #fff !important;
-  background: var(--wdcc-red-cta) !important;
-  border: 1px solid #f33145 !important;
-  border-radius: 5px !important;
-  font-size: 10px !important;
-  font-weight: 950 !important;
-  letter-spacing: .04em !important;
-  text-transform: uppercase !important;
-  white-space: nowrap !important;
-}
 
 .wdcc-app .steps-grid {
   width: min(1460px, 100%) !important;
@@ -821,7 +825,7 @@
 
 .wdcc-app .steps-grid article {
   position: relative !important;
-  min-height: 160px !important;
+  min-height: 142px !important;
   padding: 22px !important;
   color: #fff !important;
   background: var(--wdcc-navy-2) !important;
@@ -886,11 +890,32 @@
 .wdcc-app .footer-links { display: flex !important; gap: 16px !important; }
 .wdcc-app .mobile-action-bar { display: none !important; }
 
+@media (min-width: 981px) and (max-width: 1200px) {
+  .wdcc-app .site-header {
+    grid-template-columns: 116px minmax(0, 1fr) auto !important;
+    gap: 14px !important;
+  }
+  .wdcc-app .logo-button { width: 110px !important; height: 110px !important; }
+  .wdcc-app .main-nav { gap: 15px !important; }
+  .wdcc-app .header-cta { padding: 0 14px !important; }
+  .wdcc-app .featured-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .wdcc-app .featured-slide:nth-child(n + 5) { display: none !important; }
+}
+
 @media (max-width: 980px) {
   .wdcc-app .intro-sequence { --intro-badge-size: min(58vw, 240px); }
   .wdcc-app { padding-bottom: 62px !important; }
 
-  .wdcc-app .utility-bar { display: none !important; }
+  .wdcc-app .utility-bar {
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 0 8px !important;
+    display: flex !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    font-size: 7px !important;
+    letter-spacing: .045em !important;
+  }
 
   .wdcc-app .site-header {
     min-height: 74px !important;
@@ -929,8 +954,8 @@
     grid-column: 2 !important;
     grid-row: 1 !important;
     justify-self: center !important;
-    width: 82px !important;
-    height: 82px !important;
+    width: 96px !important;
+    height: 96px !important;
   }
 
   .wdcc-app .header-cta { display: none !important; }
@@ -993,36 +1018,52 @@
   .wdcc-app .hero-copy {
     width: 100% !important;
     margin: 0 !important;
-    padding: 318px 18px 35px !important;
+    padding: 346px 18px 31px !important;
   }
 
-  .wdcc-app .hero h1 { font-size: clamp(46px, 12.8vw, 66px) !important; line-height: .89 !important; margin-bottom: 15px !important; }
+  .wdcc-app .hero h1 { font-size: clamp(40px, 11.5vw, 54px) !important; line-height: .9 !important; margin-bottom: 14px !important; }
   .wdcc-app .hero-lead { font-size: 14px !important; line-height: 1.45 !important; }
   .wdcc-app .hero-actions { width: 100% !important; grid-template-columns: 1fr !important; gap: 9px !important; margin-top: 19px !important; }
   .wdcc-app .hero-actions .btn { min-height: 48px !important; }
-  .wdcc-app .hero-call { margin-top: 14px !important; }
+  .wdcc-app .hero-call { display: none !important; }
 
   .wdcc-app .benefit-strip {
     width: 100% !important;
     margin: 0 !important;
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     border-right: 0 !important;
     border-left: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
   }
 
-  .wdcc-app .benefit-strip article { min-height: 98px !important; padding: 14px 12px !important; border-bottom: 1px solid #284052 !important; }
-  .wdcc-app .benefit-strip article:nth-child(2) { border-right: 0 !important; }
-  .wdcc-app .benefit-strip article:nth-child(3),
-  .wdcc-app .benefit-strip article:nth-child(4) { border-bottom: 0 !important; }
+  .wdcc-app .benefit-strip article {
+    min-height: 102px !important;
+    padding: 13px 7px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    text-align: center !important;
+    border-bottom: 0 !important;
+  }
+  .wdcc-app .benefit-strip article:last-child { border-right: 0 !important; }
+  .wdcc-app .benefit-strip .icon { flex: 0 0 auto !important; }
+  .wdcc-app .benefit-strip article div > span { display: none !important; }
+  .wdcc-app .benefit-strip strong { font-size: 8px !important; line-height: 1.25 !important; }
 
   .wdcc-app .inventory-showcase { padding: 38px 13px 44px !important; }
   .wdcc-app .section-heading { align-items: flex-start !important; }
   .wdcc-app .featured-grid { display: flex !important; gap: 12px !important; overflow-x: auto !important; padding: 2px 1px 12px !important; scroll-snap-type: x mandatory !important; scrollbar-width: none !important; }
   .wdcc-app .featured-grid::-webkit-scrollbar { display: none !important; }
-  .wdcc-app .featured-slide { min-width: min(78%, 330px) !important; scroll-snap-align: start !important; }
+  .wdcc-app .featured-slide { display: block !important; min-width: clamp(142px, 34vw, 190px) !important; scroll-snap-align: start !important; }
   .wdcc-app .carousel-arrow { display: none !important; }
+  .wdcc-app .vehicle-card-body { padding: 10px !important; }
+  .wdcc-app .vehicle-title { min-height: 31px !important; font-size: 12px !important; }
+  .wdcc-app .vehicle-price { font-size: 19px !important; }
+  .wdcc-app .vehicle-payment { min-height: 24px !important; font-size: 8px !important; }
+  .wdcc-app .spec-pills { display: none !important; }
+  .wdcc-app .vehicle-details-cta { display: none !important; }
 
   .wdcc-app .how-section { padding: 48px 14px 54px !important; }
   .wdcc-app .steps-grid { grid-template-columns: 1fr 1fr !important; }
@@ -1040,7 +1081,7 @@
     inset: auto 0 0 !important;
     height: 62px !important;
     display: grid !important;
-    grid-template-columns: 1.15fr 1fr .8fr !important;
+    grid-template-columns: 1fr 1fr 1.12fr !important;
     color: #fff !important;
     background: #050c13f9 !important;
     border-top: 1px solid #ffffff22 !important;
@@ -1066,8 +1107,8 @@
     white-space: nowrap !important;
   }
 
-  .wdcc-app .mobile-action-bar a:first-child { background: var(--wdcc-red-cta) !important; }
-  .wdcc-app .mobile-action-bar a:last-child { border-right: 0 !important; }
+  .wdcc-app .mobile-action-bar a:first-child { background: #07131f !important; }
+  .wdcc-app .mobile-action-bar a:last-child { background: var(--wdcc-red-cta) !important; border-right: 0 !important; }
 
   .wdcc-app .intro-skyline,
   .wdcc-app .intro-car { object-position: 71% center !important; }
@@ -1090,28 +1131,28 @@
   .wdcc-app .intro-tagline { top: 74% !important; font-size: 9px !important; }
 
   .wdcc-app .site-header { min-height: 70px !important; height: 70px !important; padding: 0 10px !important; }
-  .wdcc-app .logo-button { width: 78px !important; height: 78px !important; }
+  .wdcc-app .logo-button { width: 92px !important; height: 92px !important; }
   .wdcc-app .mobile-menu,
   .wdcc-app .mobile-call { width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; }
   .wdcc-app .main-nav { top: 66px !important; left: 7px !important; right: 7px !important; }
 
-  .wdcc-app .hero { min-height: 680px !important; background-size: auto 680px !important; background-position: 72% top !important; }
-  .wdcc-app .hero-copy { padding: 298px 14px 28px !important; }
+  .wdcc-app .hero { min-height: 690px !important; background-size: auto 690px !important; background-position: 72% top !important; }
+  .wdcc-app .hero-copy { padding: 338px 14px 26px !important; }
   .wdcc-app .hero-kicker { margin-bottom: 10px !important; font-size: 9px !important; }
-  .wdcc-app .hero h1 { font-size: clamp(43px, 13.2vw, 59px) !important; }
+  .wdcc-app .hero h1 { font-size: clamp(39px, 11.4vw, 49px) !important; }
   .wdcc-app .hero-lead { font-size: 13.5px !important; }
   .wdcc-app .hero-actions .btn { font-size: 10px !important; }
 
-  .wdcc-app .benefit-strip article { min-height: 96px !important; grid-template-columns: 37px minmax(0, 1fr) !important; gap: 9px !important; padding: 12px 9px !important; }
+  .wdcc-app .benefit-strip article { min-height: 96px !important; gap: 7px !important; padding: 10px 5px !important; }
   .wdcc-app .benefit-strip .icon { width: 33px !important; height: 33px !important; font-size: 15px !important; }
   .wdcc-app .benefit-strip strong { font-size: 9px !important; }
-  .wdcc-app .benefit-strip article div > span { font-size: 8px !important; }
+  .wdcc-app .benefit-strip article div > span { display: none !important; }
 
   .wdcc-app .inventory-showcase h2,
   .wdcc-app .how-section h2 { font-size: 34px !important; }
   .wdcc-app .text-link { font-size: 9px !important; }
   .wdcc-app .section-deck { font-size: 11px !important; }
-  .wdcc-app .featured-slide { min-width: 84% !important; }
+  .wdcc-app .featured-slide { min-width: clamp(126px, 34vw, 158px) !important; }
 
   .wdcc-app .how-section .section-heading { flex-direction: column !important; }
   .wdcc-app .steps-grid { grid-template-columns: 1fr !important; }
