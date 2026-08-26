@@ -1,0 +1,144 @@
+/* OWNER PIXEL LOCK — reference-driven storefront correction
+   Scope: visual-only. No routing, data, auth, provider, lead, inventory or production changes.
+   Source: approved WDCC desktop/mobile reference boards + current owner static-intro override. */
+
+/* Keep the persistent round badge optically dominant without motion. */
+html body main.reference-home.locked-storefront > header.rh-header .rh-logo,
+html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
+  overflow:visible!important;
+}
+html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
+  transform:none!important;
+  animation:none!important;
+  transition:none!important;
+}
+
+/* Desktop: preserve the mandated 3-column grid but remove the oversized, repetitive card wall. */
+@media (min-width:1101px){
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding-top:42px!important;
+    padding-bottom:48px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:18px!important;
+    align-items:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo{
+    aspect-ratio:2/1!important;
+    min-height:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card-body{
+    padding:15px 16px 17px!important;
+  }
+}
+
+/* Mobile/tablet: match the approved composition instead of showing a large empty-sky band. */
+@media (max-width:1100px),(hover:none) and (pointer:coarse){
+  html body main.reference-home.locked-storefront .rh-hero{
+    position:relative!important;
+    min-height:0!important;
+    height:auto!important;
+    padding-top:238px!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    top:-72px!important;
+    right:0!important;
+    bottom:auto!important;
+    left:0!important;
+    width:100%!important;
+    height:332px!important;
+    object-fit:cover!important;
+    object-position:72% 48%!important;
+    filter:saturate(1.20) contrast(1.07) brightness(1.16)!important;
+    transform:none!important;
+    animation:none!important;
+    transition:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade,
+  html body main.reference-home.locked-storefront .rh-hero:after{
+    position:absolute!important;
+    top:-72px!important;
+    right:0!important;
+    bottom:auto!important;
+    left:0!important;
+    height:332px!important;
+    pointer-events:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 52%,rgba(2,7,12,.10) 68%,rgba(2,7,12,.56) 88%,#02070c 100%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero:after{
+    background:linear-gradient(180deg,transparent 0%,transparent 61%,rgba(2,7,12,.18) 78%,#02070c 100%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    position:relative!important;
+    z-index:3!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:12px 17px 27px!important;
+    background:#02070c!important;
+  }
+
+  /* The approved mobile reference is a 2x2 benefits block, not four tiny compressed columns. */
+  html body main.reference-home.locked-storefront .rh-benefits{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    width:100%!important;
+    border-radius:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:94px!important;
+    padding:14px 13px!important;
+    grid-template-columns:36px minmax(0,1fr)!important;
+    gap:10px!important;
+    align-items:center!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:13px!important;
+    line-height:1.15!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    display:block!important;
+    font-size:11px!important;
+    line-height:1.3!important;
+    margin-top:3px!important;
+  }
+
+  /* Keep carousel card proportions compact and leave the next card visibly peeking in. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    scroll-padding-inline:7vw!important;
+    padding-left:7vw!important;
+    padding-right:7vw!important;
+    gap:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card{
+    flex-basis:82vw!important;
+    min-width:82vw!important;
+    max-width:82vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo{
+    aspect-ratio:1.72!important;
+    min-height:0!important;
+  }
+}
+
+@media (max-width:430px){
+  html body main.reference-home.locked-storefront .rh-hero{
+    padding-top:230px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art,
+  html body main.reference-home.locked-storefront .rh-hero-shade,
+  html body main.reference-home.locked-storefront .rh-hero:after{
+    top:-76px!important;
+    height:320px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    padding-top:10px!important;
+  }
+}
