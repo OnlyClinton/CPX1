@@ -60,11 +60,14 @@ jobs:
           const browser = await chromium.launch({headless:true});
           async function capture(name,width,height){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
-            await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'networkidle'});
+            page.setDefaultTimeout(10000);
+            await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForSelector('[data-wdcc-intro="challenger-tampa-v1"]');
+            await page.waitForTimeout(850);
             await page.screenshot({path:`visual-proof/${name}-intro.png`,fullPage:false});
             const intro=await page.locator('[data-wdcc-intro="challenger-tampa-v1"]').count();
             if(!intro) throw new Error(`${name}: cinematic intro missing`);
-            await page.waitForTimeout(3900);
+            await page.waitForTimeout(3200);
             await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
             const checks={
               logo:await page.locator('.header-logo-image').count(),
