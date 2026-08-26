@@ -42,6 +42,39 @@ html body main.dealerDashboardLocked .opsCards article>small{color:#6d7982!impor
 html body main.dealerDashboardLocked .opsCards article>a{background:#fff!important;color:#26323a!important;border-color:#ccd5dc!important}
 html body main.dealerDashboardLocked .emptyDash{color:#77838d!important}
 
+/* Final contrast lock: older dashboard rules use highly-specific dark-card selectors.
+   These rules intentionally outrank them while keeping the surrounding dealer chrome dark. */
+html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dashMetrics>article,
+html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dashboardGridLocked>.dcCard,
+html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .opsCards>.dcCard,
+html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent>.dcCard.activityLocked{
+  background:#fff!important;
+  color:#172129!important;
+  border-color:#dbe1e6!important;
+}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dashMetrics>article>span{color:#687681!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dashMetrics>article>b{color:#111820!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dashMetrics>article>b.green{color:#17934e!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dashMetrics>article>b.red{color:#e51f31!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dashMetrics>article>b.blue{color:#1678d4!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dcCard>header>b,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dcCard .recentVehicles b,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .recentVehicles>a span>b,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .activityLocked>a span>b,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .opsCards>.dcCard>div>b,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .opsCards>.dcCard>div>span{color:#172129!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .dcCard>header>a{color:#2776a9!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .legend>p,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .recentVehicles>a,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .recentVehicles>a span>small,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .activityLocked>a,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .activityLocked>a span>small,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .opsCards>.dcCard>small,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .emptyDash{color:#66747f!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .recentVehicles>a,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .activityLocked>a{border-color:#e4e9ed!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .opsCards>.dcCard>a{background:#fff!important;color:#26323a!important;border-color:#ccd5dc!important}
+
 @media(min-width:761px){
   html body main.dealerDashboardLocked .dcContent.dashboardContent{padding:24px!important;max-width:1320px!important;margin:0 auto!important}
   html body main.dealerDashboardLocked .dashMetrics{gap:12px!important;margin-bottom:14px!important}
