@@ -1,5 +1,5 @@
 name: WDCC Dealer Target Production
-# target-refresh: deploy current mockup-aligned dealer UI
+# target-refresh: leads-inventory-target-v2
 
 on:
   push:
