@@ -1,0 +1,260 @@
+name: WDCC Dealer API Origin QA V2
+
+on:
+  push:
+    branches: ['qa/wdcc-dealer-api-origin-fix-20260825']
+    paths: ['.github/workflows/wdcc-dealer-api-origin-qa-v2.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-api-origin-qa-v2
+  cancel-in-progress: true
+
+env:
+  API_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Resolve healthy UI origin and canonical API
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$VERCEL_TOKEN"
+
+          curl -fsS "$API_ORIGIN/api/health?apiqa2=$GITHUB_RUN_ID" -o /tmp/api-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/api-health.json >/dev/null
+
+          RESOLVED_UI=''
+          for origin in https://wdcc-v32-storefront-cpxagency.vercel.app https://www.wedontcarecars.com; do
+            code="$(curl -sS -L -o /tmp/ui.html -w '%{http_code}' "$origin/dealer/login?apiqa2=$GITHUB_RUN_ID" || true)"
+            if [ "$code" = 200 ] && grep -Eq 'PORTAL LOGIN|AUTHORIZED ACCESS|Sign In' /tmp/ui.html; then
+              RESOLVED_UI="$origin"
+              break
+            fi
+          done
+          test -n "$RESOLVED_UI"
+          echo "RESOLVED_UI=$RESOLVED_UI" >> "$GITHUB_ENV"
+          echo "UI_ORIGIN=$RESOLVED_UI"
+
+      - name: Install QA tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.5.0 wrangler@4.90.0 >/dev/null
+          mkdir -p .vercel /tmp/wdcc-apiqa2
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Build path-aware candidate Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wdcc-apiqa2/worker.js <<EOF
+          const UI = "$RESOLVED_UI";
+          const API = "$API_ORIGIN";
+          const TRUSTED_ORIGIN = "https://dealer.wedontcarecars.com";
+
+          function target(request, base) {
+            const incoming = new URL(request.url);
+            const url = new URL(base);
+            url.pathname = incoming.pathname;
+            url.search = incoming.search;
+            return url;
+          }
+
+          async function proxy(request, base, api) {
+            const incoming = new URL(request.url);
+            const url = target(request, base);
+            const headers = new Headers(request.headers);
+            headers.delete('cf-worker');
+            headers.set('x-forwarded-host','dealer.wedontcarecars.com');
+            headers.set('x-forwarded-proto','https');
+            headers.set('x-wdcc-frontdoor','dealer-api-origin-qa-v2');
+            if (api && !['GET','HEAD'].includes(request.method)) headers.set('origin',TRUSTED_ORIGIN);
+            const init = {method:request.method,headers,redirect:'manual'};
+            if (!['GET','HEAD'].includes(request.method)) init.body=request.body;
+            const response = await fetch(new Request(url.toString(),init));
+            const out = new Headers(response.headers);
+            const location = out.get('location');
+            if (location) {
+              try {
+                const loc=new URL(location,url);
+                if(loc.hostname===new URL(base).hostname){
+                  loc.protocol=incoming.protocol;loc.hostname=incoming.hostname;loc.port=incoming.port;
+                  out.set('location',loc.toString());
+                }
+              } catch {}
+            }
+            out.set('x-wdcc-edge','dealer-api-origin-qa-v2');
+            out.set('x-wdcc-origin',new URL(base).hostname);
+            out.set('cache-control','private, no-store, max-age=0');
+            return new Response(response.body,{status:response.status,statusText:response.statusText,headers:out});
+          }
+
+          export default {
+            async fetch(request){
+              const url=new URL(request.url);
+              if(url.pathname==='/') return Response.redirect(new URL('/dealer',url),302);
+              if(url.pathname.startsWith('/api/')) return proxy(request,API,true);
+              return proxy(request,UI,false);
+            }
+          };
+          EOF
+
+          cat > /tmp/wdcc-apiqa2/wrangler.jsonc <<'EOF'
+          {
+            "$schema": "node_modules/wrangler/config-schema.json",
+            "name": "wdcc-dealer-api-origin-qa-v2",
+            "main": "worker.js",
+            "compatibility_date": "2026-08-25",
+            "workers_dev": true,
+            "preview_urls": true,
+            "observability": {"enabled": true}
+          }
+          EOF
+
+      - name: Deploy workers.dev candidate only
+        id: candidate
+        working-directory: /tmp/wdcc-apiqa2
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy 2>&1 | tee /tmp/wrangler.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "QA_CANDIDATE=$URL"
+
+          curl -fsS -D /tmp/candidate.h "$URL/api/health?apiqa2=$GITHUB_RUN_ID" -o /tmp/candidate-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/candidate-health.json >/dev/null
+          grep -qi '^x-wdcc-origin: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' /tmp/candidate.h
+
+          code="$(curl -sS -L -o /tmp/candidate-login.html -w '%{http_code}' "$URL/dealer/login?apiqa2=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          grep -Eq 'PORTAL LOGIN|AUTHORIZED ACCESS|Sign In' /tmp/candidate-login.html
+
+      - name: Create disposable dealer identity with backup
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-apiqa2-user.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=4;n++){
+            const before=await stable(),s=before.s,now=new Date().toISOString();
+            const password=`ApiQa2-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+            const id=`apiqa2-${crypto.randomUUID()}`,email=`apiqa2-${run}@invalid.example`,stock=`R36TEST-APIQA2-${run}`,backup=`private/state/backups/platform-v3-pre-apiqa2-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;
+            await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`API Origin QA2 ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/apiqa2.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,stock,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}
+          }
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-apiqa2-user.mjs
+          set -a; . /tmp/apiqa2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Prove authenticated full inventory and create/readback
+        id: proof
+        env:
+          QA_URL: ${{ steps.candidate.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/apiqa2.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/apiqa2.cookies -o /tmp/login.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$QA_URL/api/auth/login" --data "$payload")"
+          test "$LOGIN" = 200
+          jq -e '.ok==true' /tmp/login.json >/dev/null
+
+          SESSION="$(curl -sS -b /tmp/apiqa2.cookies -o /tmp/session.json -w '%{http_code}' "$QA_URL/api/auth/session")"
+          test "$SESSION" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+
+          INVENTORY="$(curl -sS -b /tmp/apiqa2.cookies -o /tmp/inventory-before.json -w '%{http_code}' "$QA_URL/api/inventory?before=$GITHUB_RUN_ID")"
+          test "$INVENTORY" = 200
+          COUNT="$(jq -r '.items|length' /tmp/inventory-before.json)"
+          test "$COUNT" -gt 5
+
+          create="$(jq -nc --arg stock "$STOCK" '{year:2019,make:"Toyota",model:"Corolla",trim:"API Origin QA",price:12345,downPayment:1500,mileage:54321,stock:$stock,description:"Temporary QA routing proof",internalOnly:true,visibility:"internal"}')"
+          CREATE="$(curl -sS -b /tmp/apiqa2.cookies -o /tmp/create.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$QA_URL/api/inventory" --data "$create")"
+          test "$CREATE" = 201
+          VEHICLE_ID="$(jq -r '.item.id // empty' /tmp/create.json)"
+          test -n "$VEHICLE_ID"
+          echo "VEHICLE_ID=$VEHICLE_ID" >> /tmp/apiqa2.env
+
+          READBACK="$(curl -sS -b /tmp/apiqa2.cookies -o /tmp/inventory-after.json -w '%{http_code}' "$QA_URL/api/inventory?after=$GITHUB_RUN_ID")"
+          test "$READBACK" = 200
+          jq -e --arg id "$VEHICLE_ID" --arg stock "$STOCK" 'any(.items[]?; .id==$id and .stock==$stock and .status=="draft")' /tmp/inventory-after.json >/dev/null
+
+          jq -n --argjson before "$COUNT" --argjson after "$(jq '.items|length' /tmp/inventory-after.json)" --arg id "$VEHICLE_ID" --arg stock "$STOCK" '{ok:true,authenticated:true,fullInventoryBefore:$before,fullInventoryAfter:$after,vehicleId:$id,stock:$stock,readback:true}' | tee /tmp/apiqa2-result.json
+
+      - name: Cleanup disposable QA data
+        if: always() && steps.identity.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/apiqa2.env; set +a
+          cat > .wdcc-apiqa2-clean.mjs <<'NODE'
+          import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(Buffer.concat(c).toString())}}throw Error('HOT')}for(let n=1;n<=4;n++){const before=await stable(),s=before.s,v=(s.vehicles||[]).filter(x=>String(x.stock||'')===stock),media=[...new Set(v.flatMap(x=>x.photoPathnames||[]).filter(Boolean))],users=s.users||[];s.users=users.filter(x=>x.id!==id);s.vehicles=(s.vehicles||[]).filter(x=>!v.some(y=>y.id===x.id));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,removedUsers:users.length-s.users.length,removedVehicles:v.length,removedMedia:media.length,stock}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-apiqa2-clean.mjs | tee /tmp/apiqa2-clean.json
+
+      - name: Publish evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          QA_URL: ${{ steps.candidate.outputs.url }}
+        shell: bash
+        run: |
+          result='not captured'; [ -f /tmp/apiqa2-result.json ] && result="$(cat /tmp/apiqa2-result.json)"
+          cleanup='not captured'; [ -f /tmp/apiqa2-clean.json ] && cleanup="$(tail -1 /tmp/apiqa2-clean.json)"
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Candidate: \`${QA_URL:-not-created}\`
+          UI origin: \`${RESOLVED_UI:-not-resolved}\`
+          API origin: \`$API_ORIGIN\`
+
+          Staging only: no live route binding, DNS change, Vercel alias movement, or storefront mutation.
+
+          Result:
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Cleanup:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer API origin QA V2 ${GITHUB_RUN_ID}" --body "$body" || true
