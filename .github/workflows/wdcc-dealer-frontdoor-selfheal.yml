@@ -1,0 +1,36 @@
+name: WDCC Dealer Frontdoor Self-Heal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-selfheal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-frontdoor-selfheal
+  cancel-in-progress: false
+
+jobs:
+  selfheal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch canonical Target V3 owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-dealer-target-frontdoor-v3.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+      - name: Record ownership lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC dealer frontdoor self-heal ${GITHUB_RUN_ID}" \
+            --body "Retired the stale all-through-storefront dealer proxy. Dispatched the canonical Target V3 split-origin owner. Canonical UI origin: https://wdcc-dealer-portal.vercel.app. Canonical API origin: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app. No customer storefront alias or DNS mutation is performed by this dispatcher." || true
