@@ -119,7 +119,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 
     if(Array.isArray(body.photoPathnames)){
       const requested=body.photoPathnames.map((value:unknown)=>text(value,500)).filter((value:string)=>value.startsWith(`media/wdcc/${id}/`));
-      next.photoPathnames=[...new Set([...(Array.isArray(current.photoPathnames)?current.photoPathnames:[]),...requested])].slice(0,50);
+      next.photoPathnames=[...new Set(requested)].slice(0,50);
+      if(body.primaryPhotoPathname===undefined&&next.primaryPhotoPathname&&!next.photoPathnames.includes(next.primaryPhotoPathname))next.primaryPhotoPathname=next.photoPathnames[0]||null;
     }
     if(body.primaryPhotoPathname!==undefined){
       const primary=text(body.primaryPhotoPathname,500);
@@ -143,7 +144,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 
     next.updatedAt=new Date().toISOString();
     state.vehicles[index]=next;
-    const photoChanged=(next.photoPathnames?.length||0)!==(current.photoPathnames?.length||0)||next.primaryPhotoPathname!==current.primaryPhotoPathname;
+    const photoChanged=JSON.stringify(next.photoPathnames||[])!==JSON.stringify(current.photoPathnames||[])||next.primaryPhotoPathname!==current.primaryPhotoPathname;
     const statusChanged=next.status!==current.status;
     const action=statusChanged?`vehicle.status.${next.status}`:photoChanged?"vehicle.photo_checkpoint":"vehicle.update";
     state.audit.push({id:crypto.randomUUID(),at:next.updatedAt,action,actor:user.id,actorRole:user.role,vehicleId:id,requestId:rid,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0});
