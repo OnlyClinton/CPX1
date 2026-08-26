@@ -1,4 +1,4 @@
-name: WDCC Dev Cinematic Preview
+name: WDCC Dev Visual Acceptance
 
 on:
   push:
@@ -16,17 +16,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-dev-cinematic-preview
+  group: wdcc-dev-visual-acceptance
   cancel-in-progress: true
-
-env:
-  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
 
 jobs:
   verify-preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,16 +31,17 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Required donor assets gate
+      - name: Proven visual assets gate
         shell: bash
         run: |
-          test -s public/wdcc-hero-v2.webp
-          test -s public/wdcc-logo-transparent.webp
-          test -s public/assets/cars/2004-nissan-350z-1.webp
-          test -s public/assets/cars/2016-ford-f150-limited-1.webp
-          test -s public/assets/cars/2019-honda-pilot-1.webp
-          test -s public/assets/cars/2019-kia-sportage-1.webp
-          test -s public/assets/cars/2019-toyota-rav4-1.webp
+          set -euo pipefail
+          test "$(git hash-object public/wdcc-hero-v2.webp)" = "f75ea69f3aee373bb4e3ee393d37290836266127"
+          test "$(git hash-object public/wdcc-logo-transparent.webp)" = "983e6fffee3786712b8878594ceb79495ac5a891"
+          test "$(git hash-object public/assets/cars/2004-nissan-350z-1.webp)" = "67f36d857400d227c4c99ef82ff4b4ead72e2507"
+          test "$(git hash-object public/assets/cars/2016-ford-f150-limited-1.webp)" = "e33bf5ce59efbfa11a2739d9abfc090eeeb784e9"
+          test "$(git hash-object public/assets/cars/2019-honda-pilot-1.webp)" = "6136629dac1b352a150587d598e8cdfc2bbd00d9"
+          test "$(git hash-object public/assets/cars/2019-kia-sportage-1.webp)" = "7c856e619e8e7a41350be901d49f3b91327345c6"
+          test "$(git hash-object public/assets/cars/2019-toyota-rav4-1.webp)" = "72caad4d39e48b21c954388bcd75642e0300d75d"
       - name: Type/build gate
         run: npm run build
       - name: Start local production build
@@ -61,95 +58,69 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Capture intro and stable desktop/mobile proof
+      - name: Visual and interaction acceptance
         shell: bash
         run: |
           mkdir -p visual-proof
-          cat > visual-proof/capture.mjs <<'NODE'
-          import { chromium } from 'playwright';
-          const hex=a=>[...new Uint8Array(a)].map(b=>b.toString(16).padStart(2,'0')).join('');
+          cat > visual-proof/acceptance.mjs <<'NODE'
+          import {chromium} from 'playwright';
+          const base='http://127.0.0.1:3000';
           const browser=await chromium.launch({headless:true});
-          for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+          for(const[name,width,height]of[['desktop',1440,1000],['mobile',390,844]]){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
-            await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+            await page.goto(`${base}/?dev-proof=1`,{waitUntil:'domcontentloaded',timeout:30000});
             await page.waitForTimeout(800);
             await page.screenshot({path:`visual-proof/${name}-intro.png`});
             await page.waitForTimeout(3400);
             const diag=await page.evaluate(()=>{
-              const vw=innerWidth;
-              const all=[...document.querySelectorAll('*')].map((e,i)=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return{i,tag:e.tagName,cls:typeof e.className==='string'?e.className:'',id:e.id||'',x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:e.scrollWidth,display:s.display,visibility:s.visibility,opacity:Number(s.opacity||1),position:s.position,transform:s.transform}}).filter(x=>x.display!=='none'&&x.visibility!=='hidden'&&x.opacity>.01);
               const rect=sel=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};
-              return{vw,sw:document.documentElement.scrollWidth,introCount:document.querySelectorAll('.intro-sequence').length,logo:rect('.home-header-shell .logo-button'),hero:rect('.hero'),inventory:rect('.inventory-showcase'),how:rect('.how-section'),trust:rect('.trust-grid'),offenders:all.filter(x=>x.width>vw+3||x.right>vw+3||x.x<-3).sort((a,b)=>Math.max(b.width,b.right)-Math.max(a.width,a.right)).slice(0,30)};
+              const care=document.querySelector('.hero h1 strong');
+              return{vw:innerWidth,sw:document.documentElement.scrollWidth,introCount:document.querySelectorAll('.intro-sequence').length,logo:rect('.home-header-shell .logo-button'),hero:rect('.hero'),inventory:rect('.inventory-showcase'),how:rect('.how-section'),trust:rect('.trust-grid'),careLineRects:care?[...care.getClientRects()].length:0};
             });
-            const media=await page.evaluate(async()=>{
-              const nodes=[...document.querySelectorAll('.vehicle-image img')].slice(0,5);
-              return await Promise.all(nodes.map(async img=>{
-                const src=img.getAttribute('src')||'';
-                const res=await fetch(src,{cache:'no-store'});
-                const buf=await res.arrayBuffer();
-                const digest=await crypto.subtle.digest('SHA-256',buf);
-                const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
-                return{src,currentSrc:img.currentSrc,status:res.status,bytes:buf.byteLength,hash,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight};
-              }));
-            });
+            const media=await page.evaluate(async()=>Promise.all([...document.querySelectorAll('.vehicle-image img')].slice(0,5).map(async img=>{const src=img.getAttribute('src')||'';const res=await fetch(src,{cache:'no-store'});const buf=await res.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',buf);const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');return{src,status:res.status,bytes:buf.byteLength,hash,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight}})));
             console.log(`${name} DIAG ${JSON.stringify(diag)}`);
             console.log(`${name} MEDIA ${JSON.stringify(media)}`);
-            if(diag.introCount!==0) throw new Error(`${name}: intro still mounted after animation ${diag.introCount}`);
-            if(!diag.logo||diag.logo.width<70||diag.logo.height<60) throw new Error(`${name}: crest/header logo box too small ${JSON.stringify(diag.logo)}`);
-            if(!diag.hero||diag.hero.height<420) throw new Error(`${name}: hero missing or collapsed ${JSON.stringify(diag.hero)}`);
-            if(!diag.inventory||!diag.how||!diag.trust) throw new Error(`${name}: storefront contract incomplete ${JSON.stringify(diag)}`);
-            if(diag.sw>width+3) throw new Error(`${name}: horizontal overflow ${diag.sw}>${width}; offenders=${JSON.stringify(diag.offenders)}`);
-            if(media.length<3||media.some(x=>x.status!==200||x.bytes<1000||!x.naturalWidth)) throw new Error(`${name}: inventory media broken ${JSON.stringify(media)}`);
-            if(name==='desktop'&&new Set(media.map(x=>x.hash)).size<3) throw new Error(`${name}: duplicated inventory media ${JSON.stringify(media)}`);
+            if(diag.introCount!==0)throw Error(`${name}: intro still mounted`);
+            if(!diag.logo||diag.logo.width<70||diag.logo.height<60)throw Error(`${name}: crest too small`);
+            if(!diag.hero||diag.hero.height<420||!diag.inventory||!diag.how||!diag.trust)throw Error(`${name}: storefront contract incomplete`);
+            if(diag.sw>width+3)throw Error(`${name}: horizontal overflow ${diag.sw}>${width}`);
+            if(name==='mobile'&&diag.careLineRects!==1)throw Error(`${name}: WE DON'T CARE wraps to ${diag.careLineRects} lines`);
+            if(media.length<3||media.some(x=>x.status!==200||x.bytes<1000||!x.naturalWidth))throw Error(`${name}: broken inventory media ${JSON.stringify(media)}`);
+            if(name==='desktop'&&new Set(media.map(x=>x.hash)).size<3)throw Error(`${name}: duplicated inventory media ${JSON.stringify(media)}`);
             await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
             await page.close();
           }
+
+          const click=await browser.newPage({viewport:{width:1280,height:900}});
+          await click.goto(`${base}/`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(3000);
+          await click.locator('.hero-cta-test').click();await click.waitForURL('**/get-approved**',{timeout:15000});
+          if(!click.url().includes('/get-approved'))throw Error('primary CTA route failed');
+          await click.goto(`${base}/`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(3000);
+          await click.locator('.hero-cta-qualify').click();await click.waitForURL('**/inventory**',{timeout:15000});
+          if(!click.url().includes('/inventory'))throw Error('inventory CTA route failed');
+          for(const path of ['/financing','/get-approved','/inventory','/dealer']){const r=await click.request.get(`${base}${path}`);if(!r.ok())throw Error(`${path} returned ${r.status()}`)}
+          await click.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(1200);
+          if(!(await click.locator('body').innerText()).includes('Dealer Sign In'))throw Error('dealer entrance missing');
+          await click.screenshot({path:'visual-proof/desktop-dealer-login.png',fullPage:true});
+          await click.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(1400);
+          if(!click.url().includes('/dealer'))throw Error('protected dealer add-vehicle route failed');
+          await click.close();
+
+          const dealerMobile=await browser.newPage({viewport:{width:390,height:844}});
+          await dealerMobile.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});await dealerMobile.waitForTimeout(1000);
+          await dealerMobile.screenshot({path:'visual-proof/mobile-dealer-login.png',fullPage:true});
+          await dealerMobile.close();
           await browser.close();
           NODE
-          node visual-proof/capture.mjs
+          node visual-proof/acceptance.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wdcc-exact-mockup-visual-proof
+          name: wdcc-front-back-visual-proof
           path: visual-proof/*.png
-          retention-days: 7
-      - name: Require preview deployment credential
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: test -n "$VERCEL_TOKEN"
-      - name: Install Vercel CLI
-        run: npm install --global vercel@59.5.0
-      - name: Link preview project
-        run: |
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-      - name: Pull preview environment
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Build preview artifact
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
-      - name: Deploy preview only
-        id: deploy
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -o pipefail
-          vercel deploy --prebuilt --yes --archive=tgz --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
-          url="$(tr -d '\r' </tmp/vercel-preview.log | sed -E $'s/\x1B\[[0-9;]*[A-Za-z]//g' | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -1)"
-          test -n "$url"
-          printf '%s\n' "$url" | tee preview-url.txt
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wdcc-exact-mockup-preview-url
-          path: preview-url.txt
           retention-days: 7
       - name: Summary
         run: |
-          echo '### WDCC exact mockup preview' >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Production aliases were not touched.' >> "$GITHUB_STEP_SUMMARY"
+          echo '### WDCC private visual acceptance' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Storefront desktop/mobile, intro, real media, primary CTAs, dealer entrance, and protected add-vehicle routing passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Canonical preview is deployed separately by the Cloudflare preview workflow. No production alias is touched here.' >> "$GITHUB_STEP_SUMMARY"
