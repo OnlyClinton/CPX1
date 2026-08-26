@@ -1,5 +1,23 @@
 /* WDCC compatibility shim.
- * Intentionally contains no storefront layout, logo, breakpoint, typography,
- * positioning, carousel, hero, section-height, or spacing overrides.
- * app/owner-visual-polish.css is the single storefront visual authority.
+ * Keep app/owner-visual-polish.css as the storefront visual authority.
+ * This narrowly guards the mobile pinned stack against earlier legacy !important rules.
  */
+@media (max-width:520px){
+  .reference-home.locked-storefront .rh-utility{
+    display:block!important;
+    position:fixed!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    height:var(--utility-h)!important;
+    min-height:var(--utility-h)!important;
+  }
+  .reference-home.locked-storefront .rh-header{
+    position:fixed!important;
+    top:var(--utility-h)!important;
+    left:0!important;
+    right:0!important;
+    height:var(--header-h)!important;
+    min-height:var(--header-h)!important;
+  }
+}
