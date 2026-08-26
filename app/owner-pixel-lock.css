@@ -1,6 +1,6 @@
 /* OWNER PIXEL LOCK — reference-driven storefront correction
    Scope: visual-only. No routing, data, auth, provider, lead, inventory or production changes.
-   Source: approved WDCC desktop/mobile reference boards + current owner static-intro override. */
+   Source: approved WDCC 51077 desktop/mobile reference + current owner static-intro override. */
 
 /* Keep the persistent round badge optically dominant without motion. */
 html body main.reference-home.locked-storefront > header.rh-header .rh-logo,
@@ -34,30 +34,35 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
   }
 }
 
-/* Mobile/tablet: match the approved composition. The hero image starts directly beneath the pinned header and is vertically cropped so the skyline/car, not empty sky, owns the frame. */
+/* Mobile/tablet: deterministic 51077 composition.
+   The static Challenger/skyline is a normal in-flow image block directly above the copy.
+   No absolute car positioning means the fixed header cannot shear or hide the vehicle. */
 @media (max-width:1100px),(hover:none) and (pointer:coarse){
   html body main.reference-home.locked-storefront > section.rh-hero{
     position:relative!important;
+    display:block!important;
     min-height:0!important;
     height:auto!important;
-    padding-top:220px!important;
+    padding:0!important;
+    margin:0!important;
     overflow:hidden!important;
     background:#02070c!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
-    position:absolute!important;
-    top:0!important;
-    right:-10%!important;
-    bottom:auto!important;
-    left:-10%!important;
-    width:120%!important;
-    height:245px!important;
+    position:relative!important;
+    inset:auto!important;
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    height:210px!important;
+    margin:0!important;
     object-fit:cover!important;
-    object-position:70% 64%!important;
+    object-position:70% 63%!important;
     filter:saturate(1.20) contrast(1.07) brightness(1.16)!important;
     transform:none!important;
     animation:none!important;
     transition:none!important;
+    z-index:1!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
   html body main.reference-home.locked-storefront > section.rh-hero:after{
@@ -66,26 +71,36 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
     right:0!important;
     bottom:auto!important;
     left:0!important;
-    height:245px!important;
+    height:210px!important;
     pointer-events:none!important;
+    z-index:2!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade{
-    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 44%,rgba(2,7,12,.10) 61%,rgba(2,7,12,.55) 84%,#02070c 100%)!important;
+    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 55%,rgba(2,7,12,.12) 72%,rgba(2,7,12,.48) 90%,#02070c 100%)!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero:after{
-    background:linear-gradient(180deg,transparent 0%,transparent 56%,rgba(2,7,12,.18) 75%,#02070c 100%)!important;
+    background:linear-gradient(180deg,transparent 0%,transparent 62%,rgba(2,7,12,.12) 80%,#02070c 100%)!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-inner{
+    position:relative!important;
+    display:block!important;
+    width:100%!important;
+    min-height:0!important;
+    height:auto!important;
+    margin:0!important;
+    padding:0!important;
+    z-index:3!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero .rh-copy{
     position:relative!important;
-    z-index:3!important;
     width:100%!important;
     max-width:none!important;
     margin:0!important;
-    padding:10px 17px 27px!important;
+    padding:12px 17px 27px!important;
     background:#02070c!important;
   }
 
-  /* The approved mobile reference is a 2x2 benefits block, not four tiny compressed columns. */
+  /* 51077 mobile uses a readable 2x2 benefits block. */
   html body main.reference-home.locked-storefront .rh-benefits{
     display:grid!important;
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
@@ -110,7 +125,7 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
     margin-top:3px!important;
   }
 
-  /* Keep carousel card proportions compact and leave the next card visibly peeking in. */
+  /* Compact swipe carousel with the next card peeking in, like the approved mobile reference. */
   html body main.reference-home.locked-storefront .rh-grid{
     scroll-padding-inline:7vw!important;
     padding-left:7vw!important;
@@ -127,7 +142,7 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
     min-height:0!important;
   }
 
-  /* Remove inherited footer height so the mobile page ends with the content instead of a large dead-black tail. */
+  /* End the page with the content; no inherited dead-black tail. */
   html body main.reference-home.locked-storefront > footer.rh-footer{
     height:auto!important;
     min-height:0!important;
@@ -141,15 +156,12 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
 }
 
 @media (max-width:430px){
-  html body main.reference-home.locked-storefront > section.rh-hero{
-    padding-top:212px!important;
-  }
   html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art,
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
   html body main.reference-home.locked-storefront > section.rh-hero:after{
-    height:236px!important;
+    height:190px!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
-    object-position:70% 65%!important;
+    object-position:70% 64%!important;
   }
 }
