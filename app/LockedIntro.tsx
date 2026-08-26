@@ -8,6 +8,12 @@ export default function LockedIntro(){
   const[phase,setPhase]=useState<Phase>("show");
 
   useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const proofHold=params.has("visual-mobile")||params.has("visual-desktop");
+    if(proofHold){
+      document.documentElement.classList.add("wdcc-visual-proof","wdcc-intro-active");
+      return()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active")};
+    }
     if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setPhase("done");return}
     document.documentElement.classList.add("wdcc-intro-active");
     const exit=window.setTimeout(()=>setPhase("exit"),1000);
@@ -15,7 +21,7 @@ export default function LockedIntro(){
     return()=>{window.clearTimeout(exit);window.clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active")};
   },[]);
 
-  const finish=()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")};
+  const finish=()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active");setPhase("done")};
   if(phase==="done")return null;
 
   return <div className={`li li-${phase}`} aria-label="WDCC opening intro">
@@ -35,7 +41,7 @@ export default function LockedIntro(){
         .li-badge{top:41%;width:min(58vw,224px)}
         .li-tag{top:61%;font-size:12px;letter-spacing:.09em}
       }
-      @media(prefers-reduced-motion:reduce){.li{display:none!important}}
+      @media(prefers-reduced-motion:reduce){html:not(.wdcc-visual-proof) .li{display:none!important}}
     `}</style>
     <div className="li-scene" aria-hidden="true"><img src="/wdcc-hero-v2.webp" alt="" width="1672" height="941" fetchPriority="high"/></div>
     <div className="li-badge"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></div>
