@@ -29,7 +29,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -68,42 +67,31 @@ jobs:
         run: |
           set -euo pipefail
           log=/tmp/vercel-deploy.log
-          if ! vercel deploy --prebuilt --prod --yes --archive=tgz --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee "$log"; then
-            exit 1
-          fi
+          vercel deploy --prebuilt --prod --yes --archive=tgz --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee "$log"
           url="$(grep -Eo 'https://wdcc-dealer-portal-[A-Za-z0-9-]+\.vercel\.app' "$log" | tail -1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Dealer deployment: $url"
 
-      - name: Verify dealer project alias and target markers
+      - name: Verify corrected UI on stable alias and live dealer frontdoor
         id: verify
         shell: bash
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         run: |
           set -euo pipefail
           ok=0
           for i in $(seq 1 30); do
-            code="$(curl -sS -L -o /tmp/login.html -w '%{http_code}' "$PROJECT_ALIAS/dealer?target=$GITHUB_RUN_ID" || true)"
-            hcode="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$PROJECT_ALIAS/api/health?target=$GITHUB_RUN_ID" || true)"
-            if [ "$code" = 200 ] && [ "$hcode" = 200 ] && jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1; then ok=1; break; fi
+            code="$(curl -sS -L -o /tmp/project-ui.html -w '%{http_code}' "$PROJECT_ALIAS/dealer?ui_fix=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -q 'RUN YOUR DEALERSHIP' /tmp/project-ui.html && grep -q 'SECURE DEALER ACCESS' /tmp/project-ui.html; then ok=1; break; fi
             sleep 2
           done
           test "$ok" = 1
-          grep -q 'RUN YOUR DEALERSHIP' /tmp/login.html
-          grep -q 'SECURE DEALER ACCESS' /tmp/login.html
           echo "project_alias=PASS" >> "$GITHUB_OUTPUT"
-
-          live="$(curl -sS -L -o /tmp/live-login.html -w '%{http_code}' "$DEALER/dealer?target=$GITHUB_RUN_ID" || true)"
+          live="$(curl -sS -L -o /tmp/live-ui.html -w '%{http_code}' "$DEALER/dealer?ui_fix=$GITHUB_RUN_ID" || true)"
+          test "$live" = 200
+          grep -q 'RUN YOUR DEALERSHIP' /tmp/live-ui.html
           echo "live_http=$live" >> "$GITHUB_OUTPUT"
-          if [ "$live" = 200 ] && grep -q 'RUN YOUR DEALERSHIP' /tmp/live-login.html; then
-            echo "live_target=PASS" >> "$GITHUB_OUTPUT"
-          else
-            echo "live_target=PENDING_FRONTDOOR" >> "$GITHUB_OUTPUT"
-          fi
+          echo "live_target=PASS" >> "$GITHUB_OUTPUT"
 
-      - name: Report dealer target deployment
+      - name: Report dealer UI deployment
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -114,16 +102,5 @@ jobs:
           LIVE_TARGET: ${{ steps.verify.outputs.live_target }}
         shell: bash
         run: |
-          body=$(cat <<EOF
-          Status: **$STATUS**
-          Source: \`$GITHUB_SHA\`
-          Dealer project: \`$VERCEL_PROJECT_ID\`
-          Prebuilt production deployment: \`$DEPLOYMENT_URL\`
-          Dealer project alias target markers: **$PROJECT_ALIAS**
-          dealer.wedontcarecars.com HTTP: \`$LIVE_HTTP\`
-          dealer.wedontcarecars.com visual target: **$LIVE_TARGET**
-
-          Prebuilt output was uploaded as one tgz archive to avoid Vercel Hobby file-upload quota. This workflow deploys only the dealer Vercel project and does not modify the WDCC customer storefront project or apex aliases.
-          EOF
-          )
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target production ${GITHUB_RUN_ID}" --body "$body" || true
+          body="Status: **$STATUS**\nSource: \`$GITHUB_SHA\`\nDealer UI deployment: \`$DEPLOYMENT_URL\`\nStable dealer UI alias: **$PROJECT_ALIAS**\nLive dealer HTTP/target: \`$LIVE_HTTP\` / **$LIVE_TARGET**\nAPIs remain routed by Cloudflare target V3 to immutable Phoenix authority."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC corrected dealer UI production $GITHUB_RUN_ID" --body "$body" || true
