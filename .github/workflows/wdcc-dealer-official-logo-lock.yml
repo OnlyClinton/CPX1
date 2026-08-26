@@ -1,0 +1,42 @@
+name: WDCC Dealer Official Logo Lock
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-official-logo-lock.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Lock dealer surfaces to official WDCC logo
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f public/wdcc-official-logo.webp
+          size="$(stat -c '%s' public/wdcc-official-logo.webp)"
+          test "$size" -ge 45000
+          find app/dealer -type f \( -name '*.tsx' -o -name '*.ts' \) -print0 | xargs -0 sed -i 's#/wdcc-logo-transparent\.webp#/wdcc-official-logo.webp#g'
+          if [ -f app/login/page.tsx ]; then sed -i 's#/wdcc-logo-transparent\.webp#/wdcc-official-logo.webp#g' app/login/page.tsx; fi
+          grep -R '/wdcc-official-logo.webp' app/dealer >/dev/null
+      - name: Commit dealer logo lock if changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Dealer Release'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add app/dealer app/login/page.tsx || true
+          if git diff --cached --quiet; then
+            echo 'Dealer surfaces already use official logo.'
+          else
+            git commit -m 'Lock dealer portal to official WDCC logo'
+            git push origin HEAD:main
+          fi
