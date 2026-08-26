@@ -134,24 +134,30 @@ jobs:
           path: visual-proof/*.png
           retention-days: 7
       - name: Require preview deployment credential
+        if: github.event_name == 'workflow_dispatch'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: test -n "$VERCEL_TOKEN"
       - name: Install Vercel CLI
+        if: github.event_name == 'workflow_dispatch'
         run: npm install --global vercel@59.5.0
       - name: Link preview project
+        if: github.event_name == 'workflow_dispatch'
         run: |
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
       - name: Pull preview environment
+        if: github.event_name == 'workflow_dispatch'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
       - name: Build preview artifact
+        if: github.event_name == 'workflow_dispatch'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
       - name: Deploy preview only
+        if: github.event_name == 'workflow_dispatch'
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -164,12 +170,15 @@ jobs:
           printf '%s\n' "$url" | tee preview-url.txt
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: wdcc-cinematic-preview-url
           path: preview-url.txt
           retention-days: 7
       - name: Summary
         run: |
-          echo '### WDCC dev cinematic preview' >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Production aliases were not touched.' >> "$GITHUB_STEP_SUMMARY"
+          echo '### WDCC dev cinematic proof' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Visual/build proof runs on every push.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Vercel preview upload runs only on manual workflow_dispatch to avoid daily API deployment exhaustion.' >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "Preview: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"; fi
+          echo '- Production aliases were not touched.' >> "$GITHUB_STEP_SUMMARY"
