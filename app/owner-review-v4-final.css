@@ -1,0 +1,14 @@
+/* V4 last-mile specificity shim. Keep this last. */
+@media(max-width:600px){
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{
+    font-size:11.25px!important;
+    line-height:1!important;
+    letter-spacing:.055em!important;
+    gap:20px!important;
+  }
+}
+@media(min-width:1101px){
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{
+    font-size:11.5px!important;
+  }
+}
