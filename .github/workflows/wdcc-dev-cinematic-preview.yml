@@ -63,6 +63,7 @@ jobs:
           cat > visual-proof/capture.mjs <<'NODE'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
+          const rect=e=>e?.getBoundingClientRect().toJSON();
           async function capture(name,width,height){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
             page.setDefaultTimeout(10000);
@@ -85,20 +86,36 @@ jobs:
             await page.waitForTimeout(3200);
             await page.waitForSelector('.screenshotHero');
             const visual=await page.evaluate(()=>{
+              const R=e=>e?.getBoundingClientRect().toJSON();
               const hero=document.querySelector('.screenshotHero');
               const copy=document.querySelector('.hero-copy');
               const heading=document.querySelector('.hero h1');
-              const visibleImgs=[...document.querySelectorAll('img')].filter(i=>{const r=i.getBoundingClientRect();const s=getComputedStyle(i);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'});
+              const how=document.querySelector('.screenshotHow');
+              const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};
+              const visibleImgs=[...document.querySelectorAll('img')].filter(visible);
+              const navLinks=[...document.querySelectorAll('.main-nav a')].filter(visible).map(R);
+              const cards=[...document.querySelectorAll('.featured-slide')].filter(visible).map(R);
+              const cardBodies=[...document.querySelectorAll('.vehicle-card-body')].filter(visible).map(R);
+              const steps=[...document.querySelectorAll('.steps-grid article')].filter(visible).map(R);
+              const menuLines=[...document.querySelectorAll('.mobile-menu i')].filter(visible).map(R);
+              const callSvg=document.querySelector('.mobile-call svg');
+              const title=document.querySelector('.featured-slide.active .vehicle-title')||document.querySelector('.vehicle-title');
+              const price=document.querySelector('.featured-slide.active .vehicle-price')||document.querySelector('.vehicle-price');
               return {
                 innerWidth:window.innerWidth,
                 scrollWidth:document.documentElement.scrollWidth,
                 heroBackground:hero?getComputedStyle(hero).backgroundImage:'',
-                heroRect:hero?.getBoundingClientRect().toJSON(),
-                copyRect:copy?.getBoundingClientRect().toJSON(),
-                headingRect:heading?.getBoundingClientRect().toJSON(),
+                heroRect:R(hero),
+                copyRect:R(copy),
+                headingRect:R(heading),
                 headingFont:heading?getComputedStyle(heading).fontSize:'',
                 brokenImages:visibleImgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),
-                visibleImageCount:visibleImgs.length
+                visibleImageCount:visibleImgs.length,
+                navLinks,cards,cardBodies,steps,menuLines,
+                howRect:R(how),
+                callSvgRect:callSvg&&visible(callSvg)?R(callSvg):null,
+                titleRect:R(title),
+                priceRect:R(price)
               };
             });
             console.log(`${name} visual=${JSON.stringify(visual)}`);
@@ -111,6 +128,25 @@ jobs:
             const heroBottom=heroTop+(visual.heroRect?.height??0);
             if(!visual.copyRect||visual.copyRect.y<heroTop-2||visual.copyRect.y+visual.copyRect.height>heroBottom-12){
               throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
+            }
+            if(width>900){
+              if(visual.navLinks.length<5) throw new Error(`${name}: desktop nav links missing`);
+              const navGaps=visual.navLinks.slice(1).map((r,i)=>r.x-(visual.navLinks[i].x+visual.navLinks[i].width));
+              if(navGaps.some(g=>g<12)) throw new Error(`${name}: desktop nav labels collide ${JSON.stringify(navGaps)}`);
+              if(visual.cards.length<3) throw new Error(`${name}: desktop inventory grid has ${visual.cards.length} visible cards`);
+              const cardY=visual.cards.map(r=>r.y);
+              if(Math.max(...cardY)-Math.min(...cardY)>5) throw new Error(`${name}: desktop inventory cards are not one row ${JSON.stringify(cardY)}`);
+              const maxCardBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height));
+              if(!visual.howRect||maxCardBottom>visual.howRect.y-8) throw new Error(`${name}: inventory card content overlaps process section`);
+              if(visual.steps.length!==4) throw new Error(`${name}: expected 4 desktop process steps, got ${visual.steps.length}`);
+              const stepY=visual.steps.map(r=>r.y);
+              if(Math.max(...stepY)-Math.min(...stepY)>5) throw new Error(`${name}: process steps are not one row ${JSON.stringify(stepY)}`);
+            }else{
+              if(visual.menuLines.length!==3||visual.menuLines.some(r=>r.width<15||r.height<1.5)) throw new Error(`${name}: mobile hamburger is not three visible lines`);
+              if(!visual.callSvgRect||visual.callSvgRect.width<18||visual.callSvgRect.height<18) throw new Error(`${name}: mobile call icon missing`);
+              if(!visual.titleRect||!visual.priceRect||visual.priceRect.y<visual.titleRect.y+visual.titleRect.height-1) throw new Error(`${name}: mobile vehicle title/price collide`);
+              const maxBodyBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height));
+              if(!visual.howRect||maxBodyBottom>visual.howRect.y-8) throw new Error(`${name}: mobile inventory card overlaps process section`);
             }
             const checks={
               logo:await page.locator('.header-logo-image').count(),
@@ -159,7 +195,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          vercel deploy --prebuilt --yes --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
+          vercel deploy --prebuilt --yes --archive=tgz --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
           url="$(tr -d '\r' </tmp/vercel-preview.log | sed -E $'s/\x1B\[[0-9;]*[A-Za-z]//g' | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -1)"
           if [ -z "$url" ]; then
             echo 'Preview URL not found in Vercel output.' >&2
