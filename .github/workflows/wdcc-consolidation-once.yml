@@ -1,0 +1,110 @@
+name: WDCC Workflow Consolidation Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-consolidation-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: wdcc-workflow-consolidation-once
+  cancel-in-progress: false
+
+jobs:
+  consolidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Archive legacy workflows and make protected workflows manual-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          wf = Path('.github/workflows')
+          archive = Path('.github/workflows-archive-20260826')
+          archive.mkdir(parents=True, exist_ok=True)
+          keep = {
+              'wdcc-preview-cloudflare.yml',
+              'wdcc-production.yml',
+              'wdcc-dealer.yml',
+              'wdcc-acceptance.yml',
+          }
+          temp = 'wdcc-consolidation-once.yml'
+
+          for p in list(wf.glob('*.yml')) + list(wf.glob('*.yaml')):
+              if p.name in keep or p.name == temp:
+                  continue
+              dest = archive / p.name
+              if dest.exists():
+                  stem, suffix = p.stem, p.suffix
+                  n = 1
+                  while (archive / f'{stem}-postlock-{n}{suffix}').exists():
+                      n += 1
+                  dest = archive / f'{stem}-postlock-{n}{suffix}'
+              shutil.move(str(p), str(dest))
+
+          def manual_only(path: Path):
+              text = path.read_text()
+              lines = text.splitlines(keepends=True)
+              start = next((i for i, line in enumerate(lines) if line.rstrip('\r\n') == 'on:'), None)
+              if start is None:
+                  raise SystemExit(f'missing on: in {path}')
+              end = None
+              for i in range(start + 1, len(lines)):
+                  raw = lines[i]
+                  stripped = raw.strip()
+                  if stripped and not raw.startswith((' ', '\t')) and not stripped.startswith('#'):
+                      end = i
+                      break
+              if end is None:
+                  raise SystemExit(f'could not find end of trigger block in {path}')
+              replacement = ['on:\n', '  workflow_dispatch:\n', '\n']
+              path.write_text(''.join(lines[:start] + replacement + lines[end:]))
+
+          for name in ('wdcc-production.yml', 'wdcc-dealer.yml', 'wdcc-acceptance.yml'):
+              manual_only(wf / name)
+
+          (wf / temp).unlink(missing_ok=True)
+
+          active = sorted(p.name for p in wf.iterdir() if p.is_file() and p.suffix in ('.yml', '.yaml'))
+          expected = sorted(keep)
+          if active != expected:
+              raise SystemExit(f'active workflows mismatch: {active} != {expected}')
+
+          for name in ('wdcc-production.yml', 'wdcc-dealer.yml', 'wdcc-acceptance.yml'):
+              text = (wf / name).read_text()
+              block = text.split('on:', 1)[1].split('\n\n', 1)[0]
+              if 'workflow_dispatch:' not in block or 'push:' in block or 'pull_request:' in block or 'schedule:' in block:
+                  raise SystemExit(f'{name} is not manual-only')
+
+          preview = (wf / 'wdcc-preview-cloudflare.yml').read_text()
+          if 'pull_request:' not in preview or 'workflow_dispatch:' not in preview:
+              raise SystemExit('Cloudflare preview triggers missing')
+
+          print('ACTIVE_WORKFLOWS=' + ','.join(active))
+          print('ARCHIVED_WORKFLOW_COUNT=' + str(sum(1 for p in archive.iterdir() if p.is_file() and p.suffix in ('.yml','.yaml'))))
+          PY
+
+      - name: Commit final workflow lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Workflow Lock'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add -A .github/workflows .github/workflows-archive-20260826
+          git diff --cached --check
+          git commit -m 'Lock WDCC automation to four canonical workflows'
+          git push origin HEAD:main
