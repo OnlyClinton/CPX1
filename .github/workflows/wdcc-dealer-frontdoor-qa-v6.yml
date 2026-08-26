@@ -1,0 +1,219 @@
+name: WDCC Dealer Frontdoor QA V6
+
+on:
+  push:
+    branches: ['qa/wdcc-dealer-api-origin-fix-20260825']
+    paths: ['.github/workflows/wdcc-dealer-frontdoor-qa-v6.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-frontdoor-qa-v6
+  cancel-in-progress: true
+
+env:
+  UI_ORIGIN: https://www.wedontcarecars.com
+  API_ORIGIN: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+  STOREFRONT: https://wedontcarecars.com
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Preflight live UI and canonical API
+        run: |
+          set -euo pipefail
+          curl -fsS "$API_ORIGIN/api/health?v6=$GITHUB_RUN_ID" -o /tmp/api-health.json
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and (.storage.counts.vehicles > 5)' /tmp/api-health.json >/dev/null
+          code="$(curl -sS -L -o /tmp/login.html -w '%{http_code}' "$UI_ORIGIN/dealer/login?v6=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          grep -Eq 'PORTAL LOGIN|AUTHORIZED ACCESS|Sign In' /tmp/login.html
+
+      - name: Install QA tooling
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.5.0 wrangler@4.90.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/wdcc-frontdoor-v6
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Build path-aware dealer frontdoor candidate
+        run: |
+          set -euo pipefail
+          cat > /tmp/wdcc-frontdoor-v6/worker.js <<'EOF'
+          const UI="https://www.wedontcarecars.com";
+          const API="https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
+          const TRUSTED="https://dealer.wedontcarecars.com";
+
+          function upstreamHeaders(request,api){
+            const h=new Headers();
+            for(const name of ['accept','accept-language','content-type','cookie','user-agent','x-wdcc-request-id','rsc','next-router-state-tree','next-router-prefetch','next-url']){
+              const v=request.headers.get(name); if(v) h.set(name,v);
+            }
+            h.set('x-forwarded-host','dealer.wedontcarecars.com');
+            h.set('x-forwarded-proto','https');
+            h.set('x-wdcc-frontdoor','dealer-frontdoor-qa-v6');
+            if(api && !['GET','HEAD'].includes(request.method)) h.set('origin',TRUSTED);
+            return h;
+          }
+
+          async function proxy(request,base,api){
+            const incoming=new URL(request.url);
+            const target=new URL(base); target.pathname=incoming.pathname; target.search=incoming.search;
+            const init={method:request.method,headers:upstreamHeaders(request,api),redirect:'manual'};
+            if(!['GET','HEAD'].includes(request.method)) init.body=request.body;
+            const response=await fetch(target.toString(),init);
+            const out=new Headers(response.headers);
+            const location=out.get('location');
+            if(location){try{const loc=new URL(location,target);if(loc.hostname===new URL(base).hostname){loc.protocol=incoming.protocol;loc.hostname=incoming.hostname;loc.port=incoming.port;out.set('location',loc.toString())}}catch{}}
+            out.set('x-wdcc-edge','dealer-frontdoor-qa-v6');
+            out.set('x-wdcc-origin',target.hostname);
+            if(incoming.pathname.startsWith('/dealer')||incoming.pathname.startsWith('/api/')) out.set('cache-control','private, no-store, max-age=0');
+            return new Response(response.body,{status:response.status,statusText:response.statusText,headers:out});
+          }
+
+          export default {async fetch(request){
+            const u=new URL(request.url);
+            if(u.pathname==='/') return Response.redirect(new URL('/dealer',u),302);
+            if(u.pathname.startsWith('/api/')) return proxy(request,API,true);
+            return proxy(request,UI,false);
+          }};
+          EOF
+          cat > /tmp/wdcc-frontdoor-v6/wrangler.jsonc <<'EOF'
+          {
+            "name":"wdcc-dealer-frontdoor-qa-v6",
+            "main":"worker.js",
+            "compatibility_date":"2026-08-25",
+            "compatibility_flags":["global_fetch_strictly_public"],
+            "workers_dev":true,
+            "preview_urls":true,
+            "observability":{"enabled":true}
+          }
+          EOF
+
+      - name: Deploy workers.dev full frontdoor candidate
+        id: candidate
+        working-directory: /tmp/wdcc-frontdoor-v6
+        run: |
+          set -euo pipefail
+          wrangler deploy 2>&1 | tee /tmp/wrangler.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          hcode="$(curl -sS -D /tmp/h -o /tmp/health.json -w '%{http_code}' "$URL/api/health?v6=$GITHUB_RUN_ID")"
+          test "$hcode" = 200
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and (.storage.counts.vehicles > 5)' /tmp/health.json >/dev/null
+          grep -qi '^x-wdcc-origin: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' /tmp/h
+          lcode="$(curl -sS -L -o /tmp/candidate-login.html -w '%{http_code}' "$URL/dealer/login?v6=$GITHUB_RUN_ID")"
+          test "$lcode" = 200
+          grep -Eq 'PORTAL LOGIN|AUTHORIZED ACCESS|Sign In' /tmp/candidate-login.html
+
+      - name: Create disposable dealer identity with backup
+        id: identity
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-v6-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=4;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`FrontdoorV6-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`fdv6-${crypto.randomUUID()}`,email=`fdv6-${run}@invalid.example`,stock=`R36TEST-FDV6-${run}`,backup=`private/state/backups/platform-v3-pre-fdv6-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`Frontdoor V6 ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/v6.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,stock,backup}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v6-user.mjs
+          set -a; . /tmp/v6.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Prove login form photo publish authenticated readback and public isolation
+        id: browser
+        env:
+          QA_URL: ${{ steps.candidate.outputs.url }}
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/v6.env; set +a; printf '::add-mask::%s\n' "$QA_PASSWORD"
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          const base=process.env.QA_URL,store=process.env.STOREFRONT,run=process.env.RUN_TAG,stock=process.env.STOCK;
+          const clean=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};async function text(r){try{return(await r.text()).slice(0,3000)}catch{return''}}
+          fs.writeFileSync('/tmp/v6.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+          const result={ok:false,base,run,stock,stages:{},trace:[]};
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('response',r=>{if(/\/api\/(?:auth|inventory|upload)/.test(r.url()))result.trace.push({method:r.request().method(),url:clean(r.url()),status:r.status()})});
+          await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const u=p.locator('input[autocomplete="username"]').first(),pw=p.locator('input[autocomplete="current-password"]').first();await u.waitFor({state:'visible',timeout:20000});await pw.waitFor({state:'visible',timeout:20000});await u.fill(process.env.QA_EMAIL);await pw.fill(process.env.QA_PASSWORD);await p.getByRole('button',{name:'SIGN IN'}).click();await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
+          const session=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{credentials:'include',cache:'no-store'});return{status:r.status,body:await r.text()}});if(session.status!==200||!JSON.parse(session.body).authenticated)throw Error(`SESSION_${session.status}_${session.body}`);result.stages.login={ok:true};
+          const before=await p.evaluate(async()=>{const r=await fetch(`/api/inventory?before=${Date.now()}`,{credentials:'include',cache:'no-store'});return{status:r.status,text:await r.text()}});const bj=JSON.parse(before.text);result.stages.inventoryBefore={status:before.status,count:(bj.items||[]).length};if(before.status!==200||(bj.items||[]).length<=5)throw Error(`AUTH_INVENTORY_PUBLIC_ONLY_${before.status}_${before.text.slice(0,1000)}`);
+          await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){let x=p.locator(`input[name="${n}"]`).first();if(n==='description')x=p.locator('label.description textarea, textarea').first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Frontdoor V6 ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description',`Full frontdoor QA ${run}`);result.stages.form={ok:true};
+          const input=p.locator('input[type=file][multiple]').first();if(!await input.count())throw Error('FILE_INPUT_MISSING');await input.setInputFiles('/tmp/v6.png');const pub=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();if(!await pub.count())throw Error('PUBLISH_BUTTON_MISSING');
+          const draftP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>clean(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000});await pub.click();const draft=await draftP,dt=await text(draft);result.stages.draft={status:draft.status()};if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),id=String(dj.item?.id||'');if(!id)throw Error('DRAFT_ID_MISSING');result.vehicleId=id;const upload=await uploadP,ut=await text(upload);result.stages.upload={status:upload.status()};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);
+          const nav=await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:40000}).then(()=>true).catch(()=>false);if(!nav)throw Error(`NAV_TIMEOUT_${await p.locator('.statusMessage').first().textContent().catch(()=> '')}`);result.stages.navigation={ok:true};
+          const after=await p.evaluate(async()=>{const r=await fetch(`/api/inventory?after=${Date.now()}`,{credentials:'include',cache:'no-store'});return{status:r.status,text:await r.text()}});const aj=JSON.parse(after.text),item=(aj.items||[]).find(x=>x.id===id||x.stock===stock);result.stages.inventoryAfter={status:after.status,count:(aj.items||[]).length};if(after.status!==200||!item)throw Error(`AUTH_READBACK_MISSING_${after.status}_${after.text.slice(0,1000)}`);if(String(item.status).toLowerCase()!=='published')throw Error(`STATUS_${item.status}`);if(!(item.photoPathnames||[]).length)throw Error('PHOTO_PATH_MISSING');result.vehicle={id:item.id,status:item.status,photos:item.photoPathnames.length};
+          const publicResp=await fetch(`${store}/api/inventory?v6=${Date.now()}`,{cache:'no-store'}),publicText=await publicResp.text(),publicJson=JSON.parse(publicText);result.stages.publicInventory={status:publicResp.status,count:(publicJson.items||[]).length};if((publicJson.items||[]).some(x=>x.id===id||x.stock===stock))throw Error('QA_VEHICLE_PUBLIC');result.qaHiddenPublic=true;await p.screenshot({path:'/tmp/v6-dealer.png',fullPage:true});result.ok=true;fs.writeFileSync('/tmp/v6-result.json',JSON.stringify(result,null,2));}catch(e){result.error=String(e?.message||e);fs.writeFileSync('/tmp/v6-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+
+      - name: Cleanup disposable user vehicle and media
+        if: always() && steps.identity.outcome == 'success'
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/v6.env; set +a
+          cat > .wdcc-v6-clean.mjs <<'NODE'
+          import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(Buffer.concat(c).toString())}}throw Error('HOT')}for(let n=1;n<=4;n++){const before=await stable(),s=before.s,v=(s.vehicles||[]).filter(x=>String(x.stock||'')===stock),media=[...new Set(v.flatMap(x=>x.photoPathnames||[]).filter(Boolean))],users=s.users||[];s.users=users.filter(x=>x.id!==id);s.vehicles=(s.vehicles||[]).filter(x=>!v.some(y=>y.id===x.id));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,removedUsers:users.length-s.users.length,removedVehicles:v.length,removedMedia:media.length,stock}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<4)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-v6-clean.mjs | tee /tmp/v6-clean.json
+
+      - name: Publish staging evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          QA_URL: ${{ steps.candidate.outputs.url }}
+        run: |
+          result='not captured'; [ -f /tmp/v6-result.json ] && result="$(cat /tmp/v6-result.json)"
+          cleanup='not captured'; [ -f /tmp/v6-clean.json ] && cleanup="$(tail -1 /tmp/v6-clean.json)"
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Candidate: \`${QA_URL:-not-created}\`
+          UI origin: \`$UI_ORIGIN\`
+          API origin: \`$API_ORIGIN\`
+          Compatibility flag: \`global_fetch_strictly_public\`
+
+          Full lifecycle staging proof only. No live route binding, DNS change, Vercel alias movement, or storefront mutation.
+
+          Result:
+          \`\`\`json
+          $result
+          \`\`\`
+
+          Cleanup:
+          \`\`\`json
+          $cleanup
+          \`\`\`
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer frontdoor QA V6 ${GITHUB_RUN_ID}" --body "$body" || true
+
+      - name: Upload screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dealer-frontdoor-v6-${{ github.run_id }}
+          path: |
+            /tmp/v6-result.json
+            /tmp/v6-dealer.png
+          if-no-files-found: ignore
+          retention-days: 3
