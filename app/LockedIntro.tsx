@@ -10,8 +10,8 @@ export default function LockedIntro(){
   useEffect(()=>{
     if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setPhase("done");return}
     document.documentElement.classList.add("wdcc-intro-active");
-    const exit=window.setTimeout(()=>setPhase("exit"),1500);
-    const done=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},1820);
+    const exit=window.setTimeout(()=>setPhase("exit"),1760);
+    const done=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2080);
     return()=>{window.clearTimeout(exit);window.clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active")};
   },[]);
 
