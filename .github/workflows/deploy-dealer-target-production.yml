@@ -1,5 +1,5 @@
 name: WDCC Dealer Target Production
-# target-refresh: final-official-logo-target-v3
+# target-refresh: final-official-logo-target-v4
 
 on:
   push:
