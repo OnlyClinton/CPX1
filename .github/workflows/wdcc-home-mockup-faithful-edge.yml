@@ -12,17 +12,16 @@ permissions:
 
 concurrency:
   group: wdcc-home-mockup-faithful-edge
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   ORIGIN: https://www.wedontcarecars.com
   APEX: https://wedontcarecars.com
-  BRAND_HERO: https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -32,188 +31,46 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-
-      - name: Prove storefront origin and visual assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS "$ORIGIN/?mockup_preflight=$GITHUB_RUN_ID" -o /tmp/origin.html
-          grep -q 'intro-sequence' /tmp/origin.html
-          grep -q 'hero-copy' /tmp/origin.html
-          grep -q 'benefit-strip' /tmp/origin.html
-          grep -q 'inventory-showcase' /tmp/origin.html
-          curl -fsS "$ORIGIN/wdcc-logo-transparent.webp" -o /tmp/logo.webp
-          curl -fsS "$BRAND_HERO" -o /tmp/brand-hero.jpg
-          test -s /tmp/logo.webp
-          test -s /tmp/brand-hero.jpg
-
       - name: Install Wrangler
         run: npm install --global wrangler@4.90.0 >/dev/null
-
-      - name: Build mockup-faithful storefront Worker
+      - name: Build exact screenshot-faithful edge
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/wdcc-home-mockup
-          cat > /tmp/wdcc-home-mockup/worker.js <<'EOF'
-          const ORIGIN = "https://www.wedontcarecars.com";
-          const HERO = "https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/brand/hero.jpg";
-          const CSS = `
-          <style id="wdcc-mockup-faithful-edge">
-            :root{--wdcc-red:#ef202f;--wdcc-blue:#168af4;--wdcc-ink:#02060a;--wdcc-paper:#f4f4f2}
-            body{background:var(--wdcc-ink)!important}
-            .header-shell{background:#03080df2!important;border-bottom:1px solid #ffffff18!important;backdrop-filter:blur(16px)!important}
-            .utility-bar{height:30px!important;min-height:30px!important;padding:0 24px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;background:#020609!important;border-bottom:1px solid #ffffff10!important;color:#f4f7fa!important;font-size:9px!important;letter-spacing:.07em!important}
-            .site-header{height:78px!important;min-height:78px!important;padding:0 24px!important;display:grid!important;grid-template-columns:118px minmax(0,1fr) auto!important;align-items:center!important;gap:24px!important;background:#03080df4!important}
-            .logo-button{width:108px!important;height:76px!important;background:url('/wdcc-logo-transparent.webp') center/contain no-repeat!important;display:block!important;justify-self:start!important}
-            .logo-button>span{visibility:hidden!important}
-            .main-nav{display:flex!important;align-items:center!important;justify-content:center!important;gap:26px!important;color:#fff!important;font-size:11px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.025em!important}
-            .mobile-menu,.mobile-call{display:none!important}
-
-            .intro-scene{background-image:url('${HERO}')!important;background-position:64% center!important;background-size:cover!important;filter:saturate(1.08) contrast(1.06) brightness(.62)!important}
-            .intro-sequence:after{background:linear-gradient(90deg,#02060ae8 0,#02060a9c 37%,#02060a1f 72%),linear-gradient(0deg,#02060ab8 0,#0000 45%)!important}
-            .intro-badge{width:min(25vw,280px)!important}
-
-            .hero{min-height:640px!important;background-image:linear-gradient(90deg,#02060af2 0,#02060ad8 34%,#02060a5f 55%,#0000 75%),linear-gradient(0deg,#02060ac9 0,#0000 36%),url('${HERO}')!important;background-position:62% center!important;background-size:cover!important;background-repeat:no-repeat!important;display:block!important;position:relative!important}
-            .hero:after{background:linear-gradient(0deg,#02060abf 0,#0000 28%)!important;pointer-events:none!important}
-            .hero-copy{position:relative!important;z-index:3!important;width:min(660px,52vw)!important;padding:94px 0 64px 32px!important;margin-left:max(0px,calc((100vw - 1500px)/2))!important}
-            .hero-kicker{color:#56a8ee!important;letter-spacing:.13em!important;text-transform:uppercase!important;font-size:10px!important;font-weight:900!important;margin:0 0 14px!important}
-            .hero-kicker:before{content:'';display:inline-block;width:34px;height:2px;background:#d7a72d;margin-right:10px;vertical-align:middle}
-            .hero h1{color:var(--wdcc-red)!important;text-transform:uppercase!important;letter-spacing:-.055em!important;font-size:clamp(54px,6vw,90px)!important;line-height:.88!important;margin:0 0 18px!important;text-shadow:0 6px 24px #000c!important}
-            .hero h1 em{color:var(--wdcc-blue)!important;font-style:normal!important}
-            .hero h1 strong{color:#fff!important}
-            .hero-lead{color:#eef3f7!important;font-size:16px!important;line-height:1.5!important;max-width:520px!important;text-shadow:0 3px 14px #000!important}
-            .hero-actions{display:grid!important;grid-template-columns:1.12fr 1fr!important;gap:12px!important;max-width:560px!important;margin-top:24px!important}
-            .hero-actions .hero-cta-contact{display:none!important}
-            .hero-actions .hero-cta-test,.hero-actions .hero-cta-qualify{display:flex!important;align-items:center!important;justify-content:center!important;min-height:48px!important;border-radius:5px!important;font-size:11px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.035em!important}
-            .hero-actions .hero-cta-test{background:var(--wdcc-red)!important;color:#fff!important;border:1px solid var(--wdcc-red)!important}
-            .hero-actions .hero-cta-qualify{background:#09131dcc!important;color:#fff!important;border:1px solid #8da0b2!important}
-
-            .benefit-strip{position:relative!important;z-index:8!important;margin:-20px 16px 0!important;background:#fff!important;color:#101820!important;border:1px solid #dfe3e7!important;border-radius:10px!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;overflow:hidden!important;box-shadow:0 14px 36px #0003!important}
-            .benefit-strip article{min-height:94px!important;padding:18px 16px!important;display:grid!important;grid-template-columns:42px 1fr!important;align-items:center!important;gap:10px!important;border-right:1px solid #e0e4e8!important;background:#fff!important}
-            .benefit-strip article:last-child{border-right:0!important}
-            .benefit-strip .icon{width:36px!important;height:36px!important;border:2px solid var(--wdcc-red)!important;border-radius:50%!important;display:grid!important;place-items:center!important;color:var(--wdcc-red)!important;font-size:17px!important}
-            .benefit-strip strong{display:block!important;color:#111820!important;font-size:10px!important;font-weight:950!important;text-transform:uppercase!important}
-            .benefit-strip article span:not(.icon){display:block!important;color:#5f6973!important;font-size:9px!important;line-height:1.35!important;margin-top:3px!important}
-
-            .inventory-showcase{background:var(--wdcc-paper)!important;color:#101820!important;padding:46px 18px 54px!important}
-            .inventory-showcase .section-heading{max-width:1500px!important;margin:0 auto 20px!important}
-            .inventory-showcase .section-kicker{color:#636e79!important;text-transform:uppercase!important;font-size:10px!important;font-weight:900!important;letter-spacing:.08em!important}
-            .inventory-showcase h2{color:#101820!important;font-size:clamp(30px,4vw,48px)!important;letter-spacing:-.045em!important;margin:4px 0!important}
-            .inventory-showcase .section-deck,.inventory-showcase .text-link{color:#58616b!important}
-            .featured-carousel{max-width:1500px!important;margin:auto!important}
-            .featured-grid{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important}
-            .featured-slide{display:block!important}
-            .vehicle-card{background:#fff!important;color:#101820!important;border:1px solid #d6dde3!important;border-radius:8px!important;overflow:hidden!important;box-shadow:0 6px 18px #11182718!important}
-            .vehicle-image{display:block!important;aspect-ratio:4/3!important;background:#101820!important;overflow:hidden!important}
-            .vehicle-image img{width:100%!important;height:100%!important;object-fit:cover!important}
-            .vehicle-card-body{padding:12px!important;background:#fff!important}
-            .vehicle-card-body .eyebrow{color:#68727d!important;font-size:9px!important;letter-spacing:.08em!important}
-            .vehicle-title{color:#101820!important;font-size:14px!important;font-weight:950!important}
-            .vehicle-price{display:block!important;color:#101820!important;font-size:22px!important;margin-top:7px!important}
-            .vehicle-payment{color:#49545f!important;font-size:10px!important}
-            .spec-pills span{color:#3f4953!important;background:#f0f2f4!important;font-size:8px!important}
-            .carousel-arrow{background:#071522!important;color:#fff!important;border:0!important;border-radius:50%!important}
-
-            .how-section{background:#07131e!important;color:#fff!important;padding:52px 20px!important}
-            .how-section .section-heading,.how-section .steps-grid{max-width:1500px!important;margin-left:auto!important;margin-right:auto!important}
-            .how-section h2{color:#fff!important}.how-section h2 strong{color:var(--wdcc-red)!important}
-            .how-section .steps-grid article{background:#0d1b28!important;border:1px solid #263746!important;border-radius:8px!important}
-            .site-footer{background:#02060a!important}
-            .mobile-action-bar{display:none!important}
-
-            @media(max-width:900px){
-              .utility-bar{display:none!important}
-              .site-header{height:74px!important;min-height:74px!important;padding:0 14px!important;grid-template-columns:48px 1fr 48px!important;gap:8px!important}
-              .mobile-menu{grid-column:1!important;grid-row:1!important;display:grid!important;place-items:center!important;justify-self:start!important;width:44px!important;height:44px!important;border:0!important;background:transparent!important;color:#fff!important}
-              .mobile-menu>span{display:grid!important;width:22px!important;height:16px!important;align-content:space-between!important}.mobile-menu i{display:block!important;width:22px!important;height:2px!important;background:#fff!important;border-radius:2px!important}
-              .logo-button{grid-column:2!important;grid-row:1!important;justify-self:center!important;width:84px!important;height:68px!important}
-              .mobile-call{grid-column:3!important;grid-row:1!important;display:grid!important;place-items:center!important;justify-self:end!important;width:44px!important;height:44px!important;border-radius:50%!important;background:var(--wdcc-red)!important;color:#fff!important}
-              .mobile-call svg{width:22px!important;height:22px!important;fill:#fff!important}
-              .main-nav{position:absolute!important;z-index:520!important;top:74px!important;left:10px!important;right:10px!important;display:none!important;grid-template-columns:1fr 1fr!important;gap:2px!important;padding:8px!important;background:#07131ff8!important;border:1px solid #ffffff20!important;border-radius:12px!important;box-shadow:0 20px 50px #000d!important}.main-nav.open{display:grid!important}.main-nav a{min-height:44px!important;padding:0 12px!important;display:flex!important;align-items:center!important;color:#fff!important;font-size:10px!important}
-              .hero{min-height:650px!important;background-position:72% top!important;background-size:auto 650px!important}
-              .hero-copy{width:100%!important;margin:0!important;padding:300px 18px 30px!important;background:linear-gradient(0deg,#02060a 8%,#02060adb 55%,#02060a00 100%)!important}
-              .hero-kicker{font-size:9px!important;margin-bottom:10px!important}
-              .hero h1{font-size:clamp(45px,12.8vw,62px)!important;line-height:.9!important;margin-bottom:14px!important}
-              .hero-lead{font-size:14px!important;line-height:1.42!important}
-              .hero-actions{grid-template-columns:1fr!important;gap:9px!important;max-width:none!important;margin-top:18px!important}
-              .hero-actions .hero-cta-test,.hero-actions .hero-cta-qualify{min-height:46px!important}
-              .benefit-strip{margin:0!important;border-radius:0!important;grid-template-columns:1fr 1fr!important;box-shadow:none!important}
-              .benefit-strip article{min-height:92px!important;padding:13px 10px!important;border-bottom:1px solid #e0e4e8!important}
-              .benefit-strip article:nth-child(2){border-right:0!important}
-              .inventory-showcase{padding:28px 12px 36px!important}
-              .featured-grid{display:flex!important;gap:12px!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important}.featured-slide{min-width:78%!important;scroll-snap-align:start!important}.carousel-arrow{display:none!important}
-              .how-section{padding:40px 14px!important}.steps-grid{grid-template-columns:1fr 1fr!important}
-              .mobile-action-bar{z-index:650!important;position:fixed!important;bottom:0!important;left:0!important;right:0!important;display:grid!important;grid-template-columns:1fr 1fr!important;background:#050b11f8!important;border-top:1px solid #ffffff1c!important}.mobile-action-bar a{min-height:58px!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#fff!important;font-size:10px!important;font-weight:950!important;text-transform:uppercase!important}.mobile-action-bar a:first-child{background:var(--wdcc-red)!important}.mobile-action-bar a:nth-child(2){background:#0d1b28!important}.mobile-action-bar a:nth-child(3){display:none!important}
-              body{padding-bottom:58px!important}
-            }
-            @media(max-width:560px){
-              .site-header{height:70px!important;min-height:70px!important;padding:0 10px!important}.main-nav{top:70px!important}
-              .hero{min-height:620px!important;background-position:72% top!important;background-size:auto 620px!important}
-              .hero-copy{padding:285px 14px 26px!important}
-              .hero h1{font-size:clamp(43px,13.4vw,58px)!important}
-              .benefit-strip strong{font-size:9px!important}.benefit-strip article span:not(.icon){font-size:8px!important}.benefit-strip article{grid-template-columns:36px 1fr!important}.benefit-strip .icon{width:32px!important;height:32px!important}
-              .featured-slide{min-width:84%!important}.steps-grid{grid-template-columns:1fr!important}
-            }
+          mkdir -p /tmp/wdcc-reference-edge
+          cat > /tmp/wdcc-reference-edge/worker.js <<'EOF'
+          const ORIGIN='https://www.wedontcarecars.com';
+          const CSS=`<style id="wdcc-reference-lock">
+          :root{--r:#ef202f;--b:#168af4;--g:#d7a72d;--k:#02060a;--p:#f4f4f2;--i:#101820}*{box-sizing:border-box}html,body{margin:0!important;background:var(--k)!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif!important;color:#fff!important}a{color:inherit;text-decoration:none}img{display:block;max-width:100%}.refHome{min-height:100vh;background:var(--k);overflow-x:hidden}.refUtility{height:30px;background:#020609;border-bottom:1px solid #ffffff12}.refUtility>div,.refHead,.refHeroIn,.refSecHead,.refGrid,.refFinanceIn,.refTrust,.refFoot{width:min(1480px,calc(100% - 42px));margin:auto}.refUtility>div{height:100%;display:flex;align-items:center;gap:18px;font-size:9px;font-weight:900;letter-spacing:.07em;text-transform:uppercase}.refUtility span:last-child{margin-left:auto}.refUtility b{color:var(--r)}.refHeader{height:78px;background:#03080df5;border-bottom:1px solid #ffffff17;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px)}.refHead{height:100%;display:grid;grid-template-columns:118px minmax(0,1fr) auto;align-items:center;gap:24px}.refLogo{width:104px;height:72px;display:grid;place-items:center}.refLogo img{width:82px;height:82px;object-fit:contain}.refNav{display:flex;align-items:center;justify-content:center;gap:27px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.025em}.refHeadCta{min-height:42px;padding:0 19px;border-radius:5px;background:var(--r);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:950;text-transform:uppercase}.refMenu{display:none}.refHero{min-height:610px;position:relative;overflow:hidden;background-image:linear-gradient(90deg,#02060af4 0,#02060ad9 33%,#02060a58 55%,#0000 76%),linear-gradient(0deg,#02060abc 0,#0000 34%),url('/wdcc-hero-v2.webp');background-position:62% center;background-size:cover;background-repeat:no-repeat}.refHero:after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#02060aa8 0,#0000 31%);pointer-events:none}.refHeroIn{min-height:610px;position:relative;z-index:2;display:flex;align-items:center}.refCopy{width:min(620px,47vw);padding:54px 0 44px}.refKicker{margin:0 0 13px;color:#57a9ec;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.13em}.refKicker:before{content:"";display:inline-block;width:34px;height:2px;background:var(--g);margin-right:10px;vertical-align:middle}.refHero h1{margin:0 0 18px;text-transform:uppercase;font-size:clamp(54px,5.7vw,88px);line-height:.87;letter-spacing:-.058em;font-weight:1000;text-shadow:0 6px 24px #000d}.refHero h1 .red{color:var(--r)}.refHero h1 .blue{color:var(--b)}.refLead{max-width:520px;margin:0;color:#eef3f7;font-size:15px;line-height:1.5;font-weight:650}.refActions{display:flex;gap:11px;flex-wrap:wrap;margin-top:22px}.refBtn{min-height:47px;padding:0 20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.04em}.refBtn.red{background:var(--r)}.refBtn.dark{background:#09131dcc;border:1px solid #8295a7}.refPhone{display:flex;align-items:center;gap:8px;margin-top:17px;font-size:11px;font-weight:950;text-transform:uppercase}.refPhone b{color:var(--r)}.refBenefitWrap{background:#fff;color:var(--i)}.refBenefits{width:min(1460px,calc(100% - 30px));margin:-1px auto 0;position:relative;z-index:8;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #dfe3e7;border-radius:0 0 10px 10px;overflow:hidden;box-shadow:0 14px 36px #0002}.refBenefit{min-height:100px;padding:17px 18px;background:#fff;display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:12px;border-right:1px solid #e0e4e8}.refBenefit:last-child{border-right:0}.refIcon{width:38px;height:38px;border:2px solid var(--r);border-radius:50%;display:grid;place-items:center;color:var(--r);font-weight:1000}.refBenefit strong{display:block;font-size:10px;font-weight:950;text-transform:uppercase}.refBenefit small{display:block;margin-top:4px;color:#65717c;font-size:9px;line-height:1.35}.refInventory{background:var(--p);color:var(--i);padding:40px 20px 50px}.refSecHead{margin-bottom:18px;display:flex;align-items:end;justify-content:space-between;gap:22px}.refSecHead small{display:block;color:#65717c;font-size:9px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}.refSecHead h2{margin:4px 0;font-size:clamp(28px,3vw,42px);letter-spacing:-.045em}.refSecHead p{margin:0;color:#66717b;font-size:11px}.refViewAll{font-size:10px;font-weight:950;text-transform:uppercase}.refGrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.refCard{background:#fff;border:1px solid #d7dde2;border-radius:7px;overflow:hidden;box-shadow:0 6px 18px #11182714}.refPhoto{display:block;aspect-ratio:1.38;background:#101820;overflow:hidden;position:relative}.refPhoto img{width:100%;height:100%;object-fit:cover}.refBadge{position:absolute;top:7px;left:7px;padding:4px 6px;border-radius:2px;background:#159052;color:#fff;font-size:7px;font-weight:950;text-transform:uppercase}.refBody{padding:11px 11px 12px}.refEy{margin:0 0 4px;color:#68727d;font-size:8px;font-weight:900;text-transform:uppercase}.refTitle{display:block;min-height:31px;color:#101820;font-size:13px;font-weight:950;line-height:1.2}.refPrice{display:block;margin-top:7px;color:#101820;font-size:21px;font-weight:1000}.refPay{margin:2px 0 0;color:#59636d;font-size:9px}.refPills{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}.refPills span{padding:4px 6px;border-radius:2px;background:#f0f2f4;color:#444e58;font-size:7px;font-weight:900}.refFinance{background:#07131e;padding:45px 20px 48px}.refFinance h2{margin:0 0 17px;font-size:29px;letter-spacing:-.04em;text-transform:uppercase;font-style:italic}.refFinance h2 span{color:var(--r)}.refSteps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.refStep{min-height:142px;padding:18px;border:1px solid #263746;border-radius:7px;background:#0d1b28}.refStep b{width:32px;height:32px;border-radius:50%;background:var(--r);display:grid;place-items:center;margin-bottom:12px}.refStep strong{display:block;font-size:10px;text-transform:uppercase}.refStep small{display:block;margin-top:6px;color:#c6d0d8;font-size:9px;line-height:1.4}.refTrustWrap{background:#fff;color:var(--i);padding:0 18px 22px}.refTrust{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid #dce2e7;border-radius:0 0 10px 10px;overflow:hidden}.refTrust article{min-height:86px;padding:15px;display:flex;align-items:center;border-right:1px solid #e0e4e7}.refTrust article:last-child{border-right:0}.refTrust b{font-size:9px;text-transform:uppercase}.refTrust span{display:block;color:#66717c;font-size:8px;margin-top:3px}.refFooter{background:#02060a;padding:24px 20px;color:#9ba7b2}.refFoot{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:10px}
+          @media(max-width:1100px){.refNav{gap:17px;font-size:9px}.refGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.refCopy{width:min(580px,54vw)}}
+          @media(max-width:820px){.refUtility{display:none}.refHeader{height:70px}.refHead{width:100%;padding:0 12px;grid-template-columns:64px minmax(0,1fr) 48px;gap:6px}.refLogo{grid-column:1;justify-self:start;width:60px;height:66px}.refLogo img{width:58px;height:58px}.refMenu{grid-column:3;display:grid;place-items:center;width:44px;height:44px;border:1px solid #2b4354;border-radius:10px;background:#0a1823;color:#fff;font-size:24px;justify-self:end}.refHeadCta{display:none}.refNav{position:absolute;z-index:120;left:10px;right:10px;top:70px;display:none;grid-template-columns:1fr 1fr;gap:2px;padding:8px;background:#07131ff8;border:1px solid #ffffff20;border-radius:12px;box-shadow:0 20px 50px #000d}.refNav.open{display:grid}.refNav a{min-height:44px;padding:0 12px;display:flex;align-items:center;color:#fff;font-size:10px}.refHero{min-height:610px;background-position:70% top;background-size:auto 610px}.refHeroIn{width:100%;min-height:610px;align-items:flex-end}.refCopy{width:100%;padding:275px 14px 24px;background:linear-gradient(0deg,#02060a 8%,#02060ade 56%,#02060a00 100%)}.refHero h1{font-size:clamp(41px,13vw,56px);line-height:.9;margin-bottom:14px}.refLead{font-size:14px;line-height:1.42}.refActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:17px}.refBtn{min-height:46px;padding:0 12px;font-size:9px}.refPhone{display:none}.refBenefits{width:100%;margin:0;border-radius:0;grid-template-columns:repeat(4,minmax(0,1fr));box-shadow:none}.refBenefit{min-height:80px;padding:10px 6px;display:block;text-align:center}.refIcon{width:30px;height:30px;margin:0 auto 6px;font-size:13px}.refBenefit strong{font-size:7px}.refBenefit small{font-size:6.5px}.refInventory{padding:28px 12px 34px}.refGrid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px}.refCard{min-width:78%;scroll-snap-align:start}.refSteps{grid-template-columns:1fr 1fr}.refTrust{grid-template-columns:1fr 1fr}}
+          @media(max-width:520px){.refHeader{height:68px}.refNav{top:68px}.refHero{min-height:590px;background-position:70% top;background-size:auto 590px}.refHeroIn{min-height:590px}.refCopy{padding:262px 14px 22px}.refHero h1{font-size:clamp(40px,12.9vw,54px)}.refCard{min-width:82%}.refSteps{grid-template-columns:1fr}}
           </style>`;
-
+          const BODY=`<div class="refHome"><div class="refUtility"><div><span>⌖ Tampa Bay</span><span>›</span><span>In-house financing</span><span>›</span><span>Sean · <b>813-516-4752</b></span></div></div><header class="refHeader"><div class="refHead"><a class="refLogo" href="/"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"></a><nav class="refNav" id="refNav"><a href="/inventory">Inventory</a><a href="/financing">Financing</a><a href="#how">How it works</a><a href="/reviews">Reviews</a><a href="/about">About us</a></nav><a class="refHeadCta" href="/get-approved">Get pre-approved</a><button class="refMenu" id="refMenu" aria-label="Open menu">☰</button></div></header><section class="refHero"><div class="refHeroIn"><div class="refCopy"><p class="refKicker">Tampa Bay · Drive today</p><h1><span class="red">Bad credit?</span><br><span class="blue">No credit?</span><br>We don't care.</h1><p class="refLead">In-house financing. Low down payments.<br>Fast approvals. Straight answers.<br>Get on the road without the runaround.</p><div class="refActions"><a class="refBtn red" href="/get-approved">Get pre-approved →</a><a class="refBtn dark" href="/inventory">Browse inventory →</a></div><a class="refPhone" href="tel:+18135164752">☎ Call Sean <b>813-516-4752</b></a></div></div></section><section class="refBenefitWrap"><div class="refBenefits"><article class="refBenefit"><span class="refIcon">✓</span><div><strong>Fast approvals</strong><small>Quick, straightforward decisions.</small></div></article><article class="refBenefit"><span class="refIcon">$</span><div><strong>Low down payments</strong><small>Options designed around real buyers.</small></div></article><article class="refBenefit"><span class="refIcon">▣</span><div><strong>Drive today</strong><small>Move from interest to the road.</small></div></article><article class="refBenefit"><span class="refIcon">◇</span><div><strong>Build your credit</strong><small>Ask what programs may apply.</small></div></article></div></section><section class="refInventory"><div class="refSecHead"><div><small>Featured inventory</small><h2>Vehicles ready now.</h2><p>Cash price and down payment shown clearly.</p></div><a class="refViewAll" href="/inventory">View all inventory →</a></div><div class="refGrid"><article class="refCard"><a class="refPhoto" href="/inventory/2004-nissan-350z"><img src="/assets/cars/2004-nissan-350z-1.webp" alt="2004 Nissan 350Z"><span class="refBadge">Available</span></a><div class="refBody"><p class="refEy">2004 Nissan</p><a class="refTitle" href="/inventory/2004-nissan-350z">350Z</a><strong class="refPrice">$4,900</strong><p class="refPay">$2,000 down · 154,000 miles</p><div class="refPills"><span>Car</span><span>RWD</span></div></div></article><article class="refCard"><a class="refPhoto" href="/inventory/2016-ford-f150-limited"><img src="/assets/cars/2016-ford-f150-limited-1.webp" alt="2016 Ford F-150"><span class="refBadge">Available</span></a><div class="refBody"><p class="refEy">2016 Ford</p><a class="refTitle" href="/inventory/2016-ford-f150-limited">F-150 Limited</a><strong class="refPrice">$15,000</strong><p class="refPay">$6,000 down · 164,000 miles</p><div class="refPills"><span>Truck</span><span>Automatic</span></div></div></article><article class="refCard"><a class="refPhoto" href="/inventory/2019-honda-pilot"><img src="/assets/cars/2019-honda-pilot-1.webp" alt="2019 Honda Pilot"><span class="refBadge">Available</span></a><div class="refBody"><p class="refEy">2019 Honda</p><a class="refTitle" href="/inventory/2019-honda-pilot">Pilot</a><strong class="refPrice">$7,900</strong><p class="refPay">$3,000 down · 380,000 miles</p><div class="refPills"><span>SUV</span><span>Automatic</span></div></div></article><article class="refCard"><a class="refPhoto" href="/inventory/2019-kia-sportage"><img src="/assets/cars/2019-kia-sportage-1.webp" alt="2019 Kia Sportage"><span class="refBadge">Available</span></a><div class="refBody"><p class="refEy">2019 Kia</p><a class="refTitle" href="/inventory/2019-kia-sportage">Sportage</a><strong class="refPrice">$6,500</strong><p class="refPay">$2,500 down · 127,000 miles</p><div class="refPills"><span>SUV</span><span>Automatic</span></div></div></article><article class="refCard"><a class="refPhoto" href="/inventory/2019-toyota-rav4"><img src="/assets/cars/2019-toyota-rav4-1.webp" alt="2019 Toyota RAV4"><span class="refBadge">Available</span></a><div class="refBody"><p class="refEy">2019 Toyota</p><a class="refTitle" href="/inventory/2019-toyota-rav4">RAV4</a><strong class="refPrice">$10,500</strong><p class="refPay">$4,500 down · 240,000 miles</p><div class="refPills"><span>SUV</span><span>Automatic</span></div></div></article></div></section><section class="refFinance" id="how"><div class="refFinanceIn"><h2>In-house financing <span>made easy</span></h2><div class="refSteps"><article class="refStep"><b>1</b><strong>Apply online</strong><small>Send basic details securely.</small></article><article class="refStep"><b>2</b><strong>Talk to Sean</strong><small>Confirm down payment and vehicle fit.</small></article><article class="refStep"><b>3</b><strong>Choose your car</strong><small>Shop our inventory online or in person.</small></article><article class="refStep"><b>4</b><strong>Drive today</strong><small>Schedule pickup or a test drive.</small></article></div></div></section><section class="refTrustWrap"><div class="refTrust"><article><div><b>Tampa Bay proud</b><span>Local dealer. Local community.</span></div></article><article><div><b>Straight answers</b><span>No runaround. No hidden fees.</span></div></article><article><div><b>Real people</b><span>Talk to Sean. Not a call center.</span></div></article><article><div><b>In-house financing</b><span>We make it happen when others can't.</span></div></article></div></section><footer class="refFooter"><div class="refFoot"><span>WDCC · We Don't Care Cars</span><span>Serving Tampa Bay · Confirm availability before visiting</span><a href="tel:+18135164752">813-516-4752</a></div></footer><script>document.getElementById('refMenu')?.addEventListener('click',()=>document.getElementById('refNav')?.classList.toggle('open'));</script></div>`;
           function target(request){const incoming=new URL(request.url);const out=new URL(ORIGIN);out.pathname=incoming.pathname;out.search=incoming.search;return out;}
-          function rewriteLocation(headers,incoming){const location=headers.get('location');if(!location)return;try{const loc=new URL(location,ORIGIN);if(loc.hostname==='www.wedontcarecars.com'){loc.protocol='https:';loc.hostname=incoming.hostname;loc.port='';headers.set('location',loc.toString());}}catch{}}
-          async function originFetch(request){const incoming=new URL(request.url),headers=new Headers(request.headers);headers.set('x-forwarded-host',incoming.host);headers.set('x-forwarded-proto','https');headers.delete('cf-worker');const init={method:request.method,headers,redirect:'manual'};if(!['GET','HEAD'].includes(request.method))init.body=request.body;const response=await fetch(new Request(target(request).toString(),init));const outHeaders=new Headers(response.headers);rewriteLocation(outHeaders,incoming);return {response,outHeaders};}
-          class HeadInjector{element(el){el.append(CSS,{html:true});}}
-          export default{async fetch(request){const incoming=new URL(request.url);const {response,outHeaders}=await originFetch(request);if(incoming.pathname!=='/')return new Response(response.body,{status:response.status,statusText:response.statusText,headers:outHeaders});const type=response.headers.get('content-type')||'';if(!type.includes('text/html'))return new Response(response.body,{status:response.status,statusText:response.statusText,headers:outHeaders});const transformed=new HTMLRewriter().on('head',new HeadInjector()).transform(response);const rootHeaders=new Headers(transformed.headers);rewriteLocation(rootHeaders,incoming);rootHeaders.set('x-wdcc-edge','cloudflare-home-mockup-faithful');rootHeaders.set('x-wdcc-origin','www.wedontcarecars.com');rootHeaders.set('cache-control','no-store');return new Response(transformed.body,{status:transformed.status,statusText:transformed.statusText,headers:rootHeaders});}};
+          async function originFetch(request){const incoming=new URL(request.url),headers=new Headers(request.headers);headers.set('x-forwarded-host',incoming.host);headers.set('x-forwarded-proto','https');headers.delete('cf-worker');const init={method:request.method,headers,redirect:'manual'};if(!['GET','HEAD'].includes(request.method))init.body=request.body;const response=await fetch(new Request(target(request).toString(),init));return response;}
+          class Head{element(el){el.append(CSS,{html:true})}}class Body{element(el){el.setInnerContent(BODY,{html:true})}}
+          export default{async fetch(request){const incoming=new URL(request.url);const response=await originFetch(request);const outHeaders=new Headers(response.headers);const loc=outHeaders.get('location');if(loc){try{const u=new URL(loc,ORIGIN);if(u.hostname==='www.wedontcarecars.com'){u.hostname=incoming.hostname;u.protocol='https:';outHeaders.set('location',u.toString())}}catch{}}if(incoming.pathname!=='/'||(response.headers.get('content-type')||'').includes('text/html')===false)return new Response(response.body,{status:response.status,statusText:response.statusText,headers:outHeaders});const transformed=new HTMLRewriter().on('head',new Head()).on('body',new Body()).transform(response);const h=new Headers(transformed.headers);h.set('x-wdcc-reference-clone','1');h.set('cache-control','no-store,max-age=0');return new Response(transformed.body,{status:transformed.status,statusText:transformed.statusText,headers:h})}};
           EOF
-          cat > /tmp/wdcc-home-mockup/wrangler.jsonc <<'EOF'
-          {
-            "$schema":"node_modules/wrangler/config-schema.json",
-            "name":"wdcc-home-sleek-edge",
-            "main":"worker.js",
-            "compatibility_date":"2026-08-25",
-            "workers_dev":true,
-            "observability":{"enabled":true}
-          }
+          cat > /tmp/wdcc-reference-edge/wrangler.jsonc <<'EOF'
+          {"name":"wdcc-home-sleek-edge","main":"worker.js","compatibility_date":"2026-08-25","routes":[{"pattern":"wedontcarecars.com/*","zone_name":"wedontcarecars.com"}]}
           EOF
-
-      - name: Deploy and verify candidate
-        id: stage
-        working-directory: /tmp/wdcc-home-mockup
+      - name: Deploy canonical edge
+        working-directory: /tmp/wdcc-reference-edge
+        run: wrangler deploy
+      - name: Verify apex body replacement and pass-through
         shell: bash
         run: |
           set -euo pipefail
-          wrangler deploy 2>&1 | tee /tmp/wrangler.log
-          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler.log | tail -1 || true)"
-          test -n "$URL"
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-          for attempt in $(seq 1 20); do
-            code="$(curl -sS -D /tmp/candidate.h -o /tmp/candidate.html -w '%{http_code}' "$URL/?mockup=$GITHUB_RUN_ID&attempt=$attempt" || true)"
-            if [ "$code" = 200 ] && grep -q 'id="wdcc-mockup-faithful-edge"' /tmp/candidate.html && grep -q 'wdcc/brand/hero.jpg' /tmp/candidate.html && grep -qi '^x-wdcc-edge: cloudflare-home-mockup-faithful' /tmp/candidate.h; then break; fi
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -D /tmp/live.h -o /tmp/live.html -w '%{http_code}' "$APEX/?ref=$GITHUB_RUN_ID&attempt=$i" || true)"
+            if [ "$code" = 200 ] && grep -qi 'x-wdcc-reference-clone: 1' /tmp/live.h && grep -q 'refHome' /tmp/live.html && grep -q 'Browse inventory' /tmp/live.html; then ok=1; break; fi
             sleep 2
           done
-          test "$code" = 200
-          grep -q 'id="wdcc-mockup-faithful-edge"' /tmp/candidate.html
-          grep -q 'wdcc/brand/hero.jpg' /tmp/candidate.html
-
-      - name: Bind apex route
-        working-directory: /tmp/wdcc-home-mockup
-        shell: bash
-        run: |
-          set -euo pipefail
-          node - <<'NODE'
-          const fs=require('fs');const p='wrangler.jsonc';const c=JSON.parse(fs.readFileSync(p,'utf8'));c.routes=[{pattern:'wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
-          NODE
-          wrangler deploy
-          sleep 5
-
-      - name: Double verify live apex
-        shell: bash
-        run: |
-          set -euo pipefail
-          for round in 1 2; do
-            curl -fsS -D "/tmp/live-$round.h" -o "/tmp/live-$round.html" "$APEX/?intro=1&mockup=$GITHUB_RUN_ID&round=$round"
-            grep -qi '^x-wdcc-edge: cloudflare-home-mockup-faithful' "/tmp/live-$round.h"
-            grep -q 'id="wdcc-mockup-faithful-edge"' "/tmp/live-$round.html"
-            grep -q 'wdcc/brand/hero.jpg' "/tmp/live-$round.html"
-            grep -q 'intro-sequence' "/tmp/live-$round.html"
-            sleep 2
-          done
-          echo 'WDCC_HOME_MOCKUP_FAITHFUL=PASS'
+          test "$ok" = 1
+          curl -fsS "$APEX/inventory?ref=$GITHUB_RUN_ID" -o /tmp/inventory.html
+          test -s /tmp/inventory.html
+          curl -fsS "$APEX/wdcc-logo-transparent.webp" -o /tmp/logo.webp
+          test -s /tmp/logo.webp
+          echo 'WDCC_REFERENCE_EDGE_LIVE=PASS'
