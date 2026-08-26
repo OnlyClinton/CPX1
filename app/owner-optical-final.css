@@ -121,7 +121,7 @@ html body main.reference-home.locked-storefront .rh-footer-inner{font-size:11.5p
   html body main.reference-home.locked-storefront .rh-card{flex-basis:86vw!important;min-width:86vw!important;max-width:86vw!important}
 }
 
-@media(min-width:1366px) and (min-device-width:1100px) and (hover:hover) and (pointer:fine){
+@media(min-width:1366px){
   html body main.reference-home.locked-storefront{--wdcc-utility:30px;--wdcc-header:96px;--wdcc-stack:126px}
   html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{width:min(1280px,calc(100% - 48px))!important;margin:0 auto!important;padding:0!important;justify-content:space-between!important;overflow:visible!important;font-size:11px!important}
   html body main.reference-home.locked-storefront>.rh-header>.rh-header-inner{width:min(1280px,calc(100% - 48px))!important;margin:0 auto!important;padding:0!important;grid-template-columns:160px minmax(0,1fr) auto!important;gap:28px!important}
