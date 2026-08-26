@@ -1,0 +1,79 @@
+name: WDCC Direct Phoenix Lead Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-direct-phoenix-lead-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-direct-phoenix-lead-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      API: https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install cleanup runtime
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: POST three leads directly to immutable Phoenix
+        id: post
+        shell: bash
+        run: |
+          set -euo pipefail
+          : >/tmp/ids
+          for spec in 'schedule schedule-test-drive' 'approval get-approved' 'contact call-sean'; do
+            set -- $spec; k="$1"; s="$2"; key="wdcc-qa-direct-${k}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            body="$(jq -nc --arg k "$k" --arg s "$s" --arg r "$GITHUB_RUN_ID" '{qa:true,kind:$k,name:("WDCC QA DIRECT PHOENIX "+$k+" "+$r),phone:"813-555-0196",email:("direct-"+$k+"-"+$r+"@invalid.example"),vehicleInterest:"Direct immutable Phoenix probe",message:"Automated WDCC contract verification",consent:true,source:$s,pagePath:("/qa/direct-"+$k)}')"
+            code="$(curl -sS -D "/tmp/${k}.h" -o "/tmp/${k}.json" -w '%{http_code}' -H 'content-type: application/json' -H "Idempotency-Key: $key" -X POST "$API/api/leads" --data "$body")"
+            echo "$k=$code"
+            cat "/tmp/${k}.json"
+            case "$code" in 200|201);;*) exit 1;; esac
+            jq -e '.ok==true and .persisted==true and .item.id!=null and .qa==true' "/tmp/${k}.json" >/dev/null
+            jq -r '.item.id' "/tmp/${k}.json" >>/tmp/ids
+          done
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+      - name: Cleanup direct probe leads
+        if: always()
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LEAD_IDS="$(paste -sd, /tmp/ids 2>/dev/null || true)"
+          cat > .direct-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',ids=new Set((process.env.LEAD_IDS||'').split(',').filter(Boolean));async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=6;n++){const b=await stable(),s=b.s,l=(s.leads||[]).length,now=new Date().toISOString();s.leads=(s.leads||[]).filter(x=>!ids.has(x.id));s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.direct_phoenix_lead_probe.cleanup',actor:'github-actions',leadCount:ids.size});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:b.etag});console.log(JSON.stringify({ok:true,removedLeads:l-s.leads.length,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .direct-clean.mjs | tee /tmp/clean.log
+          grep -q '"ok":true' /tmp/clean.log
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Report direct probe
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          POST_OK: ${{ steps.post.outputs.ok }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC direct Phoenix lead probe $GITHUB_RUN_ID" --body "Overall: **$STATUS**\nThree direct immutable Phoenix QA lead POSTs: **${POST_OK:-false}**\nCleanup: **${CLEAN:-false}**\n\nThis bypasses storefront and Cloudflare customer routing entirely." || true
