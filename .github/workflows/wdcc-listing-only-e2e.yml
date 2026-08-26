@@ -138,37 +138,45 @@ jobs:
               const page=await context.newPage();
 
               page.on('request',r=>{
-                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'request',method:r.method(),url:cleanUrl(r.url())});
+                if(/\/api\/(?:auth|upload|inventory)/.test(r.url())) result.trace.push({event:'request',method:r.method(),url:cleanUrl(r.url())});
               });
               page.on('response',r=>{
-                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'response',method:r.request().method(),url:cleanUrl(r.url()),status:r.status()});
+                if(/\/api\/(?:auth|upload|inventory)/.test(r.url())) result.trace.push({event:'response',method:r.request().method(),url:cleanUrl(r.url()),status:r.status()});
               });
               page.on('requestfailed',r=>{
-                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'failed',method:r.method(),url:cleanUrl(r.url()),failure:r.failure()?.errorText||''});
+                if(/\/api\/(?:auth|upload|inventory)/.test(r.url())) result.trace.push({event:'failed',method:r.method(),url:cleanUrl(r.url()),failure:r.failure()?.errorText||''});
               });
 
+              // Do not depend on the login page's client-side redirect. The auth API and
+              // resulting cookie are the contract needed by every protected dealer route.
               await page.goto(`${dealer}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});
-              const username=page.locator('input[autocomplete="username"]').first();
-              const password=page.locator('input[autocomplete="current-password"]').first();
-              await username.waitFor({state:'visible',timeout:20000});
-              await password.waitFor({state:'visible',timeout:20000});
-              await username.fill(process.env.DEALER_EMAIL);
-              await password.fill(process.env.QA_PASSWORD);
-              await page.getByRole('button',{name:'SIGN IN'}).click();
-              await page.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
+              const login=await page.evaluate(async({email,password})=>{
+                const r=await fetch('/api/auth/login',{
+                  method:'POST',
+                  credentials:'include',
+                  headers:{'content-type':'application/json'},
+                  body:JSON.stringify({email,username:email,password})
+                });
+                return {status:r.status,body:await r.text()};
+              },{email:process.env.DEALER_EMAIL,password:process.env.QA_PASSWORD});
+              result.stages.login={status:login.status,body:login.body};
+              if(login.status!==200) throw Error(`LOGIN_HTTP_${login.status}_${login.body}`);
 
               const session=await page.evaluate(async()=>{
                 const r=await fetch('/api/auth/session',{cache:'no-store',credentials:'include'});
                 return {status:r.status,body:await r.text()};
               });
-              result.stages.login={ok:true,url:page.url(),sessionStatus:session.status};
-              if(session.status!==200 || !JSON.parse(session.body).authenticated) throw Error(`SESSION_NOT_AUTHENTICATED_${session.status}_${session.body}`);
+              result.stages.session={status:session.status,body:session.body};
+              let sessionJson={};
+              try{sessionJson=JSON.parse(session.body)}catch{}
+              if(session.status!==200 || sessionJson.authenticated!==true) throw Error(`SESSION_NOT_AUTHENTICATED_${session.status}_${session.body}`);
 
               await page.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});
+              result.stages.addVehicleRoute={ok:true,url:page.url()};
 
               async function fill(name,value){
                 let x=page.locator(`input[name="${name}"]`).first();
-                if(name==='description') x=page.locator('label.description textarea, textarea').first();
+                if(name==='description') x=page.locator('textarea[name="description"], label.description textarea, textarea').first();
                 await x.waitFor({state:'visible',timeout:20000});
                 await x.fill(value,{force:true});
               }
@@ -182,15 +190,16 @@ jobs:
               await fill('mileage','54321');
               await fill('stock',stock);
               await fill('description',`Temporary QA-isolated upload probe ${run}`);
-              result.stages.form={ok:true,descriptionSelector:'label.description textarea, textarea'};
+              result.stages.form={ok:true};
 
               const fileInput=page.locator('input[type=file][multiple]').first();
               if(!await fileInput.count()) throw Error('MULTI_FILE_INPUT_MISSING');
               await fileInput.setInputFiles('/tmp/listing.png');
 
-              const publish=page.locator('button[type="submit"][name="intent"][value="published"]:visible').first();
+              let publish=page.locator('button[type="submit"][name="intent"][value="published"]:visible').first();
+              if(!await publish.count()) publish=page.getByRole('button',{name:/publish(?:\s+vehicle|\s*\/\s*submit)?/i}).first();
               if(!await publish.count()) throw Error('VISIBLE_PUBLISH_BUTTON_MISSING');
-              result.stages.publishButton={ok:true,count:await page.locator('button[type="submit"][name="intent"][value="published"]').count()};
+              result.stages.publishButton={ok:true};
 
               const draftPromise=page.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/inventory' && r.request().method()==='POST',{timeout:20000});
               const uploadPromise=page.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/upload' && r.request().method()==='POST',{timeout:40000}).catch(()=>null);
@@ -210,11 +219,10 @@ jobs:
 
               const upload=await uploadPromise;
               if(!upload){
-                const status=String(await page.locator('.statusMessage').first().textContent().catch(()=>''));
+                const status=String(await page.locator('.statusMessage,[role="status"]').first().textContent().catch(()=>''));
                 result.stages.upload={status:null,statusMessage:status};
                 throw Error(`UPLOAD_REQUEST_NOT_OBSERVED_${status}`);
               }
-
               const uploadBody=await bodyOf(upload);
               result.stages.upload={status:upload.status(),body:uploadBody};
               if(!upload.ok()) throw Error(`UPLOAD_HTTP_${upload.status()}_${uploadBody}`);
@@ -224,7 +232,7 @@ jobs:
                 page.waitForTimeout(40000).then(()=>false)
               ]);
               if(!nav){
-                const status=String(await page.locator('.statusMessage').first().textContent().catch(()=>''));
+                const status=String(await page.locator('.statusMessage,[role="status"]').first().textContent().catch(()=>''));
                 result.stages.navigation={ok:false,statusMessage:status,url:page.url()};
                 throw Error(`PUBLISH_NAVIGATION_TIMEOUT_${status}`);
               }
@@ -240,7 +248,6 @@ jobs:
               const dealerJson=JSON.parse(dealerInv.text);
               const item=(dealerJson.items||[]).find(v=>v.id===vehicleId || v.stock===stock);
               if(!item) throw Error(`VEHICLE_NOT_IN_AUTHENTICATED_DEALER_INVENTORY_${dealerInv.text.slice(0,1000)}`);
-
               result.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames||[],primaryPhotoPathname:item.primaryPhotoPathname||null};
               if(String(item.status).toLowerCase()!=='published') throw Error(`VEHICLE_STATUS_${item.status}`);
               if(!(item.photoPathnames||[]).length) throw Error('VEHICLE_PHOTO_PATH_MISSING');
@@ -279,7 +286,6 @@ jobs:
 
           cat > .wdcc-cleanup.mjs <<'NODE'
           import {get,head,put,del,BlobPreconditionFailedError} from '@vercel/blob';
-
           const path='private/state/platform-v3.json';
           const dealerId=process.env.DEALER_ID;
           const stock=process.env.STOCK;
@@ -335,7 +341,7 @@ jobs:
           body=$(cat <<EOF
           Status: **$STATUS**
 
-          Test-harness-only change. No Vercel alias, DNS, Cloudflare route, apex/www, or dealer routing mutation.
+          API-authenticated isolated listing proof. No Vercel alias, DNS, Cloudflare route, apex/www, or dealer routing mutation.
 
           Result:
           \`\`\`json
