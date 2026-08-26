@@ -1,0 +1,142 @@
+/* WDCC 8.5 mockup lock — loaded last, preview branch only. */
+
+/* Horizontal WDCC wordmark matching the approved boards. */
+.screenshotContract .wdcc-wordmark{
+  display:inline-flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:center!important;
+  width:max-content!important;
+  min-width:0!important;
+  line-height:1!important;
+  color:#fff!important;
+  filter:drop-shadow(0 7px 16px rgba(0,0,0,.6));
+}
+.screenshotContract .wdcc-mark{
+  display:flex!important;
+  align-items:baseline!important;
+  white-space:nowrap!important;
+  font-family:Impact,"Arial Black",system-ui,sans-serif!important;
+  font-size:37px!important;
+  font-weight:1000!important;
+  font-style:italic!important;
+  line-height:.78!important;
+  letter-spacing:-.075em!important;
+  transform:skewX(-4deg);
+}
+.screenshotContract .wdcc-mark b,
+.screenshotContract .wdcc-mark i{font:inherit!important;line-height:inherit!important}
+.screenshotContract .wdcc-mark b{color:#fff!important}
+.screenshotContract .wdcc-mark i{color:#ed1c2e!important;font-style:italic!important}
+.screenshotContract .wdcc-wordmark small{
+  display:block!important;
+  margin-top:5px!important;
+  padding-left:2px!important;
+  color:#fff!important;
+  white-space:nowrap!important;
+  font-size:6.8px!important;
+  font-weight:950!important;
+  line-height:1!important;
+  letter-spacing:.075em!important;
+}
+.screenshotContract .logo-button{overflow:visible!important}
+.screenshotContract .logo-button .wdcc-wordmark{transform:translateY(1px)}
+
+/* Footer wordmark replaces the crest-style mark. */
+.screenshotContract .screenshotFooter>.wdcc-wordmark{width:142px!important}
+.screenshotContract .screenshotFooter>.wdcc-wordmark .wdcc-mark{font-size:34px!important}
+.screenshotContract .screenshotFooter>.wdcc-wordmark small{font-size:6.2px!important}
+
+/* Keep the desktop hero copy/car split close to the approved frame. */
+@media(min-width:901px){
+  .screenshotContract .screenshotHero{background-position:70% center!important}
+  .screenshotContract .hero-copy{max-width:645px!important}
+  .screenshotContract .hero h1 strong{white-space:nowrap!important}
+}
+
+/* Mobile approved rhythm: image first, then copy on a clean dark field. */
+@media(max-width:900px){
+  .screenshotContract .logo-button .wdcc-wordmark{
+    align-items:center!important;
+    transform:none!important;
+  }
+  .screenshotContract .wdcc-mark{font-size:31px!important}
+  .screenshotContract .wdcc-wordmark small{font-size:5.7px!important;letter-spacing:.06em!important}
+
+  .screenshotContract .screenshotHero{
+    min-height:690px!important;
+    background-color:#050c12!important;
+    background-size:auto 300px!important;
+    background-position:72% top!important;
+    background-repeat:no-repeat!important;
+  }
+  .screenshotContract .screenshotHero:after{
+    background:radial-gradient(circle at 70% 18%,rgba(29,153,255,.11),transparent 28%)!important;
+    mix-blend-mode:screen!important;
+  }
+  .screenshotContract .screenshotHero .hero-shade{
+    background:linear-gradient(180deg,
+      rgba(3,8,13,.03) 0,
+      rgba(3,8,13,.05) 160px,
+      rgba(5,12,18,.22) 220px,
+      rgba(5,12,18,.82) 285px,
+      #050c12 330px,
+      #050c12 100%)!important;
+  }
+  .screenshotContract .hero-car-glow{
+    background:radial-gradient(circle at 71% 26%,rgba(255,255,255,.10),transparent 30%)!important;
+  }
+  .screenshotContract .hero-copy{
+    left:18px!important;
+    right:18px!important;
+    top:287px!important;
+    bottom:auto!important;
+    width:auto!important;
+    max-width:none!important;
+    transform:none!important;
+    padding:0!important;
+  }
+  .screenshotContract .hero-kicker{
+    margin:0 0 7px!important;
+    color:#8ecbff!important;
+    font-size:10px!important;
+    letter-spacing:.095em!important;
+  }
+  .screenshotContract .hero h1{
+    margin:0 0 12px!important;
+    max-width:350px!important;
+    font-size:clamp(40px,11.5vw,53px)!important;
+    line-height:.92!important;
+    letter-spacing:-.045em!important;
+  }
+  .screenshotContract .hero h1 strong{white-space:normal!important}
+  .screenshotContract .hero-lead{
+    max-width:340px!important;
+    margin:0!important;
+    font-size:13.5px!important;
+    line-height:1.4!important;
+  }
+  .screenshotContract .screenshotHeroActions{
+    width:100%!important;
+    max-width:430px!important;
+    margin-top:15px!important;
+    gap:7px!important;
+  }
+  .screenshotContract .screenshotHeroActions .btn{min-height:45px!important}
+  .screenshotContract .screenshotCallSean{margin-top:9px!important;min-height:32px!important}
+
+  /* Allow the mockup content to finish above the sticky dock. */
+  .screenshotContract .screenshotFooter{padding-bottom:86px!important}
+}
+
+@media(max-width:420px){
+  .screenshotContract .screenshotHero{
+    min-height:675px!important;
+    background-size:auto 285px!important;
+    background-position:72% top!important;
+  }
+  .screenshotContract .hero-copy{top:272px!important}
+  .screenshotContract .hero h1{font-size:43px!important}
+  .screenshotContract .hero-lead{font-size:13px!important}
+  .screenshotContract .wdcc-mark{font-size:29px!important}
+}
