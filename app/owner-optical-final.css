@@ -1,5 +1,18 @@
 /* WDCC final optical sizing layer. Loaded last; visual-only. */
 
+/* Kill late rectangular/wordmark treatments and render the real round badge. */
+.locked-storefront .rh-logo{display:grid!important;place-items:center!important;justify-content:center!important;background:transparent!important;overflow:visible!important}
+.locked-storefront .rh-logo:before,.locked-storefront .rh-logo:after{display:none!important;content:none!important;background:none!important;box-shadow:none!important;border:0!important}
+.locked-storefront .rh-logo img{
+  content:url('/wdcc-official-logo.webp')!important;
+  display:block!important;
+  max-width:none!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+}
+
 /* Desktop: use viewport width, not hover capability, to avoid accidental tablet/desktop hybrids. */
 @media(min-width:1101px){
   .locked-storefront .rh-header{height:90px!important;min-height:90px!important}
