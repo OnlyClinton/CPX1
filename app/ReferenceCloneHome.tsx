@@ -139,7 +139,7 @@ export default function ReferenceCloneHome(){
        <p className="rh-kicker">Tampa Bay · Drive today</p>
        <h1 aria-label="Bad credit? No credit? We don't care."><span className="red">Bad credit?</span><span className="blue">No credit?</span><span className="white">We don't care.</span></h1>
        <p className="rh-lead">In-house financing. Low down payments.<br/>Fast approvals. Straight answers.<br/>Get on the road without the runaround.</p>
-       <div className="rh-hero-actions"><Link className="rh-btn red" href="/inventory">Browse cars →</Link><Link className="rh-btn dark" href="/get-approved?source=hero-get-approved">Get approved →</Link></div>
+       <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link><Link className="rh-btn dark" href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY</Link></div>
        <a className="rh-phone" href="tel:+18135164752">Call Sean <b>813-516-4752</b></a>
      </div></div>
    </section>
