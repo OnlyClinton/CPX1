@@ -1,0 +1,23 @@
+name: WDCC Dealer Final Proof Dispatch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-final-proof-dispatch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch authenticated final target proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run wdcc-dealer-final-target-proof.yml --repo "$GITHUB_REPOSITORY" --ref main
