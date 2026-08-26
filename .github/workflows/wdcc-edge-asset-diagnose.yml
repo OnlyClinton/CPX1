@@ -48,8 +48,7 @@ jobs:
           echo '=== INVENTORY ==='
           INV_CODE="$(curl -sS -L -D /tmp/inv.h -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?edge-diag=$GITHUB_RUN_ID" || true)"
           echo "INV_CODE=$INV_CODE INV_BYTES=$(wc -c </tmp/inventory.json 2>/dev/null || echo 0)"
-          head -c 500 /tmp/inventory.json || true
-          echo
+          jq -c '(.items // .inventory // [])[] | {id,year,make,model,photoPathnames,primaryPhotoPathname,primary_image_url,image}' /tmp/inventory.json || true
 
           echo '=== DEALER ==='
           DEALER_CODE="$(curl -sS -L -D /tmp/dealer.h -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?edge-diag=$GITHUB_RUN_ID" || true)"
