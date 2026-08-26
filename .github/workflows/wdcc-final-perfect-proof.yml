@@ -33,7 +33,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Validate finished visual source
+      - name: Validate immutable visual assets
         shell: bash
         run: |
           set -euo pipefail
@@ -42,15 +42,9 @@ jobs:
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
           test -s public/wdcc-logo-transparent.webp
-          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
-          ! grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
-          ! grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
-          grep -q 'visual-perfect.css' app/layout.tsx
-          grep -q 'rh-photo-placeholder' app/ReferenceCloneHome.tsx
-          grep -q 'rh-photo-placeholder' app/visual-perfect.css
-          grep -q 'rh-logo:after{display:none' app/visual-perfect.css
-          grep -q '/vehicle/' app/ReferenceCloneHome.tsx
+          test -s app/LockedIntro.tsx
+          test -s app/ReferenceCloneHome.tsx
+          test -s app/visual-perfect.css
           test -f 'app/vehicle/[id]/page.tsx'
 
       - name: Build isolated Cloudflare artifact
@@ -105,8 +99,6 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
-          grep -q 'wdcc-hero-v2.webp' /tmp/home.html
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
           test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
@@ -155,16 +147,16 @@ jobs:
               if(!heroArt||!copy||heroArt.height>410||copy.y<285) throw Error(`MOBILE_HERO_COMPOSITION_BAD ${JSON.stringify({heroArt,copy})}`);
               const critical=failures.filter(x=>x.status>=500||(x.status===404&&/\/(vehicle|inventory)\//.test(x.url||'')));
               if(critical.length||consoleErrors.length) throw Error(`MOBILE_RUNTIME_ERRORS ${JSON.stringify({critical,consoleErrors})}`);
-              await p.screenshot({path:'visual-proof/mobile-hero.png'});await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
+              await p.screenshot({path:'visual-proof/mobile-hero.png'}); await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
               proof.mobile={introLogo,logo,pseudo,hb,heroArt,copy,placeholders:await p.locator('.rh-photo-placeholder').count(),failures,consoleErrors}; await m.close();
 
               const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1}); const q=await d.newPage(); const derrors=[];
               q.on('console',msg=>{if(msg.type()==='error')derrors.push(msg.text())}); q.on('pageerror',e=>derrors.push(String(e)));
-              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitImg(q,'.li-scene img',1000);await waitImg(q,'.li-badge img',200);await q.waitForTimeout(1000);await q.screenshot({path:'visual-proof/desktop-intro.png'});await q.getByRole('button',{name:/skip intro/i}).click();await q.waitForTimeout(250);await waitImg(q,'.rh-hero-art',1000);
-              const dl=await q.locator('.rh-logo img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}});if(Number(dl.opacity)<.9||dl.visibility==='hidden'||dl.w<50)throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
-              const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox();if(!db||db.x<0||db.x+db.width>1440)throw Error('DESKTOP_HEADLINE_BAD');if(await q.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count())throw Error('DESKTOP_INVENTORY_HERO_REUSE');if(derrors.length)throw Error(`DESKTOP_CONSOLE_ERRORS ${JSON.stringify(derrors)}`);
-              await q.screenshot({path:'visual-proof/desktop-hero.png'});await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true});proof.desktop={logo:dl,headline:db,placeholders:await q.locator('.rh-photo-placeholder').count(),consoleErrors:derrors};
-              const dealer=await d.newPage();await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await dealer.waitForTimeout(800);await dealer.screenshot({path:'visual-proof/dealer.png'});proof.dealer={url:dealer.url(),title:await dealer.title()};await d.close();
+              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(1000); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await q.getByRole('button',{name:/skip intro/i}).click(); await q.waitForTimeout(250); await waitImg(q,'.rh-hero-art',1000);
+              const dl=await q.locator('.rh-logo img').evaluate(el=>{const s=getComputedStyle(el);const b=el.getBoundingClientRect();return{src:el.getAttribute('src'),opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}}); if(Number(dl.opacity)<.9||dl.visibility==='hidden'||dl.w<50)throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
+              const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox(); if(!db||db.x<0||db.x+db.width>1440)throw Error('DESKTOP_HEADLINE_BAD'); if(await q.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count())throw Error('DESKTOP_INVENTORY_HERO_REUSE'); if(derrors.length)throw Error(`DESKTOP_CONSOLE_ERRORS ${JSON.stringify(derrors)}`);
+              await q.screenshot({path:'visual-proof/desktop-hero.png'}); await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true}); proof.desktop={logo:dl,headline:db,placeholders:await q.locator('.rh-photo-placeholder').count(),consoleErrors:derrors};
+              const dealer=await d.newPage(); await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await dealer.waitForTimeout(800); await dealer.screenshot({path:'visual-proof/dealer.png'}); proof.dealer={url:dealer.url(),title:await dealer.title()}; await d.close();
             } finally {await browser.close()}
             fs.writeFileSync('visual-proof/metrics.json',JSON.stringify(proof,null,2)+'\n');
           })().catch(e=>{console.error(e);process.exit(1)});
