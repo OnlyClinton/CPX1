@@ -62,3 +62,5 @@ jobs:
           git add public/wdcc-hero-v2.webp
           git commit -m 'fix(wdcc): restore canonical 8AR Tampa Challenger hero'
           git push origin HEAD:fix/wdcc-locked-contract-20260826
+
+# canonical-8ar-recovery-trigger: 2026-08-26T17:34Z
