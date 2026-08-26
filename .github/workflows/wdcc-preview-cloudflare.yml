@@ -35,7 +35,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Validate locked visual inputs
+      - name: Validate current visual authority
         shell: bash
         run: |
           set -euo pipefail
@@ -44,29 +44,36 @@ jobs:
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
           test -s public/wdcc-official-logo.webp
-          test -s public/wdcc-logo-transparent.webp
+          test -s app/LockedIntro.tsx
+          test -s app/ReferenceCloneHome.tsx
+          test -s app/owner-visual-polish.css
+          test -s app/owner-visual-hotfix.css
+          test -s app/owner-optical-final.css
+          test -f 'app/vehicle/[id]/page.tsx'
           grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
           grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
           grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'owner-visual-polish.css' app/layout.tsx
+          grep -q 'owner-visual-hotfix.css' app/layout.tsx
+          grep -q 'owner-optical-final.css' app/layout.tsx
           ! grep -q 'brand-hero-final.css' app/layout.tsx
-          ! grep -q 'owner-optical-final.css' app/layout.tsx
           ! grep -q 'preview-visual-corrections.css' app/layout.tsx
+          ! grep -q 'li-dock' app/LockedIntro.tsx
+          grep -q 'animation:none' app/LockedIntro.tsx
           grep -q 'rh-photo-placeholder' app/ReferenceCloneHome.tsx
           grep -q '/vehicle/' app/ReferenceCloneHome.tsx
-          test -f 'app/vehicle/[id]/page.tsx'
 
       - name: Build Cloudflare artifact
         shell: bash
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
           test -d .open-next/assets
+          npx playwright install --with-deps chromium >/dev/null
 
       - name: Create isolated Worker config
         shell: bash
@@ -120,13 +127,6 @@ jobs:
           jq -e '((.items // .inventory // []) | length) >= 1' /tmp/inventory.json >/dev/null
           test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?proof=$GITHUB_RUN_ID")" = 200
 
-      - name: Install browser for visual proof
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium >/dev/null
-
       - name: Capture and validate desktop/mobile visual proof
         env:
           URL: ${{ steps.deploy.outputs.url }}
@@ -142,67 +142,47 @@ jobs:
             if(!url) throw Error('PREVIEW_URL_MISSING');
             const browser=await chromium.launch({headless:true});
             const evidence={preview:url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{},dealer:{}};
-            const waitImg=async(p,s,w=100)=>{
-              await p.locator(s).waitFor({state:'visible',timeout:12000});
-              await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return !!i&&i.complete===true&&Number(i.naturalWidth||0)>=w},{s,w},{timeout:12000});
-            };
-            const waitIntroDone=async p=>{
-              const intro=p.locator('.li');
-              if(await intro.count()) await intro.waitFor({state:'detached',timeout:5000}).catch(async()=>{if(await intro.count()) await p.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:1500}).catch(()=>{})});
-              await p.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});
-            };
+            const waitImg=async(p,s,w=100)=>{await p.locator(s).waitFor({state:'visible',timeout:12000});await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return !!i&&i.complete===true&&Number(i.naturalWidth||0)>=w},{s,w},{timeout:12000});};
+            const waitIntroDone=async p=>{const intro=p.locator('.li');if(await intro.count())await intro.waitFor({state:'detached',timeout:5000}).catch(async()=>{if(await intro.count())await p.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:1500}).catch(()=>{})});await p.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});};
             try{
               const m=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-              const p=await m.newPage();
-              const failures=[]; const consoleErrors=[];
+              const p=await m.newPage(); const failures=[]; const consoleErrors=[];
               p.on('response',r=>{if(r.status()>=400)failures.push({status:r.status(),url:r.url()})});
               p.on('requestfailed',r=>failures.push({failed:r.url(),error:r.failure()?.errorText}));
               p.on('console',msg=>{if(msg.type()==='error')consoleErrors.push(msg.text())});
               p.on('pageerror',e=>consoleErrors.push(String(e)));
               await p.goto(`${url}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await waitImg(p,'.li-scene img',1000); await waitImg(p,'.li-badge img',200); await p.waitForTimeout(650);
-              const intro=await p.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el),b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,clipPath:s.clipPath,opacity:s.opacity,visibility:s.visibility,w:b.width,h:b.height}});
-              if(!intro.src.includes('wdcc-official-logo.webp')||!String(intro.clipPath).includes('circle')||Number(intro.opacity)<.9||intro.visibility==='hidden'||intro.w<120) throw Error(`INTRO_BADGE_BAD ${JSON.stringify(intro)}`);
+              const intro=await p.evaluate(()=>{const el=document.querySelector('.li-badge img'),scene=document.querySelector('.li-scene img'),s=getComputedStyle(el),ss=getComputedStyle(scene),b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,clipPath:s.clipPath,opacity:s.opacity,w:b.width,badgeAnimation:s.animationName,badgeTransition:s.transitionDuration,sceneAnimation:ss.animationName,sceneTransform:ss.transform}});
+              if(!intro.src.includes('wdcc-official-logo.webp')||!String(intro.clipPath).includes('circle')||Number(intro.opacity)<.9||intro.w<120) throw Error(`INTRO_BADGE_BAD ${JSON.stringify(intro)}`);
+              if(intro.badgeAnimation!=='none'||intro.sceneAnimation!=='none'||(intro.sceneTransform!=='none'&&!String(intro.sceneTransform).includes('matrix(1'))) throw Error(`INTRO_MOTION_ACTIVE ${JSON.stringify(intro)}`);
               await p.screenshot({path:'visual-proof/mobile-intro.png'});
-              await waitIntroDone(p);
-              await waitImg(p,'.rh-hero-art',1000); await waitImg(p,'.rh-logo img',200);
-              const layout=await p.evaluate(()=>{
-                const q=s=>document.querySelector(s), style=s=>q(s)?getComputedStyle(q(s)):null, rect=s=>q(s)?.getBoundingClientRect();
-                return {viewport:innerWidth,headerPosition:style('.rh-header')?.position,utilityPosition:style('.rh-utility')?.position,menuDisplay:style('.rh-menu')?.display,gridDisplay:style('.rh-grid')?.display,cardWidth:rect('.rh-card')?.width||0,headerLogoWidth:rect('.rh-logo img')?.width||0,headerLogoSrc:q('.rh-logo img')?.currentSrc||q('.rh-logo img')?.src||'',utilityTop:rect('.rh-utility')?.top,headerTop:rect('.rh-header')?.top,utilityHeight:rect('.rh-utility')?.height};
-              });
-              if(!layout.headerLogoSrc.includes('wdcc-official-logo.webp')||layout.headerLogoWidth<70) throw Error(`MOBILE_HEADER_LOGO_BAD ${JSON.stringify(layout)}`);
-              if(layout.menuDisplay==='none'||layout.gridDisplay!=='flex'||layout.cardWidth>360) throw Error(`MOBILE_COMPOSITION_BAD ${JSON.stringify(layout)}`);
-              if(!['fixed','sticky'].includes(layout.headerPosition)||!['fixed','sticky'].includes(layout.utilityPosition)) throw Error(`MOBILE_PINNING_MODE_BAD ${JSON.stringify(layout)}`);
-              if(Math.abs(Number(layout.utilityTop||0))>2||Math.abs(Number(layout.headerTop||0)-Number(layout.utilityHeight||0))>3) throw Error(`MOBILE_STACK_TOP_BAD ${JSON.stringify(layout)}`);
-              await p.evaluate(()=>scrollTo(0,650)); await p.waitForTimeout(150);
-              const after=await p.evaluate(()=>{const u=document.querySelector('.rh-utility')?.getBoundingClientRect(),h=document.querySelector('.rh-header')?.getBoundingClientRect();return{utilityTop:u?.top,utilityHeight:u?.height,headerTop:h?.top}});
-              if(Math.abs(Number(after.utilityTop||0))>2||Math.abs(Number(after.headerTop||0)-Number(after.utilityHeight||0))>3) throw Error(`MOBILE_STACK_NOT_PINNED_AFTER_SCROLL ${JSON.stringify(after)}`);
+              await waitIntroDone(p); await waitImg(p,'.rh-hero-art',1000); await waitImg(p,'.rh-logo img',200);
+              const before=await p.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>getComputedStyle(q(s)),r=s=>q(s).getBoundingClientRect();return{logoSrc:q('.rh-logo img').currentSrc||q('.rh-logo img').src,logoW:r('.rh-logo img').width,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card').width,utilityDisplay:st('.rh-utility').display,utilityH:r('.rh-utility').height,utilityTop:r('.rh-utility').top,headerTop:r('.rh-header').top,headerPosition:st('.rh-header').position,utilityPosition:st('.rh-utility').position}});
+              if(!before.logoSrc.includes('wdcc-official-logo.webp')||before.logoW<88||before.menu==='none'||before.grid!=='flex'||before.cardW>360) throw Error(`MOBILE_LAYOUT_BAD ${JSON.stringify(before)}`);
+              if(before.utilityDisplay==='none'||before.utilityH<24) throw Error(`MOBILE_UTILITY_COLLAPSED ${JSON.stringify(before)}`);
+              if(!['fixed','sticky'].includes(before.headerPosition)||!['fixed','sticky'].includes(before.utilityPosition)) throw Error(`MOBILE_PIN_MODE_BAD ${JSON.stringify(before)}`);
+              await p.evaluate(()=>scrollTo(0,700)); await p.waitForTimeout(180);
+              const after=await p.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top}});
+              if(Math.abs(after.uTop)>2||after.uH<24||Math.abs(after.hTop-after.uH)>3) throw Error(`MOBILE_STACK_NOT_PINNED ${JSON.stringify(after)}`);
               await p.evaluate(()=>scrollTo(0,0)); await p.waitForTimeout(100);
-              const h1=p.locator('.rh-copy h1'); const hb=await h1.boundingBox();
-              if(await h1.locator('span').count()!==3||!hb||hb.x<0||hb.x+hb.width>390) throw Error(`MOBILE_HEADLINE_BAD ${JSON.stringify(hb)}`);
-              const hero=await p.locator('.rh-hero-art').boundingBox(); const copy=await p.locator('.rh-copy').boundingBox();
-              if(!hero||!copy||hero.height>420||copy.height>500) throw Error(`MOBILE_HERO_SCALE_BAD ${JSON.stringify({hero,copy})}`);
+              const h1=p.locator('.rh-copy h1'),hb=await h1.boundingBox(); if(await h1.locator('span').count()!==3||!hb||hb.x<0||hb.x+hb.width>390) throw Error(`MOBILE_HEADLINE_BAD ${JSON.stringify(hb)}`);
+              const hero=await p.locator('.rh-hero-art').boundingBox(),copy=await p.locator('.rh-copy').boundingBox(); if(!hero||!copy||hero.height>420||copy.height>500) throw Error(`MOBILE_SCALE_BAD ${JSON.stringify({hero,copy})}`);
               if(await p.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count()) throw Error('INVENTORY_HERO_REUSE');
               if(await p.locator('.rh-card a[href*="/vehicle/"]').count()<1) throw Error('VEHICLE_LINKS_MISSING');
               const critical=failures.filter(x=>x.status>=500||(x.status===404&&/\/(vehicle|inventory)\//.test(x.url||'')));
               if(critical.length||consoleErrors.length) throw Error(`MOBILE_RUNTIME_ERRORS ${JSON.stringify({critical,consoleErrors})}`);
               await p.screenshot({path:'visual-proof/mobile-hero.png'}); await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-              evidence.mobile={intro,layout,after,headline:hb,hero,copy,failures,consoleErrors};
-              await m.close();
+              evidence.mobile={intro,before,after,headline:hb,hero,copy,failures,consoleErrors}; await m.close();
 
-              const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-              const q=await d.newPage();
+              const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1}); const q=await d.newPage();
               await q.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(650); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await waitIntroDone(q); await waitImg(q,'.rh-hero-art',1000); await waitImg(q,'.rh-logo img',200);
-              const dl=await q.locator('.rh-logo img').evaluate(el=>{const b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,w:b.width,h:b.height}});
-              if(!dl.src.includes('wdcc-official-logo.webp')||dl.w<80) throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
+              const dl=await q.locator('.rh-logo img').evaluate(el=>{const b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,w:b.width,h:b.height}}); if(!dl.src.includes('wdcc-official-logo.webp')||dl.w<88) throw Error(`DESKTOP_HEADER_LOGO_BAD ${JSON.stringify(dl)}`);
               const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox(); if(!db||db.x<0||db.x+db.width>1440) throw Error(`DESKTOP_HEADLINE_BAD ${JSON.stringify(db)}`);
-              const desktopLayout=await q.evaluate(()=>({grid:getComputedStyle(document.querySelector('.rh-grid')).display,menu:getComputedStyle(document.querySelector('.rh-menu')).display}));
-              if(desktopLayout.grid!=='grid'||desktopLayout.menu!=='none') throw Error(`DESKTOP_COMPOSITION_BAD ${JSON.stringify(desktopLayout)}`);
-              await q.screenshot({path:'visual-proof/desktop-hero.png'}); await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true});
-              evidence.desktop={logo:dl,headline:db,layout:desktopLayout};
-              const dealer=await d.newPage(); await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await dealer.waitForTimeout(800); await dealer.screenshot({path:'visual-proof/dealer.png'}); evidence.dealer={url:dealer.url(),title:await dealer.title()};
-              await d.close();
+              const desktopLayout=await q.evaluate(()=>({grid:getComputedStyle(document.querySelector('.rh-grid')).display,menu:getComputedStyle(document.querySelector('.rh-menu')).display})); if(desktopLayout.grid!=='grid'||desktopLayout.menu!=='none') throw Error(`DESKTOP_COMPOSITION_BAD ${JSON.stringify(desktopLayout)}`);
+              await q.screenshot({path:'visual-proof/desktop-hero.png'}); await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true}); evidence.desktop={logo:dl,headline:db,layout:desktopLayout};
+              const dealer=await d.newPage(); await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await dealer.waitForTimeout(800); await dealer.screenshot({path:'visual-proof/dealer.png'}); evidence.dealer={url:dealer.url(),title:await dealer.title()}; await d.close();
             } finally { await browser.close(); }
             fs.writeFileSync('visual-proof/metrics.json',JSON.stringify(evidence,null,2)+'\n');
           })().catch(e=>{console.error(e);process.exit(1)});
@@ -214,17 +194,11 @@ jobs:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
-          {
-            echo '### WDCC Cloudflare visual gate'
-            echo
-            echo "Preview: ${URL:-not-created}"
-            echo "Candidate SHA: $GITHUB_SHA"
-            echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Official round badge is rendered in intro and header.'
-            echo 'Pinned utility/header behavior is verified before and after scroll.'
-            echo 'Mobile carousel and mobile breakpoint are behaviorally verified.'
-            echo 'Production domains, aliases, DNS and production routes remain unchanged.'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo '### WDCC Cloudflare visual gate' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Static intro, large round badge, pinned utility/header stack, mobile carousel and normalized scale verified.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production routes, aliases and DNS unchanged.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
