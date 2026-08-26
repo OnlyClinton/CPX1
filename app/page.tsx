@@ -1,3 +1,3 @@
-import ReferenceCloneHome from "./ReferenceCloneHome";
+import Exact2vfDHome from "./Exact2vfDHome";
 
-export default function Home(){return <ReferenceCloneHome/>}
+export default function Home(){return <Exact2vfDHome/>}
