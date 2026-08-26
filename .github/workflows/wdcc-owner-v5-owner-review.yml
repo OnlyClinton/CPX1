@@ -1,0 +1,196 @@
+name: WDCC Owner V5 Exact Review
+
+on:
+  push:
+    branches:
+      - freeze/wdcc-owner-v5-20260826
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-v5-exact-review
+  cancel-in-progress: true
+
+env:
+  SNAPSHOT_FLAG: verified-real-20260826-2159
+  EXPECTED_HERO_SIZE: '145504'
+  EXPECTED_HERO_SHA256: 1d7a0e4fced7450f2bbc66443d44b1f35bd9e24a6366308362aafa65576d3eb2
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard V5 source and preview-only fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          grep -q 'owner-review-v5.css' app/layout.tsx
+          grep -q 'owner-review-v5-final.css' app/layout.tsx
+          grep -q 'V5_VISUAL_SNAPSHOT_FLAG' lib/v5InventorySnapshot.ts
+          grep -q 'verified-v5-snapshot' app/api/inventory/route.ts
+          grep -q 'verified-v5-snapshot' 'app/api/inventory/[id]/route.ts'
+          test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+
+      - name: Build exact V5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Configure isolated owner-review Worker
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name='wdcc-owner-v5-exact-review';
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          cfg.vars={...(cfg.vars||{}),WDCC_VISUAL_SNAPSHOT:process.env.SNAPSHOT_FLAG};
+          delete cfg.route; delete cfg.routes;
+          fs.writeFileSync('wrangler.v5-owner-review.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.v5-owner-review.jsonc
+          grep -q "$SNAPSHOT_FLAG" wrangler.v5-owner-review.jsonc
+
+      - name: Deploy isolated owner-review Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.v5-owner-review.jsonc 2>&1 | tee /tmp/v5-owner-review.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/v5-owner-review.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > preview-url.txt
+
+      - name: Verify preview-only real inventory fallback
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?owner-review=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+          jq -e '.ok==true and .count==5 and .snapshot==true and (.items|length)==5' /tmp/inventory.json >/dev/null
+          jq -e '.items[0].id=="recovered-2004-nissan-350z" and .items[0].price==4900 and .items[0].mileage==154000' /tmp/inventory.json >/dev/null
+
+      - name: Capture exact owner review packet
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p owner-review-proof
+          node - <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          (async()=>{
+            const base=process.env.URL;
+            const browser=await chromium.launch({headless:true});
+            const out={url:base,sha:process.env.GITHUB_SHA,mobile:{},desktop:{}};
+            const r=(el)=>el?.getBoundingClientRect?.();
+            const style=(el)=>el?getComputedStyle(el):null;
+            const waitIntro=async p=>{const li=p.locator('.li');if(await li.count())await li.waitFor({state:'detached',timeout:7000});};
+            try{
+              const mc=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+              async function mobilePage(path,name,ready){
+                const p=await mc.newPage();
+                await p.goto(`${base}${path}${path.includes('?')?'&':'?'}owner-review=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+                if(name==='home')await waitIntro(p);
+                await p.locator(ready).first().waitFor({state:'visible',timeout:15000});
+                await p.waitForTimeout(650);
+                const common=await p.evaluate(()=>({scrollW:document.documentElement.scrollWidth,innerW:innerWidth}));
+                if(common.scrollW>common.innerW+2)throw Error(`${name.toUpperCase()}_OVERFLOW ${JSON.stringify(common)}`);
+                await p.screenshot({path:`owner-review-proof/mobile-${name}.png`,fullPage:true});
+                return p;
+              }
+
+              const home=await mobilePage('/','home','.rh-copy h1');
+              const homeMetrics=await home.evaluate(()=>{
+                const q=s=>document.querySelector(s),rr=s=>q(s)?.getBoundingClientRect?.(),st=s=>q(s)?getComputedStyle(q(s)):null;
+                const actions=[...document.querySelectorAll('.rh-hero-actions>a')].sort((a,b)=>(parseFloat(getComputedStyle(a).order)||0)-(parseFloat(getComputedStyle(b).order)||0));
+                return{utilityH:rr('.rh-utility')?.height,headerH:rr('.rh-header')?.height,logoW:rr('.rh-logo img')?.width,heroH:rr('.rh-hero-art')?.height,h1:parseFloat(st('.rh-copy h1')?.fontSize||'0'),benefitH:rr('.rh-benefit')?.height,h2:parseFloat(st('.rh-section-head h2')?.fontSize||'0'),cardW:rr('.rh-card')?.width,finance:parseFloat(st('.finance-heading h2')?.fontSize||'0'),stepH:rr('.rh-step')?.height,trustH:rr('.rh-trust-grid article')?.height,firstAction:actions[0]?.getAttribute('href')||'',firstBg:actions[0]?getComputedStyle(actions[0]).backgroundColor:'',inventoryCards:document.querySelectorAll('.rh-card').length};
+              });
+              if(homeMetrics.utilityH>24||homeMetrics.headerH>72||homeMetrics.logoW<78||homeMetrics.logoW>90)throw Error(`HOME_HEADER ${JSON.stringify(homeMetrics)}`);
+              if(homeMetrics.heroH<300||homeMetrics.heroH>330||homeMetrics.h1<39||homeMetrics.h1>43)throw Error(`HOME_HERO ${JSON.stringify(homeMetrics)}`);
+              if(homeMetrics.benefitH>84||homeMetrics.h2<27||homeMetrics.h2>31||homeMetrics.cardW<280||homeMetrics.cardW>305||homeMetrics.inventoryCards<4)throw Error(`HOME_SECTIONS ${JSON.stringify(homeMetrics)}`);
+              if(homeMetrics.finance<25||homeMetrics.finance>30||homeMetrics.stepH>82||homeMetrics.trustH>68)throw Error(`HOME_LOWER ${JSON.stringify(homeMetrics)}`);
+              if(!homeMetrics.firstAction.startsWith('/get-approved')||!homeMetrics.firstBg.includes('242'))throw Error(`HOME_CTA ${JSON.stringify(homeMetrics)}`);
+              await home.evaluate(()=>scrollTo(0,700));await home.waitForTimeout(100);
+              const pin=await home.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top}});
+              if(Math.abs(pin.uTop)>2||Math.abs(pin.hTop-pin.uH)>3)throw Error(`HOME_PIN ${JSON.stringify(pin)}`);
+              out.mobile.home={...homeMetrics,pin};await home.close();
+
+              const inventory=await mobilePage('/inventory','inventory','.grid .card');
+              const inventoryMetrics=await inventory.evaluate(()=>{const q=s=>document.querySelector(s),rr=s=>q(s)?.getBoundingClientRect?.(),st=s=>q(s)?getComputedStyle(q(s)):null;return{commandH:rr('.commandStrip')?.height,headerH:rr('.premiumHeader')?.height,logoW:rr('.logoBrand img')?.width,title:parseFloat(st('.inventoryTop h1')?.fontSize||'0'),cards:document.querySelectorAll('.grid .card').length,photoH:rr('.grid .card .photo')?.height,stickyH:rr('.stickyCtaBar')?.height}});
+              if(inventoryMetrics.commandH>24||inventoryMetrics.headerH>72||inventoryMetrics.logoW<74||inventoryMetrics.logoW>86||inventoryMetrics.title>52||inventoryMetrics.cards<4||inventoryMetrics.stickyH>56)throw Error(`INVENTORY ${JSON.stringify(inventoryMetrics)}`);
+              out.mobile.inventory=inventoryMetrics;await inventory.close();
+
+              const approved=await mobilePage('/get-approved','approved','.leadForm');
+              const approvedMetrics=await approved.evaluate(()=>{const q=s=>document.querySelector(s),rr=s=>q(s)?.getBoundingClientRect?.(),st=s=>q(s)?getComputedStyle(q(s)):null;return{commandH:rr('.commandStrip')?.height,headerH:rr('.premiumHeader')?.height,logoW:rr('.logoBrand img')?.width,title:parseFloat(st('.leadPage>h1')?.fontSize||'0'),formTop:rr('.leadForm')?.top,stickyH:rr('.stickyCtaBar')?.height}});
+              if(approvedMetrics.commandH>24||approvedMetrics.headerH>72||approvedMetrics.logoW<74||approvedMetrics.logoW>86||approvedMetrics.title>48||approvedMetrics.formTop>520||approvedMetrics.stickyH>56)throw Error(`APPROVED ${JSON.stringify(approvedMetrics)}`);
+              out.mobile.approved=approvedMetrics;await approved.close();
+
+              const vdp=await mobilePage('/vehicle/recovered-2004-nissan-350z','vdp','.vdp-title');
+              const vdpMetrics=await vdp.evaluate(()=>{const q=s=>document.querySelector(s),rr=s=>q(s)?.getBoundingClientRect?.(),st=s=>q(s)?getComputedStyle(q(s)):null;const ph=rr('.vdp-photo');return{commandH:rr('.commandStrip')?.height,headerH:rr('.premiumHeader')?.height,logoW:rr('.logoBrand img')?.width,title:parseFloat(st('.vdp-title')?.fontSize||'0'),price:parseFloat(st('.vdp-price')?.fontSize||'0'),ratio:ph?ph.width/ph.height:0,stickyH:rr('.stickyCtaBar')?.height,actions:st('.vdp-actions')?.display}});
+              if(vdpMetrics.commandH>24||vdpMetrics.headerH>72||vdpMetrics.logoW<74||vdpMetrics.logoW>86||vdpMetrics.title<35||vdpMetrics.title>41||vdpMetrics.price<34||vdpMetrics.price>42||vdpMetrics.ratio<1.5||vdpMetrics.ratio>1.75||vdpMetrics.stickyH>56||vdpMetrics.actions!=='none')throw Error(`VDP ${JSON.stringify(vdpMetrics)}`);
+              out.mobile.vdp=vdpMetrics;await vdp.close();await mc.close();
+
+              const dc=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});const d=await dc.newPage();
+              await d.goto(`${base}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitIntro(d);await d.locator('.rh-card').first().waitFor({state:'visible',timeout:15000});
+              const desktop=await d.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>q(s)?getComputedStyle(q(s)):null,rr=s=>q(s)?.getBoundingClientRect?.();return{nav:st('.rh-nav')?.display,menu:st('.rh-menu')?.display,grid:st('.rh-grid')?.display,h1:parseFloat(st('.rh-copy h1')?.fontSize||'0'),logoW:rr('.rh-logo img')?.width,cards:document.querySelectorAll('.rh-card').length,scrollW:document.documentElement.scrollWidth,innerW:innerWidth}});
+              if(desktop.nav!=='flex'||desktop.menu!=='none'||desktop.grid!=='grid'||desktop.h1<60||desktop.logoW<88||desktop.cards<4||desktop.scrollW>desktop.innerW+2)throw Error(`DESKTOP ${JSON.stringify(desktop)}`);
+              await d.screenshot({path:'owner-review-proof/desktop-home.png',fullPage:true});out.desktop=desktop;await dc.close();
+            }finally{await browser.close()}
+            fs.writeFileSync('owner-review-proof/metrics.json',JSON.stringify(out,null,2)+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Publish exact owner review
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          echo '### WDCC Owner V5 Exact Review' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Inventory fallback: verified real-data snapshot, isolated Worker only.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production untouched.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-v5-exact-review
+          path: |
+            preview-url.txt
+            owner-review-proof/
+          if-no-files-found: warn
+          retention-days: 7
