@@ -1,0 +1,55 @@
+name: WDCC Dealer Frontdoor Watchdog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-watchdog.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '7,37 * * * *'
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-frontdoor-watchdog
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect route drift and self-heal only when needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEALER='https://dealer.wedontcarecars.com'
+          drift=0
+
+          api_code="$(curl -sS -D /tmp/api.h -o /tmp/api.json -w '%{http_code}' "$DEALER/api/health?watchdog=$GITHUB_RUN_ID" || true)"
+          [ "$api_code" = 200 ] || drift=1
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority"' /tmp/api.json >/dev/null 2>&1 || drift=1
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-target-v3' /tmp/api.h || drift=1
+          grep -qi '^x-wdcc-origin: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' /tmp/api.h || drift=1
+
+          ui_code="$(curl -sS -D /tmp/ui.h -L -o /tmp/ui.html -w '%{http_code}' "$DEALER/dealer?watchdog=$GITHUB_RUN_ID" || true)"
+          [ "$ui_code" = 200 ] || drift=1
+          grep -q 'RUN YOUR DEALERSHIP' /tmp/ui.html || drift=1
+          grep -q 'targetDealerLogin' /tmp/ui.html || drift=1
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-target-v3' /tmp/ui.h || drift=1
+          grep -qi '^x-wdcc-origin: wdcc-dealer-portal.vercel.app' /tmp/ui.h || drift=1
+
+          if [ "$drift" = 0 ]; then
+            echo 'WDCC dealer frontdoor healthy; no mutation.'
+            exit 0
+          fi
+
+          gh workflow run wdcc-dealer-target-frontdoor-v3.yml --repo "$GITHUB_REPOSITORY" --ref main
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "WDCC dealer frontdoor drift detected ${GITHUB_RUN_ID}" \
+            --body "Watchdog detected dealer frontdoor drift and dispatched the canonical Target V3 self-heal. Expected UI origin: wdcc-dealer-portal.vercel.app. Expected API origin: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app. Customer storefront routing was not modified by the watchdog." || true
