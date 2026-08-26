@@ -1,0 +1,126 @@
+name: WDCC Dev Cinematic Preview
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/wdcc-dev-cinematic-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dev-cinematic-preview
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  verify-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Type/build gate
+        run: npm run build
+      - name: Start local production build
+        shell: bash
+        run: |
+          nohup npm start -- -p 3000 >/tmp/wdcc-dev.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:3000/ >/tmp/home.html && break
+            sleep 1
+          done
+          test -s /tmp/home.html
+          grep -q 'wdcc-app' /tmp/home.html
+      - name: Install browser verifier
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Capture desktop/mobile visual proof
+        shell: bash
+        run: |
+          mkdir -p visual-proof
+          cat > /tmp/capture.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true});
+          async function capture(name,width,height){
+            const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
+            await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'networkidle'});
+            await page.screenshot({path:`visual-proof/${name}-intro.png`,fullPage:false});
+            const intro=await page.locator('[data-wdcc-intro="challenger-tampa-v1"]').count();
+            if(!intro) throw new Error(`${name}: cinematic intro missing`);
+            await page.waitForTimeout(3900);
+            await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
+            const checks={
+              logo:await page.locator('.header-logo-image').count(),
+              hero:await page.locator('.screenshotHero').count(),
+              primary:await page.locator('.hero-cta-test').count(),
+              secondary:await page.locator('.hero-cta-qualify').count(),
+              inventory:await page.locator('.screenshotInventory').count()
+            };
+            if(Object.values(checks).some(v=>v<1)) throw new Error(`${name}: mockup contract missing ${JSON.stringify(checks)}`);
+            await page.close();
+          }
+          await capture('desktop',1440,1000);
+          await capture('mobile',390,844);
+          await browser.close();
+          NODE
+          node /tmp/capture.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-cinematic-visual-proof
+          path: visual-proof/*.png
+          retention-days: 7
+      - name: Require preview deployment credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: test -n "$VERCEL_TOKEN"
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+      - name: Link preview project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build preview artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy preview only
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          printf '%s\n' "$url" | tee preview-url.txt
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-cinematic-preview-url
+          path: preview-url.txt
+          retention-days: 7
+      - name: Summary
+        run: |
+          echo '### WDCC dev cinematic preview' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production aliases were not touched.' >> "$GITHUB_STEP_SUMMARY"
