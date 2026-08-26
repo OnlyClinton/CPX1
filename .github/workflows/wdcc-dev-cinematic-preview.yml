@@ -35,6 +35,11 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      - name: Exact recovered 2vfD asset gate
+        shell: bash
+        run: |
+          test "$(git hash-object public/wdcc-hero-v2.webp)" = "f75ea69f3aee373bb4e3ee393d37290836266127"
+          test "$(git hash-object public/wdcc-logo-transparent.webp)" = "983e6fffee3786712b8878594ceb79495ac5a891"
       - name: Type/build gate
         run: npm run build
       - name: Start local production build
@@ -153,8 +158,13 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
-          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log | grep -Eo 'https://[^ ]+\.vercel\.app' | tail -1)"
-          test -n "$url"
+          set -o pipefail
+          vercel deploy --prebuilt --yes --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
+          url="$(tr -d '\r' </tmp/vercel-preview.log | sed -E $'s/\x1B\[[0-9;]*[A-Za-z]//g' | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -1)"
+          if [ -z "$url" ]; then
+            echo 'Preview URL not found in Vercel output.' >&2
+            exit 1
+          fi
           printf '%s\n' "$url" | tee preview-url.txt
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
