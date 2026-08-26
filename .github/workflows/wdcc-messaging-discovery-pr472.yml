@@ -1,0 +1,30 @@
+name: WDCC Messaging Discovery PR472
+
+on:
+  push:
+    branches: [fix/wdcc-visual-inventory-closeout-20260826]
+    paths:
+      - '.github/workflows/wdcc-messaging-discovery-pr472.yml'
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  PHOENIX_PROJECT: wdcc-cpx-launch
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover supported messaging integrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          vercel link --yes --project="$PHOENIX_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          echo '--- messaging discovery ---'
+          vercel integration discover --category messaging --format=json --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
