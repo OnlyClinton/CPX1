@@ -1,0 +1,17 @@
+/* Desktop-only correction for PR #494 visual acceptance lane.
+ * Restores desktop navigation and 3-column featured inventory at true desktop widths.
+ * No mobile, routing, backend, provider, or production changes.
+ */
+@media (min-width:1366px){
+  html body main.reference-home.locked-storefront{--wdcc-utility:30px;--wdcc-header:96px;--wdcc-stack:126px!important}
+  html body main.reference-home.locked-storefront>.rh-header>.rh-header-inner{width:min(1280px,calc(100% - 48px))!important;margin:0 auto!important;padding:0!important;grid-template-columns:160px minmax(0,1fr) auto!important;gap:28px!important}
+  html body main.reference-home.locked-storefront .rh-logo{justify-self:start!important;width:154px!important;height:96px!important}
+  html body main.reference-home.locked-storefront .rh-logo img{width:96px!important;height:96px!important}
+  html body main.reference-home.locked-storefront .rh-menu,html body main.reference-home.locked-storefront .rh-call{display:none!important}
+  html body main.reference-home.locked-storefront .rh-header-actions{display:flex!important}
+  html body main.reference-home.locked-storefront .rh-nav{display:flex!important;position:static!important;flex-direction:row!important;justify-self:center!important;gap:34px!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+  html body main.reference-home.locked-storefront .rh-nav a{min-height:0!important;padding:0!important;border:0!important;font-size:14px!important}
+  html body main.reference-home.locked-storefront .rh-grid{width:min(1280px,100%)!important;margin:0 auto!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important;overflow:visible!important;padding:0!important;scroll-snap-type:none!important}
+  html body main.reference-home.locked-storefront .rh-card{min-width:0!important;max-width:none!important;flex:auto!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots{display:none!important}
+}
