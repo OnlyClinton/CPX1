@@ -12,6 +12,7 @@ export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 const allowedContentTypes=["image/jpeg","image/png","image/webp","image/avif"];
 const maximumSizeInBytes=15*1024*1024;
+const PRESIGN_ONLY_WEBHOOK_KEY_SENTINEL="wdcc-presign-only-no-callbacks";
 
 function json(body:any,status:number,rid:string){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
@@ -25,6 +26,14 @@ export async function POST(request:Request){
   const rid=requestId(request);
   try{
     const body=(await request.json())as HandleUploadPresignedBody;
+    // WDCC uses this route only to issue scoped presigned PUT URLs. @vercel/blob
+    // currently requires a non-empty webhookPublicKey before it branches on body.type,
+    // even when no upload-completed callback is configured. Reject callback events
+    // before the SDK helper so the sentinel is never used for signature verification.
+    if(body.type!=="blob.generate-presigned-url"){
+      await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:"unsupported_upload_event"});
+      return json({ok:false,error:"unsupported_upload_event",requestId:rid},400,rid);
+    }
     const authority=blobAuthority();
     if(authority.mode==="missing"){
       console.error("WDCC_UPLOAD_AUTHORITY_MISSING",JSON.stringify({requestId:rid,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
@@ -34,6 +43,7 @@ export async function POST(request:Request){
     const result=await handleUploadPresigned({
       body,
       request,
+      webhookPublicKey:PRESIGN_ONLY_WEBHOOK_KEY_SENTINEL,
       getSignedToken:async(pathname,clientPayload)=>{
         let payload:any={};try{payload=JSON.parse(clientPayload||"{}");}catch{}
         const vehicleId=String(payload.vehicleId||"");
