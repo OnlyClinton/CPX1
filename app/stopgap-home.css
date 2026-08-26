@@ -27,50 +27,146 @@
 .wdcc-app button,
 .wdcc-app a { -webkit-tap-highlight-color: transparent; }
 
-/* Opening animation: recovered 2vfD skyline/car and corrected reveal -> dock states. */
+/* Opening animation: Three.js WebGPU scene with an asset-gated CSS fallback. */
 .wdcc-app .intro-sequence {
+  --intro-dock-top: 30px;
+  --intro-dock-left: max(24px, calc((100vw - 1500px) / 2 + 24px));
+  --intro-dock-size: 96px;
+  --intro-badge-size: min(28vw, 300px);
   position: fixed !important;
   inset: 0 !important;
   z-index: 9999 !important;
+  display: block !important;
   overflow: hidden !important;
-  background: #02060a !important;
+  background: #010408 !important;
   opacity: 1 !important;
   visibility: visible !important;
+  touch-action: none !important;
 }
 
-.wdcc-app .intro-scene {
-  position: absolute !important;
-  inset: -3% !important;
-  background-image: var(--hero-image) !important;
-  background-position: 64% center !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
-  filter: saturate(1.1) contrast(1.08) brightness(.82) !important;
-  transform: scale(1.08);
-  animation: wdccSceneReveal 2.4s cubic-bezier(.16, 1, .3, 1) forwards !important;
+.wdcc-app .intro-sequence::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #02060aaa 0%, #02060a4f 33%, transparent 70%),
+    linear-gradient(0deg, #02060aad 0%, transparent 43%);
+  transition: opacity .7s ease;
 }
 
 .wdcc-app .intro-sequence::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 7;
   pointer-events: none;
-  background:
-    linear-gradient(90deg, #02060ac2 0%, #02060a6b 34%, #02060a12 70%),
-    linear-gradient(0deg, #02060a99 0%, transparent 45%) !important;
-  transition: opacity .6s ease;
+  opacity: 0;
+  background: #02060a;
+  transition: opacity .72s ease;
+}
+
+.wdcc-app .intro-gpu-host,
+.wdcc-app .intro-fallback,
+.wdcc-app .intro-skyline-stage,
+.wdcc-app .intro-car-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.wdcc-app .intro-gpu-host {
+  z-index: 1 !important;
+  opacity: 0;
+  background: #010408;
+  transition: opacity .22s ease;
+  pointer-events: none !important;
+}
+
+.wdcc-app .intro-gpu-host canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.wdcc-app .intro-fallback {
+  z-index: 1 !important;
+  overflow: hidden !important;
+  opacity: .28;
+  transition: opacity .22s ease;
+  pointer-events: none !important;
+}
+
+.wdcc-app .intro-path-gpu .intro-gpu-host { opacity: 1; }
+.wdcc-app .intro-path-gpu .intro-fallback { opacity: 0; }
+.wdcc-app .intro-path-css.intro-assets-ready .intro-fallback { opacity: 1; }
+
+.wdcc-app .intro-skyline,
+.wdcc-app .intro-car {
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: 64% center !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.wdcc-app .intro-skyline-stage {
+  z-index: 0 !important;
+  transform: scale(1.07);
+  filter: saturate(1.04) contrast(1.05) brightness(.74);
+}
+
+.wdcc-app .intro-car-stage {
+  z-index: 2 !important;
+  opacity: 0;
+  transform: translate3d(62vw, 2.5%, 0) scale(.93);
+  transform-origin: 68% 72%;
+  filter: blur(4px) drop-shadow(0 22px 40px #000b);
+  will-change: transform, opacity, filter;
+}
+
+.wdcc-app .intro-headlight-sweep {
+  position: absolute !important;
+  z-index: 3 !important;
+  inset: 0 !important;
+  opacity: 0;
+  pointer-events: none !important;
+  background: linear-gradient(102deg, transparent 42%, #b8ddff00 48%, #dff2ff59 52%, transparent 58%);
+  transform: translateX(-48%);
+}
+
+.wdcc-app .intro-reveal.intro-path-css .intro-skyline-stage {
+  animation: wdccSkylinePush 2.1s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+.wdcc-app .intro-reveal.intro-path-css .intro-car-stage {
+  animation: wdccCarEnter 1.72s .16s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+.wdcc-app .intro-reveal.intro-path-css .intro-headlight-sweep {
+  animation: wdccHeadlightSweep .72s .7s ease-out both !important;
 }
 
 .wdcc-app .intro-badge {
   position: absolute !important;
-  z-index: 5 !important;
+  z-index: 10 !important;
   top: 49% !important;
   left: 50% !important;
-  width: min(28vw, 300px) !important;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.78);
-  animation: wdccBadgeReveal .72s .12s cubic-bezier(.16, 1, .3, 1) forwards !important;
+  width: var(--intro-badge-size) !important;
+  opacity: .34;
+  transform: translate(-50%, -50%) scale(.82);
+  animation: wdccBadgeLoading 1s ease-in-out infinite alternate !important;
+  will-change: top, left, width, transform, opacity;
+}
+
+.wdcc-app .intro-reveal .intro-badge {
+  animation: wdccBadgeReveal .68s .56s cubic-bezier(.16, 1, .3, 1) both !important;
 }
 
 .wdcc-app .intro-badge img {
@@ -78,12 +174,12 @@
   width: 100% !important;
   height: auto !important;
   object-fit: contain !important;
-  filter: drop-shadow(0 16px 36px #000c) drop-shadow(0 0 30px #168af44a) !important;
+  filter: drop-shadow(0 16px 36px #000d) drop-shadow(0 0 34px #168af45e) !important;
 }
 
 .wdcc-app .intro-tagline {
   position: absolute !important;
-  z-index: 6 !important;
+  z-index: 10 !important;
   top: 70% !important;
   left: 50% !important;
   margin: 0 !important;
@@ -95,16 +191,19 @@
   white-space: nowrap !important;
   opacity: 0;
   transform: translate(-50%, 8px);
-  animation: wdccTagReveal .65s .4s ease forwards !important;
+}
+
+.wdcc-app .intro-reveal .intro-tagline {
+  animation: wdccTagReveal .62s .82s ease forwards !important;
 }
 
 .wdcc-app .intro-skip {
   position: absolute !important;
-  right: 18px !important;
-  bottom: 18px !important;
-  z-index: 8 !important;
-  min-height: 40px !important;
-  padding: 0 15px !important;
+  right: max(18px, env(safe-area-inset-right)) !important;
+  bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  z-index: 12 !important;
+  min-height: 42px !important;
+  padding: 0 16px !important;
   color: #fff !important;
   background: #02070cbd !important;
   border: 1px solid #ffffff45 !important;
@@ -115,56 +214,84 @@
   letter-spacing: .06em !important;
   text-transform: uppercase !important;
   cursor: pointer !important;
+  opacity: 0;
+  animation: wdccSkipReveal .35s 1s ease forwards !important;
 }
 
 .wdcc-app .intro-smoke {
   position: absolute !important;
-  z-index: 2 !important;
-  bottom: 0 !important;
+  z-index: 4 !important;
+  bottom: -8% !important;
   width: 58% !important;
-  height: 38% !important;
+  height: 42% !important;
   border-radius: 50% !important;
-  filter: blur(38px) !important;
+  filter: blur(40px) !important;
   opacity: 0;
   pointer-events: none !important;
 }
 
-.wdcc-app .smoke-one {
+.wdcc-app .intro-reveal.intro-path-css .smoke-one {
   left: 7% !important;
-  background: radial-gradient(circle, #ffffff2e, transparent 67%) !important;
-  animation: wdccSmoke 2.2s .15s ease-out both !important;
+  background: radial-gradient(circle, #ffffff32, transparent 67%) !important;
+  animation: wdccSmoke 2.05s .3s ease-out both !important;
 }
 
-.wdcc-app .smoke-two {
+.wdcc-app .intro-reveal.intro-path-css .smoke-two {
   right: -4% !important;
-  background: radial-gradient(circle, #1593ff3d, transparent 67%) !important;
-  animation: wdccSmoke 2.35s .3s ease-out both reverse !important;
+  background: radial-gradient(circle, #1593ff45, transparent 67%) !important;
+  animation: wdccSmoke 2.2s .42s ease-out both reverse !important;
 }
 
-.wdcc-app .intro-dock .intro-scene,
+.wdcc-app .intro-dock .intro-gpu-host,
+.wdcc-app .intro-dock .intro-fallback,
 .wdcc-app .intro-dock .intro-tagline,
 .wdcc-app .intro-dock .intro-smoke,
-.wdcc-app .intro-dock .intro-skip { opacity: 0 !important; transition: opacity .55s ease !important; }
-
-.wdcc-app .intro-dock::after { opacity: .82 !important; }
-
-.wdcc-app .intro-dock .intro-badge {
-  animation: wdccBadgeDock .86s cubic-bezier(.16, 1, .3, 1) forwards !important;
+.wdcc-app .intro-dock .intro-headlight-sweep,
+.wdcc-app .intro-dock .intro-skip {
+  opacity: 0 !important;
+  transition: opacity .58s ease !important;
 }
 
-@keyframes wdccSceneReveal {
-  from { transform: scale(1.08); filter: saturate(1.04) contrast(1.04) brightness(.72); }
-  to { transform: scale(1.01); filter: saturate(1.1) contrast(1.08) brightness(.88); }
+.wdcc-app .intro-dock::before { opacity: 0 !important; }
+.wdcc-app .intro-dock::after { opacity: .78 !important; }
+
+.wdcc-app .intro-dock .intro-badge {
+  animation: wdccBadgeDockV2 .82s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+@keyframes wdccSkylinePush {
+  from { transform: scale(1.07); filter: saturate(1.04) contrast(1.05) brightness(.74); }
+  to { transform: scale(1.015); filter: saturate(1.1) contrast(1.08) brightness(.9); }
+}
+
+@keyframes wdccCarEnter {
+  0% { opacity: 0; transform: translate3d(62vw, 2.5%, 0) scale(.93); filter: blur(4px) drop-shadow(0 22px 40px #000b); }
+  58% { opacity: 1; transform: translate3d(-1.8vw, -.5%, 0) scale(1.018); filter: blur(0) drop-shadow(0 22px 40px #000b); }
+  78% { transform: translate3d(.8vw, .25%, 0) scale(.992); }
+  91% { transform: translate3d(-.25vw, -.08%, 0) scale(1.004); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0) drop-shadow(0 22px 40px #000b); }
+}
+
+@keyframes wdccHeadlightSweep {
+  0% { opacity: 0; transform: translateX(-48%); }
+  35% { opacity: .72; }
+  100% { opacity: 0; transform: translateX(52%); }
+}
+
+@keyframes wdccBadgeLoading {
+  from { opacity: .28; transform: translate(-50%, -50%) scale(.8); }
+  to { opacity: .48; transform: translate(-50%, -50%) scale(.84); }
 }
 
 @keyframes wdccBadgeReveal {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(.78); }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+  72% { opacity: 1; transform: translate(-50%, -50%) scale(1.045); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-@keyframes wdccBadgeDock {
-  from { top: 49%; left: 50%; width: min(28vw, 300px); opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { top: 30px; left: max(24px, calc((100vw - 1500px) / 2 + 24px)); width: 98px; opacity: .98; transform: translate(0, 0) scale(.82); }
+@keyframes wdccBadgeDockV2 {
+  from { top: 49%; left: 50%; width: var(--intro-badge-size); opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { top: var(--intro-dock-top); left: var(--intro-dock-left); width: var(--intro-dock-size); opacity: 1; transform: translate(0, 0) scale(1); }
 }
 
 @keyframes wdccTagReveal {
@@ -172,9 +299,14 @@
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
+@keyframes wdccSkipReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes wdccSmoke {
   0% { opacity: 0; transform: scale(.72) translate3d(0, 12%, 0); }
-  35% { opacity: .7; }
+  35% { opacity: .68; }
   100% { opacity: 0; transform: scale(1.5) translate3d(8%, -5%, 0); }
 }
 
@@ -755,6 +887,7 @@
 .wdcc-app .mobile-action-bar { display: none !important; }
 
 @media (max-width: 980px) {
+  .wdcc-app .intro-sequence { --intro-badge-size: min(58vw, 240px); }
   .wdcc-app { padding-bottom: 62px !important; }
 
   .wdcc-app .utility-bar { display: none !important; }
@@ -936,15 +1069,24 @@
   .wdcc-app .mobile-action-bar a:first-child { background: var(--wdcc-red-cta) !important; }
   .wdcc-app .mobile-action-bar a:last-child { border-right: 0 !important; }
 
-  @keyframes wdccBadgeDock {
-    from { top: 49%; left: 50%; width: min(58vw, 240px); opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    to { top: 0; left: 50%; width: 82px; opacity: .98; transform: translate(-50%, 0) scale(.78); }
+  .wdcc-app .intro-skyline,
+  .wdcc-app .intro-car { object-position: 71% center !important; }
+  .wdcc-app .intro-tagline { top: 73% !important; }
+
+  @keyframes wdccCarEnter {
+    0% { opacity: 0; transform: translate3d(82vw, 2.5%, 0) scale(.91); filter: blur(3px) drop-shadow(0 18px 34px #000b); }
+    58% { opacity: 1; transform: translate3d(-2.4vw, -.5%, 0) scale(1.018); filter: blur(0) drop-shadow(0 18px 34px #000b); }
+    78% { transform: translate3d(1.1vw, .25%, 0) scale(.992); }
+    91% { transform: translate3d(-.35vw, -.08%, 0) scale(1.004); }
+    100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0) drop-shadow(0 18px 34px #000b); }
   }
+
 }
 
 @media (max-width: 560px) {
-  .wdcc-app .intro-scene { inset: -1% !important; background-position: 71% center !important; }
-  .wdcc-app .intro-badge { width: min(62vw, 235px) !important; }
+  .wdcc-app .intro-sequence { --intro-badge-size: min(62vw, 235px); }
+  .wdcc-app .intro-skyline,
+  .wdcc-app .intro-car { object-position: 72% center !important; }
   .wdcc-app .intro-tagline { top: 74% !important; font-size: 9px !important; }
 
   .wdcc-app .site-header { min-height: 70px !important; height: 70px !important; padding: 0 10px !important; }
@@ -980,8 +1122,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wdcc-app .intro-sequence { display: none !important; }
-  .wdcc-app *,
-  .wdcc-app *::before,
-  .wdcc-app *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .wdcc-app .intro-sequence,
+  .wdcc-app .intro-sequence *,
+  .wdcc-app .intro-sequence::before,
+  .wdcc-app .intro-sequence::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+
+  .wdcc-app .intro-skyline-stage { transform: scale(1.015) !important; filter: saturate(1.08) contrast(1.06) brightness(.88) !important; }
+  .wdcc-app .intro-car-stage { opacity: 1 !important; transform: none !important; filter: drop-shadow(0 18px 34px #000b) !important; }
+  .wdcc-app .intro-badge { opacity: 1 !important; transform: translate(-50%, -50%) scale(1) !important; }
+  .wdcc-app .intro-tagline { opacity: 1 !important; transform: translate(-50%, 0) !important; }
+  .wdcc-app .intro-skip { opacity: 1 !important; }
 }

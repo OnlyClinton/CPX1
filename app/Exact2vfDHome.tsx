@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WdccIntro from "./WdccIntro";
 
 type Vehicle = {
   id?: string;
@@ -51,7 +52,7 @@ function customerVisible(vehicle: any) {
 
 function photo(vehicle: Vehicle) {
   if (vehicle.primaryPhotoPathname) return `/api/media?p=${encodeURIComponent(vehicle.primaryPhotoPathname)}`;
-  return vehicle.primary_image_url || vehicle.image || "/wdcc-hero-v2.webp";
+  return vehicle.primary_image_url || vehicle.image || "/wdcc-hero-2vfd-1d7a0e4f.webp";
 }
 
 function vehicleHref(vehicle: Vehicle) {
@@ -59,10 +60,11 @@ function vehicleHref(vehicle: Vehicle) {
 }
 
 export default function Exact2vfDHome() {
-  const [phase, setPhase] = useState<"reveal" | "dock" | "done">("reveal");
+  const [introVisible, setIntroVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [items, setItems] = useState<Vehicle[]>(fallback);
+  const logoTargetRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     fetch("/api/inventory", { cache: "no-store" })
@@ -74,43 +76,13 @@ export default function Exact2vfDHome() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setPhase("done");
-      return;
-    }
-    const dockTimer = window.setTimeout(() => setPhase("dock"), 1450);
-    const doneTimer = window.setTimeout(() => setPhase("done"), 2450);
-    return () => {
-      window.clearTimeout(dockTimer);
-      window.clearTimeout(doneTimer);
-    };
-  }, []);
-
   const visible = useMemo(() => items.slice(0, 5), [items]);
   const move = (direction: number) => setActive((current) => (current + direction + visible.length) % visible.length);
-  const skipIntro = () => setPhase("done");
+  const completeIntro = useCallback(() => setIntroVisible(false), []);
 
   return (
     <div className="wdcc-app">
-      {phase !== "done" && (
-        <div
-          className={`intro-sequence intro-${phase}`}
-          aria-label="WDCC opening animation"
-          onWheel={skipIntro}
-          onTouchMove={skipIntro}
-          onClick={skipIntro}
-        >
-          <div className="intro-scene" style={{ "--hero-image": "url(/wdcc-hero-v2.webp)" } as CSSProperties} />
-          <div className="intro-smoke smoke-one" />
-          <div className="intro-smoke smoke-two" />
-          <div className="intro-badge">
-            <img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512" />
-          </div>
-          <p className="intro-tagline">Tampa Bay · Drive today</p>
-          <button className="intro-skip" type="button" onClick={skipIntro}>Skip intro</button>
-        </div>
-      )}
+      {introVisible && <WdccIntro logoTargetRef={logoTargetRef} onComplete={completeIntro} />}
 
       <div className="header-shell home-header-shell">
         <div className="utility-bar">
@@ -128,8 +100,8 @@ export default function Exact2vfDHome() {
           >
             <span aria-hidden="true"><i /><i /><i /></span>
           </button>
-          <Link className="logo-button" aria-label="We Don't Care Cars home" href="/">
-            <img src="/wdcc-logo-transparent.webp" alt="" width="512" height="512" />
+          <Link ref={logoTargetRef} className="logo-button" aria-label="We Don't Care Cars home" href="/">
+            <img src="/wdcc-logo-2vfd-7f10e192.webp" alt="" width="512" height="512" />
           </Link>
           <nav className={`main-nav${menuOpen ? " open" : ""}`} aria-label="Primary navigation">
             <Link href="/inventory">Inventory</Link>
@@ -146,7 +118,7 @@ export default function Exact2vfDHome() {
       </div>
 
       <main>
-        <section className="hero" style={{ "--hero-image": "url(/wdcc-hero-v2.webp)" } as CSSProperties}>
+        <section className="hero" style={{ "--hero-image": "url(/wdcc-hero-2vfd-1d7a0e4f.webp)" } as CSSProperties}>
           <div className="hero-shade" />
           <div className="hero-copy">
             <p className="hero-kicker">Tampa Bay · Drive today</p>
