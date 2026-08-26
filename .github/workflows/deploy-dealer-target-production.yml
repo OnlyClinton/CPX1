@@ -1,4 +1,5 @@
 name: WDCC Dealer Target Production
+# target-refresh: deploy current mockup-aligned dealer UI
 
 on:
   push:
