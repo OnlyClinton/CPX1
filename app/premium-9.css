@@ -1,0 +1,429 @@
+/* WDCC premium 9 visual system — dev preview only, loaded last. */
+:root{
+  --wdcc-ink:#071019;
+  --wdcc-ink-2:#0c1721;
+  --wdcc-line:#d9e0e6;
+  --wdcc-soft:#f3f5f7;
+  --wdcc-red:#f21f36;
+  --wdcc-red-deep:#c90e24;
+  --wdcc-blue:#1596ef;
+  --wdcc-text:#101820;
+  --wdcc-muted:#6c7781;
+  --wdcc-radius:18px;
+}
+body{background:#eef2f5;color:var(--wdcc-text)}
+
+/* Home header: fewer competing signals, more breathing room. */
+.premiumNine .utility-bar{
+  height:28px!important;
+  padding:0 max(28px,calc((100vw - 1420px)/2))!important;
+  gap:26px!important;
+  background:#040a10!important;
+  border-bottom:1px solid rgba(255,255,255,.07)!important;
+  color:#a9b6c1!important;
+  font-size:9px!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+}
+.premiumNine .utility-bar span{display:inline-flex!important;align-items:center!important;gap:6px!important;white-space:nowrap!important}
+.premiumNine .utility-bar svg{width:13px!important;height:13px!important;color:#7bbdf0!important}
+.premiumNine .utility-bar .utility-call{margin-left:auto!important;color:#dce5ec!important}
+.premiumNine .utility-bar .utility-call b{color:#fff!important;font-weight:900!important}
+.premiumNine .site-header{
+  height:86px!important;
+  padding:0 max(28px,calc((100vw - 1420px)/2))!important;
+  grid-template-columns:165px minmax(0,1fr) auto auto!important;
+  gap:22px!important;
+  background:rgba(5,13,20,.97)!important;
+  border-bottom:1px solid rgba(255,255,255,.08)!important;
+  box-shadow:0 10px 28px rgba(0,0,0,.16)!important;
+}
+.premiumNine .logo-button{width:165px!important;height:86px!important}
+.premiumNine .logo-button .wdcc-wordmark{transform:scale(1.08) translateY(1px)!important;transform-origin:left center!important}
+.premiumNine .main-nav{gap:clamp(19px,1.65vw,31px)!important}
+.premiumNine .main-nav a{font-size:10.5px!important;font-weight:800!important;letter-spacing:.035em!important;color:#d8e0e6!important;transition:color .18s ease,transform .18s ease!important}
+.premiumNine .main-nav a:hover{color:#fff!important;transform:translateY(-1px)!important}
+.premiumNine .header-phone{
+  min-height:44px!important;
+  padding:0 15px!important;
+  border:1px solid #40515f!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.025)!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.04)!important;
+}
+.premiumNine .header-phone svg{width:17px!important;height:17px!important;color:#c9d5df!important}
+.premiumNine .header-apply{
+  min-height:46px!important;
+  padding:0 20px!important;
+  border-radius:10px!important;
+  background:linear-gradient(180deg,#ff2d42 0,#e91630 100%)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  box-shadow:0 12px 28px rgba(217,16,43,.25),inset 0 1px rgba(255,255,255,.2)!important;
+  font-size:10px!important;
+  letter-spacing:.035em!important;
+}
+
+/* Hero: cleaner composition, stronger material depth, less template-like. */
+.premiumNine .screenshotHero{
+  min-height:610px!important;
+  background-position:71% center!important;
+  border-bottom:0!important;
+  box-shadow:inset 0 -1px rgba(255,255,255,.05)!important;
+}
+.premiumNine .screenshotHero:after{
+  background:
+    radial-gradient(circle at 72% 33%,rgba(31,158,255,.18),transparent 24%),
+    linear-gradient(180deg,rgba(255,255,255,.02),transparent 35%,rgba(1,6,10,.1))!important;
+}
+.premiumNine .screenshotHero .hero-shade{
+  background:linear-gradient(90deg,#02070cf9 0,#05101bf0 28%,#07111ac4 43%,#07111a6d 55%,rgba(5,13,20,.13) 76%,rgba(4,11,18,.04) 100%)!important;
+}
+.premiumNine .hero-copy{
+  left:max(34px,calc((100vw - 1420px)/2))!important;
+  top:50%!important;
+  width:min(610px,calc(100vw - 68px))!important;
+  max-width:610px!important;
+}
+.premiumNine .hero-kicker{font-size:10.5px!important;letter-spacing:.14em!important;color:#9fd2f8!important}
+.premiumNine .hero h1{
+  margin:12px 0 18px!important;
+  font-size:clamp(55px,5vw,75px)!important;
+  line-height:.94!important;
+  letter-spacing:-.048em!important;
+  text-shadow:0 8px 28px rgba(0,0,0,.55)!important;
+}
+.premiumNine .hero-lead{font-size:15.5px!important;line-height:1.55!important;color:#edf2f5!important;max-width:450px!important}
+.premiumNine .screenshotHeroActions{gap:10px!important;margin-top:24px!important;max-width:520px!important}
+.premiumNine .screenshotHeroActions .btn{
+  min-height:52px!important;
+  border-radius:10px!important;
+  padding:0 22px!important;
+  font-size:10px!important;
+  font-weight:900!important;
+  letter-spacing:.035em!important;
+  box-shadow:none!important;
+}
+.premiumNine .screenshotHeroActions .hero-cta-test{
+  background:linear-gradient(180deg,#ff2d42,#e91530)!important;
+  border-color:#ff4053!important;
+  box-shadow:0 14px 34px rgba(224,18,47,.25)!important;
+}
+.premiumNine .screenshotHeroActions .hero-cta-qualify{
+  background:rgba(7,17,26,.58)!important;
+  border-color:rgba(226,237,245,.38)!important;
+  backdrop-filter:blur(10px)!important;
+}
+.premiumNine .screenshotCallSean{
+  min-height:38px!important;
+  margin-top:12px!important;
+  padding:0 4px!important;
+  border:0!important;
+  background:transparent!important;
+  color:#dce5ec!important;
+  gap:8px!important;
+  font-size:10px!important;
+  letter-spacing:.025em!important;
+}
+.premiumNine .screenshotCallSean svg{width:16px!important;height:16px!important;color:#9ec8e7!important}
+.premiumNine .screenshotCallSean b{color:#fff!important;font-size:11px!important}
+
+/* Floating benefits feel like a composed module, not a table. */
+.premiumNine .screenshotBenefits{
+  width:min(1360px,calc(100% - 48px))!important;
+  margin:-28px auto 0!important;
+  border:1px solid rgba(16,30,43,.10)!important;
+  border-radius:18px!important;
+  overflow:hidden!important;
+  box-shadow:0 22px 54px rgba(24,38,50,.13)!important;
+}
+.premiumNine .screenshotBenefits article{
+  min-height:110px!important;
+  padding:18px 22px!important;
+  gap:14px!important;
+  background:linear-gradient(180deg,#fff,#fbfcfd)!important;
+}
+.premiumNine .screenshotBenefits article:last-child{border-right:0!important}
+.premiumNine .screenshotBenefits .icon{
+  width:42px!important;
+  height:42px!important;
+  flex:0 0 42px!important;
+  display:grid!important;
+  place-items:center!important;
+  border:1px solid #d6dfe6!important;
+  border-radius:13px!important;
+  background:#f7f9fb!important;
+  color:#e31932!important;
+}
+.premiumNine .screenshotBenefits .icon svg{width:22px!important;height:22px!important}
+.premiumNine .screenshotBenefits strong{font-size:10px!important;letter-spacing:.03em!important;color:#101820!important}
+.premiumNine .screenshotBenefits article span:last-child{font-size:9px!important;line-height:1.4!important;color:#73808a!important}
+
+/* Featured inventory: four wider cards with editorial spacing. */
+.premiumNine .screenshotInventory{
+  max-width:1420px!important;
+  padding:68px 28px 60px!important;
+  background:transparent!important;
+}
+.premiumNine .screenshotInventory .section-heading{align-items:flex-end!important;margin-bottom:24px!important}
+.premiumNine .section-kicker{font-size:9px!important;font-weight:900!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:#7d8993!important}
+.premiumNine .screenshotInventory h2{margin:7px 0 8px!important;font-size:46px!important;letter-spacing:-.045em!important}
+.premiumNine .section-deck{font-size:12px!important;color:#74808a!important}
+.premiumNine .text-link{display:inline-flex!important;align-items:center!important;gap:8px!important;font-size:9px!important;letter-spacing:.06em!important;color:#27323b!important}
+.premiumNine .featured-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:18px!important}
+.premiumNine .vehicle-card{
+  border:1px solid rgba(19,35,49,.10)!important;
+  border-radius:18px!important;
+  overflow:hidden!important;
+  background:#fff!important;
+  box-shadow:0 16px 38px rgba(32,48,61,.10)!important;
+  transition:transform .2s ease,box-shadow .2s ease!important;
+}
+.premiumNine .vehicle-card:hover{transform:translateY(-3px)!important;box-shadow:0 24px 48px rgba(32,48,61,.15)!important}
+.premiumNine .vehicle-image{height:214px!important;flex-basis:214px!important;background:#dfe5e9!important}
+.premiumNine .vehicle-image img{transition:transform .35s ease!important}
+.premiumNine .vehicle-card:hover .vehicle-image img{transform:scale(1.025)!important}
+.premiumNine .card-badges{left:12px!important;top:12px!important}
+.premiumNine .card-badges span{min-height:23px!important;padding:4px 8px!important;border-radius:6px!important;font-size:7px!important;box-shadow:0 5px 14px rgba(0,0,0,.15)!important}
+.premiumNine .vehicle-card-body{min-height:190px!important;padding:17px 18px 15px!important}
+.premiumNine .vehicle-card-body .eyebrow{font-size:8px!important;letter-spacing:.12em!important;color:#81909b!important}
+.premiumNine .vehicle-title{min-height:auto!important;margin-top:3px!important;font-size:17px!important;letter-spacing:-.02em!important;color:#101820!important}
+.premiumNine .vehicle-price-row{display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:12px!important;margin-top:14px!important}
+.premiumNine .vehicle-price{margin:0!important;font-size:27px!important;letter-spacing:-.035em!important}
+.premiumNine .down-summary{font-size:8px!important;font-weight:850!important;color:#596773!important;text-transform:uppercase!important;letter-spacing:.045em!important}
+.premiumNine .vehicle-payment{margin:5px 0 0!important;font-size:9px!important;color:#6b7882!important}
+.premiumNine .spec-pills{margin-top:12px!important;gap:6px!important}
+.premiumNine .spec-pills span{min-height:21px!important;padding:4px 7px!important;border-radius:6px!important;background:#f0f3f5!important;color:#46535d!important;font-size:7px!important}
+.premiumNine .vehicle-card-cta{min-height:38px!important;margin-top:14px!important;padding-top:11px!important;justify-content:space-between!important;font-size:8px!important;letter-spacing:.055em!important;color:#1f2a33!important}
+.premiumNine .carousel-arrow{
+  width:40px!important;height:40px!important;border-radius:50%!important;background:rgba(6,16,24,.92)!important;color:#fff!important;border:1px solid rgba(255,255,255,.15)!important;box-shadow:0 10px 26px rgba(0,0,0,.18)!important
+}
+
+/* Financing: a quieter luxury dark section. */
+.premiumNine .screenshotHow{
+  max-width:none!important;
+  padding:62px max(28px,calc((100vw - 1365px)/2)) 68px!important;
+  background:
+    radial-gradient(circle at 18% 0,rgba(19,117,183,.12),transparent 31%),
+    linear-gradient(180deg,#07111a 0,#050d14 100%)!important;
+  border-top:1px solid rgba(255,255,255,.05)!important;
+}
+.premiumNine .screenshotHow h2{font-size:42px!important;letter-spacing:-.04em!important;margin-top:9px!important}
+.premiumNine .startApproval{min-height:46px!important;padding:0 17px!important;border:1px solid rgba(255,255,255,.18)!important;border-radius:10px!important;background:rgba(255,255,255,.04)!important;font-size:9px!important;font-weight:900!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+.premiumNine .steps-grid{gap:16px!important;margin-top:28px!important}
+.premiumNine .steps-grid article{
+  grid-template-columns:34px 48px 1fr!important;
+  min-height:116px!important;
+  padding:18px!important;
+  border:1px solid rgba(169,193,211,.16)!important;
+  border-radius:15px!important;
+  background:linear-gradient(180deg,rgba(18,34,47,.78),rgba(11,24,35,.76))!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025)!important;
+}
+.premiumNine .steps-grid article:not(:last-child):after{display:none!important}
+.premiumNine .step-number{width:auto!important;height:auto!important;background:transparent!important;color:#ff4960!important;font-size:9px!important;letter-spacing:.08em!important}
+.premiumNine .step-icon{width:46px!important;height:46px!important;border-radius:13px!important;border:1px solid rgba(164,193,215,.28)!important;background:rgba(255,255,255,.025)!important;color:#d8e7f2!important}
+.premiumNine .step-icon svg{width:23px!important;height:23px!important}
+.premiumNine .steps-grid h3{font-size:11px!important;letter-spacing:.025em!important}
+.premiumNine .steps-grid p{font-size:9px!important;line-height:1.45!important;color:#9fadb8!important}
+
+/* Trust: replace the tiny utility strip with a substantial credibility block. */
+.premiumNine .premiumTrust{
+  max-width:1420px!important;
+  margin:0 auto!important;
+  padding:62px 28px 68px!important;
+  display:grid!important;
+  grid-template-columns:1.35fr repeat(4,minmax(0,1fr))!important;
+  gap:16px!important;
+  align-items:stretch!important;
+  background:transparent!important;
+  border:0!important;
+}
+.premiumNine .trust-heading{padding:8px 20px 8px 0!important}
+.premiumNine .trust-heading h2{margin:8px 0 12px!important;font-size:34px!important;line-height:1.02!important;letter-spacing:-.045em!important;color:#111a22!important}
+.premiumNine .trust-heading h2 strong{color:#e51b33!important}
+.premiumNine .trust-heading p{max-width:290px!important;margin:0!important;font-size:11px!important;line-height:1.55!important;color:#727f89!important}
+.premiumNine .premiumTrust article{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:flex-start!important;
+  min-height:190px!important;
+  padding:22px!important;
+  gap:18px!important;
+  border:1px solid rgba(28,44,57,.10)!important;
+  border-radius:17px!important;
+  background:#fff!important;
+  box-shadow:0 14px 34px rgba(32,48,61,.08)!important;
+}
+.premiumNine .premiumTrust article>span{
+  width:44px!important;height:44px!important;border-radius:14px!important;background:#f3f6f8!important;border:1px solid #e0e7ec!important;color:#24323d!important
+}
+.premiumNine .premiumTrust article>span svg{width:22px!important;height:22px!important}
+.premiumNine .premiumTrust b{font-size:11px!important;letter-spacing:-.01em!important;text-transform:none!important;color:#121c24!important}
+.premiumNine .premiumTrust small{margin-top:7px!important;font-size:9px!important;line-height:1.5!important;color:#77848e!important}
+.premiumNine .premiumTrust .talkSean{background:linear-gradient(145deg,#0c1721,#071019)!important;border-color:#142535!important;color:#fff!important}
+.premiumNine .premiumTrust .talkSean .sean-badge{background:#f02139!important;color:#fff!important;border-color:#ff5164!important;font-weight:900!important}
+.premiumNine .premiumTrust .talkSean b{color:#fff!important}
+.premiumNine .premiumTrust .talkSean small{color:#aebbc5!important}
+.premiumNine .premiumTrust .talkSean a{display:inline-block!important;margin-top:12px!important;color:#fff!important;font-size:10px!important;font-weight:900!important}
+
+/* Footer: stronger brand lockup, less tiny utility copy. */
+.premiumNine .screenshotFooter{
+  padding:40px max(30px,calc((100vw - 1365px)/2)) 26px!important;
+  grid-template-columns:1fr 1fr auto!important;
+  gap:26px!important;
+  background:#03080d!important;
+  border-top:1px solid #16232d!important;
+}
+.premiumNine .footer-brand-lock{display:flex!important;align-items:center!important;gap:18px!important}
+.premiumNine .footer-brand-lock .wdcc-wordmark{flex:0 0 auto!important}
+.premiumNine .footer-brand-lock p{max-width:190px!important;margin:0!important;font-size:9px!important;line-height:1.45!important;color:#83919c!important}
+.premiumNine .footer-copy{align-self:center!important}
+.premiumNine .footer-copy strong{font-size:15px!important;letter-spacing:-.02em!important}
+.premiumNine .footer-copy span{margin-top:6px!important;font-size:9px!important;color:#83919c!important}
+.premiumNine .footer-actions>a{border-radius:10px!important}
+.premiumNine .footer-actions>a:first-child{gap:8px!important;color:#dfe8ee!important}
+.premiumNine .footer-actions svg{width:16px!important;height:16px!important}
+.premiumNine .footer-actions>a:last-child{min-height:42px!important;padding:0 16px!important;background:linear-gradient(180deg,#fa2940,#e5162e)!important;font-size:8px!important;letter-spacing:.04em!important}
+.premiumNine .footer-links{margin-top:8px!important;padding-top:18px!important;gap:26px!important;color:#87949e!important;font-size:8px!important;letter-spacing:.045em!important}
+
+/* Inner storefront pages: make the functional paths feel like the same premium product. */
+.commandStrip{background:#040a10!important;border-bottom:1px solid rgba(255,255,255,.08)!important}
+.commandStrip .wrap{max-width:1320px!important}
+.premiumHeader{background:rgba(5,13,20,.98)!important;border-bottom:1px solid rgba(255,255,255,.08)!important;box-shadow:0 12px 30px rgba(0,0,0,.12)!important}
+.premiumHeader .wrap{max-width:1320px!important}
+.premiumPhone,.premiumApply{border-radius:10px!important}
+.premiumApply{background:linear-gradient(180deg,#fa2940,#e5162e)!important;box-shadow:0 12px 28px rgba(220,18,45,.2)!important}
+.premiumFooter{background:#03080d!important;border-top:1px solid #16232d!important}
+.inventoryTop{padding:72px 0!important;background:radial-gradient(circle at 78% 20%,rgba(30,130,202,.14),transparent 30%),linear-gradient(145deg,#08141e,#050c12)!important}
+.inventoryTop .wrap,.section.light>.wrap{max-width:1320px!important}
+.inventoryTop h1{font-size:clamp(44px,6vw,74px)!important;letter-spacing:-.055em!important}
+.inventoryTop .lede{max-width:650px!important;color:#c2ced7!important}
+.section.light{background:#f2f5f7!important;padding-top:56px!important;padding-bottom:72px!important}
+.section.light .grid{gap:20px!important}
+.section.light .card{border:1px solid rgba(24,39,52,.10)!important;border-radius:18px!important;overflow:hidden!important;background:#fff!important;box-shadow:0 15px 36px rgba(30,46,58,.09)!important}
+.section.light .card .photo{min-height:230px!important;background:#dfe5e9!important}
+.section.light .cardBody{padding:20px!important}
+.section.light .cardButtons a{border-radius:9px!important}
+.leadPage{max-width:860px!important;padding-top:14px!important}
+.leadPage>h1{font-size:clamp(42px,5vw,64px)!important;letter-spacing:-.05em!important;margin-bottom:10px!important}
+.leadPage>p{max-width:620px!important;color:#6b7882!important;font-size:14px!important;line-height:1.55!important}
+.leadForm{margin-top:28px!important;padding:28px!important;border:1px solid rgba(27,43,56,.10)!important;border-radius:20px!important;background:#fff!important;box-shadow:0 22px 56px rgba(33,50,63,.10)!important}
+.leadGrid{gap:17px!important}
+.leadForm label{font-size:10px!important;font-weight:850!important;letter-spacing:.035em!important;color:#37434d!important}
+.leadForm input:not([type=checkbox]),.leadForm textarea{margin-top:7px!important;border:1px solid #d4dce2!important;border-radius:10px!important;background:#f9fbfc!important;min-height:49px!important;padding:12px 14px!important;outline:none!important;transition:border-color .18s ease,box-shadow .18s ease!important}
+.leadForm textarea{min-height:120px!important;resize:vertical!important}
+.leadForm input:focus,.leadForm textarea:focus{border-color:#5c94bd!important;box-shadow:0 0 0 4px rgba(44,136,204,.10)!important}
+.leadForm .consent{font-size:9px!important;line-height:1.5!important;color:#687680!important}
+.leadForm>.cta{min-height:48px!important;border-radius:10px!important;padding:0 22px!important;background:linear-gradient(180deg,#fa2940,#e5162e)!important;box-shadow:0 12px 28px rgba(220,18,45,.18)!important}
+.leadMessage{margin-top:16px!important;padding:14px 16px!important;border-radius:10px!important;background:#f0f7f2!important;color:#23613d!important;font-size:11px!important}
+.financingPage{background:#eef2f5!important}
+.financingHero{padding:82px 24px 62px!important;background:radial-gradient(circle at 75% 20%,rgba(27,139,216,.16),transparent 30%),linear-gradient(145deg,#08141e,#050c12)!important;color:#fff!important}
+.financingHero .wrap,.financingBody .wrap{max-width:1120px!important;margin:auto!important}
+.financingHero h1{max-width:790px!important;margin:12px 0 18px!important;font-size:clamp(48px,7vw,82px)!important;line-height:.94!important;letter-spacing:-.06em!important}
+.financingHero p{max-width:650px!important;font-size:16px!important;line-height:1.6!important;color:#c3d0d9!important}
+.financingHero .actions{margin-top:28px!important;display:flex!important;gap:12px!important;flex-wrap:wrap!important}
+.financingHero .cta{border-radius:10px!important}
+.financingBody{padding:62px 24px 78px!important}
+.financeGrid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:18px!important}
+.financeGrid article{padding:25px!important;border:1px solid rgba(24,39,52,.10)!important;border-radius:18px!important;background:#fff!important;box-shadow:0 16px 38px rgba(30,46,58,.08)!important}
+.financeGrid strong{display:block!important;margin-bottom:9px!important;font-size:18px!important}
+.financeGrid p{margin:0!important;color:#6f7c86!important;font-size:12px!important;line-height:1.55!important}
+
+@media(max-width:1080px){
+  .premiumNine .site-header{grid-template-columns:145px minmax(0,1fr) auto!important}
+  .premiumNine .header-phone{display:none!important}
+  .premiumNine .featured-grid{gap:14px!important}
+  .premiumNine .vehicle-image{height:190px!important;flex-basis:190px!important}
+  .premiumNine .premiumTrust{grid-template-columns:1fr repeat(2,1fr)!important}
+  .premiumNine .trust-heading{grid-row:span 2!important}
+}
+
+@media(max-width:900px){
+  body{padding-bottom:0!important}
+  .premiumNine .utility-bar{display:none!important}
+  .premiumNine .site-header{height:76px!important;padding:0 18px!important;grid-template-columns:48px 1fr 48px!important;gap:0!important;background:#050d14!important}
+  .premiumNine .logo-button{width:auto!important;height:76px!important;justify-content:center!important}
+  .premiumNine .logo-button .wdcc-wordmark{transform:none!important}
+  .premiumNine .mobile-menu,.premiumNine .mobile-call{width:44px!important;height:44px!important;border-radius:12px!important;background:transparent!important;border:0!important}
+  .premiumNine .mobile-call svg{width:22px!important;height:22px!important}
+  .premiumNine .main-nav{top:76px!important;padding:18px!important;background:rgba(5,13,20,.98)!important;border-top:1px solid #1a2934!important;box-shadow:0 18px 30px rgba(0,0,0,.26)!important}
+  .premiumNine .main-nav a{min-height:48px!important;padding:0 8px!important;border-bottom:1px solid rgba(255,255,255,.07)!important;font-size:12px!important}
+  .premiumNine .header-apply,.premiumNine .header-phone{display:none!important}
+
+  .premiumNine .screenshotHero{min-height:720px!important;background-size:auto 315px!important;background-position:70% top!important}
+  .premiumNine .screenshotHero .hero-shade{background:linear-gradient(180deg,rgba(3,8,13,.02) 0,rgba(3,8,13,.06) 170px,rgba(5,12,18,.2) 235px,rgba(5,12,18,.86) 302px,#050c12 350px,#050c12 100%)!important}
+  .premiumNine .hero-copy{left:20px!important;right:20px!important;top:305px!important;width:auto!important;max-width:none!important;transform:none!important}
+  .premiumNine .hero-kicker{font-size:9px!important;margin-bottom:9px!important}
+  .premiumNine .hero h1{font-size:46px!important;line-height:.94!important;margin:0 0 14px!important;max-width:350px!important}
+  .premiumNine .hero-lead{font-size:13px!important;line-height:1.48!important;max-width:340px!important}
+  .premiumNine .screenshotHeroActions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;margin-top:17px!important;max-width:none!important}
+  .premiumNine .screenshotHeroActions .btn{min-height:47px!important;width:100%!important}
+  .premiumNine .screenshotCallSean{margin-top:9px!important;min-height:34px!important}
+
+  .premiumNine .screenshotBenefits{width:100%!important;margin:0!important;border-radius:0!important;border-left:0!important;border-right:0!important;display:grid!important;grid-template-columns:1fr 1fr!important;box-shadow:0 12px 30px rgba(24,38,50,.07)!important}
+  .premiumNine .screenshotBenefits article{min-height:116px!important;padding:17px!important;border-bottom:1px solid #e2e7eb!important}
+  .premiumNine .screenshotBenefits article:nth-child(2n){border-right:0!important}
+  .premiumNine .screenshotBenefits .icon{width:38px!important;height:38px!important;flex-basis:38px!important}
+
+  .premiumNine .screenshotInventory{padding:44px 16px 46px!important}
+  .premiumNine .screenshotInventory .section-heading{align-items:flex-start!important;gap:12px!important;margin-bottom:18px!important}
+  .premiumNine .screenshotInventory h2{font-size:35px!important;line-height:.98!important}
+  .premiumNine .section-deck{font-size:10px!important}
+  .premiumNine .text-link{font-size:8px!important;text-align:right!important}
+  .premiumNine .featured-grid{display:block!important}
+  .premiumNine .featured-slide{display:none!important}
+  .premiumNine .featured-slide:first-child{display:block!important;width:min(100%,360px)!important;margin:auto!important}
+  .premiumNine .vehicle-image{height:245px!important;flex-basis:245px!important}
+  .premiumNine .vehicle-card-body{min-height:192px!important;padding:18px!important}
+  .premiumNine .vehicle-title{font-size:20px!important}
+  .premiumNine .vehicle-price{font-size:30px!important}
+  .premiumNine .carousel-arrow{width:38px!important;height:38px!important}
+
+  .premiumNine .screenshotHow{padding:48px 16px 52px!important}
+  .premiumNine .screenshotHow .section-heading{display:block!important}
+  .premiumNine .screenshotHow h2{font-size:34px!important;margin-bottom:18px!important}
+  .premiumNine .startApproval{min-height:42px!important}
+  .premiumNine .steps-grid{grid-template-columns:1fr!important;gap:10px!important;margin-top:20px!important}
+  .premiumNine .steps-grid article{min-height:88px!important;grid-template-columns:32px 44px 1fr!important;padding:14px!important}
+
+  .premiumNine .premiumTrust{padding:46px 16px 50px!important;grid-template-columns:1fr 1fr!important;gap:10px!important}
+  .premiumNine .trust-heading{grid-column:1/-1!important;grid-row:auto!important;padding:0 0 14px!important}
+  .premiumNine .trust-heading h2{font-size:31px!important}
+  .premiumNine .trust-heading p{max-width:340px!important}
+  .premiumNine .premiumTrust article{min-height:160px!important;padding:17px!important;gap:14px!important}
+  .premiumNine .premiumTrust .talkSean{grid-column:1/-1!important;min-height:130px!important}
+
+  .premiumNine .screenshotFooter{padding:34px 18px 92px!important;grid-template-columns:1fr!important;gap:18px!important}
+  .premiumNine .footer-brand-lock{justify-content:flex-start!important}
+  .premiumNine .footer-copy{display:none!important}
+  .premiumNine .footer-actions{justify-content:space-between!important;width:100%!important}
+  .premiumNine .footer-links{grid-column:1!important;gap:16px!important;flex-wrap:wrap!important}
+
+  .premiumNine .mobile-action-bar{
+    left:10px!important;right:10px!important;bottom:max(10px,env(safe-area-inset-bottom))!important;width:auto!important;height:58px!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:16px!important;overflow:hidden!important;background:rgba(5,13,20,.91)!important;backdrop-filter:blur(16px)!important;box-shadow:0 18px 40px rgba(0,0,0,.28)!important
+  }
+  .premiumNine .mobile-action-bar a{min-height:58px!important;gap:6px!important;border-right:1px solid rgba(255,255,255,.08)!important;background:transparent!important;color:#eaf0f4!important;font-size:8px!important;letter-spacing:.02em!important}
+  .premiumNine .mobile-action-bar a:last-child{border-right:0!important}
+  .premiumNine .mobile-action-bar .mobile-dock-qualify{background:linear-gradient(180deg,#f82940,#df152d)!important;color:#fff!important}
+  .premiumNine .mobile-action-bar svg{width:16px!important;height:16px!important}
+
+  .commandStrip{display:none!important}
+  .premiumHeader .nav{min-height:74px!important}
+  .section.light{padding:38px 16px 64px!important}
+  .leadForm{padding:20px!important;border-radius:16px!important}
+  .leadGrid{grid-template-columns:1fr!important}
+  .financeGrid{grid-template-columns:1fr!important}
+  .financingHero{padding:58px 18px 48px!important}
+  .financingBody{padding:44px 18px 66px!important}
+}
+
+@media(max-width:430px){
+  .premiumNine .screenshotHero{min-height:735px!important;background-size:auto 300px!important}
+  .premiumNine .hero-copy{top:292px!important}
+  .premiumNine .hero h1{font-size:44px!important}
+  .premiumNine .screenshotBenefits article{min-height:122px!important;gap:10px!important;padding:14px!important}
+  .premiumNine .screenshotBenefits article span:last-child{font-size:8px!important}
+  .premiumNine .premiumTrust{grid-template-columns:1fr!important}
+  .premiumNine .premiumTrust article,.premiumNine .premiumTrust .talkSean{grid-column:1!important;min-height:125px!important}
+}
