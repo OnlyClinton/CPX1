@@ -1,0 +1,185 @@
+name: WDCC Presigned Upload Fix Certification
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-presigned-upload-fix-cert.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-presigned-upload-fix-cert
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STORE_ID: store_cNUyQRVlXtyvZQ5N
+      BASE_SHA: e2b751e1a5e62e2ad08f786c6db456e192bfda05
+      PATCH_SHA: 0c07988855e03b6376bde21f59826750dc703ce8
+      STALE_TAG: 32881804744-3
+      LIVE_APEX: https://wedontcarecars.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PATCH_SHA }}
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove isolated patch and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PATCH_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          changed="$(git diff --name-only "$BASE_SHA" "$PATCH_SHA")"
+          test "$changed" = "app/api/upload/route.ts"
+          grep -q 'body.type!=="blob.generate-presigned-url"' app/api/upload/route.ts
+          grep -q 'PRESIGN_ONLY_WEBHOOK_KEY_SENTINEL' app/api/upload/route.ts
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          npm run build
+
+      - name: Require release freeze and live baseline
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="$(gh issue view 205 --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          printf '%s' "$body" | grep -q "$BASE_SHA"
+          printf '%s' "$body" | grep -q 'NO-GO FOR PRODUCTION PROMOTION YET'
+          curl -fsS "$LIVE_APEX/api/health?upload_fix_baseline=$GITHUB_RUN_ID" -o /tmp/live-before-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-before-health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?upload_fix_baseline=$GITHUB_RUN_ID" -o /tmp/live-before-inventory.json
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-before-inventory.json >/dev/null
+
+      - name: Link exact Phoenix authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+
+      - name: Clean exact stale V4 attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wdcc-clean-tag.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {del,get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
+          const statePath='private/state/platform-v3.json',tag=process.env.CLEAN_TAG;
+          async function stable(){for(let i=0;i<8;i++){const a=await head(statePath),r=await get(statePath,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const chunks=[];for await(const x of r.stream)chunks.push(x);const raw=Buffer.concat(chunks),b=await head(statePath);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+          for(let n=1;n<=6;n++){
+            const before=await stable(),s=before.s,users=Array.isArray(s.users)?s.users:[],leads=Array.isArray(s.leads)?s.leads:[],vehicles=Array.isArray(s.vehicles)?s.vehicles:[],audit=Array.isArray(s.audit)?s.audit:[];
+            const userIds=new Set(users.filter(x=>String(x.email||'')===`phx-v4-${tag}@invalid.example`||String(x.displayName||'').includes(`WDCC Phoenix V4 ${tag}`)).map(x=>String(x.id)));
+            const leadRows=leads.filter(x=>String(x.idempotencyKey||'').includes(tag)||String(x.email||'').includes(tag));const leadIds=new Set(leadRows.map(x=>String(x.id)));
+            const vehicleRows=vehicles.filter(x=>String(x.stock||'')===`R36TEST-PHX-V4-${tag}`);const vehicleIds=new Set(vehicleRows.map(x=>String(x.id)));
+            const paths=[...new Set(vehicleRows.flatMap(x=>[...(Array.isArray(x.photoPathnames)?x.photoPathnames:[]),x.primaryPhotoPathname].filter(Boolean).map(String)))];
+            const removed={users:userIds.size,leads:leadIds.size,vehicles:vehicleIds.size,paths:paths.length};
+            if(!removed.users&&!removed.leads&&!removed.vehicles){console.log(JSON.stringify({ok:true,tag,removed,alreadyClean:true}));process.exit(0)}
+            s.users=users.filter(x=>!userIds.has(String(x.id)));s.leads=leads.filter(x=>!leadIds.has(String(x.id)));s.vehicles=vehicles.filter(x=>!vehicleIds.has(String(x.id)));s.audit=audit.filter(x=>!userIds.has(String(x.actor||x.actorId||''))&&!leadIds.has(String(x.leadId||''))&&!vehicleIds.has(String(x.vehicleId||''))&&!String(x.idempotencyKey||'').includes(tag));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();
+            const backup=`private/state/backups/platform-v3-pre-clean-${tag}-r${Number(before.s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
+            try{await put(statePath,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});for(const p of paths){try{await del(p)}catch(e){console.warn('PHOTO_DELETE_WARNING',p,String(e?.message||e))}}console.log(JSON.stringify({ok:true,tag,removed,backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}
+          }
+          NODE
+          CLEAN_TAG="$STALE_TAG" env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node /tmp/wdcc-clean-tag.mjs
+
+      - name: Create exact-run QA identity with backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > /tmp/wdcc-fix-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}for(let n=1;n<=6;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`UploadFix-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`upload-fix-${crypto.randomUUID()}`,email=`upload-fix-${run}@invalid.example`,stock=`R36TEST-UPLOAD-FIX-${run}`,backup=`private/state/backups/platform-v3-pre-upload-fix-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Upload Fix ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/wdcc-fix.env',`RUN_TAG=${run}\nDEALER_ID=${id}\nDEALER_EMAIL=${email}\nQA_PASSWORD=${password}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,email,stock,backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          RUN_TAG="$RUN_TAG" env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node /tmp/wdcc-fix-user.mjs
+          set -a; . /tmp/wdcc-fix.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Deploy isolated patch candidate without aliases
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .next
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+          vercel deploy --prebuilt --prod --skip-domain --archive=tgz --yes \
+            --env WDCC_RUNTIME_ROLE=backend \
+            --env BLOB_STORE_ID="$STORE_ID" \
+            --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee /tmp/upload-fix-deploy.log
+          url="$(grep -Eo 'https://wdcc-cpx-launch-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/upload-fix-deploy.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s' "$url" > /tmp/upload-fix-url
+
+      - name: Gate health auth lead upload publish and QA isolation
+        id: gate
+        shell: bash
+        env:
+          BASE: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/wdcc-fix.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          ok=false
+          for i in $(seq 1 30); do code="$(curl -sS -o /tmp/fix-health.json -w '%{http_code}' "$BASE/api/health?attempt=$i" || true)"; if [ "$code" = 200 ] && jq -e --arg sha "$PATCH_SHA" '.ok==true and .degraded==false and .commit==$sha and .storage=="oidc-auto" and .state=="readable"' /tmp/fix-health.json >/dev/null 2>&1; then ok=true;break;fi;sleep 2;done
+          test "$ok" = true
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');const base=process.env.BASE,run=process.env.RUN_TAG,stock=process.env.STOCK;const out={ok:false,base,run,stock,trace:[],errors:[]};const short=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};async function txt(r){try{return(await r.text()).slice(0,3000)}catch{return''}}
+          (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('console',m=>{if(m.type()==='error')out.errors.push(m.text())});p.on('pageerror',e=>out.errors.push(String(e)));p.on('response',r=>{if(/\/api\/(auth|leads|inventory|upload)/.test(r.url()))out.trace.push({method:r.request().method(),url:short(r.url()),status:r.status()})});await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const login=await p.evaluate(async({email,password})=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});return{status:r.status,body:await r.text()}},{email:process.env.DEALER_EMAIL,password:process.env.QA_PASSWORD});if(login.status!==200)throw Error(`LOGIN_${login.status}_${login.body}`);const session=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(session.status!==200||!JSON.parse(session.body).authenticated)throw Error(`SESSION_${session.status}_${session.body}`);out.auth=true;const lead=await p.evaluate(async({run})=>{const r=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':`wdcc-qa-upload-fix-${run}`},body:JSON.stringify({qa:true,kind:'schedule',source:'upload-fix',name:`WDCC QA UPLOAD FIX ${run}`,phone:'813-555-0191',email:`qa-upload-fix-${run}@invalid.example`,vehicleInterest:'Upload fix certification',message:'Automated WDCC contract verification',consent:true})});return{status:r.status,body:await r.text()}},{run});if(lead.status!==201&&lead.status!==200)throw Error(`LEAD_${lead.status}_${lead.body}`);const lj=JSON.parse(lead.body);if(!lj.ok||!lj.persisted||!lj.item?.id)throw Error(`LEAD_CONTRACT_${lead.body}`);out.leadId=lj.item.id;await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Upload Fix ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);const desc=p.locator('textarea').first();if(await desc.count())await desc.fill(`QA-isolated presigned upload fix ${run}`);fs.writeFileSync('/tmp/fix.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const input=p.locator('input[type=file][multiple]').first();if(!await input.count())throw Error('FILE_INPUT_MISSING');await input.setInputFiles('/tmp/fix.png');const draftP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000});const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();if(!await publish.count())throw Error('VISIBLE_PUBLISH_MISSING');await publish.click({noWaitAfter:true,timeout:10000});const draft=await draftP,dt=await txt(draft);if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const dj=JSON.parse(dt),vehicleId=String(dj.item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');out.vehicleId=vehicleId;const upload=await uploadP,ut=await txt(upload);out.upload={status:upload.status(),body:ut};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);const nav=await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:50000}).then(()=>true).catch(()=>false);if(!nav)throw Error(`PUBLISH_NAV_${await p.locator('.statusMessage').first().textContent().catch(()=> '')}`);const inv=await p.evaluate(async()=>{const r=await fetch('/api/inventory',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(inv.status!==200)throw Error(`INVENTORY_${inv.status}_${inv.body}`);const item=(JSON.parse(inv.body).items||[]).find(x=>x.id===vehicleId||x.stock===stock);if(!item||String(item.status).toLowerCase()!=='published'||!(item.photoPathnames||[]).length)throw Error(`READBACK_${JSON.stringify(item||null)}`);out.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames};const pub=await b.newContext();const pr=await pub.request.get(`${base}/api/inventory?public=${Date.now()}`),pj=await pr.json();await pub.close();if((pj.items||[]).some(x=>x.id===item.id||x.stock===stock))throw Error('QA_PUBLIC');out.qaHidden=true;if(out.errors.length)throw Error(`BROWSER_ERRORS_${out.errors.join(' | ')}`);out.ok=true;fs.writeFileSync('/tmp/upload-fix-result.json',JSON.stringify(out,null,2));}catch(e){out.error=String(e?.message||e);fs.writeFileSync('/tmp/upload-fix-result.json',JSON.stringify(out,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+          jq -e '.ok==true and .auth==true and .qaHidden==true and .upload.status==200 and (.vehicle.photoPathnames|length)>0' /tmp/upload-fix-result.json >/dev/null
+
+      - name: Exact-run cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/wdcc-fix.env || exit 0
+          set -a; . /tmp/wdcc-fix.env; set +a
+          cat > /tmp/wdcc-fix-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG,userId=process.env.DEALER_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}for(let n=1;n<=6;n++){const before=await stable(),s=before.s,leads=Array.isArray(s.leads)?s.leads:[],vehicles=Array.isArray(s.vehicles)?s.vehicles:[],users=Array.isArray(s.users)?s.users:[],audit=Array.isArray(s.audit)?s.audit:[],leadRows=leads.filter(x=>String(x.idempotencyKey||'').includes(run)||String(x.email||'').includes(run)),leadIds=new Set(leadRows.map(x=>String(x.id))),vehicleRows=vehicles.filter(x=>String(x.stock||'')===stock),vehicleIds=new Set(vehicleRows.map(x=>String(x.id))),paths=[...new Set(vehicleRows.flatMap(x=>[...(Array.isArray(x.photoPathnames)?x.photoPathnames:[]),x.primaryPhotoPathname].filter(Boolean).map(String)))];s.users=users.filter(x=>String(x.id)!==userId);s.leads=leads.filter(x=>!leadIds.has(String(x.id)));s.vehicles=vehicles.filter(x=>!vehicleIds.has(String(x.id)));s.audit=audit.filter(x=>String(x.actor||x.actorId||'')!==userId&&!leadIds.has(String(x.leadId||''))&&!vehicleIds.has(String(x.vehicleId||''))&&!String(x.idempotencyKey||'').includes(run));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();const backup=`private/state/backups/platform-v3-pre-upload-fix-clean-${run}-r${Number(before.s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});for(const p of paths){await del(p).catch(e=>console.warn('PHOTO_DELETE_WARNING',p,String(e?.message||e)))}console.log(JSON.stringify({ok:true,run,removed:{user:userId,leads:leadIds.size,vehicles:vehicleIds.size,paths:paths.length},backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node /tmp/wdcc-fix-clean.mjs
+
+      - name: Re-prove live baseline untouched
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$LIVE_APEX/api/health?upload_fix_after=$GITHUB_RUN_ID" -o /tmp/live-after-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-after-health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?upload_fix_after=$GITHUB_RUN_ID" -o /tmp/live-after-inventory.json
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-after-inventory.json >/dev/null
+
+      - name: Report correction evidence to release control
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+          CANDIDATE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          summary="not-produced"
+          if [ -f /tmp/upload-fix-result.json ]; then summary="$(jq -c '{ok,auth,leadId,vehicleId,upload,vehicle,qaHidden,error}' /tmp/upload-fix-result.json)"; fi
+          body=$(printf 'Presigned upload corrective certification `%s`\n\n- base frozen source: `%s`\n- isolated patch: `%s` (only `app/api/upload/route.ts`)\n- no-alias candidate: `%s`\n- gate outcome: **%s**\n- browser/API evidence: `%s`\n- exact-run cleanup: attempted under `if: always()`\n- live production routing/DNS/aliases: **unchanged**\n\nThis does not authorize promotion. If green, update the frozen candidate only after release-control review.' "$GITHUB_RUN_ID" "$BASE_SHA" "$PATCH_SHA" "${CANDIDATE_URL:-none}" "$GATE_OUTCOME" "$summary")
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "$body" || true
