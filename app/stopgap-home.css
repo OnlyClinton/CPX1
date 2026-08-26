@@ -156,9 +156,9 @@
 .wdcc-app .intro-badge {
   position: absolute !important;
   z-index: 10 !important;
-  top: 49% !important;
-  left: 50% !important;
-  width: var(--intro-badge-size) !important;
+  top: 49%;
+  left: 50%;
+  width: var(--intro-badge-size);
   opacity: .34;
   transform: translate(-50%, -50%) scale(.82);
   animation: wdccBadgeLoading 1s ease-in-out infinite alternate !important;
