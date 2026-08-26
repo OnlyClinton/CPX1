@@ -9,6 +9,112 @@ function customerVisible(v:any){const status=String(v?.status||"").toLowerCase()
 const photo=(v:Vehicle)=>v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:String(v.primary_image_url||v.image||"").trim();
 const href=(v:Vehicle)=>`/vehicle/${encodeURIComponent(String(v.id||v.slug||""))}`;
 
+const FINAL_VISUAL_CSS=`
+main.reference-home.locked-storefront .rh-utility{position:sticky!important;top:0!important;z-index:2201!important;background:#07121c!important}
+main.reference-home.locked-storefront .rh-header{position:sticky!important;top:28px!important;z-index:2200!important;background:rgba(2,7,12,.98)!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important;box-shadow:0 8px 24px rgba(0,0,0,.28)!important}
+main.reference-home.locked-storefront .rh-logo{display:grid!important;place-items:center!important;background:transparent!important;overflow:visible!important}
+main.reference-home.locked-storefront .rh-logo:before,main.reference-home.locked-storefront .rh-logo:after{display:none!important;content:none!important}
+main.reference-home.locked-storefront .rh-logo img{content:url('/wdcc-official-logo.webp')!important;display:block!important;max-width:none!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
+@media(min-width:1101px){
+ main.reference-home.locked-storefront .rh-utility{height:28px!important;min-height:28px!important}
+ main.reference-home.locked-storefront .rh-header{height:90px!important;min-height:90px!important;top:28px!important}
+ main.reference-home.locked-storefront .rh-header-inner{height:90px!important;grid-template-columns:150px minmax(0,1fr) auto!important;gap:26px!important}
+ main.reference-home.locked-storefront .rh-logo{width:138px!important;height:88px!important}
+ main.reference-home.locked-storefront .rh-logo img{width:90px!important;height:90px!important;filter:drop-shadow(0 7px 16px rgba(0,0,0,.5))!important}
+ main.reference-home.locked-storefront .rh-menu,main.reference-home.locked-storefront .rh-call{display:none!important}
+ main.reference-home.locked-storefront .rh-nav{display:flex!important;gap:32px!important;font-size:13px!important}
+ main.reference-home.locked-storefront .rh-header-actions{display:flex!important}
+ main.reference-home.locked-storefront .rh-hero,main.reference-home.locked-storefront .rh-hero-inner{min-height:570px!important}
+ main.reference-home.locked-storefront .rh-copy{width:min(560px,45vw)!important;padding:52px 0 46px!important}
+ main.reference-home.locked-storefront h1{font-size:clamp(60px,5vw,76px)!important;line-height:.91!important;letter-spacing:-.052em!important;max-width:560px!important;margin:0 0 20px!important}
+ main.reference-home.locked-storefront .rh-lead{font-size:17px!important;line-height:1.48!important;max-width:500px!important}
+ main.reference-home.locked-storefront .rh-btn{min-height:52px!important;font-size:12px!important}
+ main.reference-home.locked-storefront .rh-benefit{min-height:106px!important;padding:18px 20px!important}
+ main.reference-home.locked-storefront .rh-benefit strong{font-size:14px!important} main.reference-home.locked-storefront .rh-benefit small{font-size:12px!important}
+ main.reference-home.locked-storefront .rh-inventory{padding:50px 24px 60px!important}
+ main.reference-home.locked-storefront .rh-section-head h2{font-size:42px!important}
+ main.reference-home.locked-storefront .rh-section-head p{font-size:13px!important}
+ main.reference-home.locked-storefront .rh-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important;overflow:visible!important;padding:0!important}
+ main.reference-home.locked-storefront .rh-card{min-width:0!important;max-width:none!important}
+ main.reference-home.locked-storefront .rh-mobile-dots{display:none!important}
+ main.reference-home.locked-storefront .rh-finance{padding:56px 24px 62px!important}
+ main.reference-home.locked-storefront .finance-heading h2{font-size:38px!important}
+ main.reference-home.locked-storefront .rh-step{min-height:126px!important;padding:20px!important}
+}
+@media(max-width:1100px),(hover:none) and (pointer:coarse){
+ main.reference-home.locked-storefront .rh-utility{height:28px!important;min-height:28px!important;top:0!important;overflow:hidden!important}
+ main.reference-home.locked-storefront .rh-utility-inner{height:28px!important;width:100%!important;max-width:none!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:17px!important;padding:0 12px!important;overflow-x:auto!important;white-space:nowrap!important;font-size:10px!important;scrollbar-width:none!important}
+ main.reference-home.locked-storefront .rh-header{height:82px!important;min-height:82px!important;top:28px!important}
+ main.reference-home.locked-storefront .rh-header-inner{height:82px!important;width:100%!important;display:grid!important;grid-template-columns:58px 1fr 94px!important;padding:0 10px!important;gap:4px!important}
+ main.reference-home.locked-storefront .rh-menu{display:flex!important;width:46px!important;height:46px!important;align-items:center!important;justify-content:center!important;font-size:28px!important;justify-self:start!important}
+ main.reference-home.locked-storefront .rh-logo{width:106px!important;height:82px!important;justify-self:center!important}
+ main.reference-home.locked-storefront .rh-logo img{width:90px!important;height:90px!important;transform:scale(1.06)!important;transform-origin:center!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))!important}
+ main.reference-home.locked-storefront .rh-header-actions{display:none!important}
+ main.reference-home.locked-storefront .rh-call{display:flex!important;align-items:center!important;justify-content:center!important;min-width:90px!important;height:44px!important;padding:0 12px!important;border-radius:999px!important;font-size:11.5px!important;font-weight:950!important;justify-self:end!important}
+ main.reference-home.locked-storefront .rh-nav{display:none!important;position:fixed!important;top:110px!important;left:12px!important;right:12px!important;z-index:2300!important;flex-direction:column!important;gap:0!important;padding:8px!important;background:#07121c!important;border:1px solid rgba(255,255,255,.13)!important;border-radius:12px!important;box-shadow:0 18px 44px rgba(0,0,0,.45)!important}
+ main.reference-home.locked-storefront .rh-nav.open{display:flex!important}
+ main.reference-home.locked-storefront .rh-nav a{display:flex!important;min-height:48px!important;align-items:center!important;padding:0 14px!important;font-size:14px!important;border-bottom:1px solid rgba(255,255,255,.08)!important}
+ main.reference-home.locked-storefront .rh-hero{position:relative!important;min-height:0!important;height:auto!important;padding-top:278px!important;background:#02070c!important;overflow:hidden!important}
+ main.reference-home.locked-storefront .rh-hero-art,main.reference-home.locked-storefront .rh-hero-shade,main.reference-home.locked-storefront .rh-hero:after{height:342px!important}
+ main.reference-home.locked-storefront .rh-hero-art{position:absolute!important;inset:0 0 auto 0!important;width:100%!important;object-fit:cover!important;object-position:72% 34%!important;filter:saturate(1.24) contrast(1.08) brightness(1.20)!important}
+ main.reference-home.locked-storefront .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,.01) 45%,rgba(2,7,12,.14) 66%,rgba(2,7,12,.60) 84%,#02070c 100%)!important}
+ main.reference-home.locked-storefront .rh-hero:after{bottom:auto!important;background:linear-gradient(180deg,transparent 0%,transparent 64%,rgba(2,7,12,.20) 79%,#02070c 100%)!important}
+ main.reference-home.locked-storefront .rh-hero-inner{width:100%!important;min-height:0!important;display:block!important}
+ main.reference-home.locked-storefront .rh-copy{width:100%!important;max-width:none!important;padding:22px 17px 29px!important;background:#02070c!important}
+ main.reference-home.locked-storefront .rh-kicker{font-size:11.5px!important;line-height:1.2!important;margin:0 0 10px!important}
+ main.reference-home.locked-storefront h1{font-size:clamp(38px,10.2vw,44px)!important;line-height:.94!important;letter-spacing:-.044em!important;max-width:372px!important;margin:0 0 17px!important}
+ main.reference-home.locked-storefront .rh-lead{font-size:15.5px!important;line-height:1.48!important;max-width:365px!important}
+ main.reference-home.locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important;margin-top:18px!important}
+ main.reference-home.locked-storefront .rh-btn{min-height:50px!important;padding:0 10px!important;font-size:12px!important}
+ main.reference-home.locked-storefront .rh-phone{font-size:12px!important;margin-top:13px!important}
+ main.reference-home.locked-storefront .rh-benefits{width:100%!important;display:grid!important;grid-template-columns:1fr 1fr!important;border-radius:0!important}
+ main.reference-home.locked-storefront .rh-benefit{min-height:96px!important;padding:14px 13px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:10px!important}
+ main.reference-home.locked-storefront .rh-icon{width:34px!important;height:34px!important;font-size:14px!important}
+ main.reference-home.locked-storefront .rh-benefit strong{font-size:14px!important;line-height:1.18!important}
+ main.reference-home.locked-storefront .rh-benefit small{font-size:12px!important;line-height:1.34!important;margin-top:3px!important}
+ main.reference-home.locked-storefront .rh-inventory{padding:38px 0 44px!important}
+ main.reference-home.locked-storefront .rh-section-head{display:block!important;padding:0 17px!important;margin-bottom:18px!important}
+ main.reference-home.locked-storefront .rh-section-head small{font-size:11px!important}
+ main.reference-home.locked-storefront .rh-section-head h2{font-size:32px!important;line-height:1.02!important;margin:6px 0 8px!important}
+ main.reference-home.locked-storefront .rh-section-head p{font-size:13px!important;line-height:1.44!important;max-width:360px!important}
+ main.reference-home.locked-storefront .rh-view-all{display:inline-flex!important;font-size:11.5px!important;margin-top:10px!important}
+ main.reference-home.locked-storefront .rh-grid{display:flex!important;width:100%!important;gap:13px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:8vw!important;padding:0 8vw 9px!important;margin:0!important;scrollbar-width:none!important;-webkit-overflow-scrolling:touch!important}
+ main.reference-home.locked-storefront .rh-card{flex:0 0 84vw!important;min-width:84vw!important;max-width:84vw!important;scroll-snap-align:center!important;scroll-snap-stop:always!important;border-radius:12px!important}
+ main.reference-home.locked-storefront .rh-photo{aspect-ratio:1.62!important;min-height:0!important}
+ main.reference-home.locked-storefront .rh-card-body{padding:16px 17px 18px!important}
+ main.reference-home.locked-storefront .rh-eyebrow{font-size:10px!important}
+ main.reference-home.locked-storefront .rh-title{font-size:18.5px!important;line-height:1.1!important;margin-bottom:11px!important}
+ main.reference-home.locked-storefront .rh-price{font-size:30px!important}
+ main.reference-home.locked-storefront .rh-payment{font-size:12.5px!important;margin:5px 0 9px!important}
+ main.reference-home.locked-storefront .rh-pills span{font-size:9.5px!important;padding:5px 7px!important}
+ main.reference-home.locked-storefront .rh-mobile-dots{display:flex!important;justify-content:center!important;align-items:center!important;gap:8px!important;margin-top:12px!important}
+ main.reference-home.locked-storefront .rh-mobile-dots button{width:8px!important;height:8px!important;border-radius:999px!important}
+ main.reference-home.locked-storefront .rh-mobile-dots button.active{width:22px!important;background:#f2263d!important}
+ main.reference-home.locked-storefront .rh-finance{padding:40px 15px 44px!important}
+ main.reference-home.locked-storefront .finance-heading h2{font-size:30px!important;line-height:1.04!important}
+ main.reference-home.locked-storefront .finance-heading p{font-size:12.5px!important;line-height:1.4!important}
+ main.reference-home.locked-storefront .rh-steps{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+ main.reference-home.locked-storefront .rh-step{min-height:98px!important;padding:16px 17px!important;grid-template-columns:46px 1fr!important;column-gap:14px!important}
+ main.reference-home.locked-storefront .rh-step b{width:44px!important;height:44px!important;font-size:18px!important}
+ main.reference-home.locked-storefront .rh-step strong{font-size:14.5px!important}
+ main.reference-home.locked-storefront .rh-step small{font-size:12px!important;line-height:1.38!important}
+ main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:1fr!important}
+ main.reference-home.locked-storefront .rh-trust-grid article{min-height:78px!important;padding:14px 17px!important}
+ main.reference-home.locked-storefront .rh-trust-grid b{font-size:14px!important}
+ main.reference-home.locked-storefront .rh-trust-grid span{font-size:12px!important;line-height:1.36!important}
+ main.reference-home.locked-storefront .rh-footer{padding:24px 17px 28px!important}
+ main.reference-home.locked-storefront .rh-footer-inner{font-size:11.5px!important;line-height:1.45!important}
+}
+@media(max-width:430px){
+ main.reference-home.locked-storefront .rh-header-inner{grid-template-columns:56px 1fr 90px!important;padding:0 9px!important}
+ main.reference-home.locked-storefront .rh-logo img{width:88px!important;height:88px!important}
+ main.reference-home.locked-storefront .rh-hero{padding-top:268px!important}
+ main.reference-home.locked-storefront .rh-hero-art,main.reference-home.locked-storefront .rh-hero-shade,main.reference-home.locked-storefront .rh-hero:after{height:332px!important}
+ main.reference-home.locked-storefront h1{font-size:clamp(37px,10.4vw,42px)!important;max-width:360px!important}
+ main.reference-home.locked-storefront .rh-lead{font-size:15px!important}
+}
+`;
+
 export default function ReferenceCloneHome(){
  const[open,setOpen]=useState(false),[items,setItems]=useState<Vehicle[]>([]),[active,setActive]=useState(0),[inventoryState,setInventoryState]=useState<"loading"|"ready"|"empty"|"error">("loading");
  const gridRef=useRef<HTMLDivElement|null>(null);
@@ -16,6 +122,7 @@ export default function ReferenceCloneHome(){
  const vehicles=useMemo(()=>items,[items]);
  const goTo=(i:number)=>{setActive(i);const node=gridRef.current?.children?.[i] as HTMLElement|undefined;node?.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"})};
  return <main className="reference-home locked-storefront">
+   <style>{FINAL_VISUAL_CSS}</style>
    <LockedIntro/>
    <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ Tampa Bay</span><span>In-house financing</span><span>Low down payments</span><span>Drive today</span></div></div>
    <header className="rh-header"><div className="rh-header-inner">
