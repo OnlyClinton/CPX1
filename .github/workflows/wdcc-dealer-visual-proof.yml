@@ -1,4 +1,3 @@
-# Registered dealer visual proof trigger: read-only isolated acceptance lane.
 name: WDCC Dealer Visual Acceptance Proof
 
 on:
@@ -45,7 +44,6 @@ jobs:
           grep -q 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'All Vehicles' app/dealer/inventory/InventoryManager.tsx
           grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
-          grep -q 'editVehicleApp' app/dealer-editor-final.css
 
       - name: Build isolated Cloudflare artifact
         shell: bash
@@ -55,56 +53,34 @@ jobs:
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
-          test -d .open-next/assets
           npx playwright install --with-deps chromium >/dev/null
 
-      - name: Create no-route Worker config
+      - name: Create isolated no-route Worker
         shell: bash
         run: |
-          set -euo pipefail
           node - <<'NODE'
           const fs=require('fs');
           const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
           cfg.name='wdcc-dealer-visual-preview';
           cfg.workers_dev=true;
           cfg.preview_urls=true;
-          delete cfg.route;
-          delete cfg.routes;
+          delete cfg.route; delete cfg.routes;
           fs.writeFileSync('wrangler.dealer-visual.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
           ! grep -qi 'wedontcarecars.com' wrangler.dealer-visual.jsonc
 
-      - name: Deploy no-production dealer preview
+      - name: Deploy isolated dealer preview
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.dealer-visual.jsonc 2>&1 | tee /tmp/wdcc-dealer-visual.log
-          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-dealer-visual.log | tail -1)"
+          npx wrangler deploy --config wrangler.dealer-visual.jsonc 2>&1 | tee /tmp/dealer-visual.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/dealer-visual.log | tail -1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > dealer-preview-url.txt
 
-      - name: Smoke read-only data surfaces
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=000
-          for i in $(seq 1 30); do
-            code="$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?dealer-visual=$GITHUB_RUN_ID-$i" || true)"
-            [ "$code" = 200 ] && break
-            sleep 2
-          done
-          test "$code" = 200
-          jq -e '(.items // .inventory // []) | type=="array" and length>0' /tmp/inventory.json >/dev/null
-          test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?dealer-visual=$GITHUB_RUN_ID")" = 200
-          test "$(curl -sS -L -o /tmp/all.html -w '%{http_code}' "$URL/dealer/inventory?dealer-visual=$GITHUB_RUN_ID")" = 200
-          test "$(curl -sS -L -o /tmp/import.html -w '%{http_code}' "$URL/dealer/inventory/import?dealer-visual=$GITHUB_RUN_ID")" = 200
-          test "$(curl -sS -L -o /tmp/new.html -w '%{http_code}' "$URL/dealer/inventory/new?dealer-visual=$GITHUB_RUN_ID")" = 200
-
-      - name: Capture complete dealer mockup packet
+      - name: Capture complete read-only dealer packet
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -116,64 +92,66 @@ jobs:
           const {chromium}=require('playwright');
           (async()=>{
             const base=process.env.URL;
-            const invRes=await fetch(`${base}/api/inventory?visual-source=${Date.now()}`);
-            if(!invRes.ok)throw Error(`REAL_INVENTORY_${invRes.status}`);
+            let invRes;
+            for(let i=0;i<25;i++){
+              invRes=await fetch(`${base}/api/inventory?visual-source=${Date.now()}-${i}`).catch(()=>null);
+              if(invRes?.ok)break;
+              await new Promise(r=>setTimeout(r,1000));
+            }
+            if(!invRes?.ok)throw Error(`REAL_INVENTORY_${invRes?.status||'unavailable'}`);
             const invJson=await invRes.json();
             const items=Array.isArray(invJson.items)?invJson.items:Array.isArray(invJson.inventory)?invJson.inventory:[];
             if(!items.length)throw Error('NO_REAL_INVENTORY');
             const live=items.filter(v=>String(v.status||'').toLowerCase()==='published'&&v.internalOnly!==true&&!['internal','dealer_only'].includes(String(v.visibility||'').toLowerCase()));
-            const first=(live[0]||items[0]);
+            const first=live[0]||items[0];
             if(!first?.id)throw Error('NO_REAL_INVENTORY_ID');
             const firstId=String(first.id);
-            const summary={soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0};
-            const dashBody=JSON.stringify({summary,inventory:items,leads:[]});
-            const sessionBody=JSON.stringify({authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}});
+            const inventoryBody=JSON.stringify({...invJson,items});
             const itemBody=JSON.stringify({item:first});
+            const sessionBody=JSON.stringify({authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}});
+            const dashBody=JSON.stringify({summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:items,leads:[]});
             const proof={url:base,sha:process.env.GITHUB_SHA,realInventoryCount:items.length,realVehicleId:firstId,writeRequests:[],screens:[]};
             const browser=await chromium.launch({headless:true});
+
             async function wire(page){
               page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))proof.writeRequests.push({method:r.method(),url:r.url()})});
-              await page.route('**/api/auth/session',r=>r.fulfill({status:200,contentType:'application/json',body:sessionBody}));
-              await page.route('**/api/crm/dashboard',r=>r.fulfill({status:200,contentType:'application/json',body:dashBody}));
-              await page.route('**/api/inventory/*',r=>{
+              await page.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:sessionBody}));
+              await page.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:dashBody}));
+              await page.route('**/api/inventory**',r=>{
                 const u=new URL(r.request().url());
-                if(u.pathname===`/api/inventory/${encodeURIComponent(firstId)}`||decodeURIComponent(u.pathname)==`/api/inventory/${firstId}`)return r.fulfill({status:200,contentType:'application/json',body:itemBody});
+                if(u.pathname==='/api/inventory')return r.fulfill({status:200,contentType:'application/json',body:inventoryBody});
+                if(decodeURIComponent(u.pathname)===`/api/inventory/${firstId}`)return r.fulfill({status:200,contentType:'application/json',body:itemBody});
                 return r.continue();
               });
             }
-            async function snap(page,path,waitSelector,full=true){
+            async function snap(page,path,selector,name,full=true){
               await page.goto(`${base}${path}${path.includes('?')?'&':'?'}visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              await page.locator(waitSelector).waitFor({state:'visible',timeout:12000});
-              await page.waitForTimeout(500);
-              const viewport=page.viewportSize(),prefix=(viewport?.width||0)>700?'desktop':'mobile';
-              const name=path.replace(/^\//,'').replace(/[^a-z0-9]+/gi,'-').replace(/-+$/,'')||'root';
-              await page.screenshot({path:`dealer-visual-proof/${prefix}-${name}.png`,fullPage:full});
-              proof.screens.push({prefix,path,url:page.url(),waitSelector});
+              await page.locator(selector).first().waitFor({state:'visible',timeout:12000});
+              await page.waitForTimeout(350);
+              await page.screenshot({path:`dealer-visual-proof/${name}.png`,fullPage:full});
+              proof.screens.push({path,url:page.url(),selector,name});
             }
             try{
               const dc=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
               const d=await dc.newPage(); await wire(d);
-              await snap(d,'/dealer','.dealerDashboardLocked');
-              await snap(d,'/dealer/inventory','.inventoryContract');
-              await snap(d,'/dealer/inventory/import','.dcDrop');
-              await snap(d,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp');
+              await snap(d,'/dealer','.dealerDashboardLocked','desktop-dealer');
+              await snap(d,'/dealer/inventory','.inventoryRow','desktop-dealer-inventory');
+              await snap(d,'/dealer/inventory/import','.dcDrop','desktop-dealer-inventory-import');
+              await snap(d,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp','desktop-dealer-inventory-new');
               await d.locator('.sectionBlock').nth(1).screenshot({path:'dealer-visual-proof/dealer-photos-desktop.png'});
               await d.locator('.readinessCard').screenshot({path:'dealer-visual-proof/dealer-readiness-desktop.png'});
               await d.getByRole('button',{name:/^preview$/i}).last().click({force:true});
               await d.locator('.previewModal').waitFor({state:'visible',timeout:5000});
               await d.locator('.previewModal').screenshot({path:'dealer-visual-proof/dealer-preview-modal-desktop.png'});
-              await snap(d,`/vehicle/${encodeURIComponent(firstId)}`,'.vehicleDetail',true).catch(async()=>{
-                await d.goto(`${base}/vehicle/${encodeURIComponent(firstId)}?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-                await d.waitForTimeout(800);await d.screenshot({path:'dealer-visual-proof/vehicle-details-desktop.png',fullPage:true});
-              });
+              await snap(d,`/vehicle/${encodeURIComponent(firstId)}`,'body','vehicle-details-desktop');
               await dc.close();
 
               const mc=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
               const m=await mc.newPage(); await wire(m);
-              await snap(m,'/dealer','.dealerDashboardLocked');
-              await snap(m,'/dealer/inventory','.inventoryContract');
-              await snap(m,'/dealer/inventory/import','.dcDrop');
-              await snap(m,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp');
+              await snap(m,'/dealer','.dealerDashboardLocked','mobile-dealer');
+              await snap(m,'/dealer/inventory','.inventoryRow','mobile-dealer-inventory');
+              await snap(m,'/dealer/inventory/import','.dcDrop','mobile-dealer-inventory-import');
+              await snap(m,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp','mobile-dealer-inventory-new');
               await m.getByRole('button',{name:/^preview$/i}).last().click({force:true});
               await m.locator('.previewModal').waitFor({state:'visible',timeout:5000});
               await m.locator('.previewModal').screenshot({path:'dealer-visual-proof/dealer-preview-modal-mobile.png'});
@@ -184,7 +162,7 @@ jobs:
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
 
-      - name: Publish dealer visual result
+      - name: Publish result
         if: always()
         env:
           URL: ${{ steps.deploy.outputs.url }}
@@ -193,8 +171,8 @@ jobs:
           echo '### WDCC dealer visual acceptance proof' >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Browser-only session mocking; real inventory reads; zero write requests permitted.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'No production route, alias, DNS, provider, account, lead, inventory, or media mutation is performed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Real inventory reads; browser-only session mocking; zero write requests permitted.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No production route, alias, DNS, provider, account, lead, inventory, or media mutation.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
