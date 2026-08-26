@@ -1,0 +1,125 @@
+name: WDCC Dealer Target Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-dealer-target-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-target-production
+  cancel-in-progress: true
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  VERCEL_SCOPE: cpxagency
+  DEALER: https://dealer.wedontcarecars.com
+  PROJECT_ALIAS: https://wdcc-dealer-portal.vercel.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Require dealer deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test "$VERCEL_PROJECT_ID" = 'prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB'
+
+      - name: Install dependencies and pinned Vercel CLI
+        run: |
+          npm ci
+          npm install --global vercel@59.3.0
+
+      - name: Pull dealer production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          jq -e --arg p "$VERCEL_PROJECT_ID" '.projectId == $p' .vercel/project.json >/dev/null
+
+      - name: Build dealer artifact on GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          test -d .vercel/output
+
+      - name: Deploy prebuilt artifact to dealer project only
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" | tail -1)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Dealer deployment: $url"
+          case "$url" in https://wdcc-dealer-portal-*.vercel.app) ;; *) echo "Unexpected deployment URL: $url" >&2; exit 1;; esac
+
+      - name: Verify dealer project alias and target markers
+        id: verify
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/login.html -w '%{http_code}' "$PROJECT_ALIAS/dealer?target=$GITHUB_RUN_ID" || true)"
+            hcode="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$PROJECT_ALIAS/api/health?target=$GITHUB_RUN_ID" || true)"
+            if [ "$code" = 200 ] && [ "$hcode" = 200 ] && jq -e '.ok == true' /tmp/health.json >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+          grep -q 'RUN YOUR DEALERSHIP' /tmp/login.html
+          grep -q 'SECURE DEALER ACCESS' /tmp/login.html
+          echo "project_alias=PASS" >> "$GITHUB_OUTPUT"
+
+          live="$(curl -sS -L -o /tmp/live-login.html -w '%{http_code}' "$DEALER/dealer?target=$GITHUB_RUN_ID" || true)"
+          echo "live_http=$live" >> "$GITHUB_OUTPUT"
+          if [ "$live" = 200 ] && grep -q 'RUN YOUR DEALERSHIP' /tmp/live-login.html; then
+            echo "live_target=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "live_target=PENDING_FRONTDOOR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report dealer target deployment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          PROJECT_ALIAS: ${{ steps.verify.outputs.project_alias }}
+          LIVE_HTTP: ${{ steps.verify.outputs.live_http }}
+          LIVE_TARGET: ${{ steps.verify.outputs.live_target }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          Status: **$STATUS**
+          Source: \`$GITHUB_SHA\`
+          Dealer project: \`$VERCEL_PROJECT_ID\`
+          Prebuilt production deployment: \`$DEPLOYMENT_URL\`
+          Dealer project alias target markers: **$PROJECT_ALIAS**
+          dealer.wedontcarecars.com HTTP: \`$LIVE_HTTP\`
+          dealer.wedontcarecars.com visual target: **$LIVE_TARGET**
+
+          This workflow deploys only the dealer Vercel project. It does not modify the WDCC customer storefront project or apex aliases.
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target production ${GITHUB_RUN_ID}" --body "$body" || true
