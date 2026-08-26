@@ -1,0 +1,252 @@
+name: WDCC Dev Max Acceptance
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/wdcc-dev-max-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dev-max-acceptance
+  cancel-in-progress: true
+
+jobs:
+  max-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install clean dependencies
+        run: npm ci
+      - name: Production build
+        run: npm run build
+      - name: Start local production server
+        shell: bash
+        env:
+          WDCC_RUNTIME_ROLE: frontend
+        run: |
+          nohup npm start -- -p 3000 >/tmp/wdcc-max.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:3000/ >/tmp/wdcc-home.html; then break; fi
+            sleep 1
+          done
+          test -s /tmp/wdcc-home.html
+          grep -q 'wdcc-app' /tmp/wdcc-home.html
+      - name: Install browser acceptance runtime
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Run max storefront acceptance
+        shell: bash
+        run: |
+          mkdir -p max-proof
+          cat > max-proof/max-acceptance.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const BASE='http://127.0.0.1:3000';
+          const browser=await chromium.launch({headless:true});
+          const failures=[];
+          const assert=(condition,message)=>{if(!condition)throw new Error(message)};
+          const cleanPath=href=>{const u=new URL(href,BASE);return `${u.pathname}${u.search}`};
+
+          async function settleHome(page){
+            await page.goto(`${BASE}/?max-acceptance=1`,{waitUntil:'domcontentloaded',timeout:30000});
+            const intro=page.locator('.intro-sequence');
+            if(await intro.count()){await intro.click({position:{x:8,y:8}}).catch(()=>{});await page.waitForTimeout(150)}
+            await page.waitForSelector('.premiumNine .screenshotHero');
+          }
+
+          async function attachGuards(page){
+            const errors=[];
+            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
+            page.on('requestfailed',r=>{if(!r.url().includes('/api/inventory'))errors.push(`request:${r.failure()?.errorText||'failed'}:${r.url()}`)});
+            await page.route('**/api/inventory**',route=>route.abort());
+            return errors;
+          }
+
+          // Responsive geometry + broken-resource + accessibility smoke at five widths.
+          for(const width of [390,768,1024,1440,1920]){
+            const page=await browser.newPage({viewport:{width,height:1000}});
+            const errors=await attachGuards(page);
+            await settleHome(page);
+            await page.waitForTimeout(200);
+            const state=await page.evaluate(()=>{
+              const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};
+              const imgs=[...document.querySelectorAll('img')].filter(visible);
+              const badButtons=[...document.querySelectorAll('button')].filter(visible).filter(b=>!(b.getAttribute('aria-label')||b.textContent||'').trim());
+              const badLinks=[...document.querySelectorAll('a')].filter(visible).filter(a=>!(a.getAttribute('aria-label')||a.textContent||'').trim());
+              return {
+                innerWidth:innerWidth,scrollWidth:document.documentElement.scrollWidth,
+                broken:imgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),
+                missingAlt:imgs.filter(i=>!i.hasAttribute('alt')).map(i=>i.currentSrc||i.src),
+                badButtons:badButtons.length,badLinks:badLinks.length,
+                h1:document.querySelectorAll('h1').length,
+                benefits:document.querySelectorAll('.screenshotBenefits article').length,
+                steps:document.querySelectorAll('.steps-grid article').length,
+                trust:document.querySelectorAll('.premiumTrust article').length
+              };
+            });
+            assert(state.scrollWidth<=state.innerWidth+3,`${width}px horizontal overflow ${state.scrollWidth}>${state.innerWidth}`);
+            assert(state.broken.length===0,`${width}px broken images ${JSON.stringify(state.broken)}`);
+            assert(state.missingAlt.length===0,`${width}px images missing alt ${JSON.stringify(state.missingAlt)}`);
+            assert(state.badButtons===0,`${width}px unnamed buttons ${state.badButtons}`);
+            assert(state.badLinks===0,`${width}px unnamed links ${state.badLinks}`);
+            assert(state.h1===1,`${width}px expected one homepage h1, got ${state.h1}`);
+            assert(state.benefits===4,`${width}px expected 4 benefits`);
+            assert(state.steps===4,`${width}px expected 4 financing steps`);
+            assert(state.trust===4,`${width}px expected 4 trust cards`);
+            assert(errors.length===0,`${width}px browser errors ${JSON.stringify(errors)}`);
+            if(width===390||width===1440)await page.screenshot({path:`max-proof/home-${width}.png`,fullPage:true});
+            await page.close();
+          }
+
+          // Reduced-motion must bypass the cinematic intro.
+          {
+            const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+            const errors=await attachGuards(page);
+            await page.goto(`${BASE}/?reduced=1`,{waitUntil:'domcontentloaded'});
+            await page.waitForSelector('.screenshotHero');
+            await page.waitForTimeout(80);
+            assert(await page.locator('.intro-sequence').count()===0,'prefers-reduced-motion did not bypass intro');
+            assert(errors.length===0,`reduced-motion browser errors ${JSON.stringify(errors)}`);
+            await page.close();
+          }
+
+          // Desktop interactions: carousel, CTAs, and every visible internal homepage link.
+          {
+            const page=await browser.newPage({viewport:{width:1440,height:1000}});
+            const errors=await attachGuards(page);
+            await settleHome(page);
+            const firstBefore=(await page.locator('.featured-slide:first-child .vehicle-title').textContent())?.trim();
+            await page.getByRole('button',{name:'Next vehicles'}).click();
+            await page.waitForTimeout(80);
+            const firstAfter=(await page.locator('.featured-slide:first-child .vehicle-title').textContent())?.trim();
+            assert(firstBefore&&firstAfter&&firstBefore!==firstAfter,`carousel next did not change first vehicle: ${firstBefore} -> ${firstAfter}`);
+            await page.getByRole('button',{name:'Previous vehicles'}).click();
+            await page.waitForTimeout(80);
+            const firstRestored=(await page.locator('.featured-slide:first-child .vehicle-title').textContent())?.trim();
+            assert(firstRestored===firstBefore,`carousel previous did not restore vehicle: ${firstRestored} != ${firstBefore}`);
+            assert((await page.locator('.hero-cta-test').getAttribute('href'))?.startsWith('/get-approved'),'primary CTA route wrong');
+            assert((await page.locator('.hero-cta-qualify').getAttribute('href'))?.startsWith('/inventory'),'inventory CTA route wrong');
+            const hrefs=await page.locator('a[href]').evaluateAll(as=>[...new Set(as.map(a=>a.getAttribute('href')).filter(Boolean).filter(h=>h.startsWith('/'))) ]);
+            for(const href of hrefs){
+              const target=cleanPath(href);
+              const response=await page.request.get(`${BASE}${target}`,{maxRedirects:5});
+              assert(response.status()<400,`internal link ${target} returned ${response.status()}`);
+            }
+            assert(errors.length===0,`desktop interaction errors ${JSON.stringify(errors)}`);
+            await page.close();
+          }
+
+          // Mobile menu must open, expose real links, and close.
+          {
+            const page=await browser.newPage({viewport:{width:390,height:844}});
+            const errors=await attachGuards(page);
+            await settleHome(page);
+            const menu=page.getByRole('button',{name:'Open navigation'});
+            await menu.click();
+            assert(await menu.getAttribute('aria-expanded')==='true','mobile menu aria-expanded did not become true');
+            const visibleMenuLinks=await page.locator('.main-nav.open a').count();
+            assert(visibleMenuLinks>=6,`mobile menu has only ${visibleMenuLinks} links`);
+            await page.getByRole('button',{name:'Close navigation'}).click();
+            assert(await page.getByRole('button',{name:'Open navigation'}).getAttribute('aria-expanded')==='false','mobile menu did not close');
+            assert(await page.locator('.mobile-action-bar a').count()===3,'mobile sticky action bar does not have 3 actions');
+            assert(errors.length===0,`mobile menu errors ${JSON.stringify(errors)}`);
+            await page.close();
+          }
+
+          // Known public route crawl. No 404/500 is acceptable.
+          {
+            const page=await browser.newPage();
+            for(const path of ['/','/inventory','/financing','/get-approved','/schedule-test-drive','/contact','/privacy','/terms']){
+              const response=await page.request.get(`${BASE}${path}`,{maxRedirects:5});
+              assert(response.status()>=200&&response.status()<400,`${path} returned ${response.status()}`);
+            }
+            await page.close();
+          }
+
+          async function testLeadForm(path,expectedKind,fillExtra=async()=>{}){
+            const page=await browser.newPage({viewport:{width:1200,height:900}});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
+            let captured=null;let postCount=0;
+            await page.route('**/api/leads',async route=>{
+              if(route.request().method()!=='POST')return route.continue();
+              postCount++;
+              captured=JSON.parse(route.request().postData()||'{}');
+              await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,id:'qa-max-lead',sync:{upstream:'ok'}})});
+            });
+            await page.goto(`${BASE}${path}`,{waitUntil:'domcontentloaded'});
+            await page.waitForSelector('form.leadForm');
+            const validBefore=await page.locator('form.leadForm').evaluate(f=>f.checkValidity());
+            assert(validBefore===false,`${expectedKind} form unexpectedly valid before required fields`);
+            await page.getByLabel('Name').fill('WDCC Max Acceptance');
+            const phone=page.getByLabel('Phone');if(await phone.count())await phone.fill('8135550100');
+            const email=page.getByLabel('Email');if(await email.count())await email.fill('qa-max@example.com');
+            await fillExtra(page);
+            await page.locator('input[name="consent"]').check();
+            await page.getByRole('button',{name:'SEND REQUEST'}).click();
+            await page.getByRole('status').waitFor({state:'visible'});
+            assert((await page.getByRole('status').textContent())?.includes('Received.'),`${expectedKind} success message missing`);
+            assert(postCount===1,`${expectedKind} expected one POST, got ${postCount}`);
+            assert(captured?.kind===expectedKind,`${expectedKind} payload kind wrong ${JSON.stringify(captured)}`);
+            assert(captured?.consent===true,`${expectedKind} consent missing`);
+            assert(captured?.name==='WDCC Max Acceptance',`${expectedKind} name payload wrong`);
+            assert(errors.length===0,`${expectedKind} browser errors ${JSON.stringify(errors)}`);
+            await page.close();
+            return captured;
+          }
+
+          const approval=await testLeadForm('/get-approved?source=max-approval&vehicle=QA-VEHICLE','approval',async page=>{
+            await page.getByLabel('Vehicle of interest').fill('QA Vehicle');
+          });
+          assert(approval.source==='max-approval',`approval source attribution wrong ${approval.source}`);
+          assert(approval.vehicleId==='QA-VEHICLE',`approval vehicle attribution wrong ${approval.vehicleId}`);
+          assert(approval.pagePath==='/get-approved',`approval pagePath wrong ${approval.pagePath}`);
+
+          const schedule=await testLeadForm('/schedule-test-drive?source=max-schedule&vehicle=QA-DRIVE','schedule',async page=>{
+            await page.getByLabel('Vehicle of interest').fill('QA Drive Vehicle');
+            await page.getByLabel('Preferred date or time').fill('Tomorrow afternoon');
+          });
+          assert(schedule.source==='max-schedule',`schedule source attribution wrong ${schedule.source}`);
+          assert(schedule.preferredTime==='Tomorrow afternoon','schedule preferredTime missing');
+          assert(schedule.vehicleId==='QA-DRIVE','schedule vehicle attribution missing');
+
+          const contact=await testLeadForm('/contact?source=max-contact','contact');
+          assert(contact.source==='max-contact',`contact source attribution wrong ${contact.source}`);
+          assert(contact.pagePath==='/contact',`contact pagePath wrong ${contact.pagePath}`);
+
+          console.log('WDCC_MAX_ACCEPTANCE=PASS');
+          await browser.close();
+          NODE
+          node max-proof/max-acceptance.mjs | tee max-proof/result.txt
+          grep -q 'WDCC_MAX_ACCEPTANCE=PASS' max-proof/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dev-max-acceptance-proof
+          path: max-proof/
+          retention-days: 7
+      - name: Summary
+        run: |
+          echo '### WDCC Dev Max Acceptance' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production build: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Responsive widths: 390 / 768 / 1024 / 1440 / 1920' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Intro and reduced-motion: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Internal link crawl: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Carousel and mobile menu: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Approval / schedule / contact forms: browser-submitted with mocked transport; no live lead data created' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production routing and aliases: untouched' >> "$GITHUB_STEP_SUMMARY"
