@@ -1,0 +1,97 @@
+name: WDCC Dealer Target Stage Diagnostic
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-target-stage-diag.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+env:
+  STAGE: https://wdcc-dealer-target-candidate-v2.clico-global.workers.dev
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  CALL_ID: lead_0ecbb749-6f7f-4ca4-b49a-393f4689929e
+  TEST_ID: lead_f1fb0db1-7970-4376-b3e4-592382334985
+  APPROVAL_ID: lead_ef99c54b-ee9f-4ec1-9b58-7a542a869c3b
+  ACCORD_ID: ab4a0f36-da7c-4bc7-9bcf-f643465aa1eb
+  ESCAPE_ID: 3c355c4c-6864-40fc-9605-905a201bc01a
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install runtime
+        run: |
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Create diagnostic dealer
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-stage-diag-create.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`Diag-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`diag-${crypto.randomUUID()}`,email=`diag-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`WDCC Diag ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.stage_diag.create',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/diag.env',`RUN_TAG=${run}\nQA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-stage-diag-create.mjs
+          set -a;. /tmp/diag.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true>>"$GITHUB_OUTPUT"
+      - name: Print staged protected-route matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -u
+          set -a;. /tmp/diag.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          UI="$(curl -sS -L -o /tmp/d-ui.html -w '%{http_code}' "$STAGE/dealer"||true)"
+          H="$(curl -sS -o /tmp/d-health.json -w '%{http_code}' "$STAGE/api/health"||true)"
+          LOGIN="$(curl -sS -c /tmp/d.cookies -o /tmp/d-login.json -w '%{http_code}' -H 'Origin: https://dealer.wedontcarecars.com' -H 'content-type: application/json' -X POST "$STAGE/api/auth/login" --data "$payload"||true)"
+          SESSION="$(curl -sS -b /tmp/d.cookies -o /tmp/d-session.json -w '%{http_code}' "$STAGE/api/auth/session"||true)"
+          DASH="$(curl -sS -b /tmp/d.cookies -o /tmp/d-dash.json -w '%{http_code}' "$STAGE/api/crm/dashboard"||true)"
+          LEADS="$(curl -sS -b /tmp/d.cookies -o /tmp/d-leads.json -w '%{http_code}' "$STAGE/api/leads"||true)"
+          INV="$(curl -sS -b /tmp/d.cookies -o /tmp/d-inv.json -w '%{http_code}' "$STAGE/api/inventory"||true)"
+          echo "UI=$UI H=$H LOGIN=$LOGIN SESSION=$SESSION DASH=$DASH LEADS=$LEADS INV=$INV"
+          echo 'LOGIN BODY:'; cat /tmp/d-login.json 2>/dev/null||true; echo
+          echo 'SESSION BODY:'; cat /tmp/d-session.json 2>/dev/null||true; echo
+          echo 'DASH BODY:'; jq -c '{ok,error,summary,leadCount:((.leads//[])|length),inventoryCount:((.inventory//[])|length)}' /tmp/d-dash.json 2>/dev/null||head -c 400 /tmp/d-dash.json; echo
+          echo 'LEADS BODY:'; jq -c --arg a "$CALL_ID" --arg b "$TEST_ID" --arg c "$APPROVAL_ID" '{ok,error,count:((.items//[])|length),call:any((.items//[])[];.id==$a),test:any((.items//[])[];.id==$b),approval:any((.items//[])[];.id==$c)}' /tmp/d-leads.json 2>/dev/null||head -c 400 /tmp/d-leads.json; echo
+          echo 'INVENTORY BODY:'; jq -c --arg a "$ACCORD_ID" --arg b "$ESCAPE_ID" '{ok,error,count:((.items//[])|length),accord:any((.items//[])[];.id==$a),escape:any((.items//[])[];.id==$b)}' /tmp/d-inv.json 2>/dev/null||head -c 400 /tmp/d-inv.json; echo
+          printf 'ui=%s\nhealth=%s\nlogin=%s\nsession=%s\ndashboard=%s\nleads=%s\ninventory=%s\n' "$UI" "$H" "$LOGIN" "$SESSION" "$DASH" "$LEADS" "$INV" >> "$GITHUB_OUTPUT"
+          jq -e '.authenticated==true' /tmp/d-session.json >/dev/null 2>&1 && echo auth=true>>"$GITHUB_OUTPUT"||echo auth=false>>"$GITHUB_OUTPUT"
+      - name: Cleanup diagnostic dealer
+        id: cleanup
+        if: always() && steps.identity.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/diag.env;set +a;export QA_ID RUN_TAG
+          cat > .wdcc-stage-diag-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID,run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=Array.isArray(s.users)?s.users:[];s.users=u.filter(x=>x.id!==id);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:new Date().toISOString(),action:'qa.stage_diag.cleanup',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removed:u.length-s.users.length}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-stage-diag-clean.mjs
+          echo ok=true>>"$GITHUB_OUTPUT"
+      - name: Publish diagnostic
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UI: ${{ steps.matrix.outputs.ui }}
+          H: ${{ steps.matrix.outputs.health }}
+          LOGIN: ${{ steps.matrix.outputs.login }}
+          SESSION: ${{ steps.matrix.outputs.session }}
+          DASH: ${{ steps.matrix.outputs.dashboard }}
+          LEADS: ${{ steps.matrix.outputs.leads }}
+          INV: ${{ steps.matrix.outputs.inventory }}
+          AUTH: ${{ steps.matrix.outputs.auth }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target stage diagnostic $GITHUB_RUN_ID" --body "UI/Health/Login/Session/Dashboard/Leads/Inventory: \`$UI/$H/$LOGIN/$SESSION/$DASH/$LEADS/$INV\`\nAuthenticated: \`$AUTH\`." || true
