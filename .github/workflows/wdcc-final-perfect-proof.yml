@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: wdcc-final-perfect-visual-proof
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   EXPECTED_HERO_SIZE: '145504'
