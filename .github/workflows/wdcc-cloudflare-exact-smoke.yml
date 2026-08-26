@@ -1,0 +1,37 @@
+name: WDCC Cloudflare Exact Preview Smoke
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - '.github/workflows/wdcc-cloudflare-exact-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Workers propagation
+        run: sleep 12
+      - name: Verify storefront dealer and assets
+        shell: bash
+        env:
+          URL: https://wdcc-exact-mockup-preview.clico-global.workers.dev
+        run: |
+          set -euo pipefail
+          check(){
+            path="$1"; expected="$2"
+            code="$(curl -sS -L --retry 8 --retry-all-errors --retry-delay 3 -o /tmp/body -w '%{http_code}' "$URL$path")"
+            echo "$path -> $code"
+            test "$code" = "$expected"
+          }
+          check / 200
+          grep -qi "we don.t care" /tmp/body
+          check /dealer 200
+          grep -qi "dealer" /tmp/body
+          check /wdcc-hero-v2.webp 200
+          check /wdcc-logo-transparent.webp 200
+          echo 'CLOUDFLARE_EXACT_PREVIEW_SMOKE=PASS'
