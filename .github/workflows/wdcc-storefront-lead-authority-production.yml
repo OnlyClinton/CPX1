@@ -1,0 +1,170 @@
+name: WDCC Storefront Lead Authority Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-storefront-lead-authority-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-storefront-lead-authority-production
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 96f10e4d440aad6d0e59897b573b0eee80d291fb
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  PROJECT_ALIAS: https://wdcc-v32-storefront-cpxagency.vercel.app
+  CUSTOMER: https://wedontcarecars.com
+  DEALER: https://dealer.wedontcarecars.com
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Exact-source and visual-contract preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          grep -q 'ReferenceCloneHome' app/page.tsx
+          grep -q 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
+          curl -fsS -L "$CUSTOMER/?authority_before=$GITHUB_RUN_ID" -o /tmp/before.html
+          grep -q 'class="refHome"' /tmp/before.html
+          grep -q 'class="refHero"' /tmp/before.html
+          grep -q 'class="refBenefits"' /tmp/before.html
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Build exact storefront artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s","projectName":"wdcc-v32-storefront"}\n' "$TEAM_ID" "$STOREFRONT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM"
+          jq -e --arg p "$STOREFRONT_ID" '.projectId==$p' .vercel/project.json >/dev/null
+          npm run build
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$TEAM"
+          test -d .vercel/output
+
+      - name: Deploy exact storefront production artifact
+        id: vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+          log=/tmp/deploy.log
+          vercel deploy --prebuilt --prod --yes --archive=tgz --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | tee "$log"
+          URL="$(grep -Eo 'https://wdcc-v32-storefront-[A-Za-z0-9-]+\.vercel\.app' "$log" | tail -1)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Require reference clone unchanged on project alias and apex
+        id: visual
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=false
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/project.html -w '%{http_code}' "$PROJECT_ALIAS/?authority=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -q 'class="refHome"' /tmp/project.html && grep -q 'class="refHero"' /tmp/project.html && grep -q 'class="refBenefits"' /tmp/project.html; then ok=true;break;fi
+            sleep 2
+          done
+          test "$ok" = true
+          ok=false
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -D /tmp/apex.h -o /tmp/apex.html -w '%{http_code}' "$CUSTOMER/?authority_live=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -qi '^x-wdcc-reference-clone: 1' /tmp/apex.h && grep -q 'class="refHome"' /tmp/apex.html && grep -q 'class="refHero"' /tmp/apex.html && grep -q 'class="refBenefits"' /tmp/apex.html; then ok=true;break;fi
+            sleep 2
+          done
+          test "$ok" = true
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Create disposable dealer verifier from Phoenix state
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .authority-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=6;n++){const b=await stable(),s=b.s,password=`Authority-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`authority-${crypto.randomUUID()}`,email=`authority-${run}@invalid.example`,now=new Date().toISOString();s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Authority ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:b.etag});fs.writeFileSync('/tmp/authority.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nRUN_TAG=${run}\n`);console.log(JSON.stringify({ok:true,id}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .authority-user.mjs
+          set -a;. /tmp/authority.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Prove all three public lead flows and dealer readback
+        id: leads
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/authority.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          p="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -c /tmp/dealer.cookies -o /tmp/login.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$p")";test "$LOGIN" = 200;jq -e '.ok==true' /tmp/login.json >/dev/null
+          : >/tmp/lead-ids
+          for spec in 'schedule schedule-test-drive' 'approval get-approved' 'contact call-sean'; do
+            set -- $spec;k="$1";s="$2";key="wdcc-qa-authority-${k}-${RUN_TAG}"
+            body="$(jq -nc --arg k "$k" --arg s "$s" --arg r "$RUN_TAG" '{qa:true,kind:$k,name:("WDCC QA AUTHORITY "+$k+" "+$r),phone:"813-555-0195",email:("authority-"+$k+"-"+$r+"@invalid.example"),vehicleInterest:"Production authority recheck",message:"Automated WDCC contract verification",consent:true,source:$s,pagePath:("/qa/authority-"+$k)}')"
+            code="$(curl -sS -o "/tmp/${k}.json" -w '%{http_code}' -H 'content-type: application/json' -H "Idempotency-Key: $key" -X POST "$CUSTOMER/api/leads" --data "$body")"
+            echo "$k=$code"
+            case "$code" in 200|201);;*)cat "/tmp/${k}.json";exit 1;;esac
+            jq -e '.ok==true and .persisted==true and .item.id!=null' "/tmp/${k}.json" >/dev/null
+            jq -r '.item.id' "/tmp/${k}.json" >>/tmp/lead-ids
+          done
+          FEED="$(curl -sS -b /tmp/dealer.cookies -o /tmp/feed.json -w '%{http_code}' "$DEALER/api/leads?authority=$GITHUB_RUN_ID")";test "$FEED" = 200
+          while read -r id;do jq -e --arg id "$id" 'any((.items//[])[];.id==$id)' /tmp/feed.json >/dev/null;done </tmp/lead-ids
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT";echo "feed=$FEED" >> "$GITHUB_OUTPUT";echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup disposable user and leads
+        if: always()
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          uid='';[ -f /tmp/authority.env ]&&{ set -a;. /tmp/authority.env;set +a;uid="$QA_ID";};export QA_ID="$uid" LEAD_IDS="$(paste -sd, /tmp/lead-ids 2>/dev/null || true)"
+          cat > .authority-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',uid=process.env.QA_ID||'',ids=new Set((process.env.LEAD_IDS||'').split(',').filter(Boolean));async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=6;n++){const b=await stable(),s=b.s,u=(s.users||[]).length,l=(s.leads||[]).length,now=new Date().toISOString();s.users=(s.users||[]).filter(x=>x.id!==uid);s.leads=(s.leads||[]).filter(x=>!ids.has(x.id));s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.storefront_authority.cleanup',actor:'github-actions',userId:uid,leadCount:ids.size});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:b.etag});console.log(JSON.stringify({ok:true,removedUsers:u-s.users.length,removedLeads:l-s.leads.length,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .authority-clean.mjs | tee /tmp/clean.log
+          grep -q '"ok":true' /tmp/clean.log
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Publish exact production proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          PRE: ${{ steps.preflight.outputs.ok }}
+          DEPLOYMENT: ${{ steps.vercel.outputs.url }}
+          VISUAL: ${{ steps.visual.outputs.ok }}
+          IDENTITY: ${{ steps.identity.outputs.ok }}
+          LEADS: ${{ steps.leads.outputs.ok }}
+          LOGIN: ${{ steps.leads.outputs.login }}
+          FEED: ${{ steps.leads.outputs.feed }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC storefront lead authority production $GITHUB_RUN_ID" --body "Exact source: \`$SOURCE_SHA\`\nOverall: **$STATUS**\nPreflight/reference clone before: **${PRE:-false}**\nDeployment: \`${DEPLOYMENT:-none}\`\nReference clone unchanged on project alias + apex: **${VISUAL:-false}**\nThree public customer lead paths + dealer readback: **${LEADS:-false}**\nDealer login/feed: \`${LOGIN:-?}/${FEED:-?}\`\nCleanup: **${CLEAN:-false}**\n\nNo Cloudflare storefront worker or customer DNS route is changed by this deployment; the existing reference-clone frontdoor continues proxying the stable storefront project alias." || true
