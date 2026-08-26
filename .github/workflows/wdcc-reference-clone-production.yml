@@ -1,0 +1,122 @@
+name: WDCC Reference Clone Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-reference-clone-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-reference-clone-production
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  VERCEL_SCOPE: cpxagency
+  PROJECT_ALIAS: https://wdcc-v32-storefront-cpxagency.vercel.app
+  APEX: https://wedontcarecars.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install --global vercel@59.3.0 wrangler@4.90.0
+      - name: Link canonical storefront project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s","projectName":"wdcc-v32-storefront"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          jq -e --arg p "$VERCEL_PROJECT_ID" '.projectId==$p' .vercel/project.json >/dev/null
+      - name: Build production artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          test -d .vercel/output
+      - name: Deploy prebuilt storefront
+        id: vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+          log=/tmp/wdcc-reference-vercel.log
+          vercel deploy --prebuilt --prod --yes --archive=tgz --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee "$log"
+          url="$(grep -Eo 'https://wdcc-v32-storefront-[A-Za-z0-9-]+\.vercel\.app' "$log" | tail -1 || true)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Verify canonical Vercel alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/project.html -w '%{http_code}' "$PROJECT_ALIAS/?reference=$GITHUB_RUN_ID" || true)"
+            if [ "$code" = 200 ] && grep -q 'reference-home' /tmp/project.html && grep -q 'Vehicles ready now' /tmp/project.html; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+      - name: Build canonical Cloudflare front door
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-reference-edge
+          cat > /tmp/wdcc-reference-edge/worker.js <<'EOF'
+          const ORIGIN='https://wdcc-v32-storefront-cpxagency.vercel.app';
+          export default {async fetch(request){
+            const incoming=new URL(request.url);const target=new URL(ORIGIN);target.pathname=incoming.pathname;target.search=incoming.search;
+            const headers=new Headers(request.headers);headers.delete('host');
+            const upstream=await fetch(new Request(target,{method:request.method,headers,body:['GET','HEAD'].includes(request.method)?undefined:request.body,redirect:'manual'}));
+            const outHeaders=new Headers(upstream.headers);outHeaders.set('x-wdcc-reference-clone','1');
+            if((outHeaders.get('content-type')||'').includes('text/html'))outHeaders.set('cache-control','no-store, max-age=0');
+            return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:outHeaders});
+          }};
+          EOF
+          cat > /tmp/wdcc-reference-edge/wrangler.jsonc <<EOF
+          {"name":"wdcc-reference-clone-frontdoor","main":"worker.js","compatibility_date":"2026-08-25","routes":[{"pattern":"wedontcarecars.com/*","zone_name":"wedontcarecars.com"},{"pattern":"www.wedontcarecars.com/*","zone_name":"wedontcarecars.com"}]}
+          EOF
+          cd /tmp/wdcc-reference-edge
+          wrangler deploy
+      - name: Verify public storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -D /tmp/live.h -o /tmp/live.html -w '%{http_code}' "$APEX/?reference_live=$GITHUB_RUN_ID" || true)"
+            if [ "$code" = 200 ] && grep -qi 'x-wdcc-reference-clone: 1' /tmp/live.h && grep -q 'reference-home' /tmp/live.html && grep -q 'Bad credit' /tmp/live.html; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+          curl -fsS "$APEX/wdcc-logo-transparent.webp" -o /tmp/logo.webp
+          test -s /tmp/logo.webp
+          curl -fsS "$APEX/api/inventory" -o /tmp/inventory.json
+          jq -e '(.items // .inventory // []) | type=="array"' /tmp/inventory.json >/dev/null
+          echo 'REFERENCE_CLONE_LIVE=PASS'
