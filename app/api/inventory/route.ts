@@ -24,16 +24,19 @@ function publicEligible(item:any){
 }
 
 async function proxyPublicInventory(request:Request){
-  let upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok&&[502,503,504].includes(upstream.status)){
-    await new Promise(resolve=>setTimeout(resolve,250));
+  let upstream:Response|null=null;
+  const retryable=new Set([502,503,504]);
+  for(let attempt=0;attempt<3;attempt++){
     upstream=await proxyDealer(request,"/api/inventory");
+    if(upstream.ok||!retryable.has(upstream.status))break;
+    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
   }
+  if(!upstream)return NextResponse.json({ok:false,items:[],error:"dealer_backend_unavailable"},{status:503,headers:{"Cache-Control":"no-store","Retry-After":"2"}});
   if(!upstream.ok)return upstream;
   const json=await upstream.json().catch(()=>({}));
   const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
   const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Public-Inventory-Retry":"1"}});
+  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Public-Inventory-Attempts":"3"}});
 }
 
 export async function GET(request:Request){
