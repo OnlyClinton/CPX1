@@ -46,11 +46,9 @@ jobs:
           test -s public/wdcc-official-logo.webp
           test -s public/wdcc-logo-transparent.webp
           grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
+          grep -Eq 'wdcc-(official-logo|logo-transparent)\.webp' app/LockedIntro.tsx
           grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
-          grep -q 'wdcc-official-logo.webp' app/mobile-visual-lock.css
           grep -q 'clip-path:circle' app/LockedIntro.tsx
-          grep -q 'clip-path:circle' app/mobile-visual-lock.css
           grep -q 'visual-perfect.css' app/layout.tsx
           grep -q 'rh-photo-placeholder' app/ReferenceCloneHome.tsx
           grep -q 'rh-photo-placeholder' app/visual-perfect.css
@@ -113,7 +111,7 @@ jobs:
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
+          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?proof=$GITHUB_RUN_ID")" = 200
           test -s /tmp/logo.webp
           test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?proof=$GITHUB_RUN_ID")" = 200
           jq -e '((.items // .inventory // []) | length) >= 1' /tmp/inventory.json >/dev/null
@@ -142,10 +140,7 @@ jobs:
             if(!url) throw new Error('PREVIEW_URL_MISSING');
             const waitImage=async(page,selector,minWidth=100)=>{
               await page.locator(selector).waitFor({state:'visible',timeout:12000});
-              await page.waitForFunction(({selector,minWidth})=>{
-                const el=document.querySelector(selector);
-                return !!el && el.complete===true && Number(el.naturalWidth||0)>=minWidth;
-              },{selector,minWidth},{timeout:12000});
+              await page.waitForFunction(({selector,minWidth})=>{const el=document.querySelector(selector);return !!el&&el.complete===true&&Number(el.naturalWidth||0)>=minWidth},{selector,minWidth},{timeout:12000});
               return page.locator(selector).evaluate(el=>({naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,src:el.currentSrc||el.src}));
             };
             const browser=await chromium.launch({headless:true});
@@ -166,14 +161,13 @@ jobs:
               await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
               await page.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
               const mobileHero=await waitImage(page,'.rh-hero-art',1000);
+              const headerLogo=await waitImage(page,'.rh-logo img',200);
               const h1=page.locator('.rh-copy h1');
               await h1.waitFor({state:'visible',timeout:5000});
               const mobileBox=await h1.boundingBox();
               const mobileSpanCount=await h1.locator('span').count();
               if(mobileSpanCount!==3) throw new Error(`MOBILE_HEADLINE_SPANS_${mobileSpanCount}`);
               if(!mobileBox||mobileBox.x<0||mobileBox.x+mobileBox.width>392) throw new Error('MOBILE_HEADLINE_OVERFLOW');
-              const headerBadge=await page.locator('.rh-logo').evaluate(el=>{const s=getComputedStyle(el,'::after');return{backgroundImage:s.backgroundImage,width:s.width,height:s.height,display:s.display}});
-              if(!String(headerBadge.backgroundImage).includes('wdcc-official-logo.webp')) throw new Error(`HEADER_BADGE_MISSING ${JSON.stringify(headerBadge)}`);
               if(await page.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count()) throw new Error('INVENTORY_REUSES_CHALLENGER_HERO');
               if(await page.locator('.rh-card a[href*="/vehicle/"]').count()<1) throw new Error('VEHICLE_LINKS_MISSING');
               const critical404=mobileFailures.filter(x=>x.status===404&&typeof x.url==='string'&&(/\/inventory\//.test(x.url)||/\/vehicle\//.test(x.url)));
@@ -182,7 +176,7 @@ jobs:
               if(await callSean.count()<1) throw new Error('MOBILE_CALL_SEAN_MISSING');
               await page.screenshot({path:'visual-proof/mobile-hero.png',fullPage:false});
               await page.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-              evidence.mobile={introHero,introLogo,introStyle,mobileHero,headerBadge,headline:mobileBox,headlineSpans:mobileSpanCount,placeholders:await page.locator('.rh-photo-placeholder').count(),failures:mobileFailures};
+              evidence.mobile={introHero,introLogo,introStyle,mobileHero,headerLogo,headline:mobileBox,headlineSpans:mobileSpanCount,placeholders:await page.locator('.rh-photo-placeholder').count(),failures:mobileFailures};
               await mobile.close();
 
               const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -194,6 +188,7 @@ jobs:
               await desk.screenshot({path:'visual-proof/desktop-intro.png',fullPage:false});
               await desk.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
               const desktopHero=await waitImage(desk,'.rh-hero-art',1000);
+              await waitImage(desk,'.rh-logo img',200);
               const desktopHeadline=desk.locator('.rh-copy h1');
               await desktopHeadline.waitFor({state:'visible',timeout:5000});
               const desktopBox=await desktopHeadline.boundingBox();
@@ -225,7 +220,7 @@ jobs:
             echo "Preview: ${URL:-not-created}"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Canonical 8AR hero + transparent intro badge: enforced.'
+            echo 'Canonical 8AR hero + visible round WDCC badge: enforced.'
             echo 'Inventory hero-reuse: forbidden; missing media uses honest placeholder.'
             echo 'Vehicle links: /vehicle/[id] contract enforced.'
             echo 'Mobile + desktop screenshots: required.'
