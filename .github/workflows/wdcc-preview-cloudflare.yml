@@ -45,14 +45,16 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Require canonical 8AR hero in source
+      - name: Require canonical visual assets in source
         shell: bash
         run: |
           set -euo pipefail
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
-          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
+          test -s public/wdcc-official-logo.webp
+          grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-official-logo.webp' app/mobile-visual-lock.css
+          grep -q 'clip-path:circle' app/LockedIntro.tsx
 
       - name: Install source and Cloudflare adapter
         shell: bash
@@ -109,14 +111,14 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -q "wdcc-logo-transparent.webp" /tmp/home.html
+          grep -q "wdcc-official-logo.webp" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
 
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
 
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
           test -s /tmp/logo.webp
 
           test "$(curl -sS -L -o /tmp/fallback.webp -w '%{http_code}' "$URL/assets/cars/2004-nissan-350z-1.webp?asset=$GITHUB_RUN_ID")" = 200
@@ -165,16 +167,16 @@ jobs:
             await page.goto(`${url}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             const introHero=await waitImage(page,'.li-scene img',1000);
             const introLogo=await waitImage(page,'.li-badge img',200);
-            await page.waitForTimeout(800);
+            await page.waitForTimeout(760);
+            const badgeStyle=await page.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);return {clipPath:s.clipPath,opacity:s.opacity,width:s.width,height:s.height,visibility:s.visibility}});
+            if(!String(badgeStyle.clipPath).includes('circle')) throw new Error(`BADGE_NOT_CIRCULAR ${JSON.stringify(badgeStyle)}`);
+            if(Number(badgeStyle.opacity)<.9 || badgeStyle.visibility==='hidden') throw new Error(`BADGE_NOT_VISIBLE ${JSON.stringify(badgeStyle)}`);
             await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
-            const logoCornerAlpha=await page.locator('.li-badge img').evaluate(img=>{
-              const c=document.createElement('canvas'); c.width=32; c.height=32;
-              const x=c.getContext('2d'); if(!x) return -1;
-              x.drawImage(img,0,0,32,32); return x.getImageData(0,0,1,1).data[3];
-            });
-            if(logoCornerAlpha>16) throw new Error(`LOGO_NOT_TRANSPARENT alpha=${logoCornerAlpha}`);
+
             await page.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
             const mobileHero=await waitImage(page,'.rh-hero-art',1000);
+            const headerBadge=await page.locator('.rh-logo').evaluate(el=>{const s=getComputedStyle(el,'::after');return {backgroundImage:s.backgroundImage,width:s.width,height:s.height,display:s.display}});
+            if(!String(headerBadge.backgroundImage).includes('wdcc-official-logo.webp')) throw new Error(`HEADER_BADGE_MISSING ${JSON.stringify(headerBadge)}`);
             const h1=page.locator('.rh-copy h1');
             await h1.waitFor({state:'visible',timeout:5000});
             const mobileBox=await h1.boundingBox();
@@ -183,7 +185,7 @@ jobs:
             if(!mobileBox || mobileBox.x<0 || mobileBox.x+mobileBox.width>392) throw new Error('MOBILE_HEADLINE_OVERFLOW');
             await page.screenshot({path:'visual-proof/mobile-hero.png',fullPage:false});
             await page.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-            evidence.mobile={introHero,introLogo,logoCornerAlpha,mobileHero,headline:mobileBox,headlineSpans:mobileSpanCount};
+            evidence.mobile={introHero,introLogo,badgeStyle,headerBadge,mobileHero,headline:mobileBox,headlineSpans:mobileSpanCount};
             await mobile.close();
 
             const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -191,7 +193,7 @@ jobs:
             await desk.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             await waitImage(desk,'.li-scene img',1000);
             await waitImage(desk,'.li-badge img',200);
-            await desk.waitForTimeout(800);
+            await desk.waitForTimeout(760);
             await desk.screenshot({path:'visual-proof/desktop-intro.png',fullPage:false});
             await desk.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
             const desktopHero=await waitImage(desk,'.rh-hero-art',1000);
@@ -227,7 +229,7 @@ jobs:
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
             echo 'Canonical 8AR hero source/served bytes: enforced.'
-            echo 'Transparent logo source/served bytes: enforced.'
+            echo 'Official round badge source + CSS circular clipping: enforced.'
             echo 'Mobile + desktop screenshot evidence: captured when browser gate succeeds.'
             echo 'Production domains, aliases, DNS and Cloudflare production routes were not changed.'
             echo 'No production promotion is authorized by this workflow.'
