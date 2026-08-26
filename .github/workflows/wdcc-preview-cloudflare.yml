@@ -142,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p visual-proof
-          node - <<'NODE'
+          node -e 'const fs=require("fs"); const code=fs.readFileSync(0,"utf8"); new Function("require", "(async()=>{\n"+code+"\n})().catch(e=>{console.error(e);process.exit(1)})")(require)' <<'NODE'
           const fs=require('fs');
           const {chromium}=require('playwright');
           const url=process.env.URL;
