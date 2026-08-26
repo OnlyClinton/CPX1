@@ -73,6 +73,29 @@ html,body{max-width:100%;overflow-x:hidden!important}
 .screenshotContract .hero h1{margin:10px 0 16px!important}
 .screenshotContract .hero-car-glow{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important}
 
+/* Desktop mockup geometry must stay multi-column. Earlier base CSS can otherwise
+   silently collapse these sections to a vertical stack. */
+.screenshotContract .screenshotInventory .section-heading,
+.screenshotContract .screenshotHow .section-heading{
+  display:flex!important;
+  justify-content:space-between!important;
+  gap:24px!important;
+}
+.screenshotContract .featured-grid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;
+  gap:13px!important;
+  width:100%!important;
+}
+.screenshotContract .featured-slide{display:block!important;min-width:0!important;width:auto!important}
+.screenshotContract .vehicle-image{height:178px!important}
+.screenshotContract .steps-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:12px!important;
+}
+.screenshotContract .steps-grid article{min-width:0!important}
+
 /* Make all visual assets fail visibly instead of silently disappearing. */
 .screenshotContract .header-logo-image,
 .screenshotContract .vehicle-image img{
@@ -107,6 +130,13 @@ html,body{max-width:100%;overflow-x:hidden!important}
     max-width:none!important;
     transform:translateY(-50%)!important;
   }
+  .screenshotContract .screenshotInventory .section-heading,
+  .screenshotContract .screenshotHow .section-heading{display:block!important}
+  .screenshotContract .featured-grid{display:block!important;width:100%!important}
+  .screenshotContract .featured-slide{display:none!important}
+  .screenshotContract .featured-slide.active{display:block!important}
+  .screenshotContract .vehicle-image{height:205px!important}
+  .screenshotContract .steps-grid{display:grid!important;grid-template-columns:1fr!important;gap:0!important}
 }
 @media(max-width:560px){
   .cinematic-v2 .cinScene{inset:0!important;min-width:100%!important;min-height:100%!important;background-position:72% center!important}
