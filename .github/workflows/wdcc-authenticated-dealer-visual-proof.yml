@@ -33,7 +33,10 @@ jobs:
           set -euo pipefail
           test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
-      - run: npm ci
+      - name: Install app and Cloudflare type dependency
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@latest
       - run: npm run build
       - name: Start local production build
         shell: bash
@@ -63,9 +66,8 @@ jobs:
             await page.getByLabel('PASSWORD').fill(password);
             await page.getByRole('button',{name:'SIGN IN'}).click();
             await page.waitForSelector('.dealerApp',{timeout:20000});
-            const session=await page.request.get(`${base}/api/auth/session`);
-            const sj=await session.json().catch(()=>({}));
-            if(!session.ok()||!sj.authenticated)throw Error(`authenticated dealer session missing: ${session.status()}`);
+            const session=await page.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store',credentials:'include'});return {status:r.status,data:await r.json().catch(()=>({}))}});
+            if(session.status!==200||!session.data?.authenticated)throw Error(`authenticated dealer session missing: ${session.status}`);
           }
 
           const desktop=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -84,14 +86,8 @@ jobs:
           await desktop.screenshot({path:'dealer-proof/dealer-add-vehicle-desktop.png',fullPage:true});
 
           const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
-          const state=await desktop.context().storageState();
-          await mobile.context().addCookies(state.cookies.filter(c=>c.domain==='127.0.0.1'||c.domain==='localhost'));
-          await mobile.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});
-          await mobile.waitForTimeout(1500);
-          if((await mobile.locator('body').innerText()).includes('Dealer Sign In')){
-            await signIn(mobile);
-            await mobile.waitForTimeout(1200);
-          }
+          await signIn(mobile);
+          await mobile.waitForTimeout(1200);
           const mobileText=await mobile.locator('body').innerText();
           if(!mobileText.includes('Dashboard')||!mobileText.includes('ADD VEHICLE'))throw Error('mobile authenticated dashboard incomplete');
           const mobileOverflow=await mobile.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
