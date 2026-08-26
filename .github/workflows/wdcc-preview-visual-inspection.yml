@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      URL: https://wdcc-preview-locked.clico-global.workers.dev
+      URL: https://wdcc-locked-preview.clico-global.workers.dev
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -73,17 +73,21 @@ jobs:
               p.on('requestfailed',r=>result.requestFailures.push(`${name}: ${r.method()} ${r.url()} ${r.failure()?.errorText||''}`));
               const r=await p.goto(`${URL}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               result.pages[`${name}HomeHttp`]=r?.status()||0;
-              await p.waitForTimeout(700);
-              await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-intro.png`,fullPage:true});
-              await p.waitForTimeout(3300);
+              await p.waitForTimeout(1150);
+              result.pages[`${name}IntroBadge`]=await p.locator('.li-badge img').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,clipPath:getComputedStyle(el).clipPath,opacity:getComputedStyle(el).opacity})).catch(e=>({error:String(e)}));
+              await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-intro.png`,fullPage:false});
+              const skip=p.getByRole('button',{name:/skip intro/i}); if(await skip.count())await skip.click().catch(()=>{});
+              await p.waitForTimeout(500);
               result.pages[`${name}Title`]=await p.title();
               result.pages[`${name}Headline`]=(await p.locator('h1').first().innerText().catch(()=>''));
-              result.pages[`${name}HeaderLogoCount`]=await p.locator('.rh-logo, .logoBrand').count();
-              result.pages[`${name}HeroImageCount`]=await p.locator('img[src*="wdcc-hero-v2.webp"], .rh-hero-art').count();
+              result.pages[`${name}HeadlineBox`]=await p.locator('h1').first().boundingBox().catch(()=>null);
+              result.pages[`${name}HeaderLogo`]=await p.locator('.rh-logo img').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight})).catch(e=>({error:String(e)}));
+              result.pages[`${name}HeroImage`]=await p.locator('.rh-hero-art').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight})).catch(e=>({error:String(e)}));
               await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-home.png`,fullPage:true});
               const dr=await p.goto(`${URL}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               result.pages[`${name}DealerHttp`]=dr?.status()||0;
-              await p.waitForTimeout(800);
+              await p.waitForTimeout(900);
+              result.pages[`${name}DealerLogo`]=await p.locator('.targetDealerLoginHero>img').evaluate(el=>({src:el.getAttribute('src'),currentSrc:el.currentSrc,naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,content:getComputedStyle(el).content})).catch(e=>({error:String(e)}));
               result.pages[`${name}DealerText`]=(await p.locator('body').innerText().catch(()=>'' )).slice(0,1200);
               await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-dealer.png`,fullPage:true});
               await ctx.close();
