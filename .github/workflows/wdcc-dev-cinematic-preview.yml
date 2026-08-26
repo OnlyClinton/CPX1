@@ -40,6 +40,11 @@ jobs:
         run: |
           test -s public/wdcc-hero-v2.webp
           test -s public/wdcc-logo-transparent.webp
+          test -s public/assets/cars/2004-nissan-350z-1.webp
+          test -s public/assets/cars/2016-ford-f150-limited-1.webp
+          test -s public/assets/cars/2019-honda-pilot-1.webp
+          test -s public/assets/cars/2019-kia-sportage-1.webp
+          test -s public/assets/cars/2019-toyota-rav4-1.webp
       - name: Type/build gate
         run: npm run build
       - name: Start local production build
@@ -62,6 +67,7 @@ jobs:
           mkdir -p visual-proof
           cat > visual-proof/capture.mjs <<'NODE'
           import { chromium } from 'playwright';
+          const hex=a=>[...new Uint8Array(a)].map(b=>b.toString(16).padStart(2,'0')).join('');
           const browser=await chromium.launch({headless:true});
           for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
@@ -71,24 +77,30 @@ jobs:
             await page.waitForTimeout(3400);
             const diag=await page.evaluate(()=>{
               const vw=innerWidth;
-              const all=[...document.querySelectorAll('*')].map((e,i)=>{
-                const r=e.getBoundingClientRect(); const s=getComputedStyle(e);
-                return {i,tag:e.tagName,cls:typeof e.className==='string'?e.className:'',id:e.id||'',x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:e.scrollWidth,display:s.display,visibility:s.visibility,opacity:Number(s.opacity||1),position:s.position,transform:s.transform};
-              }).filter(x=>x.display!=='none'&&x.visibility!=='hidden'&&x.opacity>0.01);
-              const rect=(sel)=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};
-              return {
-                vw,sw:document.documentElement.scrollWidth,
-                introCount:document.querySelectorAll('.intro-sequence').length,
-                logo:rect('.home-header-shell .logo-button'),hero:rect('.hero'),inventory:rect('.inventory-showcase'),how:rect('.how-section'),trust:rect('.trust-grid'),
-                offenders:all.filter(x=>x.width>vw+3||x.right>vw+3||x.x<-3).sort((a,b)=>Math.max(b.width,b.right)-Math.max(a.width,a.right)).slice(0,30)
-              };
+              const all=[...document.querySelectorAll('*')].map((e,i)=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return{i,tag:e.tagName,cls:typeof e.className==='string'?e.className:'',id:e.id||'',x:Math.round(r.x),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:e.scrollWidth,display:s.display,visibility:s.visibility,opacity:Number(s.opacity||1),position:s.position,transform:s.transform}}).filter(x=>x.display!=='none'&&x.visibility!=='hidden'&&x.opacity>.01);
+              const rect=sel=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};
+              return{vw,sw:document.documentElement.scrollWidth,introCount:document.querySelectorAll('.intro-sequence').length,logo:rect('.home-header-shell .logo-button'),hero:rect('.hero'),inventory:rect('.inventory-showcase'),how:rect('.how-section'),trust:rect('.trust-grid'),offenders:all.filter(x=>x.width>vw+3||x.right>vw+3||x.x<-3).sort((a,b)=>Math.max(b.width,b.right)-Math.max(a.width,a.right)).slice(0,30)};
+            });
+            const media=await page.evaluate(async()=>{
+              const nodes=[...document.querySelectorAll('.vehicle-image img')].slice(0,5);
+              return await Promise.all(nodes.map(async img=>{
+                const src=img.getAttribute('src')||'';
+                const res=await fetch(src,{cache:'no-store'});
+                const buf=await res.arrayBuffer();
+                const digest=await crypto.subtle.digest('SHA-256',buf);
+                const hash=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+                return{src,currentSrc:img.currentSrc,status:res.status,bytes:buf.byteLength,hash,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight};
+              }));
             });
             console.log(`${name} DIAG ${JSON.stringify(diag)}`);
+            console.log(`${name} MEDIA ${JSON.stringify(media)}`);
             if(diag.introCount!==0) throw new Error(`${name}: intro still mounted after animation ${diag.introCount}`);
             if(!diag.logo||diag.logo.width<70||diag.logo.height<60) throw new Error(`${name}: crest/header logo box too small ${JSON.stringify(diag.logo)}`);
             if(!diag.hero||diag.hero.height<420) throw new Error(`${name}: hero missing or collapsed ${JSON.stringify(diag.hero)}`);
             if(!diag.inventory||!diag.how||!diag.trust) throw new Error(`${name}: storefront contract incomplete ${JSON.stringify(diag)}`);
             if(diag.sw>width+3) throw new Error(`${name}: horizontal overflow ${diag.sw}>${width}; offenders=${JSON.stringify(diag.offenders)}`);
+            if(media.length<3||media.some(x=>x.status!==200||x.bytes<1000||!x.naturalWidth)) throw new Error(`${name}: inventory media broken ${JSON.stringify(media)}`);
+            if(name==='desktop'&&new Set(media.map(x=>x.hash)).size<3) throw new Error(`${name}: duplicated inventory media ${JSON.stringify(media)}`);
             await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
             await page.close();
           }
