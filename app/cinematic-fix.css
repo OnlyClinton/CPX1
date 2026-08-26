@@ -1,244 +1,65 @@
 /* Final dev visual repair. Loaded last on the isolated cinematic branch. */
 html,body{max-width:100%;overflow-x:hidden!important}
 
-/* The cinematic child layers must own an actual full-screen positioning box. */
-.cinematic-v2{
-  position:fixed!important;
-  inset:0!important;
-  width:100vw!important;
-  height:100dvh!important;
-  max-width:100vw!important;
-  overflow:hidden!important;
-  contain:layout paint!important;
-}
-.cinematic-v2 .cinScene{
-  position:absolute!important;
-  inset:-3%!important;
-  z-index:0!important;
-  display:block!important;
-  min-width:106%!important;
-  min-height:106%!important;
-  background-image:url('/wdcc-hero-v2.webp')!important;
-  background-repeat:no-repeat!important;
-  background-size:cover!important;
-  background-position:68% center!important;
-}
-.cinematic-v2 .cinVignette{
-  position:absolute!important;
-  inset:0!important;
-  z-index:3!important;
-  pointer-events:none!important;
-}
-.cinematic-v2 .cinTagline{
-  position:absolute!important;
-  left:50%!important;
-  transform:translateX(-50%);
-  white-space:nowrap!important;
-}
-.cinematic-v2 .cinSmoke{position:absolute!important;pointer-events:none!important}
-.cinematic-v2 .cinLogo{display:block!important;visibility:visible!important}
+/* Full-screen cinematic canvas using the exact recovered Tampa + Challenger art. */
+.cinematic-v2{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;max-width:100vw!important;overflow:hidden!important;contain:layout paint!important}
+.cinematic-v2 .cinScene{position:absolute!important;inset:-3%!important;z-index:0!important;display:block!important;min-width:106%!important;min-height:106%!important;background-image:url('/wdcc-hero-v2.webp')!important;background-repeat:no-repeat!important;background-size:cover!important;background-position:68% center!important}
+.cinematic-v2 .cinVignette{position:absolute!important;inset:0!important;z-index:3!important;pointer-events:none!important}
+.cinematic-v2 .cinTagline{position:absolute!important;left:50%!important;transform:translateX(-50%);white-space:nowrap!important}
+.cinematic-v2 .cinSmoke{position:absolute!important;pointer-events:none!important}.cinematic-v2 .cinLogo{display:block!important;visibility:visible!important}
 
-/* Screenshot contract depended on inherited hero positioning/background rules.
-   Make the approved Tampa + Challenger art and copy geometry explicit. */
-.screenshotContract{width:100%!important;max-width:100%!important;overflow-x:hidden!important}
-.screenshotContract .main-nav{display:flex!important;align-items:center!important;gap:28px!important}
-.screenshotContract .screenshotHero{
-  position:relative!important;
-  display:block!important;
-  overflow:hidden!important;
-  min-height:590px!important;
-  background-image:var(--hero-image)!important;
-  background-repeat:no-repeat!important;
-  background-size:cover!important;
-  background-position:68% center!important;
-  background-color:#07111a!important;
-}
-.screenshotContract .screenshotHero .hero-shade{
-  position:absolute!important;
-  inset:0!important;
-  z-index:1!important;
-}
-.screenshotContract .hero-copy{
-  position:absolute!important;
-  z-index:3!important;
-  left:max(32px,calc((100vw - 1450px)/2))!important;
-  right:auto!important;
-  top:50%!important;
-  bottom:auto!important;
-  width:min(620px,calc(100vw - 64px))!important;
-  max-width:620px!important;
-  transform:translateY(-50%)!important;
-  margin:0!important;
-  padding:0!important;
-}
-.screenshotContract .hero h1{margin:10px 0 16px!important}
-.screenshotContract .hero-kicker{color:#e9f0f5!important;font-size:12px!important;font-weight:850!important;text-shadow:0 2px 10px #000d!important}
-.screenshotContract .hero-car-glow{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important}
+/* Header hierarchy from the approved mockup. */
+.screenshotContract{width:100%!important;max-width:100%!important;overflow-x:hidden!important;background:#f3f4f5!important}
+.screenshotContract .utility-bar{height:31px!important;padding:0 30px!important;gap:20px!important;font-size:9.5px!important;font-weight:800!important;letter-spacing:.045em!important}
+.screenshotContract .utility-bar span:last-child{margin-left:auto!important}
+.screenshotContract .site-header{height:80px!important;padding:0 28px!important;grid-template-columns:152px minmax(0,1fr) auto auto!important;gap:18px!important;align-items:center!important}
+.screenshotContract .logo-button{width:152px!important;height:80px!important;display:flex!important;align-items:center!important}
+.screenshotContract .header-logo-image{display:block!important;width:146px!important;height:62px!important;object-fit:contain!important;object-position:left center!important;opacity:1!important;visibility:visible!important;filter:drop-shadow(0 8px 18px #0008)!important}
+.screenshotContract .main-nav{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:clamp(16px,1.6vw,28px)!important;min-width:0!important}
+.screenshotContract .main-nav a{display:inline-flex!important;white-space:nowrap!important;color:#f7f8f9!important;font-size:11px!important;font-weight:900!important;letter-spacing:.025em!important}
+.screenshotContract .header-phone{min-height:42px!important;padding:0 14px!important;border:1px solid #667685!important;border-radius:5px!important;display:inline-flex!important;align-items:center!important;gap:8px!important;color:#fff!important;font-size:11px!important;font-weight:900!important;white-space:nowrap!important;background:#09131dd4!important}
+.screenshotContract .header-phone:hover{border-color:#fff!important}.screenshotContract .header-apply{min-height:44px!important;padding:0 18px!important;white-space:nowrap!important}
 
-/* Desktop mockup geometry must stay multi-column. Earlier base CSS can otherwise
-   silently collapse these sections to a vertical stack. */
-.screenshotContract .screenshotInventory .section-heading,
-.screenshotContract .screenshotHow .section-heading{
-  display:flex!important;
-  justify-content:space-between!important;
-  gap:24px!important;
-}
-.screenshotContract .featured-carousel{
-  position:relative!important;
-  display:block!important;
-  height:auto!important;
-  min-height:0!important;
-  overflow:visible!important;
-}
-.screenshotContract .featured-grid{
-  position:relative!important;
-  display:grid!important;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;
-  align-items:stretch!important;
-  gap:13px!important;
-  width:100%!important;
-  height:auto!important;
-  min-height:0!important;
-}
-.screenshotContract .featured-slide{
-  position:relative!important;
-  inset:auto!important;
-  top:auto!important;
-  right:auto!important;
-  bottom:auto!important;
-  left:auto!important;
-  display:block!important;
-  min-width:0!important;
-  width:auto!important;
-  height:auto!important;
-  opacity:1!important;
-  transform:none!important;
-}
-.screenshotContract .vehicle-card{
-  position:relative!important;
-  display:flex!important;
-  flex-direction:column!important;
-  height:100%!important;
-  min-height:0!important;
-  overflow:hidden!important;
-}
-.screenshotContract .vehicle-image{position:relative!important;display:block!important;height:178px!important;flex:0 0 178px!important}
-.screenshotContract .card-badges{position:absolute!important;left:10px!important;bottom:10px!important;z-index:4!important;display:flex!important;gap:6px!important}
-.screenshotContract .vehicle-card-body{
-  position:relative!important;
-  display:flex!important;
-  flex:1 1 auto!important;
-  flex-direction:column!important;
-  min-height:150px!important;
-  padding:14px!important;
-  background:#fff!important;
-}
-.screenshotContract .vehicle-card-body .eyebrow,
-.screenshotContract .vehicle-title,
-.screenshotContract .vehicle-price,
-.screenshotContract .vehicle-payment{display:block!important}
-.screenshotContract .vehicle-title{margin-top:2px!important}
-.screenshotContract .vehicle-price{margin-top:7px!important}
-.screenshotContract .vehicle-payment{margin:5px 0 0!important}
-.screenshotContract .spec-pills{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-top:auto!important;padding-top:10px!important}
-.screenshotContract .spec-pills span{display:inline-flex!important;align-items:center!important;min-height:20px!important;padding:3px 7px!important}
-.screenshotContract .steps-grid{
-  display:grid!important;
-  grid-template-columns:repeat(4,minmax(0,1fr))!important;
-  gap:12px!important;
-}
-.screenshotContract .steps-grid article{min-width:0!important}
+/* Hero: brighter Tampa illumination, cleaner text column, stronger copy/car separation. */
+.screenshotContract .screenshotHero{position:relative!important;display:block!important;overflow:hidden!important;min-height:575px!important;background-image:var(--hero-image)!important;background-repeat:no-repeat!important;background-size:cover!important;background-position:69% center!important;background-color:#07111a!important;border-bottom:1px solid #162536!important}
+.screenshotContract .screenshotHero:after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 72% 31%,rgba(27,151,255,.15),transparent 25%),radial-gradient(circle at 80% 72%,rgba(255,255,255,.09),transparent 30%);mix-blend-mode:screen}
+.screenshotContract .screenshotHero .hero-shade{position:absolute!important;inset:0!important;z-index:1!important;background:linear-gradient(90deg,#02070cf9 0,#05101be8 31%,#07111aa8 45%,#07111a4d 58%,#07111a12 78%,rgba(4,12,19,.08) 100%)!important}
+.screenshotContract .hero-copy{position:absolute!important;z-index:3!important;left:max(32px,calc((100vw - 1450px)/2))!important;right:auto!important;top:49%!important;bottom:auto!important;width:min(650px,calc(100vw - 64px))!important;max-width:650px!important;transform:translateY(-50%)!important;margin:0!important;padding:0!important}
+.screenshotContract .hero-kicker{color:#b9ddff!important;font-size:11.5px!important;font-weight:900!important;letter-spacing:.12em!important;text-transform:uppercase!important;text-shadow:0 2px 10px #000d!important}.screenshotContract .hero-kicker span{color:#fff!important;margin:0 5px!important}
+.screenshotContract .hero h1{margin:10px 0 16px!important;font-size:clamp(54px,5.35vw,80px)!important;line-height:.91!important;letter-spacing:-.052em!important;text-shadow:0 5px 24px #000b!important}.screenshotContract .hero h1 strong{white-space:nowrap!important}
+.screenshotContract .hero-lead{font-size:16px!important;line-height:1.5!important;max-width:470px!important;color:#f5f7f8!important;text-shadow:0 2px 12px #000c!important}
+.screenshotContract .hero-car-glow{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important;background:radial-gradient(circle at 72% 71%,rgba(255,255,255,.12),transparent 35%)!important}
+.screenshotContract .screenshotHeroActions{display:flex!important;gap:12px!important;max-width:525px!important;margin-top:22px!important}.screenshotContract .screenshotHeroActions .btn{min-height:50px!important;padding:0 21px!important;border-radius:5px!important;font-size:11px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.015em!important;box-shadow:0 10px 24px #0005!important}.screenshotContract .screenshotHeroActions .hero-cta-test{background:#ed1c2e!important;border-color:#ed1c2e!important;color:#fff!important}.screenshotContract .screenshotHeroActions .hero-cta-qualify{background:#08121bd9!important;border-color:#8a98a4!important;color:#fff!important}
+.screenshotContract .screenshotCallSean{min-height:36px!important;padding:0 10px!important;border-radius:5px!important;background:#07111a9c!important;border:1px solid #ffffff24!important}
 
-/* Make all visual assets fail visibly instead of silently disappearing. */
-.screenshotContract .header-logo-image,
-.screenshotContract .vehicle-image img{
-  display:block!important;
-  opacity:1!important;
-  visibility:visible!important;
-}
-.screenshotContract .vehicle-image{
-  overflow:hidden!important;
-  background:#111b25!important;
-}
-.screenshotContract .vehicle-image img{
-  width:100%!important;
-  height:100%!important;
-  object-fit:cover!important;
-  object-position:center!important;
-}
+/* Benefit band: crisp white cards like the reference. */
+.screenshotContract .screenshotBenefits{position:relative!important;z-index:5!important;margin-top:-1px!important;background:#fff!important;color:#0c141b!important;border:1px solid #d7dce0!important;box-shadow:0 12px 30px #0a17221a!important}
+.screenshotContract .screenshotBenefits article{min-height:96px!important;border-right:1px solid #e0e4e7!important}.screenshotContract .screenshotBenefits .icon{color:#ed1c2e!important;border-color:#aab4bc!important;background:#fff!important}.screenshotContract .screenshotBenefits strong{color:#131b22!important;font-size:10.5px!important}.screenshotContract .screenshotBenefits article span:last-child{color:#5e6871!important;font-size:9.5px!important}
+
+/* Dense five-card inventory with real hierarchy. */
+.screenshotContract .screenshotInventory{max-width:1500px!important;margin:auto!important;background:#f5f5f4!important;padding:28px 24px 26px!important}.screenshotContract .screenshotInventory .section-heading{display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:24px!important}.screenshotContract .screenshotInventory h2{font-size:38px!important;line-height:1!important;color:#0d141b!important;letter-spacing:-.04em!important;margin:4px 0 5px!important}.screenshotContract .section-deck{font-size:11px!important;color:#68727b!important}.screenshotContract .text-link{font-size:10px!important;font-weight:950!important;text-transform:uppercase!important;color:#17202a!important}
+.screenshotContract .featured-carousel{position:relative!important;display:block!important;height:auto!important;min-height:0!important;overflow:visible!important}.screenshotContract .featured-grid{position:relative!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:stretch!important;gap:12px!important;width:100%!important;height:auto!important;min-height:0!important}.screenshotContract .featured-slide{position:relative!important;inset:auto!important;display:block!important;min-width:0!important;width:auto!important;height:auto!important;opacity:1!important;transform:none!important}.screenshotContract .vehicle-card{position:relative!important;display:flex!important;flex-direction:column!important;height:100%!important;min-height:0!important;overflow:hidden!important;background:#fff!important;border:1px solid #d6d9dc!important;border-radius:7px!important;box-shadow:0 7px 18px #19242d13!important}.screenshotContract .vehicle-image{position:relative!important;display:block!important;height:160px!important;flex:0 0 160px!important;overflow:hidden!important;background:#111b25!important}.screenshotContract .vehicle-image img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:center!important;opacity:1!important;visibility:visible!important}.screenshotContract .card-badges{position:absolute!important;left:9px!important;top:9px!important;bottom:auto!important;z-index:4!important;display:flex!important;gap:6px!important}.screenshotContract .card-badges span{min-height:20px!important;padding:3px 7px!important;border-radius:3px!important;color:#fff!important;font-size:7.5px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.03em!important}.screenshotContract .card-badges .green{background:#13824c!important}.screenshotContract .card-badges .blue{background:#1675d1!important}.screenshotContract .card-badges .purple{background:#8d239d!important}.screenshotContract .card-badges .orange{background:#df7712!important}
+.screenshotContract .vehicle-card-body{position:relative!important;display:flex!important;flex:1 1 auto!important;flex-direction:column!important;min-height:168px!important;padding:12px!important;background:#fff!important}.screenshotContract .vehicle-card-body .eyebrow{display:block!important;margin:0 0 2px!important;color:#65717c!important;font-size:8px!important;font-weight:850!important;text-transform:uppercase!important}.screenshotContract .vehicle-title{display:block!important;color:#111820!important;font-size:14px!important;font-weight:950!important;line-height:1.2!important;min-height:34px!important}.screenshotContract .vehicle-price{display:block!important;margin-top:6px!important;font-size:22px!important;line-height:1!important;color:#111820!important}.screenshotContract .vehicle-payment{display:block!important;margin:5px 0 0!important;font-size:8.7px!important;color:#59636c!important}.screenshotContract .spec-pills{display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-top:9px!important;padding-top:0!important}.screenshotContract .spec-pills span{display:inline-flex!important;align-items:center!important;min-height:19px!important;padding:3px 6px!important;font-size:7px!important;background:#eceeef!important;color:#29323a!important}.screenshotContract .vehicle-card-cta{display:flex!important;align-items:center!important;justify-content:center!important;min-height:32px!important;margin-top:auto!important;padding-top:8px!important;border-top:1px solid #eceff1!important;color:#17202a!important;font-size:8px!important;font-weight:950!important;text-transform:uppercase!important}.screenshotContract .vehicle-card-cta:hover{color:#ed1c2e!important}
+
+/* Four compact process cards with progression cues. */
+.screenshotContract .screenshotHow{max-width:1500px!important;margin:auto!important;background:#07111a!important;color:#fff!important;padding:26px 24px 30px!important}.screenshotContract .screenshotHow .section-heading{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:24px!important}.screenshotContract .screenshotHow h2{font-size:34px!important;line-height:1!important;margin:5px 0 0!important}.screenshotContract .steps-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important;margin-top:18px!important}.screenshotContract .steps-grid article{position:relative!important;display:grid!important;grid-template-columns:34px 42px 1fr!important;align-items:center!important;gap:10px!important;min-width:0!important;min-height:96px!important;padding:14px!important;background:#0d1924!important;border:1px solid #263a4c!important;border-radius:7px!important}.screenshotContract .steps-grid article:not(:last-child):after{content:"›";position:absolute;right:-10px;top:50%;z-index:4;transform:translateY(-50%);color:#c2ccd4;font-size:23px;font-weight:300!important}.screenshotContract .step-number{width:30px!important;height:30px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#ed1c2e!important;color:#fff!important;font-size:11px!important;font-weight:950!important}.screenshotContract .step-icon{width:40px!important;height:40px!important;border:1px solid #7f8c98!important;border-radius:6px!important;display:grid!important;place-items:center!important;color:#fff!important;font-size:20px!important;background:#09131d!important}.screenshotContract .steps-grid h3{margin:0!important;font-size:10px!important;letter-spacing:.02em!important}.screenshotContract .steps-grid p{margin:4px 0 0!important;font-size:9px!important;line-height:1.35!important;color:#c4cdd5!important}.screenshotContract .startApproval{min-height:38px!important;display:inline-flex!important;align-items:center!important}
+
+/* Stronger trust/footer finish. */
+.screenshotContract .whyWdcc{max-width:1500px!important;margin:auto!important;background:#fff!important;color:#101820!important;padding:16px 22px!important;display:grid!important;grid-template-columns:auto repeat(5,1fr)!important;align-items:center!important;gap:16px!important;border-top:1px solid #dfe3e6!important;border-bottom:1px solid #dfe3e6!important}.screenshotContract .whyWdcc>strong{font-size:12px!important;color:#0b151e!important}.screenshotContract .whyWdcc article{display:flex!important;align-items:center!important;gap:10px!important}.screenshotContract .whyWdcc article>span{width:34px!important;height:34px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:#eef1f3!important;color:#18232c!important;font-size:11px!important;font-weight:900!important}.screenshotContract .whyWdcc b{font-size:9px!important}.screenshotContract .whyWdcc small{font-size:8px!important;line-height:1.3!important;color:#6c7680!important;margin-top:2px!important}.screenshotContract .talkSean>span{background:#e6e9ec!important;color:#111!important}
+.screenshotContract .screenshotFooter{max-width:none!important;background:#03070b!important;color:#fff!important;padding:24px max(25px,calc((100vw - 1450px)/2))!important;display:grid!important;grid-template-columns:150px minmax(0,1fr) auto!important;gap:18px!important;align-items:center!important}.screenshotContract .screenshotFooter>img{width:142px!important;height:56px!important;object-fit:contain!important;object-position:left center!important}.screenshotContract .footer-copy strong,.screenshotContract .footer-copy span{display:block!important}.screenshotContract .footer-copy span{font-size:9px!important;color:#8f9ba6!important;margin-top:3px!important}.screenshotContract .footer-actions{display:flex!important;align-items:center!important;gap:10px!important}.screenshotContract .footer-actions>a{min-height:38px!important;display:inline-flex!important;align-items:center!important;font-size:12px!important;font-weight:900!important;white-space:nowrap!important}.screenshotContract .footer-actions>a:last-child{padding:0 14px!important;border-radius:4px!important;background:#ed1c2e!important;color:#fff!important;text-transform:uppercase!important;font-size:9px!important}.screenshotContract .screenshotFooter .footer-links{grid-column:1/-1!important;display:flex!important;gap:22px!important;padding-top:12px!important;border-top:1px solid #1d2933!important;font-size:9px!important;text-transform:uppercase!important;color:#bec8d0!important}
+
+@media(max-width:1180px) and (min-width:901px){.screenshotContract .site-header{grid-template-columns:130px minmax(0,1fr) auto!important}.screenshotContract .logo-button{width:130px!important}.screenshotContract .header-logo-image{width:124px!important}.screenshotContract .header-phone{display:none!important}.screenshotContract .main-nav{gap:14px!important}.screenshotContract .featured-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.screenshotContract .featured-slide:nth-child(5){display:none!important}}
 
 @media(max-width:900px){
-  .cinematic-v2 .cinScene{background-position:70% center!important}
-  .screenshotContract .main-nav{display:none!important}
-  .screenshotContract .main-nav.open{display:grid!important;gap:0!important}
-  .screenshotContract .screenshotHero{
-    min-height:560px!important;
-    background-size:auto 100%!important;
-    background-position:70% center!important;
-  }
-  .screenshotContract .hero-copy{
-    left:18px!important;
-    right:18px!important;
-    top:44%!important;
-    width:auto!important;
-    max-width:none!important;
-    transform:translateY(-50%)!important;
-  }
-  .screenshotContract .hero-kicker{font-size:11.5px!important;letter-spacing:.11em!important}
-
-  /* Explicit mobile header controls: a real 3-line menu and visible call icon. */
-  .screenshotContract .mobile-menu,
-  .screenshotContract .mobile-call{
-    width:42px!important;
-    height:42px!important;
-    padding:0!important;
-    margin:0!important;
-    display:flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    color:#fff!important;
-    background:transparent!important;
-    border:0!important;
-    opacity:1!important;
-    visibility:visible!important;
-  }
-  .screenshotContract .mobile-menu>span{
-    position:static!important;
-    display:grid!important;
-    width:20px!important;
-    gap:4px!important;
-  }
-  .screenshotContract .mobile-menu i{
-    position:static!important;
-    display:block!important;
-    width:20px!important;
-    height:2px!important;
-    min-height:2px!important;
-    border-radius:2px!important;
-    background:#fff!important;
-    opacity:1!important;
-    transform:none!important;
-  }
-  .screenshotContract .mobile-call svg{
-    display:block!important;
-    width:22px!important;
-    height:22px!important;
-    fill:#fff!important;
-    stroke:none!important;
-    opacity:1!important;
-  }
-
-  .screenshotContract .screenshotInventory .section-heading,
-  .screenshotContract .screenshotHow .section-heading{display:block!important}
-  .screenshotContract .featured-carousel{overflow:visible!important}
-  .screenshotContract .featured-grid{display:block!important;width:100%!important}
-  .screenshotContract .featured-slide{display:none!important}
-  .screenshotContract .featured-slide.active{display:block!important;position:relative!important}
-  .screenshotContract .vehicle-image{height:205px!important;flex-basis:205px!important}
-  .screenshotContract .vehicle-card-body{min-height:145px!important}
-  .screenshotContract .steps-grid{display:grid!important;grid-template-columns:1fr!important;gap:0!important}
+ .cinematic-v2 .cinScene{background-position:70% center!important}
+ .screenshotContract{padding-bottom:66px!important}.screenshotContract .utility-bar{display:none!important}.screenshotContract .site-header{height:76px!important;padding:0 14px!important;grid-template-columns:46px minmax(0,1fr) 46px!important;gap:8px!important}.screenshotContract .logo-button{grid-column:2!important;grid-row:1!important;width:auto!important;height:72px!important;justify-self:center!important}.screenshotContract .header-logo-image{width:118px!important;height:54px!important;object-position:center!important}.screenshotContract .header-phone,.screenshotContract .header-apply{display:none!important}.screenshotContract .main-nav{position:absolute!important;top:76px!important;left:0!important;right:0!important;display:none!important;background:#06111c!important;border-top:1px solid #203343!important;padding:12px!important;z-index:50!important}.screenshotContract .main-nav.open{display:grid!important;gap:0!important}.screenshotContract .main-nav a{padding:14px!important;border-bottom:1px solid #172a3a!important}
+ .screenshotContract .mobile-menu,.screenshotContract .mobile-call{width:42px!important;height:42px!important;padding:0!important;margin:0!important;display:flex!important;align-items:center!important;justify-content:center!important;color:#fff!important;background:transparent!important;border:0!important;opacity:1!important;visibility:visible!important}.screenshotContract .mobile-menu{grid-column:3!important;grid-row:1!important;justify-self:end!important}.screenshotContract .mobile-call{grid-column:1!important;grid-row:1!important;justify-self:start!important}.screenshotContract .mobile-menu>span{position:static!important;display:grid!important;width:20px!important;gap:4px!important}.screenshotContract .mobile-menu i{position:static!important;display:block!important;width:20px!important;height:2px!important;min-height:2px!important;border-radius:2px!important;background:#fff!important;opacity:1!important;transform:none!important}.screenshotContract .mobile-call svg{display:block!important;width:22px!important;height:22px!important;fill:#fff!important;stroke:none!important;opacity:1!important}
+ .screenshotContract .screenshotHero{min-height:535px!important;background-size:auto 100%!important;background-position:72% center!important}.screenshotContract .screenshotHero .hero-shade{background:linear-gradient(90deg,#04101be8 0,#06101bd2 43%,#06101b72 68%,#06101b22 100%)!important}.screenshotContract .hero-copy{left:18px!important;right:18px!important;top:45%!important;width:auto!important;max-width:none!important;transform:translateY(-50%)!important}.screenshotContract .hero-kicker{font-size:10.5px!important;letter-spacing:.1em!important}.screenshotContract .hero h1{font-size:clamp(43px,12.2vw,58px)!important;line-height:.93!important;max-width:360px!important}.screenshotContract .hero h1 strong{white-space:normal!important}.screenshotContract .hero-lead{font-size:14px!important;line-height:1.43!important;max-width:315px!important}.screenshotContract .screenshotHeroActions{display:grid!important;grid-template-columns:1fr!important;max-width:100%!important;width:min(100%,430px)!important;gap:8px!important;margin-top:18px!important}.screenshotContract .screenshotHeroActions .btn{min-height:48px!important}.screenshotContract .screenshotCallSean{margin-top:10px!important}
+ .screenshotContract .screenshotBenefits{grid-template-columns:1fr 1fr!important;border-radius:0!important;padding:8px!important;margin-top:0!important}.screenshotContract .screenshotBenefits article{min-height:88px!important;padding:11px!important;border:1px solid #dce1e4!important}.screenshotContract .screenshotBenefits strong{font-size:9px!important}.screenshotContract .screenshotBenefits article span:last-child{font-size:8.5px!important}
+ .screenshotContract .screenshotInventory{padding:20px 12px 22px!important}.screenshotContract .screenshotInventory .section-heading{display:flex!important;align-items:center!important}.screenshotContract .screenshotInventory h2{font-size:27px!important}.screenshotContract .section-deck{display:none!important}.screenshotContract .featured-carousel{padding:0 24px!important;overflow:visible!important}.screenshotContract .featured-grid{display:block!important;width:100%!important}.screenshotContract .featured-slide{display:none!important}.screenshotContract .featured-slide.active{display:block!important;position:relative!important}.screenshotContract .vehicle-image{height:210px!important;flex-basis:210px!important}.screenshotContract .vehicle-card-body{min-height:158px!important;padding:14px!important}.screenshotContract .vehicle-title{font-size:16px!important;min-height:0!important}.screenshotContract .vehicle-price{font-size:24px!important}.screenshotContract .vehicle-payment{font-size:10px!important}.screenshotContract .vehicle-card-cta{min-height:36px!important;font-size:9px!important}.screenshotContract .carousel-arrow{display:grid!important;place-items:center!important;position:absolute!important;top:31%!important;z-index:5!important;width:34px!important;height:34px!important;border-radius:50%!important;background:#07111ad9!important;color:#fff!important;border:1px solid #ffffff66!important}.screenshotContract .carousel-prev{left:0!important}.screenshotContract .carousel-next{right:0!important}
+ .screenshotContract .screenshotHow{padding:21px 12px 24px!important}.screenshotContract .screenshotHow .section-heading{display:block!important}.screenshotContract .screenshotHow h2{font-size:28px!important}.screenshotContract .startApproval{margin-top:10px!important}.screenshotContract .steps-grid{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;margin-top:14px!important}.screenshotContract .steps-grid article{grid-template-columns:30px 36px 1fr!important;min-height:74px!important;padding:10px 12px!important}.screenshotContract .steps-grid article:after{display:none!important}.screenshotContract .step-number{width:26px!important;height:26px!important}.screenshotContract .step-icon{width:34px!important;height:34px!important;font-size:16px!important}.screenshotContract .steps-grid h3{font-size:10px!important}.screenshotContract .steps-grid p{font-size:8.5px!important}
+ .screenshotContract .whyWdcc{display:grid!important;grid-template-columns:1fr 1fr!important;padding:14px 12px!important;gap:8px!important}.screenshotContract .whyWdcc>strong{grid-column:1/-1!important;font-size:11px!important;margin-bottom:2px!important}.screenshotContract .whyWdcc article{min-height:58px!important;padding:8px!important;border:1px solid #e1e5e8!important;border-radius:6px!important}.screenshotContract .whyWdcc article>span{width:30px!important;height:30px!important;flex:0 0 30px!important}.screenshotContract .whyWdcc article:last-child{grid-column:1/-1!important}.screenshotContract .whyWdcc b{font-size:8.5px!important}.screenshotContract .whyWdcc small{font-size:7.5px!important}
+ .screenshotContract .screenshotFooter{display:grid!important;grid-template-columns:110px 1fr!important;padding:18px 14px 88px!important;gap:10px!important}.screenshotContract .screenshotFooter>img{width:105px!important;height:48px!important}.screenshotContract .footer-copy strong{font-size:10px!important}.screenshotContract .footer-copy span{font-size:8px!important}.screenshotContract .footer-actions{grid-column:1/-1!important;display:grid!important;grid-template-columns:1fr 1fr!important}.screenshotContract .footer-actions>a{justify-content:center!important}.screenshotContract .screenshotFooter .footer-links{grid-column:1/-1!important;display:flex!important;flex-wrap:wrap!important;gap:12px!important;font-size:8px!important}
+ .screenshotContract .mobile-action-bar{height:60px!important;backdrop-filter:blur(14px)!important;background:#050b11e8!important}.screenshotContract .mobile-action-bar a{font-size:9px!important}
 }
-@media(max-width:560px){
-  .cinematic-v2 .cinScene{inset:0!important;min-width:100%!important;min-height:100%!important;background-position:72% center!important}
-  .screenshotContract .screenshotHero{background-position:72% center!important}
-}
+@media(max-width:560px){.cinematic-v2 .cinScene{inset:0!important;min-width:100%!important;min-height:100%!important;background-position:72% center!important}.screenshotContract .screenshotHero{background-position:73% center!important}.screenshotContract .hero-copy{top:44%!important}.screenshotContract .header-logo-image{width:112px!important}.screenshotContract .whyWdcc article:nth-of-type(4){display:none!important}}
