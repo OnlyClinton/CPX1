@@ -5,6 +5,8 @@ on:
     branches: [fix/wdcc-locked-contract-20260826]
     paths:
       - '.github/workflows/wdcc-locked-contract-build.yml'
+      - '.github/workflows/wdcc-recover-8ar-hero.yml'
+      - 'scripts/wdcc-hydrate-8ar-hero.mjs'
       - 'app/**'
       - 'public/**'
       - 'package.json'
@@ -18,6 +20,10 @@ permissions:
 concurrency:
   group: wdcc-locked-contract-cloudflare-preview
   cancel-in-progress: true
+
+env:
+  EXPECTED_HERO_SIZE: '145504'
+  EXPECTED_HERO_SHA256: 1d7a0e4fced7450f2bbc66443d44b1f35bd9e24a6366308362aafa65576d3eb2
 
 jobs:
   preview:
@@ -33,6 +39,16 @@ jobs:
           node-version: '24'
           cache: npm
 
+      - name: Require canonical 8AR visual source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+          grep -q 'import LockedIntro from "./LockedIntro"' app/ReferenceCloneHome.tsx
+          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
+
       - name: Build exact visual candidate
         shell: bash
         run: |
@@ -44,9 +60,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'from "./components"' app/ReferenceCloneHome.tsx
-          grep -q 'Get pre-approved' app/ReferenceCloneHome.tsx
-          grep -q 'Browse inventory' app/ReferenceCloneHome.tsx
+          grep -q '<LockedIntro/>' app/ReferenceCloneHome.tsx
+          grep -qi 'Get pre-approved' app/ReferenceCloneHome.tsx
+          grep -qi 'Browse inventory' app/ReferenceCloneHome.tsx
+          grep -q 'rh-hero-art' app/ReferenceCloneHome.tsx
           grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
           grep -q 'Suspense' app/dealer/inventory/new/page.tsx
           grep -q 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
@@ -97,7 +114,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > preview-url.txt
 
-      - name: Smoke Cloudflare visual preview
+      - name: Smoke Cloudflare visual preview and exact asset bytes
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -113,6 +130,20 @@ jobs:
           grep -qi "we don.t care" /tmp/home.html
           grep -q "wdcc-logo-transparent.webp" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
+
+          test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
+
+          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/logo.webp
+
+          test "$(curl -sS -L -o /tmp/fallback.webp -w '%{http_code}' "$URL/assets/cars/2004-nissan-350z-1.webp?asset=$GITHUB_RUN_ID")" = 200
+          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/fallback.webp | sha256sum -c -
+
+          test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
+          grep -qi 'items\|inventory' /tmp/inventory.json
+
           dealer="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?preview=$GITHUB_RUN_ID" || true)"
           test "$dealer" = 200
           grep -qi "dealer" /tmp/dealer.html
@@ -121,6 +152,10 @@ jobs:
             echo
             echo "Preview: $URL"
             echo "Candidate SHA: $GITHUB_SHA"
+            echo "Canonical 8AR hero SHA-256: $EXPECTED_HERO_SHA256"
+            echo 'Canonical hero served by Worker: PASS.'
+            echo 'Transparent logo served by Worker: PASS.'
+            echo 'Inventory media fallback: PASS.'
             echo 'Production routes, aliases and domains were not changed.'
             echo 'Owner visual approval is required before any production move.'
           } >> "$GITHUB_STEP_SUMMARY"
