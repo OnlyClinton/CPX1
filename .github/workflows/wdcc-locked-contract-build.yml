@@ -58,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9
           npm run build
 
       - name: Verify locked visual/function routes
