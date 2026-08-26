@@ -1,0 +1,121 @@
+name: WDCC Independent Multi-Vector Recheck
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-independent-recheck.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: wdcc-independent-multivector-recheck
+  cancel-in-progress: true
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEALER: https://dealer.wedontcarecars.com
+      CUSTOMER: https://wedontcarecars.com
+      EXPECTED_API_ORIGIN: wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app
+    steps:
+      - name: Direct network and routing proof
+        id: direct
+        shell: bash
+        run: |
+          set +e
+          fail=0
+          code="$(curl -sS -D /tmp/dealer-health.h -o /tmp/dealer-health.json -w '%{http_code}' "$DEALER/api/health?independent=$GITHUB_RUN_ID")"
+          [ "$code" = 200 ] || fail=1
+          jq -e '.ok==true and .degraded==false and .service=="wdcc-canonical-authority" and .release=="WDCC-V53-CANONICAL"' /tmp/dealer-health.json >/dev/null || fail=1
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-target-v3' /tmp/dealer-health.h || fail=1
+          grep -qi "^x-wdcc-origin: $EXPECTED_API_ORIGIN" /tmp/dealer-health.h || fail=1
+          ui="$(curl -sS -L -o /tmp/dealer-ui.html -w '%{http_code}' "$DEALER/dealer?independent=$GITHUB_RUN_ID")"
+          [ "$ui" = 200 ] || fail=1
+          grep -q 'RUN YOUR DEALERSHIP' /tmp/dealer-ui.html || fail=1
+          customer="$(curl -sS -L -o /tmp/customer.html -w '%{http_code}' "$CUSTOMER/?independent=$GITHUB_RUN_ID")"
+          [ "$customer" = 200 ] || fail=1
+          grep -q 'intro-sequence intro-impact' /tmp/customer.html || fail=1
+          grep -q 'mobile-action-bar' /tmp/customer.html || fail=1
+          echo "dealer_http=$code" >> "$GITHUB_OUTPUT"
+          echo "dealer_ui=$ui" >> "$GITHUB_OUTPUT"
+          echo "customer_http=$customer" >> "$GITHUB_OUTPUT"
+          echo "ok=$([ "$fail" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run independent acceptance suites
+        id: suites
+        shell: bash
+        run: |
+          set +e
+          : > /tmp/results.txt
+          overall=0
+          run_one(){
+            wf="$1"; label="$2"
+            before="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // 0' 2>/dev/null)"
+            gh workflow run "$wf" --repo "$GITHUB_REPOSITORY" --ref main >/dev/null
+            id=''
+            for i in $(seq 1 30); do
+              id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$wf" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // 0' 2>/dev/null)"
+              if [ -n "$id" ] && [ "$id" != 0 ] && [ "$id" != "$before" ]; then break; fi
+              sleep 2
+            done
+            if [ -z "$id" ] || [ "$id" = 0 ] || [ "$id" = "$before" ]; then
+              printf '%s|dispatch_failed|%s\n' "$label" "$id" >> /tmp/results.txt
+              overall=1
+              return
+            fi
+            gh run watch "$id" --repo "$GITHUB_REPOSITORY" --exit-status >/tmp/${label}.log 2>&1
+            rc=$?
+            conclusion="$(gh run view "$id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion // "unknown"' 2>/dev/null)"
+            printf '%s|%s|%s\n' "$label" "$conclusion" "$id" >> /tmp/results.txt
+            [ "$rc" = 0 ] || overall=1
+          }
+          run_one wdcc-dealer-route-owner-diagnostic.yml route_owner
+          run_one wdcc-dealer-final-target-proof.yml desktop_mobile
+          run_one wdcc-listing-only-e2e.yml photo_listing
+          run_one wdcc-full-live-acceptance-v2.yml full_transaction
+          cat /tmp/results.txt
+          echo "results<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/results.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "ok=$([ "$overall" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish independent recheck evidence
+        id: report
+        shell: bash
+        run: |
+          set -euo pipefail
+          direct='${{ steps.direct.outputs.ok }}'
+          suites='${{ steps.suites.outputs.ok }}'
+          body=$(cat <<EOF
+          Direct route/health/UI/customer proof: **$direct**
+          Dealer health HTTP: `${{ steps.direct.outputs.dealer_http }}`
+          Dealer UI HTTP: `${{ steps.direct.outputs.dealer_ui }}`
+          Customer HTTP: `${{ steps.direct.outputs.customer_http }}`
+
+          Independent workflow results:
+          ```
+          ${{ steps.suites.outputs.results }}
+          ```
+
+          Test vectors:
+          1. Cloudflare route ownership + V53 canonical health headers.
+          2. Authenticated desktop/mobile Dashboard + Leads + Inventory + Add Vehicle render and retained-data readback.
+          3. Real browser photo upload/publish/readback with QA vehicle hidden from public inventory, then cleanup.
+          4. Full live acceptance: dealer/admin login, three lead flows, dealer lead readback, browser vehicle publish, public inventory visibility check, then cleanup.
+
+          No production alias, DNS, or customer route is changed by this recheck.
+          EOF
+          )
+          url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC independent multi-vector recheck $GITHUB_RUN_ID" --body "$body")"
+          echo "issue=$url" >> "$GITHUB_OUTPUT"
+          if [ "$direct" != true ] || [ "$suites" != true ]; then exit 1; fi
