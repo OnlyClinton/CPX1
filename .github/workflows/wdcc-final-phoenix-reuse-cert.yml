@@ -1,0 +1,113 @@
+name: WDCC Final Phoenix Reuse Certification
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wdcc-final-phoenix-reuse-cert.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-final-phoenix-reuse-cert
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      FINAL_SHA: 0c07988855e03b6376bde21f59826750dc703ce8
+      BASE: https://wdcc-cpx-launch-ha6kn5jf3-cpxagency.vercel.app
+      LIVE_APEX: https://wedontcarecars.com
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FINAL_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Pin release control candidate and runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_SHA"
+          control="$(gh issue view 205 --repo "$GITHUB_REPOSITORY" --json body -q .body)"
+          printf '%s' "$control" | grep -q "$FINAL_SHA"
+          printf '%s' "$control" | grep -q 'NO-GO FOR PRODUCTION PROMOTION YET'
+          code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$BASE/api/health?reuse=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e --arg sha "$FINAL_SHA" '.ok==true and .degraded==false and .commit==$sha and .storage=="oidc-auto" and .state=="readable"' /tmp/health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?reuse_before=$GITHUB_RUN_ID" -o /tmp/live-before.json
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-before.json >/dev/null
+          npm ci
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null
+
+      - name: Create exact-run QA identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-reuse-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}for(let n=1;n<=6;n++){const before=await stable(),s=before.s,now=new Date().toISOString(),password=`Reuse-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`reuse-${crypto.randomUUID()}`,email=`reuse-${run}@invalid.example`,stock=`R36TEST-REUSE-${run}`,backup=`private/state/backups/platform-v3-pre-reuse-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Final Reuse ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/reuse.env',`RUN_TAG=${run}\nDEALER_ID=${id}\nDEALER_EMAIL=${email}\nQA_PASSWORD=${password}\nSTOCK=${stock}\nBACKUP=${backup}\n`);console.log(JSON.stringify({ok:true,id,email,stock,backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          RUN_TAG="$RUN_TAG" env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-reuse-user.mjs
+          set -a; . /tmp/reuse.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+
+      - name: Prove full Phoenix contract on immutable candidate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/reuse.env; set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');const base=process.env.BASE,run=process.env.RUN_TAG,stock=process.env.STOCK;const out={ok:false,base,run,stock,trace:[],errors:[]};const short=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};async function txt(r){try{return(await r.text()).slice(0,3000)}catch{return''}};(async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();p.on('console',m=>{if(m.type()==='error')out.errors.push(m.text())});p.on('pageerror',e=>out.errors.push(String(e)));p.on('response',r=>{if(/\/api\/(auth|leads|inventory|upload)/.test(r.url()))out.trace.push({method:r.request().method(),url:short(r.url()),status:r.status()})});await p.goto(`${base}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});const login=await p.evaluate(async({email,password})=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,password})});return{status:r.status,body:await r.text()}},{email:process.env.DEALER_EMAIL,password:process.env.QA_PASSWORD});if(login.status!==200)throw Error(`LOGIN_${login.status}_${login.body}`);const ses=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(ses.status!==200||!JSON.parse(ses.body).authenticated)throw Error(`SESSION_${ses.status}_${ses.body}`);out.auth=true;const ids=[],keys=[];for(const [kind,source] of [['schedule','schedule-test-drive'],['approval','get-approved'],['contact','call-sean']]){const key=`wdcc-qa-reuse-${kind}-${run}`;keys.push(key);const res=await p.evaluate(async({kind,source,run,key})=>{const r=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':key},body:JSON.stringify({qa:true,kind,source,name:`WDCC QA REUSE ${kind} ${run}`,phone:'813-555-0189',email:`qa-reuse-${kind}-${run}@invalid.example`,vehicleInterest:'Final immutable reuse',message:'Automated WDCC contract verification',consent:true})});return{status:r.status,body:await r.text()}},{kind,source,run,key});if(res.status!==200&&res.status!==201)throw Error(`LEAD_${kind}_${res.status}_${res.body}`);const j=JSON.parse(res.body);if(!j.ok||!j.persisted||!j.item?.id)throw Error(`LEAD_CONTRACT_${res.body}`);ids.push(j.item.id)}out.leadIds=ids;const dupe=await p.evaluate(async({run,key})=>{const r=await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json','Idempotency-Key':key},body:JSON.stringify({qa:true,kind:'schedule',source:'schedule-test-drive',name:`WDCC QA REUSE schedule ${run}`,phone:'813-555-0189',email:`qa-reuse-schedule-${run}@invalid.example`,vehicleInterest:'Final immutable reuse',message:'Automated WDCC contract verification',consent:true})});return{status:r.status,body:await r.text()}},{run,key:keys[0]});const dj=JSON.parse(dupe.body);if(dupe.status!==200||dj.deduplicated!==true||dj.item?.id!==ids[0])throw Error(`DEDUPE_${dupe.status}_${dupe.body}`);out.dedupe=true;const feed=await p.evaluate(async()=>{const r=await fetch('/api/leads',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(feed.status!==200)throw Error(`FEED_${feed.status}_${feed.body}`);const fj=JSON.parse(feed.body);for(const id of ids)if(!(fj.items||[]).some(x=>x.id===id))throw Error(`FEED_MISSING_${id}`);out.feed=true;await p.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});async function fill(n,v){const x=p.locator(`input[name="${n}"],textarea[name="${n}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(v,{force:true})}await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Reuse ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);const d=p.locator('textarea').first();if(await d.count())await d.fill(`QA-isolated immutable reuse ${run}`);fs.writeFileSync('/tmp/reuse.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));const input=p.locator('input[type=file][multiple]').first();if(!await input.count())throw Error('FILE_INPUT_MISSING');await input.setInputFiles('/tmp/reuse.png');const draftP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});const uploadP=p.waitForResponse(r=>short(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000});const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();if(!await publish.count())throw Error('VISIBLE_PUBLISH_MISSING');await publish.click({noWaitAfter:true,timeout:10000});const draft=await draftP,dt=await txt(draft);if(!draft.ok())throw Error(`DRAFT_${draft.status()}_${dt}`);const vehicleId=String(JSON.parse(dt).item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');out.vehicleId=vehicleId;const upload=await uploadP,ut=await txt(upload);out.upload={status:upload.status(),body:ut};if(!upload.ok())throw Error(`UPLOAD_${upload.status()}_${ut}`);const nav=await p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:50000}).then(()=>true).catch(()=>false);if(!nav)throw Error(`PUBLISH_NAV_${await p.locator('.statusMessage').first().textContent().catch(()=> '')}`);const inv=await p.evaluate(async()=>{const r=await fetch('/api/inventory',{cache:'no-store'});return{status:r.status,body:await r.text()}});if(inv.status!==200)throw Error(`INVENTORY_${inv.status}_${inv.body}`);const item=(JSON.parse(inv.body).items||[]).find(x=>x.id===vehicleId||x.stock===stock);if(!item||String(item.status).toLowerCase()!=='published'||!(item.photoPathnames||[]).length)throw Error(`READBACK_${JSON.stringify(item||null)}`);out.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames};const pub=await b.newContext();const pr=await pub.request.get(`${base}/api/inventory?public=${Date.now()}`),pj=await pr.json();await pub.close();if((pj.items||[]).some(x=>x.id===item.id||x.stock===stock))throw Error('QA_PUBLIC');out.qaHidden=true;if(out.errors.length)throw Error(`BROWSER_ERRORS_${out.errors.join(' | ')}`);out.ok=true;fs.writeFileSync('/tmp/reuse-result.json',JSON.stringify(out,null,2));}catch(e){out.error=String(e?.message||e);fs.writeFileSync('/tmp/reuse-result.json',JSON.stringify(out,null,2));console.error(e);process.exitCode=1}finally{await b.close()}})();
+          NODE
+          jq -e '.ok==true and .auth==true and .feed==true and .dedupe==true and (.leadIds|length)==3 and .upload.status==200 and .qaHidden==true and (.vehicle.photoPathnames|length)>0' /tmp/reuse-result.json >/dev/null
+
+      - name: Exact-run cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/reuse.env || exit 0
+          set -a; . /tmp/reuse.env; set +a
+          cat > .wdcc-reuse-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{del,get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG,userId=process.env.DEALER_ID,stock=process.env.STOCK;async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}for(let n=1;n<=6;n++){const before=await stable(),s=before.s,leads=Array.isArray(s.leads)?s.leads:[],vehicles=Array.isArray(s.vehicles)?s.vehicles:[],users=Array.isArray(s.users)?s.users:[],audit=Array.isArray(s.audit)?s.audit:[],leadRows=leads.filter(x=>String(x.idempotencyKey||'').includes(run)||String(x.email||'').includes(run)),leadIds=new Set(leadRows.map(x=>String(x.id))),vehicleRows=vehicles.filter(x=>String(x.stock||'')===stock),vehicleIds=new Set(vehicleRows.map(x=>String(x.id))),paths=[...new Set(vehicleRows.flatMap(x=>[...(Array.isArray(x.photoPathnames)?x.photoPathnames:[]),x.primaryPhotoPathname].filter(Boolean).map(String)))];s.users=users.filter(x=>String(x.id)!==userId);s.leads=leads.filter(x=>!leadIds.has(String(x.id)));s.vehicles=vehicles.filter(x=>!vehicleIds.has(String(x.id)));s.audit=audit.filter(x=>String(x.actor||x.actorId||'')!==userId&&!leadIds.has(String(x.leadId||''))&&!vehicleIds.has(String(x.vehicleId||''))&&!String(x.idempotencyKey||'').includes(run));s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();const backup=`private/state/backups/platform-v3-pre-reuse-clean-${run}-r${Number(before.s.revision||0)}-${crypto.randomUUID()}.json`;await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});for(const p of paths)await del(p).catch(()=>{});console.log(JSON.stringify({ok:true,run,removed:{user:userId,leads:leadIds.size,vehicles:vehicleIds.size,paths:paths.length},backup,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-reuse-clean.mjs
+
+      - name: Re-prove production untouched and report
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$LIVE_APEX/api/health?reuse_after=$GITHUB_RUN_ID" -o /tmp/live-after-health.json
+          jq -e '.ok==true and .degraded==false' /tmp/live-after-health.json >/dev/null
+          curl -fsS "$LIVE_APEX/api/inventory?reuse_after=$GITHUB_RUN_ID" -o /tmp/live-after-inventory.json
+          jq -e '.ok==true and all(.items[]; ((.stock//"")|ascii_upcase|startswith("QA-")|not) and ((.stock//"")|ascii_upcase|startswith("R36TEST-")|not))' /tmp/live-after-inventory.json >/dev/null
+          evidence=not-produced;if [ -f /tmp/reuse-result.json ];then evidence="$(jq -c '{ok,auth,leadIds,dedupe,feed,vehicleId,upload,vehicle,qaHidden,error}' /tmp/reuse-result.json)";fi
+          body=$(printf 'Frozen Phoenix reuse certification `%s`\n\n- exact SHA: `%s`\n- immutable candidate: `%s`\n- new deployment: **none**\n- full gate: **%s**\n- evidence: `%s`\n- exact-run cleanup: attempted and live baseline rechecked\n- production routing/DNS/aliases: **unchanged**\n\nNo promotion is authorized by this run.' "$GITHUB_RUN_ID" "$FINAL_SHA" "$BASE" "$GATE_OUTCOME" "$evidence")
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "$body" || true
