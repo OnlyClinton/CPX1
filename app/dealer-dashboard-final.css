@@ -105,3 +105,29 @@ html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent .opsCard
   html body main.dealerDashboardLocked .dashMobileNav .active{color:#ef2031!important}
   html body main.dealerDashboardLocked .dashMobileNav .add{background:#ef2031!important;color:#fff!important}
 }
+
+/* Human visual QA closeout: beat late styled-jsx title color and use the canonical badge directly in the dashboard chrome. */
+html body main.dcPage.dealerDashboardLocked .dcShell > .dcContent.dashboardContent > .dcTitle > div > h1{
+  color:#111820!important;
+  text-shadow:none!important;
+  opacity:1!important;
+}
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{display:none!important}
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before{
+  content:""!important;
+  display:block!important;
+  flex:0 0 58px!important;
+  width:58px!important;
+  height:58px!important;
+  border-radius:50%!important;
+  background:url('/wdcc-official-logo.webp') center/contain no-repeat!important;
+  border:2px solid rgba(255,255,255,.78)!important;
+  box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
+}
+@media(max-width:760px){
+  html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before{
+    flex-basis:50px!important;
+    width:50px!important;
+    height:50px!important;
+  }
+}
