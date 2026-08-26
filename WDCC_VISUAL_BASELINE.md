@@ -25,3 +25,7 @@ Required promotion gates:
 6. Admin/dealer dashboard can read the resulting records.
 7. No dead routes or placeholder-only form actions.
 8. Production is promoted only after the preview passes the above gates.
+
+## 2026-08-26 preview lock
+
+Branch `preview/wdcc-exact-mockup-20260826` is a render-only acceptance build cloned from this exact baseline. It must not be promoted until the supplied storefront and dealer screenshots are matched and explicitly approved.
