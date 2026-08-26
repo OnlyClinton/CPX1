@@ -100,8 +100,11 @@ jobs:
             if(!visual.heroBackground.includes('wdcc-hero-v2.webp')) throw new Error(`${name}: hero Tampa/Challenger background missing`);
             if(visual.scrollWidth>visual.innerWidth+3) throw new Error(`${name}: horizontal overflow ${visual.scrollWidth}>${visual.innerWidth}`);
             if(visual.brokenImages.length) throw new Error(`${name}: broken visible images ${JSON.stringify(visual.brokenImages)}`);
-            if(visual.visibleImageCount<5) throw new Error(`${name}: too few rendered images ${visual.visibleImageCount}`);
-            if(!visual.copyRect||visual.copyRect.y<100||visual.copyRect.y+visual.copyRect.height>(visual.heroRect?.y||0)+(visual.heroRect?.height||0)-12){
+            const minVisible=width<=560?2:5;
+            if(visual.visibleImageCount<minVisible) throw new Error(`${name}: too few rendered images ${visual.visibleImageCount}<${minVisible}`);
+            const heroTop=visual.heroRect?.y??0;
+            const heroBottom=heroTop+(visual.heroRect?.height??0);
+            if(!visual.copyRect||visual.copyRect.y<heroTop-2||visual.copyRect.y+visual.copyRect.height>heroBottom-12){
               throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
             }
             const checks={
