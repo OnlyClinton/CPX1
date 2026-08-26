@@ -185,8 +185,9 @@ jobs:
             try{
               const mobileCtx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
               const m=await mobileCtx.newPage(); watchWrites(m);
-              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});
               const intro=m.locator('.li');
+              await intro.waitFor({state:'attached',timeout:5000});
               if(await intro.count()){
                 await m.locator('.li-badge img').waitFor({state:'visible',timeout:6000});
                 const staticIntro=await m.evaluate(()=>{const b=document.querySelector('.li-badge img'),s=document.querySelector('.li-scene img');const bs=getComputedStyle(b),ss=getComputedStyle(s),br=b.getBoundingClientRect();return{badgeW:br.width,badgeAnimation:bs.animationName,badgeTransform:bs.transform,sceneAnimation:ss.animationName,sceneTransform:ss.transform}});
