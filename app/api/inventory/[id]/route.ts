@@ -5,6 +5,7 @@ import {isDealerRuntime,requestId} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
 import {isInternalVehicleRecord,isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
 import {recordVehicleAudit} from "../../../../lib/vehicleAudit";
+import {v5SnapshotVehicle,v5VisualSnapshotEnabled,V5_VISUAL_SNAPSHOT_CAPTURED_AT,V5_VISUAL_SNAPSHOT_SOURCE_SHA} from "../../../../lib/v5InventorySnapshot";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -16,6 +17,12 @@ function canEdit(user:any,vehicle:any){
 }
 function json(body:any,status:number,rid:string,headers:Record<string,string>={}){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,...headers}});
+}
+function previewSnapshotItem(id:string,rid:string,upstreamStatus?:number,error?:unknown){
+  if(!v5VisualSnapshotEnabled())return null;
+  const item=v5SnapshotVehicle(id);
+  if(!item)return null;
+  return json({ok:true,item,snapshot:true,snapshotCapturedAt:V5_VISUAL_SNAPSHOT_CAPTURED_AT,snapshotSourceSha:V5_VISUAL_SNAPSHOT_SOURCE_SHA,upstreamStatus:upstreamStatus??null,upstreamError:error instanceof Error?error.message:error?String(error):null},200,rid,{"X-WDCC-Inventory-Source":"verified-v5-snapshot","X-WDCC-Visual-Only":"1"});
 }
 async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible"){
   let visible=false;let verified=false;let verification="pending";const attempts:any[]=[];
@@ -52,8 +59,18 @@ async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible")
 
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
   const{id}=await params;
-  if(!isDealerRuntime(request))return proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
   const rid=requestId(request);
+  if(!isDealerRuntime(request)){
+    try{
+      const upstream=await proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
+      if(upstream.ok)return upstream;
+      return previewSnapshotItem(id,rid,upstream.status)||upstream;
+    }catch(error){
+      const fallback=previewSnapshotItem(id,rid,undefined,error);
+      if(fallback)return fallback;
+      return json({ok:false,error:error instanceof Error?error.message:"read_failed"},500,rid);
+    }
+  }
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     const item=state.vehicles.find(vehicle=>vehicle.id===id);
