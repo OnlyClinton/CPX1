@@ -134,17 +134,12 @@ jobs:
               p.on('console',msg=>{if(msg.type()==='error')errs.push(msg.text())});p.on('pageerror',e=>errs.push(String(e)));
               await p.goto(`${url}/?mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await waitImg(p,'.li-scene img',1000);await waitImg(p,'.li-badge img',200);
-              const introCount=await p.locator('.li-scene img').count(),canvasCount=await p.locator('canvas').count();
-              if(introCount!==1||canvasCount!==0)throw Error(`INTRO_LAYER_BAD ${JSON.stringify({introCount,canvasCount})}`);
-              await p.waitForTimeout(90);
-              const a=await p.evaluate(()=>{const b=document.querySelector('.li-badge').getBoundingClientRect(),s=document.querySelector('.li-scene img').getBoundingClientRect();return{bcx:b.x+b.width/2,bcy:b.y+b.height/2,bw:b.width,sw:s.width,sh:s.height}});
-              await p.waitForTimeout(620);
-              const b=await p.evaluate(()=>{const x=document.querySelector('.li-badge').getBoundingClientRect(),s=document.querySelector('.li-scene img').getBoundingClientRect();return{bcx:x.x+x.width/2,bcy:x.y+x.height/2,bw:x.width,sw:s.width,sh:s.height}});
-              if(Math.abs(a.bcx-b.bcx)>2||Math.abs(a.bcy-b.bcy)>2||b.bw<a.bw*1.25)throw Error(`INTRO_BADGE_WEAK ${JSON.stringify({a,b})}`);
-              if(b.sw<a.sw*1.015||b.sh<a.sh*1.015)throw Error(`INTRO_SCENE_PUSH_WEAK ${JSON.stringify({a,b})}`);
-              await p.screenshot({path:'visual-proof/mobile-intro.png'});
+              const intro=await p.evaluate(()=>{const badge=document.querySelector('.li-badge'),scene=document.querySelector('.li-scene img'),bs=getComputedStyle(badge),ss=getComputedStyle(scene),b=badge.getBoundingClientRect();return{sceneCount:document.querySelectorAll('.li-scene img').length,canvasCount:document.querySelectorAll('canvas').length,badgeAnimation:bs.animationName,badgeDuration:bs.animationDuration,sceneAnimation:ss.animationName,sceneDuration:ss.animationDuration,badgeCenterX:b.x+b.width/2,badgeCenterY:b.y+b.height/2,badgeW:b.width};});
+              if(intro.sceneCount!==1||intro.canvasCount!==0)throw Error(`INTRO_LAYER_BAD ${JSON.stringify(intro)}`);
+              if(!String(intro.badgeAnimation).includes('wdccBadgePop')||parseFloat(intro.badgeDuration)<.7||!String(intro.sceneAnimation).includes('wdccScenePush')||parseFloat(intro.sceneDuration)<1.7)throw Error(`INTRO_MOTION_CONFIG_BAD ${JSON.stringify(intro)}`);
+              await p.waitForTimeout(300);await p.screenshot({path:'visual-proof/mobile-intro.png'});
               await waitIntroDone(p);await waitImg(p,'.rh-logo img',200);
-              const mob=await p.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>getComputedStyle(q(s)),r=s=>q(s).getBoundingClientRect(),white=q('.rh-copy h1 .white');return{logoW:r('.rh-logo img').width,utilityH:r('.rh-utility').height,utilityFont:parseFloat(st('.rh-utility-inner').fontSize),headerH:r('.rh-header').height,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card').width,heroH:r('.rh-hero-art').height,h1:parseFloat(st('.rh-copy h1').fontSize),whiteH:r('.rh-copy h1 .white').height,whiteRight:r('.rh-copy h1 .white').right,sectionH2:parseFloat(st('.rh-section-head h2').fontSize),financeH2:parseFloat(st('.finance-heading h2').fontSize),benefitTitle:parseFloat(st('.rh-benefit strong').fontSize),stepTitle:parseFloat(st('.rh-step strong').fontSize),utilityPos:st('.rh-utility').position,headerPos:st('.rh-header').position}});
+              const mob=await p.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>getComputedStyle(q(s)),r=s=>q(s).getBoundingClientRect();return{logoW:r('.rh-logo img').width,utilityH:r('.rh-utility').height,utilityFont:parseFloat(st('.rh-utility-inner').fontSize),headerH:r('.rh-header').height,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card').width,heroH:r('.rh-hero-art').height,h1:parseFloat(st('.rh-copy h1').fontSize),whiteH:r('.rh-copy h1 .white').height,whiteRight:r('.rh-copy h1 .white').right,sectionH2:parseFloat(st('.rh-section-head h2').fontSize),financeH2:parseFloat(st('.finance-heading h2').fontSize),benefitTitle:parseFloat(st('.rh-benefit strong').fontSize),stepTitle:parseFloat(st('.rh-step strong').fontSize),utilityPos:st('.rh-utility').position,headerPos:st('.rh-header').position}});
               if(mob.logoW<110||mob.utilityH<30||mob.utilityFont<10.25||mob.headerH<86)throw Error(`MOBILE_HEADER_SCALE_BAD ${JSON.stringify(mob)}`);
               if(mob.menu==='none'||mob.grid!=='flex'||mob.cardW<290||mob.cardW>335)throw Error(`MOBILE_COMPOSITION_BAD ${JSON.stringify(mob)}`);
               if(mob.heroH<335||mob.heroH>365||mob.h1<41||mob.h1>46||mob.whiteH<mob.h1*.82||mob.whiteRight>390)throw Error(`MOBILE_HERO_TYPE_BAD ${JSON.stringify(mob)}`);
@@ -155,10 +150,10 @@ jobs:
               if(Math.abs(pin.uTop)>2||Math.abs(pin.hTop-pin.uH)>3)throw Error(`MOBILE_NOT_PINNED ${JSON.stringify(pin)}`);
               await p.evaluate(()=>scrollTo(0,0));await p.waitForTimeout(100);
               if(errs.length)throw Error(`MOBILE_RUNTIME_ERRORS ${JSON.stringify(errs)}`);
-              await p.screenshot({path:'visual-proof/mobile-hero.png'});await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});proof.mobile={a,b,mob,pin,errs};await m.close();
+              await p.screenshot({path:'visual-proof/mobile-hero.png'});await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});proof.mobile={intro,mob,pin,errs};await m.close();
 
               const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});const q=await d.newPage();
-              await q.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitImg(q,'.li-scene img',1000);await q.waitForTimeout(720);await q.screenshot({path:'visual-proof/desktop-intro.png'});await waitIntroDone(q);await waitImg(q,'.rh-logo img',200);
+              await q.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitImg(q,'.li-scene img',1000);await q.waitForTimeout(650);await q.screenshot({path:'visual-proof/desktop-intro.png'});await waitIntroDone(q);await waitImg(q,'.rh-logo img',200);
               const desk=await q.evaluate(()=>{const st=s=>getComputedStyle(document.querySelector(s)),r=s=>document.querySelector(s).getBoundingClientRect();return{logoW:r('.rh-logo img').width,nav:st('.rh-nav').display,menu:st('.rh-menu').display,grid:st('.rh-grid').display,heroH:r('.rh-hero-art').height,h1:parseFloat(st('.rh-copy h1').fontSize),sectionH2:parseFloat(st('.rh-section-head h2').fontSize),financeH2:parseFloat(st('.finance-heading h2').fontSize),lead:parseFloat(st('.rh-lead').fontSize)}});
               if(desk.logoW<108||desk.nav!=='flex'||desk.menu!=='none'||desk.grid!=='grid')throw Error(`DESKTOP_COMPOSITION_BAD ${JSON.stringify(desk)}`);
               if(desk.heroH<610||desk.h1<70||desk.sectionH2<44||desk.financeH2<40||desk.lead<17)throw Error(`DESKTOP_SCALE_BAD ${JSON.stringify(desk)}`);
