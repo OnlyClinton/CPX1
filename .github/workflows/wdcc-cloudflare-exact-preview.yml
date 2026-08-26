@@ -5,6 +5,8 @@ on:
     branches:
       - dev/wdcc-cinematic-mockup-v1
     paths:
+      - 'app/**'
+      - 'public/**'
       - '.github/workflows/wdcc-cloudflare-exact-preview.yml'
   workflow_dispatch:
 
@@ -41,7 +43,13 @@ jobs:
           test -s public/wdcc-logo-transparent.webp
           test "$(git hash-object public/wdcc-hero-v2.webp)" = "f75ea69f3aee373bb4e3ee393d37290836266127"
           test "$(git hash-object public/wdcc-logo-transparent.webp)" = "983e6fffee3786712b8878594ceb79495ac5a891"
-          grep -q 'recovered-2vfd-source' 'app/assets/cars/[filename]/route.ts'
+          test "$(git hash-object public/assets/cars/2004-nissan-350z-1.webp)" = "67f36d857400d227c4c99ef82ff4b4ead72e2507"
+          test "$(git hash-object public/assets/cars/2016-ford-f150-limited-1.webp)" = "e33bf5ce59efbfa11a2739d9abfc090eeeb784e9"
+          test "$(git hash-object public/assets/cars/2019-honda-pilot-1.webp)" = "6136629dac1b352a150587d598e8cdfc2bbd00d9"
+          test "$(git hash-object public/assets/cars/2019-kia-sportage-1.webp)" = "7c856e619e8e7a41350be901d49f3b91327345c6"
+          test "$(git hash-object public/assets/cars/2019-toyota-rav4-1.webp)" = "72caad4d39e48b21c954388bcd75642e0300d75d"
+          grep -q 'bad-credit' app/Exact2vfDHome.tsx
+          grep -q 'Start Pre-Approval' app/Exact2vfDHome.tsx
           echo 'PROVEN_VISUAL_ASSETS=PASS'
       - name: Install app and Cloudflare adapter
         run: |
@@ -83,6 +91,7 @@ jobs:
           grep -qi "dealer" /tmp/dealer.html
           curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/wdcc-hero-v2.webp" | grep -qi '200'
           curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/wdcc-logo-transparent.webp" | grep -qi '200'
+          curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/assets/cars/2004-nissan-350z-1.webp" | grep -qi '200'
           echo "CLOUDFLARE_EXACT_PREVIEW=PASS"
       - uses: actions/upload-artifact@v4
         with:
