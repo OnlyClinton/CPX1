@@ -1,0 +1,64 @@
+name: WDCC Recover Exact 8AR Hero
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+    paths:
+      - '.github/workflows/wdcc-recover-8ar-hero.yml'
+      - 'scripts/wdcc-hydrate-8ar-hero.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-recover-exact-8ar-hero
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      WDCC_8AR_DONOR_DEPLOYMENT_ID: dpl_8ARLPgiW4ZKC9qwQxJrwqc2hrZzX
+      EXPECTED_SIZE: '145504'
+      EXPECTED_SHA256: 1d7a0e4fced7450f2bbc66443d44b1f35bd9e24a6366308362aafa65576d3eb2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-locked-contract-20260826
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Require immutable donor access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+
+      - name: Recover canonical 8AR hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-hydrate-8ar-hero.mjs
+          test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_SIZE"
+          printf '%s  %s\n' "$EXPECTED_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+
+      - name: Commit exact asset to candidate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- public/wdcc-hero-v2.webp; then
+            echo 'Canonical 8AR hero already committed.'
+            exit 0
+          fi
+          git config user.name 'WDCC Visual Recovery Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add public/wdcc-hero-v2.webp
+          git commit -m 'fix(wdcc): restore canonical 8AR Tampa Challenger hero'
+          git push origin HEAD:fix/wdcc-locked-contract-20260826
