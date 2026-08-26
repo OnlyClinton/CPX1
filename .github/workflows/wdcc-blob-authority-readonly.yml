@@ -1,0 +1,84 @@
+name: WDCC Blob Authority Readonly Diagnostic
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+    paths:
+      - '.github/workflows/wdcc-blob-authority-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  TEAM: cpxagency
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  STORE_ID: store_cNUyQRVlXtyvZQ5N
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install diagnostic clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir diag && cd diag
+          npm init -y >/dev/null
+          npm install @vercel/blob@2 >/dev/null
+      - name: Inspect store and safe project bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== BLOB STORES ==='
+          vercel blob list-stores --all --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | sed -E 's/(token|secret|authorization)[=: ]+[^ ]+/\1=[REDACTED]/Ig' || true
+          echo '=== CANONICAL STORE ==='
+          vercel blob get-store "$STORE_ID" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 | sed -E 's/(token|secret|authorization)[=: ]+[^ ]+/\1=[REDACTED]/Ig' || true
+          for project in "$PHOENIX_PROJECT" "$DEALER_PROJECT"; do
+            echo "=== PROJECT $project SAFE ENV ==="
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v10/projects/$project/env?teamId=$ORG_ID" \
+              | jq '{envs:[.envs[]? | select(.key=="BLOB_STORE_ID" or .key=="BLOB_READ_WRITE_TOKEN" or .key=="VERCEL_OIDC_TOKEN") | {key,type,target,createdAt,updatedAt}]}'
+          done
+      - name: Prove project OIDC access to canonical ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd diag
+          : > ../oidc-proof.jsonl
+          for project in "$PHOENIX_PROJECT" "$DEALER_PROJECT"; do
+            token_json="$(curl -fsS -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'content-type: application/json' \
+              "https://api.vercel.com/v1/projects/$project/token?teamId=$ORG_ID" --data '{"source":"wdcc-blob-authority-readonly"}')"
+            oidc="$(printf '%s' "$token_json" | jq -r '.token // empty')"
+            test -n "$oidc"
+            PROJECT="$project" OIDC="$oidc" STORE="$STORE_ID" node - <<'NODE' | tee -a ../oidc-proof.jsonl
+          const {get,list}=require('@vercel/blob');
+          (async()=>{
+            const out={project:process.env.PROJECT,store:process.env.STORE,listOk:false,readOk:false,count:null,revision:null,error:null};
+            try{
+              const l=await list({prefix:'private/state/',limit:5,oidcToken:process.env.OIDC,storeId:process.env.STORE});
+              out.listOk=true;out.count=l.blobs.length;
+              const r=await get('private/state/platform-v3.json',{access:'private',useCache:false,oidcToken:process.env.OIDC,storeId:process.env.STORE});
+              if(r?.statusCode===200&&r.stream){const chunks=[];for await(const c of r.stream)chunks.push(c);const s=JSON.parse(Buffer.concat(chunks).toString('utf8'));out.readOk=true;out.revision=Number(s.revision||0);out.vehicleCount=Array.isArray(s.vehicles)?s.vehicles.length:null;}
+            }catch(e){out.error=String(e?.message||e)}
+            console.log(JSON.stringify(out));
+          })();
+          NODE
+          done
+          echo '=== OIDC PROOF SUMMARY ==='
+          cat ../oidc-proof.jsonl | jq .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-blob-authority-readonly-${{ github.sha }}
+          path: oidc-proof.jsonl
+          retention-days: 3
