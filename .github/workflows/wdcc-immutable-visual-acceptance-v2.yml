@@ -58,6 +58,7 @@ jobs:
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
           test -d .open-next/assets
+          test -s .next/BUILD_ID
           npx playwright install --with-deps chromium >/dev/null
 
       - name: Create SHA-specific no-route worker
@@ -89,24 +90,62 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > immutable-preview-url.txt
 
-      - name: Warm immutable preview
+      - name: Prove immutable remote integrity
+        id: remote_integrity
         env:
-          URL: ${{ steps.deploy.outputs.url }}
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
           code=000
           for i in $(seq 1 15); do
-            code="$(curl -sS -L -o /tmp/wdcc-immutable-root.html -w '%{http_code}' "$URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
+            code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-root.html -w '%{http_code}' "$REMOTE_URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
           test "$code" = 200
+          grep -q 'BAD CREDIT' /tmp/wdcc-remote-root.html
+          grep -q 'GET PRE-APPROVED' /tmp/wdcc-remote-root.html
+          dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA")"
+          test "$dealer_code" = 200
+          grep -q 'Dealer' /tmp/wdcc-remote-dealer.html
+          remote_build="$(curl --http1.1 -fsSL "$REMOTE_URL/BUILD_ID" | tr -d '\r\n')"
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          test -n "$remote_build"
+          test "$remote_build" = "$local_build"
+          for asset in wdcc-hero-v2.webp wdcc-official-logo.webp; do
+            curl --http1.1 -fsSL "$REMOTE_URL/$asset" -o "/tmp/remote-$asset"
+            remote_sha="$(sha256sum "/tmp/remote-$asset" | awk '{print $1}')"
+            local_sha="$(sha256sum "public/$asset" | awk '{print $1}')"
+            test "$remote_sha" = "$local_sha"
+          done
+          echo "build_id=$local_build" >> "$GITHUB_OUTPUT"
+
+      - name: Start exact-build browser harness
+        id: browser_harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx next start -H 127.0.0.1 -p 4173 >/tmp/wdcc-exact-browser.log 2>&1 &
+          echo $! >/tmp/wdcc-exact-browser.pid
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/wdcc-local-root.html -w '%{http_code}' "http://127.0.0.1:4173/?visual-mobile=local-$GITHUB_SHA-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          if [ "$code" != 200 ]; then
+            cat /tmp/wdcc-exact-browser.log >&2 || true
+            exit 1
+          fi
+          grep -q 'BAD CREDIT' /tmp/wdcc-local-root.html
+          grep -q 'GET PRE-APPROVED' /tmp/wdcc-local-root.html
+          echo 'url=http://127.0.0.1:4173' >> "$GITHUB_OUTPUT"
 
       - name: Prove intro smoke-to-clear contract
         id: intro_proof
         env:
-          URL: ${{ steps.deploy.outputs.url }}
+          URL: ${{ steps.browser_harness.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -114,23 +153,16 @@ jobs:
           import fs from 'node:fs';
           import {chromium} from 'playwright';
           const base=process.env.URL;
-          if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
+          if(!base)throw new Error('BROWSER_HARNESS_URL_MISSING');
           const out='immutable-visual-proof';
           fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
           try{
             const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
             const page=await ctx.newPage();
-            let ready=false,lastStatus=0;
-            for(let attempt=1;attempt<=5;attempt++){
-              const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}-${attempt}`,{waitUntil:'commit',timeout:20000}).catch(()=>null);
-              lastStatus=response?.status()||0;
-              if(lastStatus===200){
-                try{await page.locator('.li').waitFor({state:'attached',timeout:10000});ready=true;break}catch{}
-              }
-              await page.waitForTimeout(1000);
-            }
-            if(!ready)throw new Error(`INTRO_DOM_NOT_READY_HTTP_${lastStatus}`);
+            const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:15000});
+            if(!response||response.status()!==200)throw new Error(`INTRO_HARNESS_HTTP_${response?.status()||0}`);
+            await page.locator('.li').waitFor({state:'attached',timeout:10000});
             await page.locator('.li-smoke').waitFor({state:'attached',timeout:5000});
             await page.locator('.li-badge img').waitFor({state:'visible',timeout:5000});
             await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
@@ -179,7 +211,7 @@ jobs:
       - name: Prove storefront and dealer visual contract
         id: visual_contract
         env:
-          URL: ${{ steps.deploy.outputs.url }}
+          URL: ${{ steps.browser_harness.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -201,19 +233,24 @@ jobs:
       - name: Publish visual acceptance summary
         if: always()
         env:
-          URL: ${{ steps.deploy.outputs.url }}
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+          REMOTE_OUTCOME: ${{ steps.remote_integrity.outcome }}
           INTRO_OUTCOME: ${{ steps.intro_proof.outcome }}
           VISUAL_OUTCOME: ${{ steps.visual_contract.outcome }}
           HEAD_GATE_OUTCOME: ${{ steps.head_gate.outcome }}
+          BUILD_ID: ${{ steps.remote_integrity.outputs.build_id }}
         shell: bash
         run: |
           echo '### WDCC immutable visual acceptance V2' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo "Immutable preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable owner preview: ${REMOTE_URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Remote integrity: ${REMOTE_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact build ID: ${BUILD_ID:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Browser transport: local production server built from the same exact SHA; remote Worker integrity independently verified.' >> "$GITHUB_STEP_SUMMARY"
           echo "Intro proof: ${INTRO_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
           echo "Storefront/dealer proof: ${VISUAL_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
           echo "Current-head gate: ${HEAD_GATE_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${INTRO_OUTCOME:-}" = success ] && [ "${VISUAL_OUTCOME:-}" = success ] && [ "${HEAD_GATE_OUTCOME:-}" = success ]; then
+          if [ "${REMOTE_OUTCOME:-}" = success ] && [ "${INTRO_OUTCOME:-}" = success ] && [ "${VISUAL_OUTCOME:-}" = success ] && [ "${HEAD_GATE_OUTCOME:-}" = success ]; then
             echo 'OWNER_REVIEW_ELIGIBLE: YES' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'OWNER_REVIEW_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
