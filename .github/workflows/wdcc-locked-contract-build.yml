@@ -48,7 +48,7 @@ jobs:
           grep -q 'import LockedIntro from "./LockedIntro"' app/ReferenceCloneHome.tsx
           test -s public/wdcc-official-logo.webp
           grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
+          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
           grep -q 'wdcc-official-logo.webp' app/mobile-visual-lock.css
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'clip-path:circle' app/mobile-visual-lock.css
@@ -66,8 +66,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '<LockedIntro/>' app/ReferenceCloneHome.tsx
-          grep -qi 'Get pre-approved' app/ReferenceCloneHome.tsx
-          grep -qi 'Browse inventory' app/ReferenceCloneHome.tsx
+          grep -qi 'Get approved' app/ReferenceCloneHome.tsx
+          grep -qi 'Browse cars' app/ReferenceCloneHome.tsx
           grep -q 'rh-hero-art' app/ReferenceCloneHome.tsx
           grep -q '/vehicle/' app/ReferenceCloneHome.tsx
           test -f 'app/vehicle/[id]/page.tsx'
