@@ -25,7 +25,7 @@ export default function ReferenceCloneHome(){
    <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ Tampa Bay</span><span>In-house financing</span><span>Low down payments</span><span>Drive today</span></div></div>
    <header className="rh-header"><div className="rh-header-inner">
      <button className="rh-menu" aria-label="Open navigation" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>☰</button>
-     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
+     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
      <nav className={`rh-nav${open?" open":""}`} aria-label="Main navigation"><Link href="/inventory" onClick={()=>setOpen(false)}>Inventory</Link><Link href="/get-approved?source=nav-financing" onClick={()=>setOpen(false)}>Financing</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>How it works</Link><Link href="/contact?source=nav-contact" onClick={()=>setOpen(false)}>Contact</Link></nav>
      <div className="rh-header-actions"><a className="rh-header-phone" href="tel:+18135164752">Call Sean · (813) 516-4752</a></div>
      <a className="rh-call" href="tel:+18135164752" aria-label="Call Sean"><span>Call Sean</span></a>
