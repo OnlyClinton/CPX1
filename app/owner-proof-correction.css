@@ -1,6 +1,6 @@
 /* Owner visual proof correction — 2026-08-26
-   Keep the round WDCC badge visually dominant on both desktop and mobile.
-   Preview-only; no routing or functional behavior changes. */
+   Keep the round WDCC badge visually dominant, remove the dead mobile hero sky,
+   and keep the phone action compact. Preview-only; no routing or behavior changes. */
 
 @media(min-width:1366px){
   html body main.reference-home.locked-storefront>header.rh-header .rh-logo{
@@ -28,5 +28,36 @@
     max-width:none!important;
     max-height:none!important;
     transform:none!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-call{
+    min-width:44px!important;
+    width:44px!important;
+    max-width:44px!important;
+    height:44px!important;
+    padding:0!important;
+    border-radius:999px!important;
+    overflow:hidden!important;
+    color:transparent!important;
+    font-size:0!important;
+    line-height:0!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-call::after{
+    content:"☎"!important;
+    color:#fff!important;
+    font-size:20px!important;
+    line-height:1!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{
+    transform:translateY(-30px) scale(1.18)!important;
+    transform-origin:72% 58%!important;
+    object-position:72% 58%!important;
+  }
+}
+
+@media(max-width:430px){
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{
+    transform:translateY(-34px) scale(1.20)!important;
+    transform-origin:72% 60%!important;
+    object-position:72% 60%!important;
   }
 }
