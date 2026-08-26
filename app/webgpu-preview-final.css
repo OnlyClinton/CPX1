@@ -1,0 +1,16 @@
+/* Dedicated WebGPU handoff preview closeout. Loaded last on the isolated preview branch. */
+html body .li.gpu-intro{background:transparent!important}
+
+@media(max-width:600px){
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1{
+    font-size:clamp(36px,9.85vw,39px)!important;
+    line-height:.94!important;
+    letter-spacing:-.05em!important;
+    max-width:100%!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1 span{
+    width:max-content!important;
+    max-width:100%!important;
+    white-space:nowrap!important;
+  }
+}
