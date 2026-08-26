@@ -8,9 +8,9 @@ html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle .dcBut
 html body main.dealerDashboardLocked .dcTop .brand{display:flex!important;align-items:center!important;gap:12px!important;color:#fff!important}
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand:before{display:none!important;content:none!important;background:none!important}
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand>img{
-  display:block!important;content:url('/wdcc-official-logo.webp')!important;flex:0 0 58px!important;width:58px!important;height:58px!important;
+  display:block!important;content:normal!important;flex:0 0 58px!important;width:58px!important;height:58px!important;
   min-width:58px!important;max-width:58px!important;object-fit:contain!important;object-position:center!important;
-  border-radius:50%!important;clip-path:circle(49% at 50% 50%)!important;background:transparent!important;
+  border-radius:50%!important;background:transparent!important;
   border:2px solid rgba(255,255,255,.78)!important;box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
   filter:contrast(1.06) saturate(1.06)!important;
 }
