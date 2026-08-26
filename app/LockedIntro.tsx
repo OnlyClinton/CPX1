@@ -51,7 +51,7 @@ export default function LockedIntro(){
       .li-dock .li-car{opacity:.12;transition:opacity .55s ease}
       .li-smoke{position:absolute;z-index:3;left:61%;top:63%;width:min(1050px,112vw);height:min(500px,59vw);border-radius:50%;background:radial-gradient(ellipse,rgba(236,243,247,.46),rgba(108,135,151,.2) 38%,transparent 72%);filter:blur(35px);mix-blend-mode:screen;pointer-events:none;opacity:.38;transform:translate(-50%,-50%);animation:liSmoke 2.7s ease both}
       .li-badge{position:absolute;z-index:5;left:50%;top:43%;width:min(25vw,238px);aspect-ratio:1;display:grid;place-items:center;transform:translate(-50%,-50%);transform-origin:center;will-change:transform,opacity;border-radius:50%;background:radial-gradient(circle at 50% 42%,#fff 0 61%,#edf1f4 62% 68%,#07121c 69% 72%,transparent 73%);box-shadow:0 22px 54px rgba(0,0,0,.78),0 0 0 2px rgba(255,255,255,.8),0 0 36px rgba(239,31,47,.18)}
-      .li-badge img{display:block;width:88%;height:88%;object-fit:contain;visibility:visible;opacity:1;border-radius:50%}
+      .li-badge img{display:block;width:88%;height:88%;object-fit:contain;visibility:visible;opacity:1;border-radius:50%;clip-path:circle(49% at 50% 50%)}
       .li-reveal .li-badge{animation:liBadge 1.35s .72s cubic-bezier(.16,.84,.18,1) both}
       .li-badge:before{content:"";position:absolute;inset:-10%;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.25),rgba(239,31,47,.08) 42%,transparent 70%);opacity:0;pointer-events:none;animation:liFlash 1.9s .55s ease-out both}
       .li-badge:after{content:"";position:absolute;inset:-7%;border-radius:50%;border:2px solid transparent;pointer-events:none;animation:liImpact 1.9s .52s ease-out both}
