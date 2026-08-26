@@ -83,7 +83,7 @@ export default function Exact2vfDHome(){
       <div className="hero-shade"/>
       <div className="hero-copy">
         <p className="hero-kicker">Tampa Bay · Drive today</p>
-        <h1>Bad credit?<br/><em>No credit?</em><br/><strong>We don't care.</strong></h1>
+        <h1><span className="bad-credit">Bad credit?</span><br/><em>No credit?</em><br/><strong>We don't care.</strong></h1>
         <p className="hero-lead">In-house financing. Low down payments.<br/>Fast approvals. Straight answers.<br/>Get on the road without the runaround.</p>
         <div className="hero-actions" aria-label="Choose your next step">
           <Link className="btn btn-primary hero-cta-test" href="/get-approved?source=hero-get-approved">Get Pre-Approved <span>→</span></Link>
@@ -118,7 +118,7 @@ export default function Exact2vfDHome(){
     </section>
 
     <section className="how-section" id="how-it-works">
-      <div className="section-heading"><div><span className="section-kicker">One simple process. No hoops. No hassle.</span><h2>In-house financing <strong>made easy.</strong></h2></div></div>
+      <div className="section-heading"><div><span className="section-kicker">One simple process. No hoops. No hassle.</span><h2>In-house financing <strong>made easy.</strong></h2></div><Link className="start-approval" href="/get-approved?source=how-it-works">Start Pre-Approval →</Link></div>
       <div className="steps-grid">
         <article><span>1</span><h3>Apply Online</h3><p>Send basic details securely.</p></article>
         <article><span>2</span><h3>Talk to Sean</h3><p>Confirm down payment and vehicle fit.</p></article>
@@ -131,7 +131,7 @@ export default function Exact2vfDHome(){
       <article><span className="trust-icon">☆</span><div><h3>Tampa Bay Proud</h3><p>Local dealer. Local community.</p></div></article>
       <article><span className="trust-icon">•••</span><div><h3>Straight Answers</h3><p>No runaround. No hidden games.</p></div></article>
       <article><span className="trust-avatar">SE</span><div><h3>Real People</h3><p>Talk to Sean. Not a call center.</p></div></article>
-      <article><span className="trust-icon">✓</span><div><h3>Confidence Driven</h3><p>We make it happen when others can't.</p></div></article>
+      <article><span className="trust-icon">✓</span><div><h3>In-House Financing</h3><p>We make it happen when others can't.</p></div></article>
     </section>
 
     <footer className="site-footer" id="about"><div><strong>WDCC · We Don't Care Cars</strong><span>Used cars and in-house financing for Tampa Bay.</span></div><a href="tel:+18135164752">813-516-4752</a><span className="footer-links"><Link href="/dealer">Dealer Portal</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></span></footer>
