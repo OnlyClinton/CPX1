@@ -1,0 +1,58 @@
+/* V5 hard lock: beats legacy element-qualified selectors. Load last. */
+@media(max-width:760px){
+  html body main.reference-home.locked-storefront.locked-storefront>header.rh-header.rh-header{
+    position:sticky!important;top:22px!important;height:68px!important;min-height:68px!important;max-height:68px!important;z-index:5000!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront>header.rh-header.rh-header>.rh-header-inner.rh-header-inner{
+    width:100%!important;height:68px!important;min-height:68px!important;max-height:68px!important;
+    display:grid!important;grid-template-columns:46px minmax(0,1fr) 84px!important;align-items:center!important;padding:0 9px!important;gap:4px!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront header.rh-header.rh-header .rh-menu.rh-menu{
+    display:flex!important;width:40px!important;height:40px!important;font-size:24px!important;align-items:center!important;justify-content:center!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront header.rh-header.rh-header .rh-logo.rh-logo{
+    width:94px!important;height:68px!important;display:grid!important;place-items:center!important;justify-self:center!important;overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront header.rh-header.rh-header .rh-logo.rh-logo img{
+    content:url('/wdcc-official-logo.webp')!important;width:84px!important;height:84px!important;max-width:none!important;transform:none!important;
+    object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront header.rh-header.rh-header .rh-call.rh-call{
+    display:flex!important;min-width:80px!important;width:80px!important;height:38px!important;padding:0 9px!important;font-size:10px!important;justify-self:end!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront .rh-nav.rh-nav{top:90px!important}
+
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero{
+    height:auto!important;min-height:0!important;padding:0!important;overflow:hidden!important;background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-art.rh-hero-art{
+    position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:315px!important;min-height:0!important;max-height:315px!important;
+    object-fit:cover!important;object-position:69% 40%!important;filter:saturate(1.27) contrast(1.055) brightness(1.20)!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-shade.rh-hero-shade{
+    position:absolute!important;inset:0 0 auto 0!important;height:315px!important;min-height:0!important;max-height:315px!important;
+    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,.01) 58%,rgba(2,7,12,.16) 79%,#02070c 100%)!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-inner.rh-hero-inner{
+    display:block!important;width:100%!important;min-height:0!important;height:auto!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy{
+    width:100%!important;max-width:none!important;margin:0!important;padding:18px 16px 24px!important;background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy h1{
+    width:100%!important;max-width:100%!important;margin:0 0 14px!important;font-size:41px!important;line-height:.92!important;letter-spacing:-.045em!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy h1 span{display:block!important;width:max-content!important;max-width:none!important;white-space:nowrap!important}
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy h1 .white{
+    font-size:1em!important;letter-spacing:-.055em!important;transform:scaleX(.86)!important;transform-origin:left center!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-lead.rh-lead{font-size:14px!important;line-height:1.42!important;max-width:350px!important}
+
+  html body .commandStrip.commandStrip{display:flex!important;position:sticky!important;top:0!important;height:22px!important;min-height:22px!important;max-height:22px!important;z-index:6001!important}
+  html body header.premiumHeader.premiumHeader{position:sticky!important;top:22px!important;height:68px!important;min-height:68px!important;max-height:68px!important;z-index:6000!important}
+  html body header.premiumHeader.premiumHeader .nav.nav{height:68px!important;min-height:68px!important;max-height:68px!important;grid-template-columns:44px minmax(0,1fr) 78px!important;padding:0 9px!important}
+  html body header.premiumHeader.premiumHeader .logoBrand.logoBrand{grid-column:2!important;grid-row:1!important;justify-self:center!important;width:90px!important;height:68px!important;display:grid!important;place-items:center!important;overflow:visible!important}
+  html body header.premiumHeader.premiumHeader .logoBrand.logoBrand img{content:url('/wdcc-official-logo.webp')!important;width:80px!important;height:80px!important;max-width:none!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
+  html body header.premiumHeader.premiumHeader .mobileMenuButton.mobileMenuButton{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;padding:0!important}
+  html body .stickyCtaBar.stickyCtaBar{height:52px!important;min-height:52px!important;max-height:52px!important}
+}
