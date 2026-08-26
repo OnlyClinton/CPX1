@@ -28,16 +28,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Verify isolated exact-mockup source
+      - name: Verify isolated mockup source and proven visual binaries
         shell: bash
         run: |
           set -euo pipefail
           test -s app/Exact2vfDHome.tsx
+          test -s app/reference-final.css
+          test -s app/reference-polish.css
           test -s app/dealer-reference.css
           test -s app/dealer-dashboard-reference.css
           test -s public/wdcc-hero-v2.webp
           test -s public/wdcc-logo-transparent.webp
-          grep -q '2vfD is the visual source of truth' WDCC_VISUAL_BASELINE.md
+          test "$(git hash-object public/wdcc-hero-v2.webp)" = "f75ea69f3aee373bb4e3ee393d37290836266127"
+          test "$(git hash-object public/wdcc-logo-transparent.webp)" = "983e6fffee3786712b8878594ceb79495ac5a891"
+          grep -q 'recovered-2vfd-source' 'app/assets/cars/[filename]/route.ts'
+          echo 'PROVEN_VISUAL_ASSETS=PASS'
       - name: Install app and Cloudflare adapter
         run: |
           npm ci
@@ -77,6 +82,7 @@ jobs:
           curl -fsS --retry 5 --retry-delay 3 "$PREVIEW_URL/dealer" -o /tmp/dealer.html
           grep -qi "dealer" /tmp/dealer.html
           curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/wdcc-hero-v2.webp" | grep -qi '200'
+          curl -fsSI --retry 5 --retry-delay 3 "$PREVIEW_URL/wdcc-logo-transparent.webp" | grep -qi '200'
           echo "CLOUDFLARE_EXACT_PREVIEW=PASS"
       - uses: actions/upload-artifact@v4
         with:
