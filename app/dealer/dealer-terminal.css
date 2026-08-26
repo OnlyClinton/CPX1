@@ -6,11 +6,13 @@ html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle p{colo
 html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle .dcButton{background:#fff!important;color:#26333d!important;border-color:#cbd4dc!important}
 
 html body main.dealerDashboardLocked .dcTop .brand{display:flex!important;align-items:center!important;gap:12px!important;color:#fff!important}
-html body main.dealerDashboardLocked .dcTop .brand img{display:none!important}
-html body main.dealerDashboardLocked .dcTop .brand:before{
-  content:""!important;display:block!important;flex:0 0 58px!important;width:58px!important;height:58px!important;
-  background:url('/wdcc-official-logo.webp') center/contain no-repeat!important;border-radius:50%!important;
-  filter:drop-shadow(0 7px 16px rgba(0,0,0,.48))!important;
+html body main.dealerDashboardLocked .dcTop .brand:before{display:none!important;content:none!important;background:none!important}
+html body main.dealerDashboardLocked .dcTop .brand>img{
+  display:block!important;content:url('/wdcc-official-logo.webp')!important;flex:0 0 58px!important;width:58px!important;height:58px!important;
+  min-width:58px!important;max-width:58px!important;object-fit:contain!important;object-position:center!important;
+  border-radius:50%!important;clip-path:circle(49% at 50% 50%)!important;background:transparent!important;
+  border:2px solid rgba(255,255,255,.78)!important;box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
+  filter:contrast(1.06) saturate(1.06)!important;
 }
 html body main.dealerDashboardLocked .dcTop .brand b{color:#fff!important;font-size:12px!important}
 html body main.dealerDashboardLocked .dcTop .brand small{color:#9fb0be!important;font-size:9px!important}
@@ -46,7 +48,7 @@ html body main.dealerDashboardLocked .legend p{color:#65717b!important}
 html body main.dealerDashboardLocked .legend p b{color:#1b252e!important}
 
 @media(max-width:760px){
-  html body main.dealerDashboardLocked .dcTop .brand:before{flex-basis:50px!important;width:50px!important;height:50px!important}
+  html body main.dealerDashboardLocked .dcTop .brand>img{flex-basis:50px!important;width:50px!important;height:50px!important;min-width:50px!important;max-width:50px!important}
   html body main.dealerDashboardLocked .dcTop .brand b{font-size:10px!important}
   html body main.dealerDashboardLocked .dcTop .brand small{font-size:8px!important}
   html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle h1{color:#111820!important;font-size:30px!important}
