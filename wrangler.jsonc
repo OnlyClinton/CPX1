@@ -15,6 +15,6 @@
   },
   "vars": {
     "WDCC_RUNTIME_ROLE": "frontend",
-    "WDCC_DEALER_BACKEND_URL": "https://wdcc-cpx-launch-cpxagency.vercel.app"
+    "WDCC_DEALER_BACKEND_URL": "https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app"
   }
 }
