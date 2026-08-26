@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wdcc-dev-frontdoor",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-26",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "dev.wedontcarecars.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

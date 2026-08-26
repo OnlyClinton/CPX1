@@ -1,0 +1,165 @@
+name: WDCC DEV FRONTDOOR
+
+on:
+  push:
+    branches:
+      - fix/wdcc-stopgap-hero-20260826
+    paths:
+      - '.github/workflows/wdcc-dev-frontdoor.yml'
+      - 'cloudflare/wdcc-dev/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dev-frontdoor
+  cancel-in-progress: false
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  ORIGIN: https://wdcc-stopgap-hero-preview.vercel.app
+  DEV_URL: https://dev.wedontcarecars.com
+  DEV_HOST: dev.wedontcarecars.com
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Cloudflare authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 2; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 2; }
+
+      - name: Guard the development-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG=cloudflare/wdcc-dev/wrangler.jsonc
+          test "$(jq '.routes | length' "$CONFIG")" -eq 1
+          test "$(jq -r '.routes[0].pattern' "$CONFIG")" = "$DEV_HOST"
+          test "$(jq -r '.routes[0].custom_domain' "$CONFIG")" = true
+          test "$(jq -r '.name' "$CONFIG")" = wdcc-dev-frontdoor
+          ! jq -e '.routes[] | select(.pattern == "wedontcarecars.com" or .pattern == "www.wedontcarecars.com" or .pattern == "dealer.wedontcarecars.com")' "$CONFIG" >/dev/null
+
+      - name: Prove the isolated Vercel origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 30 "$ORIGIN/?dev_preflight=$GITHUB_RUN_ID" -o /tmp/origin.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/origin.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/origin.html
+          grep -qi 'we don.t care' /tmp/origin.html
+          curl -fsSL --max-time 30 "$ORIGIN/wdcc-hero-v2.webp" -o /tmp/hero.webp
+          curl -fsSL --max-time 30 "$ORIGIN/wdcc-logo-transparent.webp" -o /tmp/logo.webp
+          test "$(stat -c %s /tmp/hero.webp)" -gt 140000
+          test "$(stat -c %s /tmp/logo.webp)" -gt 45000
+
+      - name: Snapshot protected production routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" "${auth[@]}" > /tmp/routes-before.json
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=5000" "${auth[@]}" > /tmp/dns-before.json
+          jq -e '.success == true' /tmp/routes-before.json >/dev/null
+          jq -e '.success == true' /tmp/dns-before.json >/dev/null
+          jq -S '[.result[] | select(.pattern == "wedontcarecars.com/*" or .pattern == "www.wedontcarecars.com/*" or .pattern == "dealer.wedontcarecars.com/*") | {id,pattern,script}] | sort_by(.id)' /tmp/routes-before.json > /tmp/protected-routes-before.json
+          jq -S '[.result[] | select(.name == "wedontcarecars.com" or .name == "www.wedontcarecars.com" or .name == "dealer.wedontcarecars.com") | {id,type,name,content,proxied,ttl}] | sort_by(.id)' /tmp/dns-before.json > /tmp/protected-dns-before.json
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.90.0 >/dev/null
+
+      - name: Deploy and verify the unbound candidate
+        id: candidate
+        working-directory: cloudflare/wdcc-dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy --config wrangler.candidate.jsonc 2>&1 | tee /tmp/wrangler-candidate.log
+          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler-candidate.log | tail -1 || true)"
+          test -n "$URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          ok=0
+          for attempt in $(seq 1 20); do
+            code="$(curl -sS -D /tmp/candidate.h -o /tmp/candidate.html -w '%{http_code}' "$URL/?candidate=$GITHUB_RUN_ID-$attempt" || true)"
+            if [ "$code" = 200 ] \
+              && grep -qi '^x-wdcc-dev-frontdoor: cloudflare' /tmp/candidate.h \
+              && grep -q 'name="wdcc-environment" content="development"' /tmp/candidate.html \
+              && grep -q 'wdcc-hero-v2.webp' /tmp/candidate.html; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ok" = 1
+
+      - name: Bind only dev.wedontcarecars.com
+        working-directory: cloudflare/wdcc-dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deploy --config wrangler.jsonc
+
+      - name: Verify the Cloudflare development domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -L -D /tmp/dev.h -o /tmp/dev.html -w '%{http_code}' "$DEV_URL/?dev_verify=$GITHUB_RUN_ID-$attempt" || true)"
+            if [ "$code" = 200 ] \
+              && grep -qi '^x-wdcc-environment: development' /tmp/dev.h \
+              && grep -qi '^x-wdcc-dev-frontdoor: cloudflare' /tmp/dev.h \
+              && grep -qi '^x-robots-tag: noindex' /tmp/dev.h \
+              && grep -q 'wdcc-hero-v2.webp' /tmp/dev.html \
+              && grep -q 'wdcc-logo-transparent.webp' /tmp/dev.html; then
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          curl -fsSL --max-time 30 "$DEV_URL/wdcc-hero-v2.webp" -o /tmp/dev-hero.webp
+          curl -fsSL --max-time 30 "$DEV_URL/wdcc-logo-transparent.webp" -o /tmp/dev-logo.webp
+          test "$(stat -c %s /tmp/dev-hero.webp)" -gt 140000
+          test "$(stat -c %s /tmp/dev-logo.webp)" -gt 45000
+          curl -fsSL --max-time 20 "$DEV_URL/robots.txt" | grep -q '^Disallow: /$'
+
+      - name: Prove production routing was not changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" "${auth[@]}" > /tmp/routes-after.json
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=5000" "${auth[@]}" > /tmp/dns-after.json
+          jq -e '.success == true' /tmp/routes-after.json >/dev/null
+          jq -e '.success == true' /tmp/dns-after.json >/dev/null
+          jq -S '[.result[] | select(.pattern == "wedontcarecars.com/*" or .pattern == "www.wedontcarecars.com/*" or .pattern == "dealer.wedontcarecars.com/*") | {id,pattern,script}] | sort_by(.id)' /tmp/routes-after.json > /tmp/protected-routes-after.json
+          jq -S '[.result[] | select(.name == "wedontcarecars.com" or .name == "www.wedontcarecars.com" or .name == "dealer.wedontcarecars.com") | {id,type,name,content,proxied,ttl}] | sort_by(.id)' /tmp/dns-after.json > /tmp/protected-dns-after.json
+          cmp /tmp/protected-routes-before.json /tmp/protected-routes-after.json
+          cmp /tmp/protected-dns-before.json /tmp/protected-dns-after.json
+          for url in https://wedontcarecars.com https://www.wedontcarecars.com https://dealer.wedontcarecars.com/dealer; do
+            code="$(curl -sS -L --max-time 25 -D /tmp/protected.h -o /dev/null -w '%{http_code}' "$url" || true)"
+            echo "$url -> $code"
+            echo "$code" | grep -Eq '^(200|301|302|307|308)$'
+            ! grep -qi '^x-wdcc-dev-frontdoor:' /tmp/protected.h
+          done
+          {
+            echo '### WDCC development lane'
+            echo ''
+            echo "- Development: $DEV_URL"
+            echo "- Origin: $ORIGIN"
+            echo '- Production aliases: unchanged (route and DNS fingerprints match)'
+            echo '- Search indexing: disabled'
+          } >> "$GITHUB_STEP_SUMMARY"
