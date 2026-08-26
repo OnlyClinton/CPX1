@@ -1,0 +1,41 @@
+name: WDCC Locked Contract Build
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-locked-contract-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify locked visual/function routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'from "./components"' app/ReferenceCloneHome.tsx
+          grep -q 'Get pre-approved' app/ReferenceCloneHome.tsx
+          grep -q 'Browse inventory' app/ReferenceCloneHome.tsx
+          grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
+          grep -q 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'handleUploadUrl:"/api/upload"' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'method:"PATCH"' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'method:"POST"' app/dealer/inventory/import/page.tsx
+          grep -q 'InventoryManager' app/dealer/inventory/page.tsx
+          grep -q 'DashboardManager' app/dealer/page.tsx
+          echo 'LOCKED_CONTRACT_STATIC_GATE=PASS'
