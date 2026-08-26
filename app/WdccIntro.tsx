@@ -33,6 +33,9 @@ export default function WdccIntro({ logoTargetRef, onComplete }: WdccIntroProps)
 
   const badgeRef = useRef<HTMLDivElement>(null);
   const skipRef = useRef<HTMLButtonElement>(null);
+  const skylineRef = useRef<HTMLImageElement>(null);
+  const carRef = useRef<HTMLImageElement>(null);
+  const logoRef = useRef<HTMLImageElement>(null);
   const phaseRef = useRef<IntroPhase>("loading");
   const renderPathRef = useRef<RenderPath>("pending");
   const dockRequestedRef = useRef(false);
@@ -78,6 +81,18 @@ export default function WdccIntro({ logoTargetRef, onComplete }: WdccIntroProps)
 
   useEffect(() => {
     if (compositeFallback) markAsset("car");
+  }, [compositeFallback, markAsset]);
+
+  useEffect(() => {
+    const cachedAssets: Array<[IntroAsset, HTMLImageElement | null]> = [
+      ["skyline", skylineRef.current],
+      ["car", carRef.current],
+      ["logo", logoRef.current],
+    ];
+
+    cachedAssets.forEach(([asset, image]) => {
+      if (image?.complete && image.naturalWidth > 0) markAsset(asset);
+    });
   }, [compositeFallback, markAsset]);
 
   useEffect(() => {
@@ -261,6 +276,7 @@ export default function WdccIntro({ logoTargetRef, onComplete }: WdccIntroProps)
       <div className="intro-fallback" aria-hidden="true">
         <div className="intro-skyline-stage">
           <img
+            ref={skylineRef}
             className="intro-skyline"
             src={compositeFallback ? HERO_FALLBACK : SKYLINE}
             alt=""
@@ -275,6 +291,7 @@ export default function WdccIntro({ logoTargetRef, onComplete }: WdccIntroProps)
         {!compositeFallback && (
           <div className="intro-car-stage" onAnimationEnd={handleCssCarAnimationEnd}>
             <img
+              ref={carRef}
               className="intro-car"
               src={CHALLENGER}
               alt=""
@@ -294,6 +311,7 @@ export default function WdccIntro({ logoTargetRef, onComplete }: WdccIntroProps)
 
       <div className="intro-badge" ref={badgeRef}>
         <img
+          ref={logoRef}
           src={LOGO}
           alt="We Don't Care Cars"
           width="512"
