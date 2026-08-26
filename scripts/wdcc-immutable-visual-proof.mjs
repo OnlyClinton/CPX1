@@ -119,7 +119,7 @@ try{
 
   const desktopCtx=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   const d=await desktopCtx.newPage();watchWrites(d);
-  await d.goto(`${base}/?visual-desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await finishIntro(d);
+  await d.goto(`${base}/?visual-desktop=${Date.now()}`,{waitUntil:'commit',timeout:30000});await finishIntro(d);
   const desktopGeom=await d.evaluate(()=>{const menu=getComputedStyle(document.querySelector('.rh-menu')).display,logo=document.querySelector('.rh-logo img').getBoundingClientRect(),u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect(),hero=document.querySelector('.rh-hero').getBoundingClientRect();return{menu,logoW:logo.width,docW:document.documentElement.scrollWidth,winW:innerWidth,uTop:u.top,uH:u.height,hTop:h.top,hBottom:h.bottom,heroTop:hero.top}});
   if(desktopGeom.menu!=='none'||desktopGeom.logoW<80||desktopGeom.docW>desktopGeom.winW+1)throw new Error(`DESKTOP_CHROME_BAD ${JSON.stringify(desktopGeom)}`);
   const desktopCtas=await checkCtas(d);
@@ -143,7 +143,7 @@ try{
       return item?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item})}):r.fulfill({status:404,contentType:'application/json',body:'{"ok":false,"error":"NOT_FOUND"}'});
     });
   }
-  const capture=async(page,path,selector,name)=>{await page.goto(`${base}${path}${path.includes('?')?'&':'?'}visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await page.locator(selector).waitFor({state:'visible',timeout:10000});await page.screenshot({path:`${out}/${name}.png`,fullPage:true})};
+  const capture=async(page,path,selector,name)=>{await page.goto(`${base}${path}${path.includes('?')?'&':'?'}visual=${Date.now()}`,{waitUntil:'commit',timeout:30000});await page.locator(selector).waitFor({state:'visible',timeout:10000});await page.screenshot({path:`${out}/${name}.png`,fullPage:true})};
 
   const dealer=await desktopCtx.newPage();await wireDealer(dealer);
   await capture(dealer,'/dealer','.dealerDashboardLocked','dealer-dashboard-desktop');
@@ -152,7 +152,7 @@ try{
   if(dashVisual.logoDisplay==='none'||dashVisual.logoW<48||dashVisual.naturalW<1||(rgb.length===3&&rgb.every(v=>v>220)))throw new Error(`DEALER_DASHBOARD_VISUAL_BAD ${JSON.stringify(dashVisual)}`);
   await capture(dealer,'/dealer/inventory','.inventoryContract','dealer-inventory-desktop');
   await capture(dealer,'/dealer/inventory/import','.dcDrop','dealer-import-desktop');
-  await dealer.goto(`${base}/dealer/inventory/new?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+  await dealer.goto(`${base}/dealer/inventory/new?visual=${Date.now()}`,{waitUntil:'commit',timeout:30000});
   await dealer.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
   await dealer.screenshot({path:`${out}/dealer-editor-desktop.png`,fullPage:true});
   const photos=dealer.locator('.sectionBlock').filter({hasText:'Photos'}).first();if(await photos.count())await photos.screenshot({path:`${out}/dealer-photos-desktop.png`});
@@ -167,7 +167,7 @@ try{
   await capture(dm,'/dealer','.dealerDashboardLocked','dealer-dashboard-mobile');
   await capture(dm,'/dealer/inventory','.inventoryContract','dealer-inventory-mobile');
   await capture(dm,'/dealer/inventory/import','.dcDrop','dealer-import-mobile');
-  await dm.goto(`${base}/dealer/inventory/new?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await dm.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
+  await dm.goto(`${base}/dealer/inventory/new?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});await dm.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
   await dm.screenshot({path:`${out}/dealer-editor-mobile.png`,fullPage:true});
   const mobilePreview=dm.getByRole('button',{name:/^preview$/i}).last();await mobilePreview.scrollIntoViewIfNeeded();await mobilePreview.click({timeout:5000});await dm.locator('.previewModal').waitFor({state:'visible',timeout:5000});await dm.locator('.previewModal').screenshot({path:`${out}/dealer-preview-mobile.png`});
   proof.dealer.mobile={inventoryMode:proof.provider.ok?'canonical-readonly':'empty-provider-fallback',preview:'normal-click-pass'};
