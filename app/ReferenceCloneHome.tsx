@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
-import {Intro} from "./components";
+import LockedIntro from "./LockedIntro";
 
 type Vehicle={id?:string;slug?:string;year:number;make:string;model:string;trim?:string;price:number;downPayment?:number;down_payment?:number;mileage?:number;primaryPhotoPathname?:string;primary_image_url?:string;image?:string;status?:string;stock?:string;stock_id?:string;badges?:string[];bodyStyle?:string;body_style?:string;transmission?:string;drivetrain?:string;visibility?:string;internalOnly?:boolean};
 const fallback:Vehicle[]=[
@@ -21,7 +21,7 @@ export default function ReferenceCloneHome(){
  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>{const live=(j.items||j.inventory||[]).filter(customerVisible).slice(0,5);if(live.length)setItems(live)}).catch(()=>{})},[]);
  const vehicles=useMemo(()=>items.slice(0,5),[items]);
  return <main className="reference-home locked-storefront">
-   <Intro/>
+   <LockedIntro/>
    <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ Tampa Bay</span><span>★</span><span>In-house financing</span><span>★</span><span>Low payments</span><span>★</span><span>Drive today</span><span className="utility-sales">Sales: <b>(813) 516-4752</b></span></div></div>
    <header className="rh-header"><div className="rh-header-inner">
      <button className="rh-menu" aria-label="Open navigation" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>☰</button>
