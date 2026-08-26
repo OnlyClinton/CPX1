@@ -1,0 +1,16 @@
+/* Preview-only corrections from direct Cloudflare screenshot review. Loaded last. */
+.targetDealerLoginHero>img,
+.targetDealerTopBrand>img,
+.targetDealerSide .sideBrand>img{
+  content:url('/wdcc-official-logo.webp')!important;
+  object-fit:contain!important;
+  background:transparent!important;
+  filter:none!important;
+}
+
+@media(max-width:430px){
+  .locked-storefront h1 .white{
+    font-size:.90em!important;
+    letter-spacing:-.055em!important;
+  }
+}
