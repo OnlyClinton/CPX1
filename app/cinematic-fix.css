@@ -71,6 +71,7 @@ html,body{max-width:100%;overflow-x:hidden!important}
   padding:0!important;
 }
 .screenshotContract .hero h1{margin:10px 0 16px!important}
+.screenshotContract .hero-kicker{color:#e9f0f5!important;font-size:12px!important;font-weight:850!important;text-shadow:0 2px 10px #000d!important}
 .screenshotContract .hero-car-glow{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important}
 
 /* Desktop mockup geometry must stay multi-column. Earlier base CSS can otherwise
@@ -130,6 +131,47 @@ html,body{max-width:100%;overflow-x:hidden!important}
     max-width:none!important;
     transform:translateY(-50%)!important;
   }
+  .screenshotContract .hero-kicker{font-size:11.5px!important;letter-spacing:.11em!important}
+
+  /* Explicit mobile header controls: a real 3-line menu and visible call icon. */
+  .screenshotContract .mobile-menu,
+  .screenshotContract .mobile-call{
+    width:42px!important;
+    height:42px!important;
+    padding:0!important;
+    margin:0!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    color:#fff!important;
+    background:transparent!important;
+    border:0!important;
+    opacity:1!important;
+    visibility:visible!important;
+  }
+  .screenshotContract .mobile-menu>span{
+    display:grid!important;
+    width:20px!important;
+    gap:4px!important;
+  }
+  .screenshotContract .mobile-menu i{
+    display:block!important;
+    width:20px!important;
+    height:2px!important;
+    min-height:2px!important;
+    border-radius:2px!important;
+    background:#fff!important;
+    opacity:1!important;
+  }
+  .screenshotContract .mobile-call svg{
+    display:block!important;
+    width:22px!important;
+    height:22px!important;
+    fill:#fff!important;
+    stroke:none!important;
+    opacity:1!important;
+  }
+
   .screenshotContract .screenshotInventory .section-heading,
   .screenshotContract .screenshotHow .section-heading{display:block!important}
   .screenshotContract .featured-grid{display:block!important;width:100%!important}
