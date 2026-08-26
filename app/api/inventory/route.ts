@@ -5,6 +5,7 @@ import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {isIsolatedWorkersDevRequest,visualProofInventoryFallback} from "../../../lib/visualProofInventory";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -25,18 +26,31 @@ function publicEligible(item:any){
 
 async function proxyPublicInventory(request:Request){
   let upstream:Response|null=null;
+  // Never retry 500 here: quota/storage faults can make each retry consume more provider work.
   const retryable=new Set([502,503,504]);
-  for(let attempt=0;attempt<3;attempt++){
+  const isolatedPreview=isIsolatedWorkersDevRequest(request);
+  const maxAttempts=isolatedPreview?1:3;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
     upstream=await proxyDealer(request,"/api/inventory");
     if(upstream.ok||!retryable.has(upstream.status))break;
-    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+    if(attempt<maxAttempts-1)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
   }
-  if(!upstream)return NextResponse.json({ok:false,items:[],error:"dealer_backend_unavailable"},{status:503,headers:{"Cache-Control":"no-store","Retry-After":"2"}});
-  if(!upstream.ok)return upstream;
+  if(!upstream){
+    if(isolatedPreview){
+      return NextResponse.json(visualProofInventoryFallback(503),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":"503","X-WDCC-Public-Inventory-Attempts":"1"}});
+    }
+    return NextResponse.json({ok:false,items:[],error:"dealer_backend_unavailable"},{status:503,headers:{"Cache-Control":"no-store","Retry-After":"2"}});
+  }
+  if(!upstream.ok){
+    if(isolatedPreview&&upstream.status>=500){
+      return NextResponse.json(visualProofInventoryFallback(upstream.status),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":String(upstream.status),"X-WDCC-Public-Inventory-Attempts":"1"}});
+    }
+    return upstream;
+  }
   const json=await upstream.json().catch(()=>({}));
   const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
   const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Public-Inventory-Attempts":"3"}});
+  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":"live","X-WDCC-Public-Inventory-Attempts":String(maxAttempts)}});
 }
 
 export async function GET(request:Request){
