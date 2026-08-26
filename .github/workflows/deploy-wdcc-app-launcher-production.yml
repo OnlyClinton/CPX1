@@ -1,0 +1,203 @@
+name: WDCC APP LAUNCHER PRODUCTION
+
+on:
+  push:
+    branches: [codex/wdcc-dealer-android-v2]
+    paths:
+      - '.github/workflows/deploy-wdcc-app-launcher-production.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wdcc-app-launcher-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  VERCEL_SCOPE: cpxagency
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+  DEALER: dealer.wedontcarecars.com
+  APK_URL: https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v2/WDCC-Dealer-v2.apk
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout approved public branch
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require release authority and exact source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          grep -q 'Run your inventory from anywhere' app/app/page.tsx
+          grep -q 'Open Web Portal' app/app/page.tsx
+          grep -q 'Download Android' app/app/page.tsx
+          grep -q 'wdcc-dealer-app-v2/WDCC-Dealer-v2.apk' app/app/download/android/route.ts
+          curl -fsSL "$APK_URL" -o /tmp/WDCC-Dealer-v2.apk
+          test "$(stat -c '%s' /tmp/WDCC-Dealer-v2.apk)" -gt 1000000
+          printf '%s  %s\n' 'e8ae948aab602a16b118b01891468c9754d0b0386c63408b0a669b9ef0a868b0' /tmp/WDCC-Dealer-v2.apk | sha256sum --check
+
+      - name: Install and link exact storefront project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=production --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+
+      - name: Capture rollback aliases
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$APEX?teamId=$VERCEL_ORG_ID" -o /tmp/old-apex.json
+          curl -fsSL -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$WWW?teamId=$VERCEL_ORG_ID" -o /tmp/old-www.json
+          jq -r '.deployment.id // .deploymentId // empty' /tmp/old-apex.json > /tmp/old-apex-id
+          jq -r '.deployment.id // .deploymentId // empty' /tmp/old-www.json > /tmp/old-www-id
+          test -n "$(cat /tmp/old-apex-id)"
+          test -n "$(cat /tmp/old-www-id)"
+
+      - name: Build approved source with production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel build --prod --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy isolated production candidate
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --prod --skip-domain --yes --env "WDCC_ANDROID_APK_URL=$APK_URL" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$output"
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://wdcc-v32-storefront-[a-z0-9-]+-cpxagency\.vercel\.app' | tail -n1 || true)"
+          test -n "$url"
+          echo "Vercel CLI exit after deployment: $rc"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "host=${url#https://}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate before public cutover
+        env:
+          CANDIDATE: ${{ steps.deploy.outputs.host }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel curl / --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-home.html
+          grep -q 'screenshotContract' /tmp/candidate-home.html
+          grep -q 'header-logo-image' /tmp/candidate-home.html
+          grep -q 'mobile-action-bar' /tmp/candidate-home.html
+
+          vercel curl /app --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-app.html
+          grep -q 'Run your inventory from anywhere' /tmp/candidate-app.html
+          grep -q 'Open Web Portal' /tmp/candidate-app.html
+          grep -q 'Download Android' /tmp/candidate-app.html
+
+          redirect="$(vercel curl /app/download/android --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" -- --silent --output /dev/null --write-out '%{http_code} %{redirect_url}')"
+          test "$redirect" = "307 $APK_URL"
+
+          vercel curl /api/health --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-health.json
+          jq -e '.ok == true and .degraded == false' /tmp/candidate-health.json >/dev/null
+          vercel curl /api/inventory --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-inventory.json
+          jq -e '.ok == true and (.items | type == "array")' /tmp/candidate-inventory.json >/dev/null
+          jq -e 'all(.items[]; ((.internalOnly // false) == false))' /tmp/candidate-inventory.json >/dev/null
+
+          for path in /dealer /dealer/login /dealer/inventory /dealer/inventory/new; do
+            code="$(vercel curl "$path" --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" -- --silent --output /dev/null --write-out '%{http_code}')"
+            test "$code" = 200
+          done
+
+      - name: Assign customer aliases to verified candidate
+        id: cutover
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DEPLOYMENT_URL" "$APEX" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+          vercel alias set "$DEPLOYMENT_URL" "$WWW" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Verify live storefront, app launcher and installer
+        id: live
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$WWW" "$APEX"; do
+            ok=0
+            for i in $(seq 1 40); do
+              key="$GITHUB_RUN_ID-$host-$i"
+              home_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o /tmp/live-home.html -w '%{http_code}' "https://$host/?app-release=$key" || true)"
+              app_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o /tmp/live-app.html -w '%{http_code}' "https://$host/app?app-release=$key" || true)"
+              health_code="$(curl -sS -L -o /tmp/live-health.json -w '%{http_code}' "https://$host/api/health?app-release=$key" || true)"
+              inventory_code="$(curl -sS -L -o /tmp/live-inventory.json -w '%{http_code}' "https://$host/api/inventory?app-release=$key" || true)"
+              download_code="$(curl -sS -D /tmp/live-download.headers -o /dev/null -w '%{http_code}' "https://$host/app/download/android?app-release=$key" || true)"
+              download_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,""); print $2}' /tmp/live-download.headers | tail -n1)"
+              if [ "$home_code" = 200 ] && [ "$app_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inventory_code" = 200 ] && [ "$download_code" = 307 ] \
+                && grep -q 'screenshotContract' /tmp/live-home.html \
+                && grep -q 'header-logo-image' /tmp/live-home.html \
+                && grep -q 'mobile-action-bar' /tmp/live-home.html \
+                && grep -q 'Run your inventory from anywhere' /tmp/live-app.html \
+                && grep -q 'Open Web Portal' /tmp/live-app.html \
+                && grep -q 'Download Android' /tmp/live-app.html \
+                && [ "$download_location" = "$APK_URL" ] \
+                && jq -e '.ok == true and .degraded == false' /tmp/live-health.json >/dev/null 2>&1 \
+                && jq -e '.ok == true and (.items | type == "array")' /tmp/live-inventory.json >/dev/null 2>&1 \
+                && jq -e 'all(.items[]; ((.internalOnly // false) == false))' /tmp/live-inventory.json >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep 3
+            done
+            test "$ok" = 1
+          done
+
+          dealer_health="$(curl -sS -L -o /tmp/dealer-health.json -w '%{http_code}' "https://$DEALER/api/health?app-release=$GITHUB_RUN_ID" || true)"
+          dealer_page="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "https://$DEALER/dealer?app-release=$GITHUB_RUN_ID" || true)"
+          test "$dealer_health" = 200
+          test "$dealer_page" = 200
+          jq -e '.ok == true and .degraded == false' /tmp/dealer-health.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Restore storefront aliases if live verification fails
+        if: always() && steps.cutover.outcome != 'skipped' && steps.live.outputs.verified != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD_APEX="$(cat /tmp/old-apex-id)"
+          OLD_WWW="$(cat /tmp/old-www-id)"
+          curl -fsSL -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' "https://api.vercel.com/v2/deployments/$OLD_APEX/aliases?teamId=$VERCEL_ORG_ID" --data "{\"alias\":\"$APEX\",\"redirect\":null}" >/dev/null
+          curl -fsSL -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'Content-Type: application/json' "https://api.vercel.com/v2/deployments/$OLD_WWW/aliases?teamId=$VERCEL_ORG_ID" --data "{\"alias\":\"$WWW\",\"redirect\":null}" >/dev/null
+          exit 1
+
+      - name: Publish deployment proof
+        if: steps.live.outputs.verified == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## WDCC app launcher production release'
+            echo
+            echo "- Source: $GITHUB_SHA"
+            echo "- Deployment: ${{ steps.deploy.outputs.url }}"
+            echo "- Web launcher: https://$APEX/app"
+            echo "- Android route: https://$APEX/app/download/android"
+            echo '- Existing storefront: verified'
+            echo '- Dealer health: verified and alias unchanged'
+            echo '- Internal-only inventory exclusion: verified'
+          } >> "$GITHUB_STEP_SUMMARY"
