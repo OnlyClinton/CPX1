@@ -1,0 +1,196 @@
+name: WDCC Immutable Real Device Visual Proof
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-immutable-real-device-proof
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate real-device authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -s public/wdcc-hero-v2.webp
+          test -s public/wdcc-official-logo.webp
+          test -s app/LockedIntro.tsx
+          test -s app/owner-device-final.css
+          grep -q 'owner-device-final.css' app/layout.tsx
+          grep -q 'animation:none' app/LockedIntro.tsx
+          ! grep -q 'li-dock' app/LockedIntro.tsx
+
+      - name: Build isolated artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create SHA-specific no-route Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          const short=String(process.env.GITHUB_SHA||'unknown').slice(0,8).toLowerCase();
+          cfg.name=`wdcc-proof-${short}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.immutable.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.immutable.jsonc
+
+      - name: Deploy immutable preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.immutable.jsonc 2>&1 | tee /tmp/wdcc-immutable.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-immutable.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" | tee immutable-preview-url.txt
+
+      - name: Smoke exact preview
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /api/inventory /dealer; do
+            code=000
+            for i in $(seq 1 20); do
+              code="$(curl -sS -L -o /tmp/body -w '%{http_code}' "$URL$path?sha=$GITHUB_SHA&attempt=$i" || true)"
+              [ "$code" = 200 ] && break
+              sleep 2
+            done
+            test "$code" = 200
+          done
+
+      - name: Assert physical-phone geometry and desktop contract
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p immutable-proof
+          node - <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          (async()=>{
+            const url=process.env.URL;
+            const browser=await chromium.launch({headless:true});
+            const proof={url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{}};
+            const waitImg=async(p,s,w=100)=>{await p.locator(s).waitFor({state:'visible',timeout:15000});await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return i&&i.complete&&i.naturalWidth>=w},{s,w},{timeout:15000});};
+            const finishIntro=async p=>{const intro=p.locator('.li');if(await intro.count()){await p.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:3000}).catch(()=>{});await intro.waitFor({state:'detached',timeout:5000}).catch(()=>{})}await p.locator('.rh-hero').waitFor({state:'visible',timeout:5000});};
+            const waitInventory=async p=>{await p.locator('.rh-grid').waitFor({state:'visible',timeout:20000});await p.locator('.rh-card').first().waitFor({state:'visible',timeout:10000});};
+
+            async function mobile(width,height,name){
+              const c=await browser.newContext({viewport:{width,height},deviceScaleFactor:3,isMobile:true,hasTouch:true});
+              const p=await c.newPage();
+              const errors=[]; p.on('pageerror',e=>errors.push(String(e))); p.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+              await p.goto(`${url}/?device=${name}&t=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              await waitImg(p,'.li-scene img',1000); await waitImg(p,'.li-badge img',200); await p.waitForTimeout(350);
+              const intro=await p.evaluate(()=>{const b=document.querySelector('.li-badge')?.getBoundingClientRect(),img=document.querySelector('.li-badge img'),scene=document.querySelector('.li-scene img');return{w:b?.width||0,top:b?.top||0,src:img?.getAttribute('src')||'',badgeAnim:img?getComputedStyle(img).animationName:'',sceneAnim:scene?getComputedStyle(scene).animationName:''}});
+              if(intro.w<150||intro.w>205||!intro.src.includes('wdcc-official-logo.webp')||intro.badgeAnim!=='none'||intro.sceneAnim!=='none')throw Error(`${name}_INTRO ${JSON.stringify(intro)}`);
+              await p.screenshot({path:`immutable-proof/${name}-intro.png`});
+              await finishIntro(p); await waitImg(p,'.rh-logo img',200); await waitInventory(p);
+              const g=await p.evaluate(()=>{
+                const r=s=>document.querySelector(s)?.getBoundingClientRect(); const st=s=>{const e=document.querySelector(s);return e?getComputedStyle(e):null};
+                const u=r('.rh-utility'),h=r('.rh-header'),hero=r('.rh-hero'),art=r('.rh-hero-art'),logo=r('.rh-logo img'),call=r('.rh-call'),h1=r('.rh-copy h1');
+                const btns=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(e=>e.getBoundingClientRect());
+                const cards=[...document.querySelectorAll('.rh-benefit')].map(e=>e.getBoundingClientRect());
+                const step=document.querySelector('.rh-step'),small=step?.querySelector('small')?.getBoundingClientRect(),num=step?.querySelector('b')?.getBoundingClientRect();
+                const grid=r('.rh-grid'),card=r('.rh-card');
+                return {vw:innerWidth,scrollW:document.documentElement.scrollWidth,u,h,hero,art,logo,call,h1,btns,cards,small,num,grid,card,gridDisplay:st('.rh-grid')?.display,menuDisplay:st('.rh-menu')?.display};
+              });
+              const gap=(g.hero?.top??999)-(g.h?.bottom??0);
+              if(Math.abs(gap)>3)throw Error(`${name}_DEAD_BAND ${JSON.stringify({gap,h:g.h,hero:g.hero})}`);
+              if(g.scrollW>width+2)throw Error(`${name}_HORIZONTAL_OVERFLOW ${JSON.stringify({scrollW:g.scrollW,width})}`);
+              if(!g.logo||g.logo.width<72||g.logo.width>88)throw Error(`${name}_HEADER_LOGO ${JSON.stringify(g.logo)}`);
+              if(!g.call||Math.abs(g.call.width-g.call.height)>3||g.call.width<40||g.call.width>52)throw Error(`${name}_CALL_NOT_CIRCLE ${JSON.stringify(g.call)}`);
+              if(!g.art||g.art.height<190||g.art.height>225)throw Error(`${name}_HERO_ART ${JSON.stringify(g.art)}`);
+              if(!g.h1||g.h1.left<0||g.h1.right>width+1)throw Error(`${name}_HEADLINE ${JSON.stringify(g.h1)}`);
+              if(g.btns.length!==2||g.btns.some(b=>b.width<width-50)||!(g.btns[1].top>g.btns[0].bottom))throw Error(`${name}_CTA_STACK ${JSON.stringify(g.btns)}`);
+              if(g.cards.length<4||Math.abs(g.cards[0].top-g.cards[1].top)>3||!(g.cards[2].top>g.cards[0].top))throw Error(`${name}_BENEFITS ${JSON.stringify(g.cards)}`);
+              if(!g.small||!g.num||g.small.width<width-145||g.small.left<=g.num.right)throw Error(`${name}_FINANCE_TEXT ${JSON.stringify({small:g.small,num:g.num})}`);
+              if(g.gridDisplay!=='flex'||!g.card||g.card.width<width*.72||g.card.width>width*.88)throw Error(`${name}_CAROUSEL ${JSON.stringify({display:g.gridDisplay,card:g.card})}`);
+              if(await p.locator('.rh-inventory-state').count())throw Error(`${name}_INVENTORY_FALLBACK_VISIBLE`);
+              if(await p.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count())throw Error(`${name}_HERO_REUSED_AS_INVENTORY`);
+              await p.evaluate(()=>scrollTo(0,700)); await p.waitForTimeout(150);
+              const pinned=await p.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top}});
+              if(Math.abs(pinned.uTop)>2||Math.abs(pinned.hTop-pinned.uH)>3)throw Error(`${name}_PINNED ${JSON.stringify(pinned)}`);
+              if(errors.length)throw Error(`${name}_ERRORS ${JSON.stringify(errors)}`);
+              await p.evaluate(()=>scrollTo(0,0)); await p.waitForTimeout(100);
+              await p.screenshot({path:`immutable-proof/${name}-full.png`,fullPage:true});
+              proof.mobile[name]={intro,g,pinned,errors};
+              await c.close();
+            }
+
+            try{
+              await mobile(390,844,'mobile390');
+              await mobile(360,800,'mobile360');
+              const c=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+              const p=await c.newPage();
+              await p.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              await waitImg(p,'.li-scene img',1000); await finishIntro(p); await waitInventory(p);
+              const d=await p.evaluate(()=>{const grid=document.querySelector('.rh-grid'),menu=document.querySelector('.rh-menu'),h1=document.querySelector('.rh-copy h1')?.getBoundingClientRect();const gs=getComputedStyle(grid),cols=gs.gridTemplateColumns.split(' ').filter(Boolean);return{grid:gs.display,cols:cols.length,menu:getComputedStyle(menu).display,h1,scrollW:document.documentElement.scrollWidth,vw:innerWidth}});
+              if(d.grid!=='grid'||d.cols!==3||d.menu!=='none'||d.scrollW>d.vw+2)throw Error(`DESKTOP_CONTRACT ${JSON.stringify(d)}`);
+              await p.screenshot({path:'immutable-proof/desktop-full.png',fullPage:true}); proof.desktop=d; await c.close();
+            }finally{await browser.close()}
+            fs.writeFileSync('immutable-proof/metrics.json',JSON.stringify(proof,null,2)+'\n');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Publish immutable result
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          echo '### WDCC immutable real-device visual proof' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Asserts 390px + 360px physical-phone geometry, pinned bars, zero dead band, circular call control, CTA stack, 2x2 benefits, inventory carousel, financing text width, and 3-column desktop.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No production route, alias, DNS, provider, or database change.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-immutable-real-device-${{ github.sha }}
+          path: |
+            immutable-preview-url.txt
+            immutable-proof/
+          if-no-files-found: warn
+          retention-days: 7
