@@ -1,6 +1,16 @@
 # WDCC locked visual + functional contract
 
-This branch is preview/candidate-only. It must not move production aliases, Cloudflare routes, DNS, provider records, or database schema.
+This branch is preview/candidate-only. It must not move production aliases, Cloudflare production routes, DNS, provider records, Vercel production aliases, or database schema.
+
+## Release order — mandatory
+
+1. **Visual fidelity first.** The exact candidate must match the supplied WDCC desktop/mobile references before functionality or provider extras can authorize release.
+2. **Core functionality second.** After visual approval, verify storefront CTAs, auth/session, leads/dashboard readback, inventory, Add/Edit, photo upload, draft/preview/publish, and public inventory isolation.
+3. **Notifications/provider extras third.** Email/SMS/webhook, Proton mailbox/DKIM and registrar DNSSEC closeout cannot outrank the visual and core-function gates.
+
+## Mandatory Cloudflare preview + owner approval
+
+Before this candidate can go live on **either Cloudflare production or Vercel production**, the exact visual candidate must be published to an isolated Cloudflare `workers.dev` preview URL with production routes removed. The owner must see that Cloudflare preview and explicitly approve the visual result. No merge, production deployment, alias movement, DNS change, Cloudflare production route change, or promotion is authorized before that approval.
 
 ## Visual source of truth
 
@@ -34,5 +44,7 @@ Do not merge or promote until:
 
 - `npm run build` passes on the branch.
 - Public home, dealer dashboard, inventory, import, Add/Edit, photo/readiness and preview routes compile.
-- Authenticated dealer create/edit/photo/publish APIs retain their existing contracts.
-- No production deployment, alias, DNS or Cloudflare routing change is required to validate the source.
+- A Cloudflare `workers.dev` preview of the exact visual candidate is live and visually inspected by the owner.
+- Owner explicitly approves that Cloudflare preview.
+- Only after visual approval, authenticated dealer create/edit/photo/publish and storefront lead/inventory APIs retain their existing contracts.
+- No production deployment, alias, DNS or Cloudflare production routing change is required to validate the source.
