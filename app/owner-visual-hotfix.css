@@ -49,13 +49,14 @@ html body main.reference-home.locked-storefront section.rh-hero .rh-lead{font-si
  html body main.reference-home.locked-storefront header.rh-header{height:78px!important;min-height:78px!important;top:28px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-header-inner{height:78px!important;grid-template-columns:58px 1fr 98px!important;padding:0 10px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-logo{height:78px!important;width:108px!important}
- html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:90px!important;height:90px!important}
+ html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:94px!important;height:94px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-call{display:flex!important;min-width:94px!important;height:44px!important;font-size:11px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-menu{display:flex!important}
  html body main.reference-home.locked-storefront .rh-nav{top:106px!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{height:390px!important;object-position:70% 42%!important;filter:saturate(1.28) contrast(1.04) brightness(1.24)!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-shade{height:390px!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-copy{padding:22px 18px 28px!important}
- html body main.reference-home.locked-storefront section.rh-hero h1{font-size:clamp(43px,12vw,51px)!important;max-width:370px!important}
+ html body main.reference-home.locked-storefront section.rh-hero h1{font-size:clamp(43px,12vw,51px)!important;max-width:370px!important;overflow:visible!important}
+ html body main.reference-home.locked-storefront section.rh-hero h1 .white{font-size:.82em!important;letter-spacing:-.055em!important;width:auto!important;max-width:100%!important;white-space:nowrap!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-lead{font-size:15.5px!important}
 }
