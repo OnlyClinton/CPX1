@@ -1,0 +1,55 @@
+name: WDCC PR472 Storefront Preview Proof
+
+on:
+  push:
+    branches: [fix/wdcc-visual-inventory-closeout-20260826]
+    paths:
+      - '.github/workflows/wdcc-pr472-preview.yml'
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  VERCEL_PROJECT: wdcc-v32-storefront
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Build and deploy preview only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.3.0 >/dev/null
+          vercel link --yes --project="$VERCEL_PROJECT" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          vercel pull --yes --environment=preview --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          vercel build --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/tmp/build.log 2>&1
+          vercel deploy --prebuilt --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/tmp/deploy.log 2>&1
+          cat /tmp/deploy.log
+          url="$(grep -Eo 'https://wdcc-v32-storefront-[a-z0-9]+-cpxagency\.vercel\.app' /tmp/deploy.log | tail -n1)"
+          test -n "$url"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+          echo "Preview: $url"
+      - name: Verify immutable preview contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel curl "$PREVIEW_URL/" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/home.html
+          grep -q 'wdcc-closeout' /tmp/home.html
+          grep -q 'header-logo-image' /tmp/home.html
+          grep -qi 'Schedule a test drive' /tmp/home.html
+          grep -qi 'Get approved' /tmp/home.html
+          grep -qi "We don't care" /tmp/home.html
+          vercel curl "$PREVIEW_URL/api/inventory" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/inventory.json
+          jq -e '.ok == true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
+          ! grep -q 'R36TEST-' /tmp/inventory.json
+          echo "Preview contract PASS: $PREVIEW_URL"
