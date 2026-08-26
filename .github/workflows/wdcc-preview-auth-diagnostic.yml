@@ -1,0 +1,55 @@
+name: WDCC Preview Auth Diagnostic
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - '.github/workflows/wdcc-preview-auth-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+      PREVIEW_URL: https://wdcc-exact-mockup-preview.clico-global.workers.dev
+    steps:
+      - name: Require masked credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+      - name: Probe authorized aliases without exposing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=''
+          for user in dealer admin; do
+            rm -f /tmp/wdcc.cookies /tmp/login.json /tmp/session.json
+            code="$(curl -sS -o /tmp/login.json -w '%{http_code}' -c /tmp/wdcc.cookies \
+              -H 'content-type: application/json' \
+              --data "$(jq -nc --arg u "$user" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:$u,password:$p}')" \
+              "$PREVIEW_URL/api/auth/login")"
+            error="$(jq -r '.error // empty' /tmp/login.json 2>/dev/null || true)"
+            printf 'AUTH_ALIAS=%s LOGIN_HTTP=%s ERROR=%s\n' "$user" "$code" "${error:-none}"
+            if [ "$code" = 200 ]; then
+              scode="$(curl -sS -o /tmp/session.json -w '%{http_code}' -b /tmp/wdcc.cookies "$PREVIEW_URL/api/auth/session")"
+              authenticated="$(jq -r '.authenticated // false' /tmp/session.json 2>/dev/null || echo false)"
+              role="$(jq -r '.role // empty' /tmp/session.json 2>/dev/null || true)"
+              printf 'AUTH_ALIAS=%s SESSION_HTTP=%s AUTHENTICATED=%s ROLE=%s\n' "$user" "$scode" "$authenticated" "${role:-unknown}"
+              if [ "$scode" = 200 ] && [ "$authenticated" = true ]; then found="$user"; break; fi
+            fi
+          done
+          if [ -n "$found" ]; then
+            echo "AUTH_DIAGNOSTIC=PASS"
+            echo "AUTH_ALIAS=$found" >> "$GITHUB_ENV"
+          else
+            echo "AUTH_DIAGNOSTIC=FAIL"
+            exit 1
+          fi
