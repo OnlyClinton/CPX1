@@ -45,6 +45,8 @@ jobs:
           grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
           grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
           grep -q 'owner-device-final.css' app/layout.tsx
+          grep -q 'li-smoke' app/LockedIntro.tsx
+          grep -q '@keyframes liSmokeClear' app/LockedIntro.tsx
           ! grep -q 'li-dock' app/LockedIntro.tsx
 
       - name: Build exact Cloudflare candidate
@@ -87,6 +89,70 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > immutable-preview-url.txt
 
+      - name: Prove intro smoke-to-clear contract
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const base=process.env.URL;
+          if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
+          const out='immutable-visual-proof';
+          fs.mkdirSync(out,{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          try{
+            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+            const page=await ctx.newPage();
+            await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            await page.locator('.li').waitFor({state:'attached',timeout:5000});
+            await page.locator('.li-smoke').waitFor({state:'attached',timeout:5000});
+            await page.locator('.li-badge img').waitFor({state:'visible',timeout:5000});
+            await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
+            await page.waitForFunction(()=>[document.querySelector('.li-badge img'),document.querySelector('.li-scene img')].every(x=>x&&x.complete&&x.naturalWidth>0),null,{timeout:5000});
+            const anim=await page.evaluate(()=>{
+              const smoke=document.querySelector('.li-smoke');
+              const a=smoke?.getAnimations()[0];
+              if(!a)return null;
+              a.pause();
+              a.currentTime=250;
+              return getComputedStyle(smoke).animationName;
+            });
+            if(anim!=='liSmokeClear')throw new Error(`INTRO_SMOKE_ANIMATION_MISSING_${anim}`);
+            const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+            const sample=()=>page.evaluate(()=>{
+              const rect=e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2}};
+              const badge=document.querySelector('.li-badge');
+              const scene=document.querySelector('.li-scene img');
+              const smoke=document.querySelector('.li-smoke');
+              const tag=document.querySelector('.li-tag');
+              const ss=getComputedStyle(smoke),is=getComputedStyle(scene),ts=getComputedStyle(tag);
+              const blur=Number((ss.backdropFilter.match(/blur\(([\d.]+)px\)/)||[])[1]||0);
+              const brightness=Number((is.filter.match(/brightness\(([\d.]+)\)/)||[])[1]||1);
+              return{badge:rect(badge),scene:rect(scene),smokeOpacity:Number(ss.opacity),smokeBlur:blur,sceneBrightness:brightness,tagText:(tag.textContent||'').trim(),tagFont:Number.parseFloat(ts.fontSize)||0,winW:innerWidth};
+            });
+            await settle();
+            const start=await sample();
+            if(start.badge.w<230||Math.abs(start.badge.cx-start.winW/2)>3)throw new Error(`INTRO_BADGE_NOT_DOMINANT_CENTERED ${JSON.stringify(start.badge)}`);
+            if(!/tampa bay/i.test(start.tagText)||start.tagFont<12)throw new Error(`INTRO_TAGLINE_BAD ${JSON.stringify({text:start.tagText,font:start.tagFont})}`);
+            if(start.sceneBrightness<1.2)throw new Error(`INTRO_SCENE_TOO_DARK ${start.sceneBrightness}`);
+            if(start.smokeOpacity<.55||start.smokeBlur<4)throw new Error(`INTRO_SOFT_REVEAL_MISSING ${JSON.stringify({opacity:start.smokeOpacity,blur:start.smokeBlur})}`);
+            await page.screenshot({path:`${out}/mobile-intro-smoke.png`});
+            await page.evaluate(()=>{const a=document.querySelector('.li-smoke')?.getAnimations()[0];if(!a)throw new Error('INTRO_SMOKE_ANIMATION_LOST');a.pause();a.currentTime=1250});
+            await settle();
+            const end=await sample();
+            if(end.smokeOpacity>.06||end.smokeBlur>.5)throw new Error(`INTRO_DID_NOT_CLEAR_CRISP ${JSON.stringify({opacity:end.smokeOpacity,blur:end.smokeBlur})}`);
+            const delta=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.w-b.w),Math.abs(a.h-b.h));
+            const badgeDelta=delta(start.badge,end.badge),sceneDelta=delta(start.scene,end.scene);
+            if(badgeDelta>.75||sceneDelta>.75)throw new Error(`INTRO_OBJECT_MOVEMENT ${JSON.stringify({badgeDelta,sceneDelta})}`);
+            await page.screenshot({path:`${out}/mobile-intro-crisp.png`});
+            fs.writeFileSync(`${out}/intro-reveal.json`,JSON.stringify({start,end,badgeDelta,sceneDelta,pass:true},null,2)+'\n');
+            await ctx.close();
+          }finally{await browser.close()}
+          NODE
+
       - name: Prove storefront and dealer visual contract
         env:
           URL: ${{ steps.deploy.outputs.url }}
@@ -104,6 +170,12 @@ jobs:
           echo '### WDCC immutable visual acceptance V2' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Immutable preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s immutable-visual-proof/intro-reveal.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const p=require('./immutable-visual-proof/intro-reveal.json');
+          console.log(`Intro smoke → crisp: PASS · blur ${p.start.smokeBlur.toFixed(1)}px → ${p.end.smokeBlur.toFixed(1)}px · badge movement ${p.badgeDelta.toFixed(2)}px · scene movement ${p.sceneDelta.toFixed(2)}px.`);
+          NODE
+          fi
           if [ -s immutable-visual-proof/metrics.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./immutable-visual-proof/metrics.json');
