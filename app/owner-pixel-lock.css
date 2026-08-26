@@ -34,54 +34,54 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
   }
 }
 
-/* Mobile/tablet: match the approved composition instead of showing a large empty-sky band. */
+/* Mobile/tablet: match the approved composition. The hero image starts directly beneath the pinned header and is vertically cropped so the skyline/car, not empty sky, owns the frame. */
 @media (max-width:1100px),(hover:none) and (pointer:coarse){
-  html body main.reference-home.locked-storefront .rh-hero{
+  html body main.reference-home.locked-storefront > section.rh-hero{
     position:relative!important;
     min-height:0!important;
     height:auto!important;
-    padding-top:238px!important;
+    padding-top:220px!important;
     overflow:hidden!important;
     background:#02070c!important;
   }
-  html body main.reference-home.locked-storefront .rh-hero-art{
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
     position:absolute!important;
-    top:-72px!important;
-    right:0!important;
+    top:0!important;
+    right:-10%!important;
     bottom:auto!important;
-    left:0!important;
-    width:100%!important;
-    height:332px!important;
+    left:-10%!important;
+    width:120%!important;
+    height:245px!important;
     object-fit:cover!important;
-    object-position:72% 48%!important;
+    object-position:70% 64%!important;
     filter:saturate(1.20) contrast(1.07) brightness(1.16)!important;
     transform:none!important;
     animation:none!important;
     transition:none!important;
   }
-  html body main.reference-home.locked-storefront .rh-hero-shade,
-  html body main.reference-home.locked-storefront .rh-hero:after{
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
     position:absolute!important;
-    top:-72px!important;
+    top:0!important;
     right:0!important;
     bottom:auto!important;
     left:0!important;
-    height:332px!important;
+    height:245px!important;
     pointer-events:none!important;
   }
-  html body main.reference-home.locked-storefront .rh-hero-shade{
-    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 52%,rgba(2,7,12,.10) 68%,rgba(2,7,12,.56) 88%,#02070c 100%)!important;
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade{
+    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 44%,rgba(2,7,12,.10) 61%,rgba(2,7,12,.55) 84%,#02070c 100%)!important;
   }
-  html body main.reference-home.locked-storefront .rh-hero:after{
-    background:linear-gradient(180deg,transparent 0%,transparent 61%,rgba(2,7,12,.18) 78%,#02070c 100%)!important;
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
+    background:linear-gradient(180deg,transparent 0%,transparent 56%,rgba(2,7,12,.18) 75%,#02070c 100%)!important;
   }
-  html body main.reference-home.locked-storefront .rh-copy{
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-copy{
     position:relative!important;
     z-index:3!important;
     width:100%!important;
     max-width:none!important;
     margin:0!important;
-    padding:12px 17px 27px!important;
+    padding:10px 17px 27px!important;
     background:#02070c!important;
   }
 
@@ -126,19 +126,30 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
     aspect-ratio:1.72!important;
     min-height:0!important;
   }
+
+  /* Remove inherited footer height so the mobile page ends with the content instead of a large dead-black tail. */
+  html body main.reference-home.locked-storefront > footer.rh-footer{
+    height:auto!important;
+    min-height:0!important;
+    padding:20px 12px 22px!important;
+  }
+  html body main.reference-home.locked-storefront > footer.rh-footer .rh-footer-inner{
+    height:auto!important;
+    min-height:0!important;
+    padding:0!important;
+  }
 }
 
 @media (max-width:430px){
-  html body main.reference-home.locked-storefront .rh-hero{
-    padding-top:230px!important;
+  html body main.reference-home.locked-storefront > section.rh-hero{
+    padding-top:212px!important;
   }
-  html body main.reference-home.locked-storefront .rh-hero-art,
-  html body main.reference-home.locked-storefront .rh-hero-shade,
-  html body main.reference-home.locked-storefront .rh-hero:after{
-    top:-76px!important;
-    height:320px!important;
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art,
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
+    height:236px!important;
   }
-  html body main.reference-home.locked-storefront .rh-copy{
-    padding-top:10px!important;
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
+    object-position:70% 65%!important;
   }
 }
