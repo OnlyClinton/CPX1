@@ -1,0 +1,123 @@
+name: WDCC Dealer Target Visual Readback
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-target-visual-readback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-target-visual-readback
+  cancel-in-progress: true
+
+env:
+  DEALER: https://dealer.wedontcarecars.com
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install visual runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/screens
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Create disposable visual verifier
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-visual-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,password=`Visual-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`visual-${crypto.randomUUID()}`,email=`visual-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Visual Verify ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/visual.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-visual-user.mjs
+          set -a;. /tmp/visual.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Create authenticated live session
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/visual.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          code="$(curl -sS -c /tmp/visual.cookies -o /tmp/visual-login.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$payload")"
+          test "$code" = 200;jq -e '.ok==true' /tmp/visual-login.json >/dev/null
+          cookie="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/visual.cookies|tail -1)";test -n "$cookie";printf '::add-mask::%s\n' "$cookie";printf '%s' "$cookie" >/tmp/session-cookie
+          echo login=$code >> "$GITHUB_OUTPUT"
+
+      - name: Render exact live dealer target
+        id: render
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEALER SESSION_COOKIE="$(cat /tmp/session-cookie)"
+          printf '::add-mask::%s\n' "$SESSION_COOKIE"
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.SESSION_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
+          await p.goto(process.env.DEALER+'/dealer',{waitUntil:'networkidle'});await p.waitForSelector('.targetDealerApp',{timeout:20000});let t=(await p.locator('body').innerText()).toLowerCase();for(const x of['dashboard','leads overview','leads by source','top performing vehicles','recent activity'])if(!t.includes(x))throw Error('DASH_'+x);await p.screenshot({path:'/tmp/screens/dealer-dashboard.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/inventory',{waitUntil:'networkidle'});await p.waitForSelector('.refDealerShell',{timeout:20000});await p.screenshot({path:'/tmp/screens/dealer-inventory.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/leads',{waitUntil:'networkidle'});await p.waitForTimeout(1200);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('leads'))throw Error('LEADS_VIEW');await p.screenshot({path:'/tmp/screens/dealer-leads.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/inventory/new',{waitUntil:'networkidle'});await p.waitForTimeout(1200);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('vehicle'))throw Error('ADD_VEHICLE_VIEW');await p.screenshot({path:'/tmp/screens/dealer-add-vehicle.png',fullPage:true});
+          fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:true,url:p.url()},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          jq -e '.ok==true' /tmp/visual-result.json >/dev/null
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Upload target screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dealer-target-visual-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup visual verifier
+        id: cleanup
+        if: always() && steps.identity.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/visual.env;set +a;export QA_ID
+          cat > .wdcc-visual-clean.mjs <<'NODE'
+          import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=s.users||[];s.users=u.filter(x=>x.id!==id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removedUsers:u.length-s.users.length,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-visual-clean.mjs|tee /tmp/visual-clean.log
+          grep -q '"ok":true' /tmp/visual-clean.log;echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Publish visual readback result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          AUTH: ${{ steps.auth.outputs.login }}
+          RENDER: ${{ steps.render.outputs.ok }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        shell: bash
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target visual readback $GITHUB_RUN_ID" --body "Status: **$STATUS**\nLive login: \`$AUTH\`\nAuthenticated rendered dashboard/inventory/leads/add-vehicle: **${RENDER:-false}**\nVerifier cleanup: **${CLEAN:-false}**\nLive Worker remains the already-proven target V3 version." || true
