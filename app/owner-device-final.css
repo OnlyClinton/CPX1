@@ -1,0 +1,214 @@
+/* OWNER REAL-DEVICE FINAL — Android/iPhone acceptance corrections.
+   Visual-only storefront authority. No production routing/provider changes. */
+
+@media (max-width:1100px),(hover:none) and (pointer:coarse){
+  /* Both bars remain pinned but stay in normal flow. This prevents the 106px double-offset/dead band
+     seen on physical Android while retaining the required pinned stack. */
+  html body main.reference-home.locked-storefront > .rh-utility{
+    position:sticky!important;
+    top:0!important;
+    z-index:3201!important;
+    height:28px!important;
+    min-height:28px!important;
+    overflow:hidden!important;
+  }
+  html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner{
+    height:28px!important;
+    min-height:28px!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:0 10px!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:14px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    white-space:nowrap!important;
+    font-size:9px!important;
+    line-height:1!important;
+    scrollbar-width:none!important;
+  }
+  html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner::-webkit-scrollbar{display:none!important}
+
+  html body main.reference-home.locked-storefront > header.rh-header{
+    position:sticky!important;
+    top:28px!important;
+    z-index:3200!important;
+    height:82px!important;
+    min-height:82px!important;
+    margin:0!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-header-inner{
+    height:82px!important;
+    min-height:82px!important;
+  }
+
+  /* Header already occupies flow space. Never add another manual header offset to the hero. */
+  html body main.reference-home.locked-storefront > section.rh-hero{
+    margin:0!important;
+    padding:0!important;
+    min-height:0!important;
+    height:auto!important;
+    display:block!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
+    position:relative!important;
+    inset:auto!important;
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    height:218px!important;
+    margin:0!important;
+    object-fit:cover!important;
+    object-position:70% 61%!important;
+    filter:saturate(1.30) contrast(1.08) brightness(1.22)!important;
+    transform:none!important;
+    animation:none!important;
+    transition:none!important;
+    z-index:1!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
+    position:absolute!important;
+    inset:0 0 auto 0!important;
+    height:218px!important;
+    pointer-events:none!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade{
+    background:linear-gradient(180deg,transparent 0%,transparent 58%,rgba(2,7,12,.10) 74%,rgba(2,7,12,.48) 91%,#02070c 100%)!important;
+    z-index:2!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
+    background:linear-gradient(180deg,transparent 0%,transparent 65%,rgba(2,7,12,.10) 82%,#02070c 100%)!important;
+    z-index:2!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-inner{
+    position:relative!important;
+    width:100%!important;
+    min-height:0!important;
+    height:auto!important;
+    display:block!important;
+    margin:0!important;
+    padding:0!important;
+    z-index:3!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-copy{
+    position:relative!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:14px 17px 26px!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-copy h1{
+    max-width:100%!important;
+    font-size:clamp(39px,10.6vw,45px)!important;
+    line-height:.94!important;
+    letter-spacing:-.045em!important;
+    margin:0 0 16px!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-lead{
+    max-width:100%!important;
+    font-size:15px!important;
+    line-height:1.43!important;
+  }
+
+  /* Physical phones use the approved stacked CTA hierarchy. */
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-hero-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:10px!important;
+    width:100%!important;
+    margin-top:18px!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-hero-actions .rh-btn{
+    width:100%!important;
+    min-height:52px!important;
+    font-size:12px!important;
+  }
+
+  /* Make the 2x2 benefit band readable on an actual 360-430 CSS-pixel viewport. */
+  html body main.reference-home.locked-storefront .rh-benefits{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-width:0!important;
+    min-height:102px!important;
+    padding:13px 12px!important;
+    display:grid!important;
+    grid-template-columns:34px minmax(0,1fr)!important;
+    gap:9px!important;
+    text-align:left!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{margin:0!important}
+
+  /* Fix the real-device financing auto-placement bug. Markup is b + strong + small, so explicitly
+     anchor the number in column 1 and both text rows in the flexible column 2. */
+  html body main.reference-home.locked-storefront .rh-finance .rh-step{
+    display:grid!important;
+    grid-template-columns:44px minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    column-gap:14px!important;
+    row-gap:4px!important;
+    align-items:start!important;
+    min-height:92px!important;
+    padding:16px 17px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > b{
+    grid-column:1!important;
+    grid-row:1 / span 2!important;
+    width:44px!important;
+    height:44px!important;
+    margin:0!important;
+    align-self:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > strong{
+    grid-column:2!important;
+    grid-row:1!important;
+    min-width:0!important;
+    width:auto!important;
+    margin:2px 0 0!important;
+    font-size:14px!important;
+    line-height:1.2!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > small{
+    grid-column:2!important;
+    grid-row:2!important;
+    min-width:0!important;
+    width:auto!important;
+    max-width:none!important;
+    margin:0!important;
+    font-size:12px!important;
+    line-height:1.38!important;
+    white-space:normal!important;
+    overflow-wrap:normal!important;
+    word-break:normal!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-inventory-state{
+    margin:4px 17px 0!important;
+    padding:16px!important;
+    display:grid!important;
+    gap:5px!important;
+    border:1px solid #d8dde2!important;
+    border-radius:9px!important;
+    background:#fff!important;
+    color:#202832!important;
+    font-size:13px!important;
+    line-height:1.4!important;
+  }
+  html body main.reference-home.locked-storefront .rh-inventory-state strong{font-size:15px!important}
+}
+
+@media(max-width:430px){
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art,
+  html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
+  html body main.reference-home.locked-storefront > section.rh-hero:after{
+    height:205px!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{object-position:70% 62%!important}
+}
