@@ -119,11 +119,15 @@ jobs:
           DEALER_MARKER: ${{ steps.http.outputs.dealer_marker }}
         shell: bash
         run: |
-          summary='not-captured'; [ -f /tmp/wdcc-visual/result.json ] && summary="$(jq -c '{pages,consoleErrors,requestFailures,fatal}' /tmp/wdcc-visual/result.json)"
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC preview visual inspection $GITHUB_RUN_ID" --body "Preview: \`$URL\`
-Branch SHA: \`$GITHUB_SHA\`
-Homepage/hero/official-logo/transparent-logo/dealer HTTP: \`$HOME_HTTP/$HERO_HTTP/$OFFICIAL_HTTP/$TRANSPARENT_HTTP/$DEALER_HTTP\`
-Homepage brand marker: **$HOME_BRAND**
-Dealer marker: **$DEALER_MARKER**
-Browser result: \`$summary\`
-Screenshots are attached to the workflow artifact. No production route, alias, DNS or deployment was changed by this inspection." || true
+          summary='not-captured'
+          [ -f /tmp/wdcc-visual/result.json ] && summary="$(jq -c '{pages,consoleErrors,requestFailures,fatal}' /tmp/wdcc-visual/result.json)"
+          cat > /tmp/wdcc-visual/issue.md <<EOF
+          Preview: \`$URL\`
+          Branch SHA: \`$GITHUB_SHA\`
+          Homepage/hero/official-logo/transparent-logo/dealer HTTP: \`$HOME_HTTP/$HERO_HTTP/$OFFICIAL_HTTP/$TRANSPARENT_HTTP/$DEALER_HTTP\`
+          Homepage brand marker: **$HOME_BRAND**
+          Dealer marker: **$DEALER_MARKER**
+          Browser result: \`$summary\`
+          Screenshots are attached to the workflow artifact. No production route, alias, DNS or deployment was changed by this inspection.
+          EOF
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC preview visual inspection $GITHUB_RUN_ID" --body-file /tmp/wdcc-visual/issue.md || true
