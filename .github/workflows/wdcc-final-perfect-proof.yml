@@ -134,6 +134,7 @@ jobs:
             const browser=await chromium.launch({headless:true});
             const proof={url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{},dealer:{}};
             const waitImg=async(p,s,w=100)=>{await p.locator(s).waitFor({state:'visible',timeout:12000});await p.waitForFunction(({s,w})=>{const i=document.querySelector(s);return i&&i.complete&&i.naturalWidth>=w},{s,w},{timeout:12000});};
+            const waitInventory=async p=>{await p.locator('.rh-grid').waitFor({state:'visible',timeout:12000});await p.locator('.rh-card').first().waitFor({state:'visible',timeout:12000});};
             const waitIntroDone=async p=>{const intro=p.locator('.li');if(await intro.count())await intro.waitFor({state:'detached',timeout:5000}).catch(async()=>{if(await intro.count())await p.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:1500}).catch(()=>{})});await p.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});};
             try{
               const m=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
@@ -144,7 +145,7 @@ jobs:
               const intro=await p.evaluate(()=>{const el=document.querySelector('.li-badge img'),scene=document.querySelector('.li-scene img'),s=getComputedStyle(el),ss=getComputedStyle(scene),b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,clipPath:s.clipPath,opacity:s.opacity,w:b.width,badgeAnimation:s.animationName,sceneAnimation:ss.animationName,sceneTransform:ss.transform}});
               if(!intro.src.includes('wdcc-official-logo.webp')||!String(intro.clipPath).includes('circle')||Number(intro.opacity)<.9||intro.w<120) throw Error(`INTRO_BAD ${JSON.stringify(intro)}`);
               if(intro.badgeAnimation!=='none'||intro.sceneAnimation!=='none'||(intro.sceneTransform!=='none'&&!String(intro.sceneTransform).includes('matrix(1'))) throw Error(`INTRO_MOTION_ACTIVE ${JSON.stringify(intro)}`);
-              await p.screenshot({path:'visual-proof/mobile-intro.png'}); await waitIntroDone(p); await waitImg(p,'.rh-logo img',200);
+              await p.screenshot({path:'visual-proof/mobile-intro.png'}); await waitIntroDone(p); await waitImg(p,'.rh-logo img',200); await waitInventory(p);
               const before=await p.evaluate(()=>{const q=s=>document.querySelector(s),st=s=>getComputedStyle(q(s)),r=s=>q(s).getBoundingClientRect();return{logoSrc:q('.rh-logo img').currentSrc||q('.rh-logo img').src,logoW:r('.rh-logo img').width,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card').width,utilityDisplay:st('.rh-utility').display,utilityH:r('.rh-utility').height,utilityTop:r('.rh-utility').top,headerTop:r('.rh-header').top,headerPosition:st('.rh-header').position,utilityPosition:st('.rh-utility').position}});
               if(!before.logoSrc.includes('wdcc-official-logo.webp')||before.logoW<88||before.menu==='none'||before.grid!=='flex'||before.cardW>360) throw Error(`MOBILE_LAYOUT_BAD ${JSON.stringify(before)}`);
               if(before.utilityDisplay==='none'||before.utilityH<24) throw Error(`MOBILE_UTILITY_COLLAPSED ${JSON.stringify(before)}`);
@@ -159,7 +160,7 @@ jobs:
               await p.screenshot({path:'visual-proof/mobile-hero.png'}); await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true}); proof.mobile={intro,before,after,hb,hero,copy,errors}; await m.close();
 
               const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1}); const q=await d.newPage();
-              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(650); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await waitIntroDone(q); await waitImg(q,'.rh-logo img',200);
+              await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000}); await waitImg(q,'.li-scene img',1000); await waitImg(q,'.li-badge img',200); await q.waitForTimeout(650); await q.screenshot({path:'visual-proof/desktop-intro.png'}); await waitIntroDone(q); await waitImg(q,'.rh-logo img',200); await waitInventory(q);
               const dl=await q.locator('.rh-logo img').evaluate(el=>{const b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,w:b.width}}); if(!dl.src.includes('wdcc-official-logo.webp')||dl.w<88) throw Error(`DESKTOP_LOGO_BAD ${JSON.stringify(dl)}`);
               const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox(); if(!db||db.x<0||db.x+db.width>1440) throw Error(`DESKTOP_HEADLINE_BAD ${JSON.stringify(db)}`);
               const comp=await q.evaluate(()=>({grid:getComputedStyle(document.querySelector('.rh-grid')).display,menu:getComputedStyle(document.querySelector('.rh-menu')).display})); if(comp.grid!=='grid'||comp.menu!=='none') throw Error(`DESKTOP_LAYOUT_BAD ${JSON.stringify(comp)}`);
