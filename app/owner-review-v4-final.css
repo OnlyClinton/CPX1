@@ -1,14 +1,621 @@
-/* V4 last-mile specificity shim. Keep this last. */
+/* WDCC OWNER V5 — isolated review branch visual closeout.
+ * This file is intentionally loaded last and only normalizes presentation.
+ * No routing, data, auth, lead, inventory, provider, DNS, alias or production behavior.
+ */
+
+/* ---------- HOME STOREFRONT: MOBILE ---------- */
 @media(max-width:600px){
+  html body main.reference-home.locked-storefront{
+    --wdcc-utility-v4:22px!important;
+    --wdcc-header-v4:68px!important;
+    --wdcc-stack-v4:90px!important;
+    padding-top:0!important;
+  }
+
+  html body main.reference-home.locked-storefront>.rh-utility{
+    position:sticky!important;
+    top:0!important;
+    height:22px!important;
+    min-height:22px!important;
+    max-height:22px!important;
+    overflow:hidden!important;
+  }
   html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{
-    font-size:11.25px!important;
+    height:22px!important;
+    min-height:22px!important;
+    width:100%!important;
+    max-width:none!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    gap:13px!important;
+    padding:0 8px!important;
+    overflow:hidden!important;
+    white-space:nowrap!important;
+    font-size:8.25px!important;
     line-height:1!important;
-    letter-spacing:.055em!important;
-    gap:20px!important;
+    letter-spacing:.035em!important;
   }
-}
-@media(min-width:1101px){
-  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner>span{
+    flex:0 0 auto!important;
+  }
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner>span:nth-child(4){
+    display:none!important;
+  }
+
+  html body main.reference-home.locked-storefront>header.rh-header{
+    position:sticky!important;
+    top:22px!important;
+    height:68px!important;
+    min-height:68px!important;
+    max-height:68px!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header>.rh-header-inner{
+    height:68px!important;
+    min-height:68px!important;
+    display:grid!important;
+    grid-template-columns:48px minmax(0,1fr) 54px!important;
+    align-items:center!important;
+    gap:4px!important;
+    padding:0 10px!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-menu{
+    display:flex!important;
+    grid-column:1!important;
+    justify-self:start!important;
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    min-height:42px!important;
+    align-items:center!important;
+    justify-content:center!important;
+    padding:0!important;
+    font-size:25px!important;
+    line-height:1!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo{
+    display:grid!important;
+    grid-column:2!important;
+    justify-self:center!important;
+    place-items:center!important;
+    width:82px!important;
+    height:68px!important;
+    margin:0!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo img{
+    content:url('/wdcc-official-logo.webp')!important;
+    width:78px!important;
+    height:78px!important;
+    max-width:78px!important;
+    max-height:78px!important;
+    object-fit:contain!important;
+    transform:none!important;
+    animation:none!important;
+    transition:none!important;
+    filter:drop-shadow(0 5px 13px rgba(0,0,0,.48))!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-call{
+    display:flex!important;
+    grid-column:3!important;
+    justify-self:end!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:48px!important;
+    min-width:48px!important;
+    height:48px!important;
+    padding:0!important;
+    border-radius:999px!important;
+    font-size:0!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-call:before{
+    content:"☎"!important;
+    font-size:21px!important;
+    line-height:1!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-header-actions{display:none!important}
+  html body main.reference-home.locked-storefront .rh-nav{
+    top:90px!important;
+  }
+
+  /* Static Challenger/Tampa image: compact and fully visible, no duplicate motion layer. */
+  html body main.reference-home.locked-storefront>section.rh-hero{
+    height:auto!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero>img.rh-hero-art{
+    position:relative!important;
+    inset:auto!important;
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    height:214px!important;
+    margin:0!important;
+    object-fit:cover!important;
+    object-position:70% 62%!important;
+    filter:saturate(1.20) contrast(1.06) brightness(1.17)!important;
+    transform:none!important;
+    animation:none!important;
+    transition:none!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero>.rh-hero-shade{
+    position:absolute!important;
+    inset:0 0 auto 0!important;
+    height:214px!important;
+    background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 58%,rgba(2,7,12,.10) 73%,rgba(2,7,12,.44) 91%,#02070c 100%)!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero:after{
+    display:none!important;
+    content:none!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero>.rh-hero-inner{
+    display:block!important;
+    width:100%!important;
+    min-height:0!important;
+    height:auto!important;
+    margin:0!important;
+    padding:0!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-copy{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:15px 16px 22px!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-kicker{
+    margin:0 0 8px!important;
+    font-size:10px!important;
+    line-height:1.15!important;
+    letter-spacing:.13em!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero h1{
+    width:100%!important;
+    max-width:355px!important;
+    margin:0 0 13px!important;
+    font-size:41px!important;
+    line-height:.93!important;
+    letter-spacing:-.044em!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero h1 span{
+    display:block!important;
+    width:auto!important;
+    max-width:100%!important;
+    white-space:nowrap!important;
+    transform:none!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero h1 .white{
+    font-size:.92em!important;
+    letter-spacing:-.05em!important;
+    transform:none!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-lead{
+    max-width:360px!important;
+    margin:0!important;
+    font-size:14px!important;
+    line-height:1.43!important;
+    font-weight:620!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-hero-actions{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:8px!important;
+    width:100%!important;
+    margin-top:15px!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-hero-actions .rh-btn{
+    width:100%!important;
+    min-height:48px!important;
+    height:48px!important;
+    padding:0 12px!important;
+    border-radius:10px!important;
     font-size:11.5px!important;
+    box-shadow:none!important;
   }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-hero-actions .rh-btn.dark{
+    box-shadow:0 5px 15px rgba(242,38,61,.16)!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero .rh-phone{
+    margin-top:9px!important;
+    font-size:11px!important;
+  }
+
+  /* Compact 2x2 benefits. */
+  html body main.reference-home.locked-storefront .rh-benefits{
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    width:100%!important;
+    border-radius:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:82px!important;
+    padding:11px 10px!important;
+    grid-template-columns:31px minmax(0,1fr)!important;
+    gap:8px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:30px!important;
+    height:30px!important;
+    font-size:13px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:11px!important;
+    line-height:1.14!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:9.25px!important;
+    line-height:1.26!important;
+    margin-top:3px!important;
+  }
+
+  /* Featured inventory: true swipe carousel, shorter cards/placeholders. */
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:29px 0 34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    display:block!important;
+    margin:0 0 13px!important;
+    padding:0 15px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head small{font-size:9.5px!important}
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:29px!important;
+    line-height:1.02!important;
+    margin:4px 0 6px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head p{
+    max-width:355px!important;
+    font-size:11.5px!important;
+    line-height:1.36!important;
+  }
+  html body main.reference-home.locked-storefront .rh-view-all{
+    margin-top:7px!important;
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    gap:11px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:8vw!important;
+    padding:0 8vw 7px!important;
+    scrollbar-width:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card{
+    flex:0 0 76vw!important;
+    min-width:76vw!important;
+    max-width:76vw!important;
+    scroll-snap-align:center!important;
+    border-radius:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo{
+    aspect-ratio:1.58!important;
+    min-height:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo-placeholder{
+    gap:5px!important;
+    padding:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo-placeholder small{
+    font-size:9px!important;
+    letter-spacing:.12em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo-placeholder strong{
+    font-size:15px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card-body{
+    padding:13px 14px 14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-title{font-size:17px!important;margin-bottom:8px!important}
+  html body main.reference-home.locked-storefront .rh-price{font-size:27px!important}
+  html body main.reference-home.locked-storefront .rh-payment{font-size:11px!important;margin:4px 0 7px!important}
+  html body main.reference-home.locked-storefront .rh-pills span{font-size:8.75px!important;padding:4px 6px!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots{margin-top:9px!important;gap:7px!important}
+
+  /* Financing/trust rhythm: no awkward giant wrapping. */
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:31px 14px 34px!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    max-width:360px!important;
+    font-size:28px!important;
+    line-height:1.04!important;
+    letter-spacing:-.035em!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading p{
+    font-size:11.5px!important;
+    line-height:1.34!important;
+  }
+  html body main.reference-home.locked-storefront .rh-steps{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step{
+    min-height:78px!important;
+    padding:12px 14px!important;
+    grid-template-columns:38px 1fr!important;
+    column-gap:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step b{width:36px!important;height:36px!important;font-size:15px!important}
+  html body main.reference-home.locked-storefront .rh-step strong{font-size:12.5px!important}
+  html body main.reference-home.locked-storefront .rh-step small{font-size:10px!important;line-height:1.28!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:1fr!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article{min-height:64px!important;padding:10px 14px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:12px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:10px!important;line-height:1.26!important}
+  html body main.reference-home.locked-storefront .rh-footer{padding:18px 14px 20px!important}
+
+  /* ---------- SHARED PUBLIC INTERIOR HEADER ---------- */
+  html body>.commandStrip{
+    position:fixed!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    z-index:7000!important;
+    height:22px!important;
+    min-height:22px!important;
+    max-height:22px!important;
+    background:#07121c!important;
+    overflow:hidden!important;
+  }
+  html body>.commandStrip>.wrap{
+    width:100%!important;
+    max-width:none!important;
+    height:22px!important;
+    min-height:22px!important;
+    padding:0 11px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:8px!important;
+  }
+  html body>.commandStrip>.wrap>span{
+    font-size:8px!important;
+    line-height:1!important;
+    letter-spacing:.035em!important;
+    white-space:nowrap!important;
+  }
+  html body>.premiumHeader{
+    position:fixed!important;
+    top:22px!important;
+    left:0!important;
+    right:0!important;
+    z-index:6999!important;
+    height:68px!important;
+    min-height:68px!important;
+    max-height:68px!important;
+    background:#02070cf7!important;
+    border-bottom:1px solid rgba(255,255,255,.09)!important;
+    overflow:visible!important;
+  }
+  html body>.premiumHeader>.wrap.nav,
+  html body>.premiumHeader>.nav{
+    width:100%!important;
+    max-width:none!important;
+    height:68px!important;
+    min-height:68px!important;
+    display:grid!important;
+    grid-template-columns:48px minmax(0,1fr) 54px!important;
+    align-items:center!important;
+    gap:4px!important;
+    padding:0 10px!important;
+    border:0!important;
+  }
+  html body>.premiumHeader .logoBrand{
+    grid-column:2!important;
+    grid-row:1!important;
+    justify-self:center!important;
+    width:82px!important;
+    height:68px!important;
+    margin:0!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  html body>.premiumHeader .logoBrand img{
+    content:url('/wdcc-official-logo.webp')!important;
+    display:block!important;
+    width:78px!important;
+    height:78px!important;
+    max-width:78px!important;
+    max-height:78px!important;
+    object-fit:contain!important;
+    transform:none!important;
+    filter:drop-shadow(0 5px 13px rgba(0,0,0,.48))!important;
+  }
+  html body>.premiumHeader .mobileMenuButton{
+    display:grid!important;
+    grid-column:1!important;
+    grid-row:1!important;
+    justify-self:start!important;
+    place-items:center!important;
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    min-height:42px!important;
+    padding:0!important;
+    border-radius:11px!important;
+  }
+  html body>.premiumHeader .mobileCallButton{
+    display:flex!important;
+    grid-column:3!important;
+    grid-row:1!important;
+    justify-self:end!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:48px!important;
+    min-width:48px!important;
+    height:48px!important;
+    padding:0!important;
+    border-radius:999px!important;
+    background:#f2263d!important;
+    color:#fff!important;
+    border:0!important;
+    font-size:20px!important;
+    box-shadow:none!important;
+  }
+  html body>.premiumHeader .navlinks{display:none!important}
+  html body>.premiumHeader .mobileHeaderMenu{
+    position:fixed!important;
+    top:90px!important;
+    left:9px!important;
+    right:9px!important;
+    z-index:7100!important;
+  }
+
+  /* Interior page spacing and typography. */
+  html body main>.inventoryTop{
+    padding:122px 0 27px!important;
+    background:#0c1720!important;
+  }
+  html body main>.inventoryTop .wrap{width:min(100% - 30px,1180px)!important}
+  html body main>.inventoryTop .eyebrow{font-size:9.5px!important;letter-spacing:.18em!important}
+  html body main>.inventoryTop h1{
+    max-width:350px!important;
+    margin:8px 0 13px!important;
+    font-size:47px!important;
+    line-height:.94!important;
+    letter-spacing:-.055em!important;
+  }
+  html body main>.inventoryTop .lede{
+    max-width:350px!important;
+    margin:0!important;
+    font-size:16px!important;
+    line-height:1.45!important;
+  }
+  html body main>.inventoryTop+.section.light{
+    padding:27px 0 76px!important;
+  }
+  html body main>.inventoryTop+.section.light>.wrap{width:min(100% - 30px,1180px)!important}
+  html body main>.inventoryTop+.section.light .grid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:14px!important;
+    overflow:visible!important;
+  }
+  html body main>.inventoryTop+.section.light .card{
+    border-radius:14px!important;
+  }
+  html body main>.inventoryTop+.section.light .photo{
+    aspect-ratio:16/9!important;
+    min-height:0!important;
+  }
+  html body main>.inventoryTop+.section.light .cardBody{padding:15px!important}
+  html body main>.inventoryTop+.section.light .carTitle{font-size:18px!important}
+  html body main>.inventoryTop+.section.light .price{font-size:28px!important}
+
+  html body main.section.light:has(>.wrap.leadPage){
+    padding:0 0 74px!important;
+    background:#f3f0e9!important;
+  }
+  html body main.section.light>.wrap.leadPage{
+    width:min(100% - 30px,680px)!important;
+    padding-top:122px!important;
+  }
+  html body main.section.light>.wrap.leadPage>.eyebrow{
+    font-size:10px!important;
+    letter-spacing:.18em!important;
+  }
+  html body main.section.light>.wrap.leadPage>h1{
+    margin:9px 0 13px!important;
+    font-size:44px!important;
+    line-height:1!important;
+    letter-spacing:-.045em!important;
+  }
+  html body main.section.light>.wrap.leadPage>p{
+    max-width:580px!important;
+    margin:0 0 22px!important;
+    font-size:17px!important;
+    line-height:1.42!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadForm{
+    padding:18px!important;
+    border-radius:12px!important;
+    box-shadow:0 8px 26px rgba(16,24,32,.08)!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadGrid{
+    grid-template-columns:1fr!important;
+    gap:12px!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadForm label{
+    font-size:11px!important;
+    letter-spacing:.04em!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadForm input,
+  html body main.section.light>.wrap.leadPage .leadForm textarea{
+    min-height:48px!important;
+    font-size:16px!important;
+    padding:11px 12px!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadForm textarea{min-height:104px!important}
+
+  /* Bottom quick-actions remain useful but stop covering a large part of the page. */
+  html body>.stickyCtaBar{
+    height:52px!important;
+    min-height:52px!important;
+    padding-bottom:env(safe-area-inset-bottom)!important;
+    grid-template-columns:1fr 1fr .9fr!important;
+  }
+  html body>.stickyCtaBar a{
+    min-height:52px!important;
+    height:52px!important;
+    font-size:9.5px!important;
+  }
+  html body>.premiumFooter{
+    padding-bottom:calc(68px + env(safe-area-inset-bottom))!important;
+  }
+
+  /* V5 vehicle detail classes added on this isolated branch. */
+  html body main.vdp-page{
+    background:#f3f0e9!important;
+    color:#111820!important;
+    min-height:100vh!important;
+    padding:120px 15px 76px!important;
+  }
+  html body main.vdp-page .vdp-wrap{width:min(100%,900px)!important;margin:0 auto!important}
+  html body main.vdp-page .vdp-kicker{font-size:9.5px!important;font-weight:900!important;letter-spacing:.18em!important;color:#69747d!important}
+  html body main.vdp-page .vdp-title{margin:8px 0 18px!important;font-size:37px!important;line-height:1!important;letter-spacing:-.045em!important}
+  html body main.vdp-page .vdp-grid{display:grid!important;grid-template-columns:1fr!important;gap:14px!important}
+  html body main.vdp-page .vdp-photo{aspect-ratio:16/9!important;min-height:0!important;border-radius:13px!important;overflow:hidden!important;background:#101b25!important;display:grid!important;place-items:center!important;color:#dbe3e9!important}
+  html body main.vdp-page .vdp-photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+  html body main.vdp-page .vdp-summary{background:#fff!important;border:1px solid #d9dfe4!important;border-radius:13px!important;padding:16px!important}
+  html body main.vdp-page .vdp-price{font-size:31px!important;font-weight:950!important;letter-spacing:-.03em!important}
+  html body main.vdp-page .vdp-down{margin-top:3px!important;color:#cf2132!important;font-size:12px!important;font-weight:900!important}
+  html body main.vdp-page .vdp-mileage{margin-top:10px!important;font-size:12px!important;color:#65727d!important}
+  html body main.vdp-page .vdp-description{font-size:14px!important;line-height:1.45!important}
+  html body main.vdp-page .vdp-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:15px!important}
+  html body main.vdp-page .vdp-btn{min-height:46px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:1px solid #cbd4dc!important;border-radius:8px!important;background:#fff!important;color:#16212a!important;font-size:10px!important;font-weight:950!important}
+  html body main.vdp-page .vdp-btn.primary{background:#f2263d!important;border-color:#f2263d!important;color:#fff!important}
+  html body main.vdp-page .vdp-btn.ghost{grid-column:1/-1!important;background:#0b1823!important;border-color:#0b1823!important;color:#fff!important}
+}
+
+/* Narrow phones: keep utility/header clean and prevent headline clipping. */
+@media(max-width:430px){
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{
+    gap:11px!important;
+    font-size:7.8px!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero h1{
+    font-size:40px!important;
+    max-width:350px!important;
+  }
+  html body main.reference-home.locked-storefront>section.rh-hero>img.rh-hero-art,
+  html body main.reference-home.locked-storefront>section.rh-hero>.rh-hero-shade{
+    height:205px!important;
+  }
+  html body>.commandStrip>.wrap>span:nth-child(2){display:none!important}
+  html body main>.inventoryTop h1{font-size:44px!important}
+  html body main.section.light>.wrap.leadPage>h1{font-size:42px!important}
+}
+
+/* Desktop stays a true desktop composition and three-column inventory grid. */
+@media(min-width:1101px){
+  html body main.reference-home.locked-storefront>.rh-utility>.rh-utility-inner{font-size:11.5px!important}
+  html body main.reference-home.locked-storefront .rh-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important}
 }
