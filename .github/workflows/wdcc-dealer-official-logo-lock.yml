@@ -1,4 +1,5 @@
 name: WDCC Dealer Official Logo Lock
+# execute: official-dealer-logo-v1
 
 on:
   push:
