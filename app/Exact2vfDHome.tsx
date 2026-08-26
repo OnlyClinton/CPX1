@@ -17,6 +17,7 @@ function photo(v:Vehicle){if(v.primaryPhotoPathname)return `/api/media?p=${encod
 function href(v:Vehicle){return v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`}
 function badge(v:Vehicle){return String(v.badges?.[0]||"Available")}
 function badgeTone(label:string){const x=label.toLowerCase();if(x.includes("mile"))return"blue";if(x.includes("seller"))return"purple";if(x.includes("family"))return"orange";return"green"}
+function Wordmark(){return <span className="wdcc-wordmark" aria-hidden="true"><span className="wdcc-mark"><b>WD</b><i>CC</i></span><small>WE DON'T CARE CARS</small></span>}
 
 export default function Exact2vfDHome(){
  const[phase,setPhase]=useState<"impact"|"reveal"|"done">("impact"),[open,setOpen]=useState(false),[active,setActive]=useState(0),[items,setItems]=useState<Vehicle[]>(fallback);
@@ -33,7 +34,7 @@ export default function Exact2vfDHome(){
     <div className="utility-bar"><span>⌖ Tampa Bay</span><span>★ In-house financing</span><span>★ Low payments</span><span>★ Drive today</span><span>Sales: <b>(813) 516-4752</b></span></div>
     <header className="site-header">
       <button className="mobile-menu" aria-expanded={open} aria-label="Open navigation" onClick={()=>setOpen(v=>!v)}><span aria-hidden="true"><i/><i/><i/></span></button>
-      <Link className="logo-button" aria-label="WDCC home" href="/"><img className="header-logo-image" src="/wdcc-official-logo.webp" alt="We Don't Care Cars"/></Link>
+      <Link className="logo-button" aria-label="WDCC home" href="/"><Wordmark/></Link>
       <nav className={`main-nav${open?" open":""}`} aria-label="Main navigation"><Link href="/inventory">Inventory</Link><Link href="/financing">Financing</Link><Link href="/#how-it-works">How It Works</Link><Link href="/reviews">Reviews</Link><Link href="/about">About Us</Link><Link href="/contact">Contact</Link></nav>
       <a className="header-phone" href="tel:+18135164752">☎ <span>(813) 516-4752</span></a>
       <Link className="header-apply" href="/get-approved?source=header-get-approved">Get Pre-Approved</Link>
@@ -59,7 +60,7 @@ export default function Exact2vfDHome(){
 
   <section className="whyWdcc" id="reviews"><strong>WHY WDCC?</strong><article><span>♢</span><div><b>We Work With You</b><small>Solutions for all credit situations.</small></div></article><article><span>⌁</span><div><b>Straight Answers</b><small>No runaround. No hidden-fee maze.</small></div></article><article><span>♨</span><div><b>Local & Trusted</b><small>Serving Tampa Bay and beyond.</small></div></article><article><span>◇</span><div><b>Built for You</b><small>Your approval. Your future.</small></div></article><article className="talkSean"><span>SE</span><div><b>TALK TO SEAN</b><small>Real answers from a real person.</small></div></article></section>
 
-  <footer className="site-footer screenshotFooter" id="about"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div className="footer-copy"><strong>WDCC · We Don't Care Cars</strong><span>Serving Tampa Bay · In-house financing · Straight answers.</span></div><div className="footer-actions"><a href="tel:+18135164752">☎ (813) 516-4752</a><Link href="/get-approved?source=footer-get-approved">Get pre-approved →</Link></div><span className="footer-links"><Link href="/inventory">Inventory</Link><Link href="/financing">Financing</Link><Link href="/reviews">Reviews</Link><Link href="/about">About Us</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></span></footer>
+  <footer className="site-footer screenshotFooter" id="about"><Wordmark/><div className="footer-copy"><strong>WDCC · We Don't Care Cars</strong><span>Serving Tampa Bay · In-house financing · Straight answers.</span></div><div className="footer-actions"><a href="tel:+18135164752">☎ (813) 516-4752</a><Link href="/get-approved?source=footer-get-approved">Get pre-approved →</Link></div><span className="footer-links"><Link href="/inventory">Inventory</Link><Link href="/financing">Financing</Link><Link href="/reviews">Reviews</Link><Link href="/about">About Us</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></span></footer>
 
   <div className="mobile-action-bar" aria-label="Quick actions"><Link className="mobile-dock-drive" href="/schedule-test-drive?source=mobile-sticky-test-drive"><span>▣</span>Test Drive</Link><Link className="mobile-dock-qualify" href="/get-approved?source=mobile-sticky-get-approved"><span>▱</span>Get Approved</Link><a className="mobile-dock-contact" href="tel:+18135164752" aria-label="Call Sean"><span>☎</span>Call Sean</a></div>
  </div>
