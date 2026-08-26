@@ -25,18 +25,21 @@ jobs:
       PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
       DEALER: https://dealer.wedontcarecars.com
       STOREFRONT: https://wedontcarecars.com
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
-      - name: Install test dependencies
+      - name: Install isolated proof tooling
+        shell: bash
         run: |
           set -euo pipefail
           npm ci
-          npm install --global vercel@59.3.0 >/dev/null
+          npm install --global vercel@59.5.0 >/dev/null
           npm install --no-save playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
           mkdir -p .vercel
@@ -52,99 +55,218 @@ jobs:
           import crypto from 'node:crypto';
           import fs from 'node:fs';
           import {get,head,put,BlobPreconditionFailedError} from '@vercel/blob';
-          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
-          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{raw,etag:b.etag,state:JSON.parse(raw.toString())}}throw Error('STATE_TOO_HOT')}
+
+          const path='private/state/platform-v3.json';
+          const run=process.env.RUN_TAG;
+
+          async function stable(){
+            for(let i=0;i<5;i++){
+              const a=await head(path);
+              const r=await get(path,{access:'private',useCache:false});
+              if(!r?.stream) throw Error('STATE_READ_FAILED');
+              const chunks=[];
+              for await(const x of r.stream) chunks.push(x);
+              const raw=Buffer.concat(chunks);
+              const b=await head(path);
+              if(a.etag===b.etag) return {raw,etag:b.etag,state:JSON.parse(raw.toString())};
+            }
+            throw Error('STATE_TOO_HOT');
+          }
+
           for(let attempt=1;attempt<=4;attempt++){
-            const before=await stable(),s=before.state,now=new Date().toISOString();
-            const password=`WdccListing-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
-            const dealerId=`listing-dealer-${crypto.randomUUID()}`,email=`listing-${run}@invalid.example`,stock=`R36TEST-PUBVERIFY-${run}`;
+            const before=await stable();
+            const s=before.state;
+            const now=new Date().toISOString();
+            const password=`WdccListing-${crypto.randomBytes(18).toString('base64url')}!`;
+            const salt=crypto.randomBytes(24);
+            const digest=crypto.scryptSync(password,salt,64);
+            const passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+            const dealerId=`listing-dealer-${crypto.randomUUID()}`;
+            const email=`listing-${run}@invalid.example`;
+            const stock=`R36TEST-PUBVERIFY-${run}`;
             const backup=`private/state/backups/platform-v3-pre-listing-${run}-r${Number(s.revision||0)}-${crypto.randomUUID()}.json`;
+
             await put(backup,before.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'});
             s.users=Array.isArray(s.users)?s.users:[];
             s.users.push({id:dealerId,email,username:email,displayName:`WDCC Listing Verification ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash});
-            s.revision=Number(s.revision||0)+1;s.updatedAt=now;
+            s.revision=Number(s.revision||0)+1;
+            s.updatedAt=now;
+
             try{
               await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});
               fs.writeFileSync('/tmp/listing.env',`RUN_TAG=${run}\nQA_PASSWORD=${password}\nDEALER_ID=${dealerId}\nDEALER_EMAIL=${email}\nSTOCK=${stock}\nBACKUP=${backup}\n`);
-              console.log(JSON.stringify({ok:true,dealerId,stock,backup}));process.exit(0)
-            }catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}
+              console.log(JSON.stringify({ok:true,dealerId,stock,backup}));
+              process.exit(0);
+            }catch(e){
+              if(e instanceof BlobPreconditionFailedError && attempt<4) continue;
+              throw e;
+            }
           }
           NODE
+
           env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-identity.mjs
           set -a; . /tmp/listing.env; set +a
           printf '::add-mask::%s\n' "$QA_PASSWORD"
 
-      - name: Prove draft upload checkpoint publish and QA isolation
+      - name: Prove live draft upload publish readback and QA isolation
         id: browser
         shell: bash
         run: |
           set -euo pipefail
           set -a; . /tmp/listing.env; set +a
           printf '::add-mask::%s\n' "$QA_PASSWORD"
+
           node <<'NODE'
           const fs=require('fs');
           const {chromium}=require('playwright');
+
           const cleanUrl=u=>{try{const x=new URL(u);return x.pathname+x.search}catch{return u}};
           async function bodyOf(r){try{return (await r.text()).slice(0,3000)}catch{return ''}}
+
           (async()=>{
-            const dealer=process.env.DEALER,store=process.env.STOREFRONT,run=process.env.RUN_TAG,stock=process.env.STOCK;
+            const dealer=process.env.DEALER;
+            const store=process.env.STOREFRONT;
+            const run=process.env.RUN_TAG;
+            const stock=process.env.STOCK;
             fs.writeFileSync('/tmp/listing.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64'));
+
             const result={ok:false,run,stock,stages:{},trace:[]};
-            const b=await chromium.launch({headless:true});
+            const browser=await chromium.launch({headless:true});
+
             try{
-              const c=await b.newContext({viewport:{width:390,height:844}}),p=await c.newPage();
-              p.on('request',r=>{if(/\/api\/(?:upload|inventory)/.test(r.url()))result.trace.push({event:'request',method:r.method(),url:cleanUrl(r.url())})});
-              p.on('response',r=>{if(/\/api\/(?:upload|inventory)/.test(r.url()))result.trace.push({event:'response',method:r.request().method(),url:cleanUrl(r.url()),status:r.status()})});
-              p.on('requestfailed',r=>{if(/\/api\/(?:upload|inventory)/.test(r.url()))result.trace.push({event:'failed',method:r.method(),url:cleanUrl(r.url()),failure:r.failure()?.errorText||''})});
+              const context=await browser.newContext({viewport:{width:390,height:844}});
+              const page=await context.newPage();
 
-              await p.goto(`${dealer}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});
-              const username=p.locator('input[autocomplete="username"]').first(),password=p.locator('input[autocomplete="current-password"]').first();
-              await username.waitFor({state:'visible',timeout:20000});await password.waitFor({state:'visible',timeout:20000});
-              await username.fill(process.env.DEALER_EMAIL);await password.fill(process.env.QA_PASSWORD);
-              await p.getByRole('button',{name:'SIGN IN'}).click();
-              await p.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
-              result.stages.login={ok:true,url:p.url()};
+              page.on('request',r=>{
+                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'request',method:r.method(),url:cleanUrl(r.url())});
+              });
+              page.on('response',r=>{
+                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'response',method:r.request().method(),url:cleanUrl(r.url()),status:r.status()});
+              });
+              page.on('requestfailed',r=>{
+                if(/\/api\/(?:upload|inventory)/.test(r.url())) result.trace.push({event:'failed',method:r.method(),url:cleanUrl(r.url()),failure:r.failure()?.errorText||''});
+              });
 
-              await p.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});
-              async function fill(name,value){const x=p.locator(`input[name="${name}"],textarea[name="${name}"]`).first();await x.waitFor({state:'visible',timeout:20000});await x.fill(value,{force:true})}
-              await fill('year','2019');await fill('make','Toyota');await fill('model','Corolla');await fill('trim',`Upload Probe ${run}`);await fill('price','12345');await fill('downPayment','1500');await fill('mileage','54321');await fill('stock',stock);await fill('description',`Temporary QA-isolated upload probe ${run}`);
-              const input=p.locator('input[type=file][multiple]').first();if(!await input.count())throw Error('MULTI_FILE_INPUT_MISSING');await input.setInputFiles('/tmp/listing.png');
-              const publish=p.locator('button[type="submit"][name="intent"][value="published"]:visible').first();
-              if(!await publish.count())throw Error('VISIBLE_PUBLISH_BUTTON_MISSING');
-              result.stages.publishButton={ok:true,count:await p.locator('button[type="submit"][name="intent"][value="published"]').count()};
+              await page.goto(`${dealer}/dealer/login`,{waitUntil:'domcontentloaded',timeout:30000});
+              const username=page.locator('input[autocomplete="username"]').first();
+              const password=page.locator('input[autocomplete="current-password"]').first();
+              await username.waitFor({state:'visible',timeout:20000});
+              await password.waitFor({state:'visible',timeout:20000});
+              await username.fill(process.env.DEALER_EMAIL);
+              await password.fill(process.env.QA_PASSWORD);
+              await page.getByRole('button',{name:'SIGN IN'}).click();
+              await page.waitForURL(/\/dealer(?:$|\?)/,{timeout:30000});
 
-              const draftPromise=p.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/inventory'&&r.request().method()==='POST',{timeout:20000});
-              const uploadPromise=p.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/upload'&&r.request().method()==='POST',{timeout:40000}).catch(()=>null);
+              const session=await page.evaluate(async()=>{
+                const r=await fetch('/api/auth/session',{cache:'no-store',credentials:'include'});
+                return {status:r.status,body:await r.text()};
+              });
+              result.stages.login={ok:true,url:page.url(),sessionStatus:session.status};
+              if(session.status!==200 || !JSON.parse(session.body).authenticated) throw Error(`SESSION_NOT_AUTHENTICATED_${session.status}_${session.body}`);
+
+              await page.goto(`${dealer}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:30000});
+
+              async function fill(name,value){
+                let x=page.locator(`input[name="${name}"]`).first();
+                if(name==='description') x=page.locator('label.description textarea, textarea').first();
+                await x.waitFor({state:'visible',timeout:20000});
+                await x.fill(value,{force:true});
+              }
+
+              await fill('year','2019');
+              await fill('make','Toyota');
+              await fill('model','Corolla');
+              await fill('trim',`Upload Probe ${run}`);
+              await fill('price','12345');
+              await fill('downPayment','1500');
+              await fill('mileage','54321');
+              await fill('stock',stock);
+              await fill('description',`Temporary QA-isolated upload probe ${run}`);
+              result.stages.form={ok:true,descriptionSelector:'label.description textarea, textarea'};
+
+              const fileInput=page.locator('input[type=file][multiple]').first();
+              if(!await fileInput.count()) throw Error('MULTI_FILE_INPUT_MISSING');
+              await fileInput.setInputFiles('/tmp/listing.png');
+
+              const publish=page.locator('button[type="submit"][name="intent"][value="published"]:visible').first();
+              if(!await publish.count()) throw Error('VISIBLE_PUBLISH_BUTTON_MISSING');
+              result.stages.publishButton={ok:true,count:await page.locator('button[type="submit"][name="intent"][value="published"]').count()};
+
+              const draftPromise=page.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/inventory' && r.request().method()==='POST',{timeout:20000});
+              const uploadPromise=page.waitForResponse(r=>cleanUrl(r.url()).split('?')[0]==='/api/upload' && r.request().method()==='POST',{timeout:40000}).catch(()=>null);
+
               await publish.click();
-              const draft=await draftPromise,draftBody=await bodyOf(draft);result.stages.draft={status:draft.status(),body:draftBody};
-              if(!draft.ok())throw Error(`DRAFT_HTTP_${draft.status()}_${draftBody}`);
-              let draftJson={};try{draftJson=JSON.parse(draftBody)}catch{};const vehicleId=String(draftJson?.item?.id||'');if(!vehicleId)throw Error('DRAFT_ID_MISSING');result.vehicleId=vehicleId;
+
+              const draft=await draftPromise;
+              const draftBody=await bodyOf(draft);
+              result.stages.draft={status:draft.status(),body:draftBody};
+              if(!draft.ok()) throw Error(`DRAFT_HTTP_${draft.status()}_${draftBody}`);
+
+              let draftJson={};
+              try{draftJson=JSON.parse(draftBody)}catch{}
+              const vehicleId=String(draftJson?.item?.id||'');
+              if(!vehicleId) throw Error('DRAFT_ID_MISSING');
+              result.vehicleId=vehicleId;
 
               const upload=await uploadPromise;
-              if(!upload){const status=String(await p.locator('.statusMessage').first().textContent().catch(()=>''));result.stages.upload={status:null,body:null,statusMessage:status};throw Error(`UPLOAD_REQUEST_NOT_OBSERVED_${status}`)}
-              const uploadBody=await bodyOf(upload);result.stages.upload={status:upload.status(),body:uploadBody};
-              if(!upload.ok())throw Error(`UPLOAD_HTTP_${upload.status()}_${uploadBody}`);
+              if(!upload){
+                const status=String(await page.locator('.statusMessage').first().textContent().catch(()=>''));
+                result.stages.upload={status:null,statusMessage:status};
+                throw Error(`UPLOAD_REQUEST_NOT_OBSERVED_${status}`);
+              }
+
+              const uploadBody=await bodyOf(upload);
+              result.stages.upload={status:upload.status(),body:uploadBody};
+              if(!upload.ok()) throw Error(`UPLOAD_HTTP_${upload.status()}_${uploadBody}`);
 
               const nav=await Promise.race([
-                p.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:40000}).then(()=>true).catch(()=>false),
-                p.waitForTimeout(40000).then(()=>false)
+                page.waitForURL(/\/dealer\/inventory\?saved=published(?:&|$)/,{timeout:40000}).then(()=>true).catch(()=>false),
+                page.waitForTimeout(40000).then(()=>false)
               ]);
-              if(!nav){const status=String(await p.locator('.statusMessage').first().textContent().catch(()=>''));result.stages.navigation={ok:false,statusMessage:status,url:p.url()};throw Error(`PUBLISH_NAVIGATION_TIMEOUT_${status}`)}
-              result.stages.navigation={ok:true,url:p.url()};
+              if(!nav){
+                const status=String(await page.locator('.statusMessage').first().textContent().catch(()=>''));
+                result.stages.navigation={ok:false,statusMessage:status,url:page.url()};
+                throw Error(`PUBLISH_NAVIGATION_TIMEOUT_${status}`);
+              }
+              result.stages.navigation={ok:true,url:page.url()};
 
-              const dealerInv=await c.request.get(`${dealer}/api/inventory`);const dealerText=await dealerInv.text();result.stages.dealerInventory={status:dealerInv.status()};if(!dealerInv.ok())throw Error(`DEALER_INVENTORY_${dealerInv.status()}`);
-              const dealerJson=JSON.parse(dealerText),item=(dealerJson.items||[]).find(v=>v.id===vehicleId||v.stock===stock);if(!item)throw Error('VEHICLE_NOT_IN_DEALER_INVENTORY');
+              const dealerInv=await page.evaluate(async()=>{
+                const r=await fetch(`/api/inventory?listing_readback=${Date.now()}`,{cache:'no-store',credentials:'include'});
+                return {status:r.status,ok:r.ok,text:await r.text()};
+              });
+              result.stages.dealerInventory={status:dealerInv.status};
+              if(!dealerInv.ok) throw Error(`DEALER_INVENTORY_${dealerInv.status}_${dealerInv.text.slice(0,1000)}`);
+
+              const dealerJson=JSON.parse(dealerInv.text);
+              const item=(dealerJson.items||[]).find(v=>v.id===vehicleId || v.stock===stock);
+              if(!item) throw Error(`VEHICLE_NOT_IN_AUTHENTICATED_DEALER_INVENTORY_${dealerInv.text.slice(0,1000)}`);
+
               result.vehicle={id:item.id,stock:item.stock,status:item.status,photoPathnames:item.photoPathnames||[],primaryPhotoPathname:item.primaryPhotoPathname||null};
-              if(String(item.status).toLowerCase()!=='published')throw Error(`VEHICLE_STATUS_${item.status}`);if(!(item.photoPathnames||[]).length)throw Error('VEHICLE_PHOTO_PATH_MISSING');
+              if(String(item.status).toLowerCase()!=='published') throw Error(`VEHICLE_STATUS_${item.status}`);
+              if(!(item.photoPathnames||[]).length) throw Error('VEHICLE_PHOTO_PATH_MISSING');
 
-              const publicInv=await c.request.get(`${store}/api/inventory?qa_upload_verify=${Date.now()}`);const publicText=await publicInv.text();result.stages.publicInventory={status:publicInv.status()};if(!publicInv.ok())throw Error(`PUBLIC_INVENTORY_${publicInv.status()}`);
-              const publicJson=JSON.parse(publicText);if((publicJson.items||[]).some(v=>v.id===item.id||v.stock===stock))throw Error('QA_VEHICLE_VISIBLE_PUBLICLY');result.qaHiddenPublic=true;
+              const publicResp=await fetch(`${store}/api/inventory?qa_upload_verify=${Date.now()}`,{cache:'no-store'});
+              const publicText=await publicResp.text();
+              result.stages.publicInventory={status:publicResp.status};
+              if(!publicResp.ok) throw Error(`PUBLIC_INVENTORY_${publicResp.status}_${publicText.slice(0,1000)}`);
+              const publicJson=JSON.parse(publicText);
+              if((publicJson.items||[]).some(v=>v.id===item.id || v.stock===stock)) throw Error('QA_VEHICLE_VISIBLE_PUBLICLY');
+              result.qaHiddenPublic=true;
 
-              await p.goto(`${dealer}/dealer/inventory`,{waitUntil:'domcontentloaded',timeout:30000});
-              await p.locator('body').waitFor({state:'visible',timeout:10000});await p.screenshot({path:'/tmp/dealer-listing.png',fullPage:true});
-              result.stages.screenshot={ok:true};result.ok=true;
+              await page.goto(`${dealer}/dealer/inventory`,{waitUntil:'domcontentloaded',timeout:30000});
+              await page.locator('body').waitFor({state:'visible',timeout:10000});
+              await page.screenshot({path:'/tmp/dealer-listing.png',fullPage:true});
+              result.stages.screenshot={ok:true};
+              result.ok=true;
               fs.writeFileSync('/tmp/listing-result.json',JSON.stringify(result,null,2));
-            }catch(e){result.error=String(e?.message||e);fs.writeFileSync('/tmp/listing-result.json',JSON.stringify(result,null,2));console.error(e);process.exitCode=1}finally{await b.close()}
+            }catch(e){
+              result.error=String(e?.message||e);
+              fs.writeFileSync('/tmp/listing-result.json',JSON.stringify(result,null,2));
+              console.error(e);
+              process.exitCode=1;
+            }finally{
+              await browser.close();
+            }
           })();
           NODE
 
@@ -154,31 +276,66 @@ jobs:
         run: |
           set -euo pipefail
           set -a; . /tmp/listing.env; set +a
+
           cat > .wdcc-cleanup.mjs <<'NODE'
           import {get,head,put,del,BlobPreconditionFailedError} from '@vercel/blob';
-          const path='private/state/platform-v3.json',dealerId=process.env.DEALER_ID,stock=process.env.STOCK;
-          async function stable(){for(let i=0;i<5;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ_FAILED');const c=[];for await(const x of r.stream)c.push(x);const b=await head(path);if(a.etag===b.etag)return{etag:b.etag,state:JSON.parse(Buffer.concat(c).toString())}}throw Error('STATE_TOO_HOT')}
+
+          const path='private/state/platform-v3.json';
+          const dealerId=process.env.DEALER_ID;
+          const stock=process.env.STOCK;
+
+          async function stable(){
+            for(let i=0;i<5;i++){
+              const a=await head(path);
+              const r=await get(path,{access:'private',useCache:false});
+              if(!r?.stream) throw Error('STATE_READ_FAILED');
+              const chunks=[];
+              for await(const x of r.stream) chunks.push(x);
+              const b=await head(path);
+              if(a.etag===b.etag) return {etag:b.etag,state:JSON.parse(Buffer.concat(chunks).toString())};
+            }
+            throw Error('STATE_TOO_HOT');
+          }
+
           for(let attempt=1;attempt<=4;attempt++){
-            const before=await stable(),s=before.state,vehicles=Array.isArray(s.vehicles)?s.vehicles:[],users=Array.isArray(s.users)?s.users:[];
-            const exact=vehicles.filter(v=>String(v.stock||'')===stock),media=[...new Set(exact.flatMap(v=>Array.isArray(v.photoPathnames)?v.photoPathnames:[]).filter(Boolean))];
-            s.vehicles=vehicles.filter(v=>!exact.some(x=>x.id===v.id));s.users=users.filter(u=>u.id!==dealerId);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();
-            try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});if(media.length)await del(media);console.log(JSON.stringify({ok:true,revision:s.revision,removedUsers:users.length-s.users.length,removedVehicles:exact.length,removedMedia:media.length,stock}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&attempt<4)continue;throw e}
+            const before=await stable();
+            const s=before.state;
+            const vehicles=Array.isArray(s.vehicles)?s.vehicles:[];
+            const users=Array.isArray(s.users)?s.users:[];
+            const exact=vehicles.filter(v=>String(v.stock||'')===stock);
+            const media=[...new Set(exact.flatMap(v=>Array.isArray(v.photoPathnames)?v.photoPathnames:[]).filter(Boolean))];
+            s.vehicles=vehicles.filter(v=>!exact.some(x=>x.id===v.id));
+            s.users=users.filter(u=>u.id!==dealerId);
+            s.revision=Number(s.revision||0)+1;
+            s.updatedAt=new Date().toISOString();
+
+            try{
+              await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});
+              if(media.length) await del(media);
+              console.log(JSON.stringify({ok:true,revision:s.revision,removedUsers:users.length-s.users.length,removedVehicles:exact.length,removedMedia:media.length,stock}));
+              process.exit(0);
+            }catch(e){
+              if(e instanceof BlobPreconditionFailedError && attempt<4) continue;
+              throw e;
+            }
           }
           NODE
+
           env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-cleanup.mjs | tee /tmp/listing-cleanup.json
 
-      - name: Publish listing evidence
+      - name: Publish isolated evidence
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
+        shell: bash
         run: |
           result='not captured'; [ -f /tmp/listing-result.json ] && result="$(cat /tmp/listing-result.json)"
           cleanup='not captured'; [ -f /tmp/listing-cleanup.json ] && cleanup="$(tail -1 /tmp/listing-cleanup.json)"
           body=$(cat <<EOF
           Status: **$STATUS**
 
-          Isolated dealer listing test uses only \`R36TEST-*\` stock and does not move Vercel aliases, DNS, Cloudflare routes, apex/www, or dealer routing.
+          Test-harness-only change. No Vercel alias, DNS, Cloudflare route, apex/www, or dealer routing mutation.
 
           Result:
           \`\`\`json
