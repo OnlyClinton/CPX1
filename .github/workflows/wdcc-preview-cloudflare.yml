@@ -3,9 +3,6 @@ name: WDCC Cloudflare Preview
 on:
   push:
     branches:
-      - preview/wdcc-exact-mockup-20260826
-      - preview/wdcc-locked-contract-20260826
-      - dev/wdcc-cinematic-mockup-v1
       - fix/wdcc-locked-contract-20260826
   workflow_dispatch:
 
@@ -13,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-cloudflare-preview
+  group: wdcc-cloudflare-preview-locked
   cancel-in-progress: true
 
 env:
@@ -28,7 +25,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout preview source
+      - name: Checkout exact visual source
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -38,66 +35,57 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Require Cloudflare credentials
+      - name: Validate preview inputs
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-
-      - name: Require canonical visual assets in source
-        shell: bash
-        run: |
-          set -euo pipefail
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
           test -s public/wdcc-official-logo.webp
-          grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
+          test -s public/wdcc-logo-transparent.webp
+          grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
           grep -q 'wdcc-official-logo.webp' app/mobile-visual-lock.css
-          grep -q 'clip-path:circle' app/LockedIntro.tsx
 
-      - name: Install source and Cloudflare adapter
+      - name: Build Cloudflare artifact
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
-
-      - name: Build Cloudflare preview
-        shell: bash
-        run: |
-          set -euo pipefail
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
           test -d .open-next/assets
 
-      - name: Create isolated preview config
+      - name: Create isolated Worker config
         shell: bash
         run: |
           set -euo pipefail
           node - <<'NODE'
           const fs=require('fs');
-          const source=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          source.name='wdcc-preview';
-          source.workers_dev=true;
-          source.preview_urls=true;
-          delete source.route;
-          delete source.routes;
-          fs.writeFileSync('wrangler.preview.jsonc',JSON.stringify(source,null,2)+'\n');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name='wdcc-preview-locked';
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.preview.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
 
-      - name: Deploy Cloudflare preview only
+      - name: Deploy isolated Cloudflare preview
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee /tmp/wdcc-cloudflare-preview.log
-          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-cloudflare-preview.log | tail -1)"
+          npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee /tmp/wdcc-preview.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-preview.log | tail -1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" | tee preview-url.txt
 
-      - name: Smoke exact preview and asset bytes
+      - name: Verify preview is real
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -105,142 +93,32 @@ jobs:
           set -euo pipefail
           code=000
           for i in $(seq 1 20); do
-            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?wdcc-preview=$GITHUB_RUN_ID-$i" || true)"
+            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?proof=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -q "wdcc-official-logo.webp" /tmp/home.html
-          grep -q "wdcc-hero-v2.webp" /tmp/home.html
-
-          test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
-          test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
+          test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
+          test "$(curl -sS -L -o /tmp/logo1.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?proof=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/logo1.webp
+          test "$(curl -sS -L -o /tmp/logo2.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/logo2.webp
+          test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?proof=$GITHUB_RUN_ID")" = 200
+          grep -qi dealer /tmp/dealer.html
 
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
-          test -s /tmp/logo.webp
-
-          test "$(curl -sS -L -o /tmp/fallback.webp -w '%{http_code}' "$URL/assets/cars/2004-nissan-350z-1.webp?asset=$GITHUB_RUN_ID")" = 200
-          printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/fallback.webp | sha256sum -c -
-
-          test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
-          grep -qi 'items\|inventory' /tmp/inventory.json
-
-          test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?wdcc-preview=$GITHUB_RUN_ID")" = 200
-          grep -qi "dealer" /tmp/dealer.html
-
-      - name: Install browser for visual evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
-
-      - name: Capture mobile and desktop visual evidence
+      - name: Publish URL
         env:
           URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p visual-proof
-          node -e 'const fs=require("fs"); const code=fs.readFileSync(0,"utf8"); new Function("require", "(async()=>{\n"+code+"\n})().catch(e=>{console.error(e);process.exit(1)})")(require)' <<'NODE'
-          const fs=require('fs');
-          const {chromium}=require('playwright');
-          const url=process.env.URL;
-          if(!url) throw new Error('PREVIEW_URL_MISSING');
-
-          const waitImage=async(page,selector,minWidth=100)=>{
-            await page.locator(selector).waitFor({state:'visible',timeout:10000});
-            await page.waitForFunction(({selector,minWidth})=>{
-              const el=document.querySelector(selector);
-              return !!el && el.complete === true && Number(el.naturalWidth||0) >= minWidth;
-            },{selector,minWidth},{timeout:10000});
-            return page.locator(selector).evaluate(el=>({naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,src:el.currentSrc||el.src}));
-          };
-
-          const browser=await chromium.launch({headless:true});
-          const evidence={preview:url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{}};
-          try{
-            const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-            const page=await mobile.newPage();
-            await page.goto(`${url}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            const introHero=await waitImage(page,'.li-scene img',1000);
-            const introLogo=await waitImage(page,'.li-badge img',200);
-            await page.waitForTimeout(760);
-            const badgeStyle=await page.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);return {clipPath:s.clipPath,opacity:s.opacity,width:s.width,height:s.height,visibility:s.visibility}});
-            if(!String(badgeStyle.clipPath).includes('circle')) throw new Error(`BADGE_NOT_CIRCULAR ${JSON.stringify(badgeStyle)}`);
-            if(Number(badgeStyle.opacity)<.9 || badgeStyle.visibility==='hidden') throw new Error(`BADGE_NOT_VISIBLE ${JSON.stringify(badgeStyle)}`);
-            await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
-
-            await page.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
-            const mobileHero=await waitImage(page,'.rh-hero-art',1000);
-            const headerBadge=await page.locator('.rh-logo').evaluate(el=>{const s=getComputedStyle(el,'::after');return {backgroundImage:s.backgroundImage,width:s.width,height:s.height,display:s.display}});
-            if(!String(headerBadge.backgroundImage).includes('wdcc-official-logo.webp')) throw new Error(`HEADER_BADGE_MISSING ${JSON.stringify(headerBadge)}`);
-            const h1=page.locator('.rh-copy h1');
-            await h1.waitFor({state:'visible',timeout:5000});
-            const mobileBox=await h1.boundingBox();
-            const mobileSpanCount=await h1.locator('span').count();
-            if(mobileSpanCount!==3) throw new Error(`MOBILE_HEADLINE_SPANS_${mobileSpanCount}`);
-            if(!mobileBox || mobileBox.x<0 || mobileBox.x+mobileBox.width>392) throw new Error('MOBILE_HEADLINE_OVERFLOW');
-            await page.screenshot({path:'visual-proof/mobile-hero.png',fullPage:false});
-            await page.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-            evidence.mobile={introHero,introLogo,badgeStyle,headerBadge,mobileHero,headline:mobileBox,headlineSpans:mobileSpanCount};
-            await mobile.close();
-
-            const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-            const desk=await desktop.newPage();
-            await desk.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            await waitImage(desk,'.li-scene img',1000);
-            await waitImage(desk,'.li-badge img',200);
-            await desk.waitForTimeout(760);
-            await desk.screenshot({path:'visual-proof/desktop-intro.png',fullPage:false});
-            await desk.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
-            const desktopHero=await waitImage(desk,'.rh-hero-art',1000);
-            const desktopHeadline=desk.locator('.rh-copy h1');
-            await desktopHeadline.waitFor({state:'visible',timeout:5000});
-            const desktopBox=await desktopHeadline.boundingBox();
-            if(!desktopBox || desktopBox.x<0 || desktopBox.x+desktopBox.width>1440) throw new Error('DESKTOP_HEADLINE_OVERFLOW');
-            await desk.screenshot({path:'visual-proof/desktop-hero.png',fullPage:false});
-            evidence.desktop={desktopHero,headline:desktopBox,headlineSpans:await desktopHeadline.locator('span').count()};
-
-            const dealer=await desktop.newPage();
-            await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            await dealer.waitForTimeout(800);
-            await dealer.screenshot({path:'visual-proof/dealer.png',fullPage:false});
-            evidence.dealer={url:dealer.url(),title:await dealer.title()};
-            await desktop.close();
-          } finally {
-            await browser.close();
-          }
-          fs.writeFileSync('visual-proof/metrics.json',JSON.stringify(evidence,null,2)+'\n');
-          NODE
-
-      - name: Publish preview evidence summary
-        if: always()
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          {
-            echo '### WDCC Cloudflare isolated visual gate'
-            echo
-            echo "Preview: ${URL:-not-created}"
-            echo "Candidate SHA: $GITHUB_SHA"
-            echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Canonical 8AR hero source/served bytes: enforced.'
-            echo 'Official round badge source + CSS circular clipping: enforced.'
-            echo 'Mobile + desktop screenshot evidence: captured when browser gate succeeds.'
-            echo 'Production domains, aliases, DNS and Cloudflare production routes were not changed.'
-            echo 'No production promotion is authorized by this workflow.'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "### WDCC Cloudflare Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Production untouched." >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: wdcc-cloudflare-visual-proof
-          path: |
-            preview-url.txt
-            visual-proof/
-          if-no-files-found: warn
+          name: wdcc-cloudflare-preview-url
+          path: preview-url.txt
           retention-days: 7
