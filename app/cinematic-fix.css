@@ -41,6 +41,7 @@ html,body{max-width:100%;overflow-x:hidden!important}
 /* Screenshot contract depended on inherited hero positioning/background rules.
    Make the approved Tampa + Challenger art and copy geometry explicit. */
 .screenshotContract{width:100%!important;max-width:100%!important;overflow-x:hidden!important}
+.screenshotContract .main-nav{display:flex!important;align-items:center!important;gap:28px!important}
 .screenshotContract .screenshotHero{
   position:relative!important;
   display:block!important;
@@ -168,6 +169,8 @@ html,body{max-width:100%;overflow-x:hidden!important}
 
 @media(max-width:900px){
   .cinematic-v2 .cinScene{background-position:70% center!important}
+  .screenshotContract .main-nav{display:none!important}
+  .screenshotContract .main-nav.open{display:grid!important;gap:0!important}
   .screenshotContract .screenshotHero{
     min-height:560px!important;
     background-size:auto 100%!important;
