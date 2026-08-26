@@ -89,6 +89,20 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > immutable-preview-url.txt
 
+      - name: Warm immutable preview
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 15); do
+            code="$(curl -sS -L -o /tmp/wdcc-immutable-root.html -w '%{http_code}' "$URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+
       - name: Prove intro smoke-to-clear contract
         env:
           URL: ${{ steps.deploy.outputs.url }}
@@ -104,10 +118,18 @@ jobs:
           fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
           try{
-            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
             const page=await ctx.newPage();
-            await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            await page.locator('.li').waitFor({state:'attached',timeout:5000});
+            let ready=false,lastStatus=0;
+            for(let attempt=1;attempt<=5;attempt++){
+              const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}-${attempt}`,{waitUntil:'domcontentloaded',timeout:30000}).catch(()=>null);
+              lastStatus=response?.status()||0;
+              if(lastStatus===200){
+                try{await page.locator('.li').waitFor({state:'attached',timeout:10000});ready=true;break}catch{}
+              }
+              await page.waitForTimeout(1000);
+            }
+            if(!ready)throw new Error(`INTRO_DOM_NOT_READY_HTTP_${lastStatus}`);
             await page.locator('.li-smoke').waitFor({state:'attached',timeout:5000});
             await page.locator('.li-badge img').waitFor({state:'visible',timeout:5000});
             await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
