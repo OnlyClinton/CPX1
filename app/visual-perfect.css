@@ -8,7 +8,8 @@
 .locked-storefront .rh-header-inner{width:min(1260px,calc(100% - 40px))!important;grid-template-columns:126px minmax(0,1fr) auto!important;gap:18px!important}
 .locked-storefront .rh-logo{position:relative!important;width:112px!important;height:76px!important;isolation:isolate!important}
 .locked-storefront .rh-logo:before{content:"";position:absolute;width:68px;height:68px;border-radius:50%;background:radial-gradient(circle at 50% 42%,#fff 0 63%,#edf1f4 64% 69%,#0a1721 70% 73%,transparent 74%);box-shadow:0 8px 22px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.58);z-index:-1}
-.locked-storefront .rh-logo img{width:62px!important;height:62px!important;object-fit:contain!important;filter:none!important}
+.locked-storefront .rh-logo:after{display:none!important;content:none!important;background:none!important}
+.locked-storefront .rh-logo img{display:block!important;visibility:visible!important;opacity:1!important;width:62px!important;height:62px!important;object-fit:contain!important;filter:none!important;position:relative!important;z-index:2!important}
 .locked-storefront .rh-nav{gap:28px!important;font-size:10px!important}
 .locked-storefront .rh-header-actions{display:flex!important}.locked-storefront .rh-header-phone{height:40px!important;padding:0 15px!important;border-color:#4d6070!important;border-radius:999px!important;font-size:10px!important;background:rgba(255,255,255,.03)!important}
 
@@ -45,12 +46,14 @@
   .locked-storefront .rh-header{height:72px!important}
   .locked-storefront .rh-header-inner{width:100%!important;padding:0 12px!important;grid-template-columns:78px 1fr 78px!important;gap:3px!important}
   .locked-storefront .rh-menu{width:46px!important;height:46px!important;font-size:23px!important}
-  .locked-storefront .rh-logo{width:88px!important;height:70px!important}.locked-storefront .rh-logo:before{width:60px;height:60px}.locked-storefront .rh-logo img{width:55px!important;height:55px!important}
+  .locked-storefront .rh-logo{width:88px!important;height:70px!important}.locked-storefront .rh-logo:before{width:60px!important;height:60px!important}.locked-storefront .rh-logo:after{display:none!important;content:none!important}.locked-storefront .rh-logo img{display:block!important;visibility:visible!important;opacity:1!important;width:55px!important;height:55px!important}
   .locked-storefront .rh-call{display:flex!important;width:auto!important;min-width:72px!important;height:38px!important;padding:0 10px!important;border-radius:999px!important;background:var(--vp-red)!important;align-items:center!important;justify-content:center!important;font-size:9px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.03em!important}.locked-storefront .rh-call span{display:block!important}
   .locked-storefront .rh-nav{top:72px!important;grid-template-columns:1fr 1fr!important;padding:10px!important}.locked-storefront .rh-nav a{font-size:10px!important}
 
-  .locked-storefront .rh-hero{min-height:0!important;background-position:72% top!important;background-size:auto 390px!important;background-repeat:no-repeat!important;padding-top:318px!important;background-color:#02070c!important}
-  .locked-storefront .rh-hero:after{background:linear-gradient(180deg,transparent 0,rgba(2,7,12,.22) 44%,#02070c 100%)!important;height:360px!important;bottom:auto!important}
+  .locked-storefront .rh-hero{min-height:0!important;height:auto!important;background:#02070c!important;padding-top:318px!important}
+  .locked-storefront .rh-hero-art{position:absolute!important;inset:0 0 auto 0!important;width:100%!important;height:390px!important;object-fit:cover!important;object-position:73% 42%!important;filter:saturate(1.15) contrast(1.08) brightness(1.03)!important}
+  .locked-storefront .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;height:390px!important;background:linear-gradient(180deg,rgba(2,7,12,.02) 0%,rgba(2,7,12,.06) 54%,rgba(2,7,12,.88) 100%)!important}
+  .locked-storefront .rh-hero:after{height:390px!important;bottom:auto!important;background:linear-gradient(180deg,transparent 0,transparent 55%,#02070c 100%)!important}
   .locked-storefront .rh-hero-inner{width:100%!important;min-height:0!important;display:block!important}
   .locked-storefront .rh-copy{width:100%!important;max-width:none!important;padding:24px 17px 27px!important;background:#02070c!important}
   .locked-storefront .rh-kicker{font-size:10px!important;margin-bottom:11px!important}
@@ -71,7 +74,8 @@
 
 @media(max-width:430px){
   .locked-storefront .rh-header-inner{grid-template-columns:76px 1fr 76px!important}.locked-storefront .rh-call{min-width:70px!important;font-size:8px!important}
-  .locked-storefront .rh-hero{background-size:auto 370px!important;padding-top:302px!important;background-position:73% top!important}
+  .locked-storefront .rh-hero{padding-top:302px!important}
+  .locked-storefront .rh-hero-art,.locked-storefront .rh-hero-shade{height:370px!important}.locked-storefront .rh-hero-art{object-position:74% 40%!important}
   .locked-storefront .rh-copy{padding:23px 14px 25px!important}.locked-storefront h1{font-size:clamp(40px,11.7vw,47px)!important;max-width:345px!important}.locked-storefront .rh-lead{font-size:13.5px!important}
   .locked-storefront .rh-benefit{padding:12px!important}.locked-storefront .rh-benefit small{font-size:8.5px!important}
 }
