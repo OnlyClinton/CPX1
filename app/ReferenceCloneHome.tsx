@@ -25,18 +25,22 @@ export default function ReferenceCloneHome(){
    <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ Tampa Bay</span><span>★</span><span>In-house financing</span><span>★</span><span>Low payments</span><span>★</span><span>Drive today</span><span className="utility-sales">Sales: <b>(813) 516-4752</b></span></div></div>
    <header className="rh-header"><div className="rh-header-inner">
      <button className="rh-menu" aria-label="Open navigation" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>☰</button>
-     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
+     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
      <nav className={`rh-nav${open?" open":""}`} aria-label="Main navigation"><Link href="/inventory" onClick={()=>setOpen(false)}>Inventory</Link><Link href="/get-approved?source=nav-financing" onClick={()=>setOpen(false)}>Financing</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>How it works</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>Reviews</Link><Link href="/#about" onClick={()=>setOpen(false)}>About us</Link><Link href="/contact?source=nav-contact" onClick={()=>setOpen(false)}>Contact</Link></nav>
      <div className="rh-header-actions"><a className="rh-header-phone" href="tel:+18135164752">☎ (813) 516-4752</a><Link className="rh-header-cta" href="/get-approved?source=header-get-approved">Get pre-approved</Link></div>
      <a className="rh-call" href="tel:+18135164752" aria-label="Call Sean">☎</a>
    </div></header>
-   <section className="rh-hero"><div className="rh-hero-inner"><div className="rh-copy">
-     <p className="rh-kicker">Tampa Bay · Drive today</p>
-     <h1><span className="red">Bad credit?</span><br/><span className="blue">No credit?</span><br/>We don't care.</h1>
-     <p className="rh-lead">In-house financing. Low down payments.<br/>Fast approvals. Straight answers.<br/>Get on the road without the runaround.</p>
-     <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved?source=hero-get-approved">Get pre-approved →</Link><Link className="rh-btn dark" href="/inventory">Browse inventory →</Link></div>
-     <a className="rh-phone" href="tel:+18135164752">☎ Call Sean <b>813-516-4752</b></a>
-   </div></div></section>
+   <section className="rh-hero">
+     <img className="rh-hero-art" src="/wdcc-hero-v2.webp" alt="American flag Challenger with Tampa Bay skyline" width="1672" height="941" fetchPriority="high"/>
+     <div className="rh-hero-shade" aria-hidden="true"/>
+     <div className="rh-hero-inner"><div className="rh-copy">
+       <p className="rh-kicker">Tampa Bay · Drive today</p>
+       <h1 aria-label="Bad credit? No credit? We don't care."><span className="red">Bad credit?</span><span className="blue">No credit?</span><span className="white">We don't care.</span></h1>
+       <p className="rh-lead">In-house financing. Low down payments.<br/>Fast approvals. Straight answers.<br/>Get on the road without the runaround.</p>
+       <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved?source=hero-get-approved">Get pre-approved →</Link><Link className="rh-btn dark" href="/inventory">Browse inventory →</Link></div>
+       <a className="rh-phone" href="tel:+18135164752">☎ Call Sean <b>813-516-4752</b></a>
+     </div></div>
+   </section>
    <section className="rh-benefit-wrap"><div className="rh-benefits">
      <article className="rh-benefit"><span className="rh-icon">✓</span><div><strong>Fast approvals</strong><small>Quick, straightforward decisions.</small></div></article>
      <article className="rh-benefit"><span className="rh-icon">$</span><div><strong>Low down payments</strong><small>Options designed around real buyers.</small></div></article>
