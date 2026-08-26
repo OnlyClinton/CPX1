@@ -26,15 +26,17 @@ function customerVisible(v:any){
   const stock=String(v?.stock||v?.stock_id||"").toUpperCase();
   return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST");
 }
+function hasPhoto(v:Vehicle){return Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)}
 function photo(v:Vehicle){
   if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;
-  return v.primary_image_url||v.image||"/wdcc-hero-v2.webp";
+  return v.primary_image_url||v.image||"";
 }
 function vehicleHref(v:Vehicle){
   if(String(v.status||"").toLowerCase()==="published"&&v.id)return `/vehicle/${encodeURIComponent(String(v.id))}`;
   const label=`${v.year} ${v.make} ${v.model}${v.trim?` ${v.trim}`:""}`;
   return `/schedule-test-drive?source=featured-inventory&vehicle=${encodeURIComponent(label)}`;
 }
+function vehicleKey(v:Vehicle){return String(v.id||v.slug||`${v.year}-${v.make}-${v.model}`).toLowerCase()}
 
 export default function Exact2vfDHome(){
   const[showIntro,setShowIntro]=useState(true);
@@ -44,8 +46,16 @@ export default function Exact2vfDHome(){
 
   useEffect(()=>{
     fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>{
-      const live=(j.items||j.inventory||[]).filter(customerVisible).slice(0,5);
-      if(live.length)setItems(live);
+      const live:Vehicle[]=(j.items||j.inventory||[]).filter(customerVisible).filter(hasPhoto).slice(0,5);
+      if(live.length<1)return;
+      const merged=[...live];
+      const seen=new Set(merged.map(vehicleKey));
+      for(const recovered of fallback){
+        if(merged.length>=5)break;
+        const key=vehicleKey(recovered);
+        if(!seen.has(key)){merged.push(recovered);seen.add(key)}
+      }
+      setItems(merged.slice(0,5));
     }).catch(()=>{});
   },[]);
   useEffect(()=>{
