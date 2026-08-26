@@ -1,207 +1,23 @@
-name: WDCC CLOUDFLARE DEALER LIVE
+name: WDCC CLOUDFLARE DEALER LIVE — RETIRED
 
-# Dealer front door pinned to direct Vercel origin to avoid Cloudflare->Cloudflare fallback drift.
+# RETIRED 2026-08-26.
+# This legacy workflow previously proxied dealer API traffic through the customer
+# storefront and could overwrite the canonical split-origin dealer front door.
+# The ONLY live owner is .github/workflows/wdcc-dealer-target-frontdoor-v3.yml.
+# Dealer UI is served by wdcc-dealer-portal.vercel.app and dealer APIs are served
+# by the immutable Phoenix authority wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app.
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-cloudflare-dealer-live.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: write
-  issues: write
-
-concurrency:
-  group: wdcc-cloudflare-dealer-live
-  cancel-in-progress: false
-
-env:
-  PRIMARY_ORIGIN: https://www.wedontcarecars.com
-  FALLBACK_ORIGIN: https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app
-  EXPECTED_SHA: d49210a02b70411376e1f2506ab67050bf719eb9
-  EXPECTED_ADD_CHUNK: 41lk83p0an81v.js
-  DEALER_HOST: dealer.wedontcarecars.com
 
 jobs:
-  deploy:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Require Cloudflare authorization
-        shell: bash
+      - name: Refuse legacy dealer-frontdoor mutation
         run: |
-          set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-
-      - name: Prove current direct Vercel dealer origin
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -L -o /tmp/health.json -w '%{http_code}' "$PRIMARY_ORIGIN/api/health?cf_dealer=$GITHUB_RUN_ID")"
-          test "$code" = 200
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/health.json >/dev/null
-          curl -fsSL "$PRIMARY_ORIGIN/api/inventory?cf_dealer=$GITHUB_RUN_ID" -o /tmp/inventory.json
-          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
-          for path in /dealer /dealer/login /dealer/inventory /dealer/inventory/new; do
-            code="$(curl -sS -L -o /dev/null -w '%{http_code}' "$PRIMARY_ORIGIN$path?cf_dealer=$GITHUB_RUN_ID")"
-            test "$code" = 200
-          done
-          curl -fsSL "$PRIMARY_ORIGIN/dealer/inventory/new?cf_dealer=$GITHUB_RUN_ID" -o /tmp/add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/add.html
-          curl -fsSL "$PRIMARY_ORIGIN/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_dealer=$GITHUB_RUN_ID" -o /tmp/add.js
-          grep -q 'name:"description"' /tmp/add.js
-          echo 'DIRECT_VERCEL_ORIGIN_PREFLIGHT=PASS'
-
-      - name: Install Wrangler
-        run: npm install --global wrangler@4.90.0 >/dev/null
-
-      - name: Build current-source dealer reverse-proxy Worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/wdcc-dealer-cf
-          cat > /tmp/wdcc-dealer-cf/worker.js <<'EOF'
-          const PRIMARY = "https://www.wedontcarecars.com";
-          const FALLBACK = "https://wdcc-v32-storefront-5juxr2hkc-cpxagency.vercel.app";
-
-          function targetUrl(request, base) {
-            const incoming = new URL(request.url);
-            const target = new URL(base);
-            target.pathname = incoming.pathname;
-            target.search = incoming.search;
-            return target;
-          }
-
-          async function proxy(request, base) {
-            const incoming = new URL(request.url);
-            const target = targetUrl(request, base);
-            const headers = new Headers(request.headers);
-            headers.set("x-forwarded-host", "dealer.wedontcarecars.com");
-            headers.set("x-forwarded-proto", "https");
-            headers.set("x-wdcc-frontdoor", "cloudflare-dealer");
-            headers.delete("cf-worker");
-            const init = { method: request.method, headers, redirect: "manual" };
-            if (!['GET','HEAD'].includes(request.method)) init.body = request.body;
-            const response = await fetch(new Request(target.toString(), init));
-            const outHeaders = new Headers(response.headers);
-            const location = outHeaders.get("location");
-            if (location) {
-              try {
-                const loc = new URL(location, target);
-                if (loc.hostname === new URL(base).hostname) {
-                  loc.protocol = incoming.protocol;
-                  loc.hostname = incoming.hostname;
-                  loc.port = incoming.port;
-                  outHeaders.set("location", loc.toString());
-                }
-              } catch {}
-            }
-            outHeaders.set("x-wdcc-edge", "cloudflare-dealer-sales-command");
-            outHeaders.set("x-wdcc-origin", new URL(base).hostname);
-            if (incoming.pathname.startsWith('/dealer') || incoming.pathname.startsWith('/api/')) {
-              outHeaders.set('cache-control','private, no-store, max-age=0');
-            }
-            return new Response(response.body, {status: response.status, statusText: response.statusText, headers: outHeaders});
-          }
-
-          export default {
-            async fetch(request) {
-              const incoming = new URL(request.url);
-              if (incoming.pathname === "/") return Response.redirect(new URL("/dealer", incoming), 302);
-              try {
-                const response = await proxy(request, PRIMARY);
-                if (response.status < 500) return response;
-              } catch {}
-              try { return await proxy(request, FALLBACK); }
-              catch { return new Response("Dealer portal temporarily unavailable", {status: 503, headers:{"cache-control":"no-store"}}); }
-            }
-          };
-          EOF
-          cat > /tmp/wdcc-dealer-cf/wrangler.jsonc <<'EOF'
-          {
-            "$schema": "node_modules/wrangler/config-schema.json",
-            "name": "wdcc-dealer-frontdoor",
-            "main": "worker.js",
-            "compatibility_date": "2026-08-25",
-            "workers_dev": true,
-            "observability": {"enabled": true}
-          }
-          EOF
-
-      - name: Deploy and verify workers.dev candidate
-        id: stage
-        working-directory: /tmp/wdcc-dealer-cf
-        shell: bash
-        run: |
-          set -euo pipefail
-          wrangler deploy 2>&1 | tee /tmp/wrangler-stage.log
-          URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wrangler-stage.log | tail -1 || true)"
-          test -n "$URL"
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-          for attempt in $(seq 1 20); do
-            code="$(curl -sS -o /tmp/cf-health.json -w '%{http_code}' "$URL/api/health?cf_stage=$GITHUB_RUN_ID&attempt=$attempt" || true)"
-            if [ "$code" = 200 ] && jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/cf-health.json >/dev/null
-          curl -fsS "$URL/dealer/inventory/new?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/cf-add.html
-          curl -fsS "$URL/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_stage=$GITHUB_RUN_ID" -o /tmp/cf-add.js
-          grep -q 'name:"description"' /tmp/cf-add.js
-          echo 'CLOUDFLARE_STAGE_CURRENT_BUNDLE=PASS'
-
-      - name: Bind dealer.wedontcarecars.com route
-        working-directory: /tmp/wdcc-dealer-cf
-        shell: bash
-        run: |
-          set -euo pipefail
-          node - <<'NODE'
-          const fs=require('fs');
-          const p='wrangler.jsonc';
-          const c=JSON.parse(fs.readFileSync(p,'utf8'));
-          c.routes=[{pattern:'dealer.wedontcarecars.com/*',zone_name:'wedontcarecars.com'}];
-          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
-          NODE
-          wrangler deploy
-          sleep 5
-
-      - name: Verify live dealer uses exact current bundle and API
-        id: live
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(curl -sS -D /tmp/live-health.h -o /tmp/live-health.json -w '%{http_code}' "https://$DEALER_HOST/api/health?cf_live=$GITHUB_RUN_ID")"
-          test "$code" = 200
-          jq -e --arg sha "$EXPECTED_SHA" '.ok==true and .degraded==false and .commit==$sha' /tmp/live-health.json >/dev/null
-          grep -qi '^x-wdcc-edge: cloudflare-dealer-sales-command' /tmp/live-health.h
-          grep -qi '^x-wdcc-origin: www.wedontcarecars.com' /tmp/live-health.h
-          curl -fsS "https://$DEALER_HOST/dealer/inventory/new?cf_live=$GITHUB_RUN_ID" -o /tmp/live-add.html
-          grep -q "$EXPECTED_ADD_CHUNK" /tmp/live-add.html
-          ! grep -q '1vekog7nwnog3.js' /tmp/live-add.html
-          curl -fsS "https://$DEALER_HOST/_next/static/chunks/$EXPECTED_ADD_CHUNK?cf_live=$GITHUB_RUN_ID" -o /tmp/live-add.js
-          grep -q 'name:"description"' /tmp/live-add.js
-          curl -fsS "https://$DEALER_HOST/api/auth/session?cf_live=$GITHUB_RUN_ID" -o /tmp/live-session.json
-          jq -e '.authenticated==false' /tmp/live-session.json >/dev/null
-          echo 'WDCC_CLOUDFLARE_DEALER_CURRENT_SOURCE=PASS'
-          echo 'verified=true' >> "$GITHUB_OUTPUT"
-
-      - name: Dispatch authenticated listing proof
-        if: steps.live.outputs.verified == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run wdcc-listing-only-e2e.yml --ref main
-
-      - name: Publish cutover evidence
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          LIVE: ${{ steps.live.outputs.verified }}
-        shell: bash
-        run: |
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC Cloudflare dealer current-source $GITHUB_RUN_ID" --body "Expected source: \`$EXPECTED_SHA\`\nPrimary: \`$PRIMARY_ORIGIN\`\nFallback: \`$FALLBACK_ORIGIN\`\nLive current-bundle verification: \`${LIVE:-false}\`\nExpected Add Vehicle chunk: \`$EXPECTED_ADD_CHUNK\`." || true
+          echo 'RETIRED: use wdcc-dealer-target-frontdoor-v3.yml. No live mutation performed.' >&2
+          exit 1
