@@ -1,9 +1,9 @@
 name: WDCC Canonical Inventory Provider Gate
 
+# Manual-only while Vercel has the canonical Blob store suspended for Hobby
+# Simple Request exhaustion. Do not probe the known-paused provider on every
+# visual branch push. Re-run explicitly after provider access is restored.
 on:
-  push:
-    branches:
-      - fix/wdcc-locked-contract-20260826
   workflow_dispatch:
 
 permissions:
