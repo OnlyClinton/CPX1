@@ -1,0 +1,124 @@
+name: WDCC Dealer Final Target Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-final-target-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DEALER: https://dealer.wedontcarecars.com
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  CALL_ID: lead_0ecbb749-6f7f-4ca4-b49a-393f4689929e
+  TEST_ID: lead_f1fb0db1-7970-4376-b3e4-592382334985
+  APPROVAL_ID: lead_ef99c54b-ee9f-4ec1-9b58-7a542a869c3b
+  ACCORD_ID: ab4a0f36-da7c-4bc7-9bcf-f643465aa1eb
+  ESCAPE_ID: 3c355c4c-6864-40fc-9605-905a201bc01a
+  ACCORD_STOCK: R36TEST-DASH-ACCORD-32851023472-1
+  ESCAPE_STOCK: R36TEST-DASH-ESCAPE-32851023472-1
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install proof runtime
+        run: |
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/screens
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Create disposable dealer proof user
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-target-proof-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}
+          for(let n=1;n<=5;n++){const before=await stable(),s=before.s,password=`Target-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`target-${crypto.randomUUID()}`,email=`target-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Target Proof ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/target-proof.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-target-proof-user.mjs
+          set -a;. /tmp/target-proof.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Prove live target desktop and mobile
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/target-proof.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          export DEALER QA_EMAIL QA_PASSWORD CALL_ID TEST_ID APPROVAL_ID ACCORD_ID ESCAPE_ID ACCORD_STOCK ESCAPE_STOCK
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          async function auth(c){const r=await c.request.post(`${process.env.DEALER}/api/auth/login`,{headers:{'content-type':'application/json'},data:{username:process.env.QA_EMAIL,email:process.env.QA_EMAIL,password:process.env.QA_PASSWORD}});if(r.status()!==200)throw Error(`LOGIN_${r.status()}`);const s=await c.request.get(`${process.env.DEALER}/api/auth/session`),j=await s.json();if(s.status()!==200||!j.authenticated)throw Error('SESSION');return j}
+          (async()=>{
+            const b=await chromium.launch({headless:true});
+            const c=await b.newContext({viewport:{width:1440,height:1000}});const sj=await auth(c);const p=await c.newPage();
+            await p.goto(`${process.env.DEALER}/dealer?target=${Date.now()}`,{waitUntil:'networkidle'});await p.waitForSelector('.targetDealerApp',{timeout:30000});let text=(await p.locator('body').innerText()).toLowerCase();for(const x of['dashboard','leads overview','leads by source','top performing vehicles','recent activity'])if(!text.includes(x))throw Error(`DASH_${x}`);await p.screenshot({path:'/tmp/screens/dashboard-desktop.png',fullPage:true});
+            const leads=await c.request.get(`${process.env.DEALER}/api/leads`),lj=await leads.json();if(leads.status()!==200)throw Error('LEADS_API');for(const id of[process.env.CALL_ID,process.env.TEST_ID,process.env.APPROVAL_ID])if(!(lj.items||[]).some(v=>v.id===id))throw Error(`LEAD_${id}`);
+            await p.goto(`${process.env.DEALER}/dealer/leads?target=${Date.now()}`,{waitUntil:'networkidle'});await p.waitForSelector('.targetLeadShell',{timeout:30000});text=(await p.locator('body').innerText()).toLowerCase();for(const x of['leads','source','vehicle','status','received','actions'])if(!text.includes(x))throw Error(`LEADS_RENDER_${x}`);await p.screenshot({path:'/tmp/screens/leads-desktop.png',fullPage:true});
+            const inv=await c.request.get(`${process.env.DEALER}/api/inventory`),ij=await inv.json();if(inv.status()!==200)throw Error('INVENTORY_API');for(const id of[process.env.ACCORD_ID,process.env.ESCAPE_ID])if(!(ij.items||[]).some(v=>v.id===id))throw Error(`VEHICLE_${id}`);
+            await p.goto(`${process.env.DEALER}/dealer/inventory?target=${Date.now()}`,{waitUntil:'networkidle'});await p.waitForSelector('.targetInventoryShell',{timeout:30000});const search=p.locator('input[placeholder*="Search by make"]');await search.fill('R36TEST-DASH');await p.waitForTimeout(400);text=(await p.locator('body').innerText());if(!text.includes(process.env.ACCORD_STOCK)||!text.includes(process.env.ESCAPE_STOCK))throw Error('INVENTORY_RETAINED_ROWS_NOT_RENDERED');await search.fill('');await p.waitForTimeout(250);await p.screenshot({path:'/tmp/screens/inventory-desktop.png',fullPage:true});
+            await p.goto(`${process.env.DEALER}/dealer/inventory/new?target=${Date.now()}`,{waitUntil:'networkidle'});await p.waitForSelector('.editVehicleApp',{timeout:30000});text=(await p.locator('body').innerText()).toLowerCase();for(const x of['add / edit vehicle','vehicle information','photos','listing readiness','publish / submit'])if(!text.includes(x))throw Error(`ADD_RENDER_${x}`);await p.screenshot({path:'/tmp/screens/add-vehicle-desktop.png',fullPage:true});
+            const m=await b.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});await auth(m);const mp=await m.newPage();
+            for(const [path,selector,file] of [['/dealer','.targetDealerApp','dashboard-mobile.png'],['/dealer/leads','.targetLeadShell','leads-mobile.png'],['/dealer/inventory','.targetInventoryShell','inventory-mobile.png'],['/dealer/inventory/new','.editVehicleApp','add-vehicle-mobile.png']]){await mp.goto(`${process.env.DEALER}${path}?mobile=${Date.now()}`,{waitUntil:'networkidle'});await mp.waitForSelector(selector,{timeout:30000});await mp.screenshot({path:`/tmp/screens/${file}`,fullPage:true})}
+            fs.writeFileSync('/tmp/target-result.json',JSON.stringify({ok:true,role:sj?.user?.role||null,login:200,session:200,leads:leads.status(),inventory:inv.status(),retainedLeads:3,retainedVehicles:2,desktop:true,mobile:true},null,2));console.log(fs.readFileSync('/tmp/target-result.json','utf8'));await b.close();
+          })().catch(e=>{fs.writeFileSync('/tmp/target-result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          jq -e '.ok==true and .desktop==true and .mobile==true and .retainedLeads==3 and .retainedVehicles==2' /tmp/target-result.json >/dev/null
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Upload final target screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dealer-final-target-${{ github.run_id }}
+          path: /tmp/screens/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup disposable dealer proof user
+        id: cleanup
+        if: always() && steps.identity.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/target-proof.env;set +a;export QA_ID
+          cat > .wdcc-target-proof-clean.mjs <<'NODE'
+          import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=s.users||[];s.users=u.filter(x=>x.id!==id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removedUsers:u.length-s.users.length,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-target-proof-clean.mjs
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Report final target proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BROWSER: ${{ steps.browser.outputs.ok }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        shell: bash
+        run: |
+          err=''; [ -f /tmp/target-result.json ] && err="$(jq -r '.error // ""' /tmp/target-result.json)"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer final target proof $GITHUB_RUN_ID" --body "Status: **$STATUS**\nDesktop + mobile target render: **${BROWSER:-false}**\nRetained 3 leads + 2 QA cars verified: **${BROWSER:-false}**\nTemporary proof identity cleanup: **${CLEAN:-false}**\nError: \`$err\`" || true
