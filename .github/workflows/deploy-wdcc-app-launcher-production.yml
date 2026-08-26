@@ -98,27 +98,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          vercel curl / --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-home.html
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$CANDIDATE" > /tmp/candidate-home.html
           grep -q 'screenshotContract' /tmp/candidate-home.html
           grep -q 'header-logo-image' /tmp/candidate-home.html
           grep -q 'mobile-action-bar' /tmp/candidate-home.html
 
-          vercel curl /app --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-app.html
+          vercel --scope "$VERCEL_SCOPE" curl /app --deployment "$CANDIDATE" > /tmp/candidate-app.html
           grep -q 'Run your inventory from anywhere' /tmp/candidate-app.html
           grep -q 'Open Web Portal' /tmp/candidate-app.html
           grep -q 'Download Android' /tmp/candidate-app.html
 
-          redirect="$(vercel curl /app/download/android --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" -- --silent --output /dev/null --write-out '%{http_code} %{redirect_url}')"
+          redirect="$(vercel --scope "$VERCEL_SCOPE" curl /app/download/android --deployment "$CANDIDATE" -- --silent --output /dev/null --write-out '%{http_code} %{redirect_url}')"
           test "$redirect" = "307 $APK_URL"
 
-          vercel curl /api/health --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-health.json
+          vercel --scope "$VERCEL_SCOPE" curl /api/health --deployment "$CANDIDATE" > /tmp/candidate-health.json
           jq -e '.ok == true and .degraded == false' /tmp/candidate-health.json >/dev/null
-          vercel curl /api/inventory --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-inventory.json
+          vercel --scope "$VERCEL_SCOPE" curl /api/inventory --deployment "$CANDIDATE" > /tmp/candidate-inventory.json
           jq -e '.ok == true and (.items | type == "array")' /tmp/candidate-inventory.json >/dev/null
           jq -e 'all(.items[]; ((.internalOnly // false) == false))' /tmp/candidate-inventory.json >/dev/null
 
           for path in /dealer /dealer/login /dealer/inventory /dealer/inventory/new; do
-            code="$(vercel curl "$path" --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" -- --silent --output /dev/null --write-out '%{http_code}')"
+            code="$(vercel --scope "$VERCEL_SCOPE" curl "$path" --deployment "$CANDIDATE" -- --silent --output /dev/null --write-out '%{http_code}')"
             test "$code" = 200
           done
 
