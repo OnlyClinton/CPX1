@@ -35,8 +35,8 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
 }
 
 /* Mobile/tablet: deterministic 51077 composition.
-   The static Challenger/skyline is a normal in-flow image block directly above the copy.
-   No absolute car positioning means the fixed header cannot shear or hide the vehicle. */
+   The utility + header are fixed and compute to 106px, so the hero starts exactly below them.
+   The static Challenger/skyline is an in-flow image block followed immediately by copy. */
 @media (max-width:1100px),(hover:none) and (pointer:coarse){
   html body main.reference-home.locked-storefront > section.rh-hero{
     position:relative!important;
@@ -44,7 +44,7 @@ html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
     min-height:0!important;
     height:auto!important;
     padding:0!important;
-    margin:0!important;
+    margin:106px 0 0!important;
     overflow:hidden!important;
     background:#02070c!important;
   }
