@@ -97,7 +97,7 @@ jobs:
             if(!visual.wordmarkRect||visual.wordmarkRect.width<80||visual.wordmarkRect.height<25) throw new Error(`${name}: horizontal WDCC wordmark missing or too small`);
             if(visual.scrollWidth>visual.innerWidth+3) throw new Error(`${name}: horizontal overflow ${visual.scrollWidth}>${visual.innerWidth}`);
             if(visual.brokenImages.length) throw new Error(`${name}: broken visible images ${JSON.stringify(visual.brokenImages)}`);
-            const minVisible=width<=560?1:5;
+            const minVisible=width<=560?1:4;
             if(visual.visibleImageCount<minVisible) throw new Error(`${name}: too few rendered inventory images ${visual.visibleImageCount}<${minVisible}`);
             const heroTop=visual.heroRect?.y??0,heroBottom=heroTop+(visual.heroRect?.height??0);
             if(!visual.copyRect||visual.copyRect.y<heroTop-2||visual.copyRect.y+visual.copyRect.height>heroBottom-12) throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
@@ -105,7 +105,7 @@ jobs:
               if(visual.navLinks.length<5) throw new Error(`${name}: desktop nav links missing`);
               const navGaps=visual.navLinks.slice(1).map((r,i)=>r.x-(visual.navLinks[i].x+visual.navLinks[i].width));
               if(navGaps.some(g=>g<12)) throw new Error(`${name}: desktop nav labels collide ${JSON.stringify(navGaps)}`);
-              if(visual.cards.length!==5) throw new Error(`${name}: expected five desktop inventory cards, got ${visual.cards.length}`);
+              if(visual.cards.length!==4) throw new Error(`${name}: expected four premium desktop inventory cards, got ${visual.cards.length}`);
               const cardY=visual.cards.map(r=>r.y); if(Math.max(...cardY)-Math.min(...cardY)>5) throw new Error(`${name}: desktop inventory cards are not one row ${JSON.stringify(cardY)}`);
               const maxCardBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height)); if(!visual.howRect||maxCardBottom>visual.howRect.y-8) throw new Error(`${name}: inventory card content overlaps process section`);
               if(visual.steps.length!==4) throw new Error(`${name}: expected 4 desktop process steps, got ${visual.steps.length}`);
@@ -117,8 +117,8 @@ jobs:
               const maxBodyBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height)); if(!visual.howRect||maxBodyBottom>visual.howRect.y-8) throw new Error(`${name}: mobile inventory card overlaps process section`);
               if(visual.copyRect.y<visual.heroRect.y+240) throw new Error(`${name}: mobile hero copy still overlays too much of the car image`);
             }
-            const checks={wordmark:await page.locator('.logo-button .wdcc-wordmark').count(),hero:await page.locator('.screenshotHero').count(),primary:await page.locator('.hero-cta-test').count(),secondary:await page.locator('.hero-cta-qualify').count(),inventory:await page.locator('.screenshotInventory').count()};
-            if(Object.values(checks).some(v=>v<1)) throw new Error(`${name}: mockup contract missing ${JSON.stringify(checks)}`);
+            const checks={wordmark:await page.locator('.logo-button .wdcc-wordmark').count(),hero:await page.locator('.screenshotHero').count(),primary:await page.locator('.hero-cta-test').count(),secondary:await page.locator('.hero-cta-qualify').count(),inventory:await page.locator('.screenshotInventory').count(),trust:await page.locator('.premiumTrust').count()};
+            if(Object.values(checks).some(v=>v<1)) throw new Error(`${name}: premium mockup contract missing ${JSON.stringify(checks)}`);
             if(failed.length) throw new Error(`${name}: unexpected resource failures ${JSON.stringify(failed)}`);
             await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
             await page.close();
