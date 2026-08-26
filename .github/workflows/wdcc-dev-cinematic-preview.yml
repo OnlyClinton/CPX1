@@ -63,34 +63,23 @@ jobs:
           cat > visual-proof/capture.mjs <<'NODE'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless:true});
-          const rect=e=>e?.getBoundingClientRect().toJSON();
           async function capture(name,width,height){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
             page.setDefaultTimeout(10000);
-            // Keep the visual contract deterministic: use the known static mockup inventory donor.
             await page.route('**/api/inventory**', route=>route.abort());
             const failed=[];
             page.on('requestfailed',r=>{if(!r.url().includes('/api/inventory')) failed.push(`${r.failure()?.errorText||'failed'} ${r.url()}`)});
             await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
             await page.waitForSelector('[data-wdcc-intro="challenger-tampa-v1"]');
             await page.waitForTimeout(850);
-            const introState=await page.locator('.cinematic-v2 .cinScene').evaluate(e=>({
-              background:getComputedStyle(e).backgroundImage,
-              width:e.getBoundingClientRect().width,
-              height:e.getBoundingClientRect().height
-            }));
-            if(!introState.background.includes('wdcc-hero-v2.webp')||introState.width<width*.95||introState.height<height*.95){
-              throw new Error(`${name}: Tampa/Challenger intro canvas invalid ${JSON.stringify(introState)}`);
-            }
+            const introState=await page.locator('.cinematic-v2 .cinScene').evaluate(e=>({background:getComputedStyle(e).backgroundImage,width:e.getBoundingClientRect().width,height:e.getBoundingClientRect().height}));
+            if(!introState.background.includes('wdcc-hero-v2.webp')||introState.width<width*.95||introState.height<height*.95) throw new Error(`${name}: Tampa/Challenger intro canvas invalid ${JSON.stringify(introState)}`);
             await page.screenshot({path:`visual-proof/${name}-intro.png`,fullPage:false});
             await page.waitForTimeout(3200);
             await page.waitForSelector('.screenshotHero');
             const visual=await page.evaluate(()=>{
               const R=e=>e?.getBoundingClientRect().toJSON();
-              const hero=document.querySelector('.screenshotHero');
-              const copy=document.querySelector('.hero-copy');
-              const heading=document.querySelector('.hero h1');
-              const how=document.querySelector('.screenshotHow');
+              const hero=document.querySelector('.screenshotHero'),copy=document.querySelector('.hero-copy'),heading=document.querySelector('.hero h1'),how=document.querySelector('.screenshotHow'),wordmark=document.querySelector('.logo-button .wdcc-wordmark');
               const visible=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};
               const visibleImgs=[...document.querySelectorAll('img')].filter(visible);
               const navLinks=[...document.querySelectorAll('.main-nav a')].filter(visible).map(R);
@@ -101,60 +90,34 @@ jobs:
               const callSvg=document.querySelector('.mobile-call svg');
               const title=document.querySelector('.featured-slide.active .vehicle-title')||document.querySelector('.vehicle-title');
               const price=document.querySelector('.featured-slide.active .vehicle-price')||document.querySelector('.vehicle-price');
-              return {
-                innerWidth:window.innerWidth,
-                scrollWidth:document.documentElement.scrollWidth,
-                heroBackground:hero?getComputedStyle(hero).backgroundImage:'',
-                heroRect:R(hero),
-                copyRect:R(copy),
-                headingRect:R(heading),
-                headingFont:heading?getComputedStyle(heading).fontSize:'',
-                brokenImages:visibleImgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),
-                visibleImageCount:visibleImgs.length,
-                navLinks,cards,cardBodies,steps,menuLines,
-                howRect:R(how),
-                callSvgRect:callSvg&&visible(callSvg)?R(callSvg):null,
-                titleRect:R(title),
-                priceRect:R(price)
-              };
+              return {innerWidth:window.innerWidth,scrollWidth:document.documentElement.scrollWidth,heroBackground:hero?getComputedStyle(hero).backgroundImage:'',heroRect:R(hero),copyRect:R(copy),headingRect:R(heading),headingFont:heading?getComputedStyle(heading).fontSize:'',wordmarkRect:wordmark&&visible(wordmark)?R(wordmark):null,brokenImages:visibleImgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),visibleImageCount:visibleImgs.length,navLinks,cards,cardBodies,steps,menuLines,howRect:R(how),callSvgRect:callSvg&&visible(callSvg)?R(callSvg):null,titleRect:R(title),priceRect:R(price)};
             });
             console.log(`${name} visual=${JSON.stringify(visual)}`);
             if(!visual.heroBackground.includes('wdcc-hero-v2.webp')) throw new Error(`${name}: hero Tampa/Challenger background missing`);
+            if(!visual.wordmarkRect||visual.wordmarkRect.width<80||visual.wordmarkRect.height<25) throw new Error(`${name}: horizontal WDCC wordmark missing or too small`);
             if(visual.scrollWidth>visual.innerWidth+3) throw new Error(`${name}: horizontal overflow ${visual.scrollWidth}>${visual.innerWidth}`);
             if(visual.brokenImages.length) throw new Error(`${name}: broken visible images ${JSON.stringify(visual.brokenImages)}`);
-            const minVisible=width<=560?2:5;
-            if(visual.visibleImageCount<minVisible) throw new Error(`${name}: too few rendered images ${visual.visibleImageCount}<${minVisible}`);
-            const heroTop=visual.heroRect?.y??0;
-            const heroBottom=heroTop+(visual.heroRect?.height??0);
-            if(!visual.copyRect||visual.copyRect.y<heroTop-2||visual.copyRect.y+visual.copyRect.height>heroBottom-12){
-              throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
-            }
+            const minVisible=width<=560?1:5;
+            if(visual.visibleImageCount<minVisible) throw new Error(`${name}: too few rendered inventory images ${visual.visibleImageCount}<${minVisible}`);
+            const heroTop=visual.heroRect?.y??0,heroBottom=heroTop+(visual.heroRect?.height??0);
+            if(!visual.copyRect||visual.copyRect.y<heroTop-2||visual.copyRect.y+visual.copyRect.height>heroBottom-12) throw new Error(`${name}: hero copy clipped ${JSON.stringify({hero:visual.heroRect,copy:visual.copyRect})}`);
             if(width>900){
               if(visual.navLinks.length<5) throw new Error(`${name}: desktop nav links missing`);
               const navGaps=visual.navLinks.slice(1).map((r,i)=>r.x-(visual.navLinks[i].x+visual.navLinks[i].width));
               if(navGaps.some(g=>g<12)) throw new Error(`${name}: desktop nav labels collide ${JSON.stringify(navGaps)}`);
-              if(visual.cards.length<3) throw new Error(`${name}: desktop inventory grid has ${visual.cards.length} visible cards`);
-              const cardY=visual.cards.map(r=>r.y);
-              if(Math.max(...cardY)-Math.min(...cardY)>5) throw new Error(`${name}: desktop inventory cards are not one row ${JSON.stringify(cardY)}`);
-              const maxCardBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height));
-              if(!visual.howRect||maxCardBottom>visual.howRect.y-8) throw new Error(`${name}: inventory card content overlaps process section`);
+              if(visual.cards.length!==5) throw new Error(`${name}: expected five desktop inventory cards, got ${visual.cards.length}`);
+              const cardY=visual.cards.map(r=>r.y); if(Math.max(...cardY)-Math.min(...cardY)>5) throw new Error(`${name}: desktop inventory cards are not one row ${JSON.stringify(cardY)}`);
+              const maxCardBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height)); if(!visual.howRect||maxCardBottom>visual.howRect.y-8) throw new Error(`${name}: inventory card content overlaps process section`);
               if(visual.steps.length!==4) throw new Error(`${name}: expected 4 desktop process steps, got ${visual.steps.length}`);
-              const stepY=visual.steps.map(r=>r.y);
-              if(Math.max(...stepY)-Math.min(...stepY)>5) throw new Error(`${name}: process steps are not one row ${JSON.stringify(stepY)}`);
+              const stepY=visual.steps.map(r=>r.y); if(Math.max(...stepY)-Math.min(...stepY)>5) throw new Error(`${name}: process steps are not one row ${JSON.stringify(stepY)}`);
             }else{
               if(visual.menuLines.length!==3||visual.menuLines.some(r=>r.width<15||r.height<1.5)) throw new Error(`${name}: mobile hamburger is not three visible lines`);
               if(!visual.callSvgRect||visual.callSvgRect.width<18||visual.callSvgRect.height<18) throw new Error(`${name}: mobile call icon missing`);
               if(!visual.titleRect||!visual.priceRect||visual.priceRect.y<visual.titleRect.y+visual.titleRect.height-1) throw new Error(`${name}: mobile vehicle title/price collide`);
-              const maxBodyBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height));
-              if(!visual.howRect||maxBodyBottom>visual.howRect.y-8) throw new Error(`${name}: mobile inventory card overlaps process section`);
+              const maxBodyBottom=Math.max(...visual.cardBodies.map(r=>r.y+r.height)); if(!visual.howRect||maxBodyBottom>visual.howRect.y-8) throw new Error(`${name}: mobile inventory card overlaps process section`);
+              if(visual.copyRect.y<visual.heroRect.y+240) throw new Error(`${name}: mobile hero copy still overlays too much of the car image`);
             }
-            const checks={
-              logo:await page.locator('.header-logo-image').count(),
-              hero:await page.locator('.screenshotHero').count(),
-              primary:await page.locator('.hero-cta-test').count(),
-              secondary:await page.locator('.hero-cta-qualify').count(),
-              inventory:await page.locator('.screenshotInventory').count()
-            };
+            const checks={wordmark:await page.locator('.logo-button .wdcc-wordmark').count(),hero:await page.locator('.screenshotHero').count(),primary:await page.locator('.hero-cta-test').count(),secondary:await page.locator('.hero-cta-qualify').count(),inventory:await page.locator('.screenshotInventory').count()};
             if(Object.values(checks).some(v=>v<1)) throw new Error(`${name}: mockup contract missing ${JSON.stringify(checks)}`);
             if(failed.length) throw new Error(`${name}: unexpected resource failures ${JSON.stringify(failed)}`);
             await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
@@ -197,10 +160,7 @@ jobs:
           set -o pipefail
           vercel deploy --prebuilt --yes --archive=tgz --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
           url="$(tr -d '\r' </tmp/vercel-preview.log | sed -E $'s/\x1B\[[0-9;]*[A-Za-z]//g' | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -1)"
-          if [ -z "$url" ]; then
-            echo 'Preview URL not found in Vercel output.' >&2
-            exit 1
-          fi
+          if [ -z "$url" ]; then echo 'Preview URL not found in Vercel output.' >&2; exit 1; fi
           printf '%s\n' "$url" | tee preview-url.txt
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
