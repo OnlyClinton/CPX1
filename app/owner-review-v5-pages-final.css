@@ -1,0 +1,64 @@
+/* V5 customer subpage sizing authority. Keep last. */
+@media(max-width:760px){
+  html body main .inventoryTop.inventoryTop{
+    padding:28px 0 24px!important;
+    background:#101a23!important;
+  }
+  html body main .inventoryTop.inventoryTop>.wrap{
+    width:min(100% - 28px,680px)!important;
+    margin:0 auto!important;
+  }
+  html body main .inventoryTop.inventoryTop .eyebrow{
+    font-size:9px!important;
+    line-height:1.15!important;
+    letter-spacing:.17em!important;
+    margin-bottom:7px!important;
+  }
+  html body main .inventoryTop.inventoryTop h1{
+    margin:0 0 10px!important;
+    max-width:340px!important;
+    font-size:42px!important;
+    line-height:.94!important;
+    letter-spacing:-.045em!important;
+  }
+  html body main .inventoryTop.inventoryTop .lede{
+    max-width:345px!important;
+    font-size:13px!important;
+    line-height:1.38!important;
+  }
+  html body main .inventoryTop.inventoryTop + section.section.light{
+    padding:28px 0 72px!important;
+  }
+  html body main .inventoryTop.inventoryTop + section.section.light>.wrap{
+    width:min(100% - 24px,680px)!important;
+    margin:0 auto!important;
+  }
+
+  html body main.section.light{
+    padding:30px 0 76px!important;
+  }
+  html body main.section.light>.wrap.leadPage{
+    width:min(100% - 28px,680px)!important;
+    margin:0 auto!important;
+  }
+  html body main.section.light>.wrap.leadPage>.eyebrow{
+    font-size:9px!important;
+    letter-spacing:.16em!important;
+    margin-bottom:7px!important;
+  }
+  html body main.section.light>.wrap.leadPage>h1{
+    margin:0 0 9px!important;
+    font-size:38px!important;
+    line-height:.98!important;
+    letter-spacing:-.04em!important;
+  }
+  html body main.section.light>.wrap.leadPage>p{
+    margin:0 0 17px!important;
+    max-width:350px!important;
+    font-size:13px!important;
+    line-height:1.4!important;
+  }
+  html body main.section.light>.wrap.leadPage .leadForm{
+    margin-top:0!important;
+  }
+}
