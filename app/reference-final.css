@@ -1,29 +1,183 @@
-/* Final reference hardening for the isolated WDCC preview branch. */
-.wdcc-app.premiumNine .featured-grid,
-.wdcc-app.premiumNine .featured-slide,
-.wdcc-app.premiumNine .vehicle-card,
-.wdcc-app.premiumNine .vehicle-image,
-.wdcc-app.premiumNine .vehicle-image img{box-sizing:border-box!important;max-width:100%!important}
-.wdcc-app.premiumNine .vehicle-image{display:block!important;position:relative!important;width:100%!important;min-width:0!important;overflow:hidden!important}
-.wdcc-app.premiumNine .vehicle-image img{display:block!important;width:100%!important;min-width:0!important;height:100%!important;object-fit:cover!important;object-position:center!important}
-.wdcc-app.premiumNine .featured-slide{min-width:0!important;overflow:hidden!important}
+/* WDCC preview-only final reference lock.
+   This file is intentionally loaded last and changes no production routing. */
+:root{--wdcc-red:#ed1c2e;--wdcc-blue:#1795f2;--wdcc-ink:#050c13;--wdcc-navy:#07131e;--wdcc-paper:#f4f5f5}
+html,body{max-width:100%;overflow-x:hidden!important;background:var(--wdcc-paper)!important}
+body{margin:0!important}
+.wdcc-app,.wdcc-app *{box-sizing:border-box}
+.wdcc-app{width:100%!important;max-width:100vw!important;overflow-x:hidden!important;background:var(--wdcc-paper)!important;color:#111820!important}
 
-/* The wrapper already owns the cinematic opener; never render the legacy opener underneath it. */
-.wdcc-app.premiumNine > .intro-sequence{display:none!important}
+/* === CINEMATIC OPENER: Tampa skyline + moving Challenger + crest impact === */
+.wdcc-app>.intro-sequence{position:fixed!important;inset:0!important;z-index:9999!important;width:100vw!important;height:100dvh!important;overflow:hidden!important;background:#02070c!important;isolation:isolate!important;cursor:pointer!important}
+.wdcc-app>.intro-sequence .intro-scene{position:absolute!important;inset:-2%!important;z-index:0!important;background-image:var(--hero-image)!important;background-repeat:no-repeat!important;background-size:cover!important;background-position:68% center!important;filter:saturate(1.15) contrast(1.1) brightness(.72)!important;animation:wdccScenePush 2.8s cubic-bezier(.18,.78,.2,1) both!important}
+.wdcc-app>.intro-sequence .intro-scene:after{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse 44% 30% at 73% 66%,rgba(2,6,10,.96) 0 31%,rgba(2,6,10,.83) 44%,rgba(2,6,10,.2) 64%,transparent 78%);animation:wdccRevealBakedCar 1.6s .4s ease-out both}
+.wdcc-app>.intro-sequence .intro-scene:before{content:"";position:absolute;inset:0;z-index:2;background-image:var(--hero-image);background-repeat:no-repeat;background-size:cover;background-position:68% center;clip-path:polygon(39% 42%,52% 34%,80% 34%,97% 46%,100% 67%,93% 83%,75% 91%,48% 88%,38% 72%);-webkit-mask-image:radial-gradient(ellipse 43% 31% at 73% 65%,#000 0 61%,rgba(0,0,0,.95) 70%,transparent 89%);mask-image:radial-gradient(ellipse 43% 31% at 73% 65%,#000 0 61%,rgba(0,0,0,.95) 70%,transparent 89%);transform-origin:73% 68%;filter:saturate(1.22) contrast(1.13) brightness(1.04) drop-shadow(-26px 28px 28px rgba(0,0,0,.55));animation:wdccCarSweep 1.65s .32s cubic-bezier(.12,.87,.22,1) both}
+.wdcc-app>.intro-sequence:after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(90deg,rgba(1,5,9,.88),rgba(1,5,9,.42) 34%,rgba(1,5,9,.06) 72%),radial-gradient(circle at 50% 48%,transparent 0 18%,rgba(0,0,0,.04) 38%,rgba(0,0,0,.62) 100%)}
+.wdcc-app>.intro-sequence .intro-smoke{position:absolute!important;z-index:4!important;pointer-events:none!important;mix-blend-mode:screen!important;filter:blur(6px)!important}
+.wdcc-app>.intro-sequence .smoke-one{left:-8%!important;bottom:-10%!important;width:72%!important;height:54%!important;background:radial-gradient(circle,rgba(255,255,255,.34),rgba(177,204,227,.13) 39%,transparent 70%)!important;animation:wdccSmokeLeft 2.4s ease-out both!important}
+.wdcc-app>.intro-sequence .smoke-two{right:-10%!important;bottom:-8%!important;width:68%!important;height:50%!important;background:radial-gradient(circle,rgba(32,142,239,.34),rgba(237,28,46,.12) 42%,transparent 72%)!important;animation:wdccSmokeRight 2.5s .12s ease-out both!important}
+.wdcc-app>.intro-sequence .intro-badge{position:absolute!important;z-index:7!important;left:50%!important;top:47%!important;width:min(34vw,390px)!important;height:min(34vw,390px)!important;transform:translate(-50%,-50%)!important;display:grid!important;place-items:center!important;animation:wdccCrestImpact 2.55s cubic-bezier(.16,1,.3,1) both!important}
+.wdcc-app>.intro-sequence .brand-logo{display:block!important;width:100%!important;height:100%!important}
+.wdcc-app>.intro-sequence .brand-logo img{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important;filter:drop-shadow(0 20px 44px rgba(0,0,0,.82)) drop-shadow(0 0 30px rgba(28,146,241,.28))!important}
+.wdcc-app>.intro-sequence .intro-tagline{position:absolute!important;z-index:8!important;left:50%!important;top:70%!important;transform:translateX(-50%)!important;margin:0!important;color:#fff!important;font-size:12px!important;font-weight:900!important;letter-spacing:.18em!important;text-transform:uppercase!important;white-space:nowrap!important;text-shadow:0 3px 14px #000!important;animation:wdccTagline 2.4s .1s ease both!important}
+.wdcc-app>.intro-sequence .intro-skip{position:absolute!important;z-index:10!important;right:20px!important;bottom:20px!important;min-height:38px!important;padding:0 14px!important;border:1px solid rgba(255,255,255,.38)!important;border-radius:5px!important;background:rgba(2,8,13,.7)!important;color:#fff!important;font-size:10px!important;font-weight:850!important;letter-spacing:.06em!important;text-transform:uppercase!important}
+@keyframes wdccCarSweep{0%{opacity:0;transform:translate3d(47vw,3vh,0) scale(.82) rotate(-1.5deg);filter:saturate(1.05) contrast(1.05) brightness(.76) blur(2px)}12%{opacity:1}68%{transform:translate3d(5vw,.4vh,0) scale(.99) rotate(-.2deg)}84%{transform:translate3d(-1vw,0,0) scale(1.015)}100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:saturate(1.18) contrast(1.12) brightness(1.03) drop-shadow(-18px 20px 22px rgba(0,0,0,.45))}}
+@keyframes wdccRevealBakedCar{0%,38%{opacity:1}78%{opacity:.58}100%{opacity:0}}
+@keyframes wdccScenePush{0%{transform:scale(1.055);filter:saturate(.95) contrast(1.03) brightness(.54)}62%{transform:scale(1.018);filter:saturate(1.08) contrast(1.08) brightness(.72)}100%{transform:scale(1.005);filter:saturate(1.15) contrast(1.1) brightness(.94)}}
+@keyframes wdccSmokeLeft{0%{opacity:0;transform:scale(.72) translate(-8%,12%)}26%{opacity:.78}100%{opacity:0;transform:scale(1.62) translate(22%,-10%)}}
+@keyframes wdccSmokeRight{0%{opacity:0;transform:scale(.7) translate(10%,12%)}30%{opacity:.72}100%{opacity:0;transform:scale(1.58) translate(-18%,-7%)}}
+@keyframes wdccCrestImpact{0%{opacity:0;transform:translate(-50%,-50%) scale(.54)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}37%{transform:translate(-50%,-50%) scale(1)}53%{transform:translate(-50%,-50%) scale(1.12);filter:brightness(1.22)}61%{transform:translate(-50%,-50%) scale(.97)}74%{left:50%;top:47%;width:min(34vw,390px);height:min(34vw,390px)}100%{opacity:1;left:max(60px,calc((100vw - 1450px)/2 + 56px));top:72px;width:100px;height:100px;transform:translate(-50%,-50%) scale(1)}}
+@keyframes wdccTagline{0%,12%{opacity:0;transform:translate(-50%,8px)}25%,68%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
 
-@media(max-width:900px){
- .wdcc-app.premiumNine{width:100%!important;max-width:100vw!important;overflow-x:hidden!important}
- .wdcc-app.premiumNine .featured-carousel,
- .wdcc-app.premiumNine .featured-grid{width:100%!important;max-width:100%!important;min-width:0!important;overflow:hidden!important}
- .wdcc-app.premiumNine .featured-slide{display:none!important;width:100%!important;max-width:100%!important;min-width:0!important;margin:0!important}
- .wdcc-app.premiumNine .featured-slide.active{display:block!important;width:min(100%,330px)!important;max-width:330px!important;margin:0 auto!important}
- .wdcc-app.premiumNine .featured-slide.active .vehicle-card{width:100%!important;max-width:100%!important;min-width:0!important}
- .wdcc-app.premiumNine .featured-slide.active .vehicle-image{width:100%!important;max-width:100%!important;height:230px!important}
- .wdcc-app.premiumNine .featured-slide.active .vehicle-image img{width:100%!important;max-width:100%!important;height:230px!important}
+/* === HEADER === */
+.wdcc-app .header-shell{position:relative!important;z-index:40!important;background:#050b11!important;color:#fff!important;border-bottom:1px solid rgba(255,255,255,.06)!important}
+.wdcc-app .utility-bar{height:30px!important;min-height:30px!important;padding:0 28px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:28px!important;background:#02070b!important;color:#dce4ea!important;font-size:9px!important;font-weight:850!important;letter-spacing:.055em!important;text-transform:uppercase!important}
+.wdcc-app .utility-bar b{color:var(--wdcc-red)!important}
+.wdcc-app .site-header{height:84px!important;min-height:84px!important;padding:0 26px!important;display:grid!important;grid-template-columns:112px minmax(0,1fr) 54px!important;align-items:center!important;gap:20px!important;max-width:1500px!important;margin:0 auto!important;background:#07111a!important}
+.wdcc-app .logo-button{position:relative!important;display:block!important;width:106px!important;height:106px!important;align-self:center!important;justify-self:start!important;background:url('/wdcc-logo-transparent.webp') center/contain no-repeat!important;filter:drop-shadow(0 7px 18px rgba(0,0,0,.72))!important;overflow:visible!important;transform:translateY(3px)!important}
+.wdcc-app .logo-button>span{display:none!important}
+.wdcc-app .main-nav{display:flex!important;align-items:center!important;justify-content:center!important;gap:clamp(20px,2.2vw,34px)!important;min-width:0!important}
+.wdcc-app .main-nav a{color:#fff!important;text-decoration:none!important;font-size:10.5px!important;font-weight:900!important;letter-spacing:.025em!important;text-transform:uppercase!important;white-space:nowrap!important}
+.wdcc-app .main-nav a:hover{color:#9ed2ff!important}
+.wdcc-app .mobile-menu{display:none!important}
+.wdcc-app .mobile-call{justify-self:end!important;width:48px!important;height:48px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:var(--wdcc-red)!important;color:#fff!important;text-decoration:none!important;box-shadow:0 8px 20px rgba(237,28,46,.25)!important}
+.wdcc-app .mobile-call svg{width:20px!important;height:20px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important}
+.wdcc-app .mobile-call span{display:none!important}
+
+/* === HERO === */
+.wdcc-app .hero{position:relative!important;display:block!important;overflow:hidden!important;min-height:560px!important;background-image:var(--hero-image)!important;background-repeat:no-repeat!important;background-size:cover!important;background-position:68% center!important;background-color:#07111a!important;color:#fff!important}
+.wdcc-app .hero:after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(circle at 72% 34%,rgba(23,149,242,.10),transparent 28%),radial-gradient(circle at 78% 72%,rgba(255,255,255,.07),transparent 31%);mix-blend-mode:screen}
+.wdcc-app .hero-shade{position:absolute!important;inset:0!important;z-index:1!important;background:linear-gradient(90deg,#02070cf9 0,#04101ae8 28%,#06111bbd 42%,#07111a5f 58%,#07111a13 80%,rgba(5,12,19,.04) 100%)!important}
+.wdcc-app .hero-copy{position:absolute!important;z-index:3!important;left:max(28px,calc((100vw - 1450px)/2))!important;top:50%!important;width:min(560px,calc(100vw - 56px))!important;max-width:560px!important;transform:translateY(-50%)!important;margin:0!important;padding:0!important}
+.wdcc-app .hero-kicker{margin:0 0 10px!important;color:#85c8ff!important;font-size:10.5px!important;font-weight:950!important;letter-spacing:.12em!important;text-transform:uppercase!important;text-shadow:0 2px 10px #000!important}
+.wdcc-app .hero h1{margin:0 0 15px!important;color:#fff!important;font-size:clamp(52px,5.25vw,78px)!important;font-weight:1000!important;line-height:.9!important;letter-spacing:-.052em!important;text-transform:uppercase!important;text-shadow:0 5px 24px rgba(0,0,0,.8)!important}
+.wdcc-app .hero h1 em{color:#1594ed!important;font-style:normal!important}
+.wdcc-app .hero h1 strong{color:#fff!important;font:inherit!important;white-space:nowrap!important}
+.wdcc-app .hero-lead{margin:0!important;max-width:440px!important;color:#f4f7f9!important;font-size:15.5px!important;font-weight:520!important;line-height:1.5!important;text-shadow:0 2px 12px rgba(0,0,0,.8)!important}
+.wdcc-app .hero-actions{display:flex!important;align-items:center!important;gap:11px!important;margin-top:20px!important;max-width:470px!important}
+.wdcc-app .hero-actions .btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:48px!important;padding:0 20px!important;border-radius:4px!important;text-decoration:none!important;font-size:10.5px!important;font-weight:950!important;letter-spacing:.02em!important;text-transform:uppercase!important;white-space:nowrap!important;box-shadow:0 10px 26px rgba(0,0,0,.28)!important}
+.wdcc-app .hero-actions .btn-primary{background:var(--wdcc-red)!important;border:1px solid var(--wdcc-red)!important;color:#fff!important}
+.wdcc-app .hero-actions .btn-outline{background:rgba(5,14,22,.78)!important;border:1px solid rgba(255,255,255,.65)!important;color:#fff!important}
+.wdcc-app .hero-car-glow{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important;background:radial-gradient(circle at 73% 71%,rgba(255,255,255,.08),transparent 37%)!important}
+
+/* === BENEFITS === */
+.wdcc-app .benefit-strip{position:relative!important;z-index:8!important;width:min(1460px,calc(100% - 28px))!important;margin:-1px auto 0!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;background:#fff!important;border:1px solid #d9dee2!important;border-radius:9px!important;box-shadow:0 12px 30px rgba(7,18,29,.13)!important;overflow:hidden!important}
+.wdcc-app .benefit-strip article{min-height:94px!important;padding:16px 18px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:12px!important;border-right:1px solid #e1e5e8!important;background:#fff!important}
+.wdcc-app .benefit-strip article:last-child{border-right:0!important}
+.wdcc-app .benefit-strip .icon{display:grid!important;place-items:center!important;width:35px!important;height:35px!important;min-width:35px!important;border:1px solid #b9c2c9!important;border-radius:50%!important;color:var(--wdcc-red)!important;background:#fff!important;font-size:16px!important;font-weight:950!important}
+.wdcc-app .benefit-strip strong{display:block!important;color:#111820!important;font-size:10.2px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.02em!important}
+.wdcc-app .benefit-strip article div>span{display:block!important;margin-top:4px!important;color:#5d6871!important;font-size:9.1px!important;line-height:1.35!important}
+
+/* === INVENTORY === */
+.wdcc-app .inventory-showcase{width:100%!important;max-width:1500px!important;margin:0 auto!important;padding:28px 22px 30px!important;background:#f5f6f6!important}
+.wdcc-app .inventory-showcase .section-heading{display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:20px!important;margin:0 0 16px!important}
+.wdcc-app .section-kicker{display:block!important;color:#177fc4!important;font-size:9px!important;font-weight:950!important;letter-spacing:.09em!important;text-transform:uppercase!important}
+.wdcc-app .inventory-showcase h2{margin:5px 0 0!important;color:#111820!important;font-size:31px!important;font-weight:1000!important;line-height:1!important;letter-spacing:-.035em!important}
+.wdcc-app .section-deck{margin:7px 0 0!important;color:#58636b!important;font-size:11px!important}
+.wdcc-app .text-link{color:#111820!important;text-decoration:none!important;font-size:9px!important;font-weight:950!important;text-transform:uppercase!important;white-space:nowrap!important}
+.wdcc-app .featured-carousel{position:relative!important;width:100%!important;min-width:0!important;overflow:visible!important}
+.wdcc-app .featured-grid{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important;width:100%!important;min-width:0!important;align-items:stretch!important}
+.wdcc-app .featured-slide{display:block!important;position:relative!important;min-width:0!important;width:auto!important;max-width:100%!important;opacity:1!important;transform:none!important}
+.wdcc-app .vehicle-card{height:100%!important;min-width:0!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;background:#fff!important;border:1px solid #dce1e4!important;border-radius:8px!important;box-shadow:0 7px 20px rgba(7,18,29,.08)!important}
+.wdcc-app .vehicle-image{position:relative!important;display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;height:158px!important;overflow:hidden!important;background:#0b141d!important}
+.wdcc-app .vehicle-image img{display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;height:100%!important;object-fit:cover!important;object-position:center!important}
+.wdcc-app .image-count{display:none!important}
+.wdcc-app .card-badges{position:absolute!important;left:8px!important;top:8px!important;z-index:3!important}
+.wdcc-app .card-badges>span{display:inline-flex!important;align-items:center!important;min-height:20px!important;padding:0 7px!important;border-radius:3px!important;background:#118c48!important;color:#fff!important;font-size:7.5px!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.03em!important}
+.wdcc-app .vehicle-card-body{display:flex!important;flex:1 1 auto!important;flex-direction:column!important;min-height:150px!important;padding:12px!important;background:#fff!important}
+.wdcc-app .vehicle-card-body .eyebrow{margin:0 0 2px!important;color:#4c5861!important;font-size:8.5px!important;font-weight:850!important;text-transform:uppercase!important}
+.wdcc-app .vehicle-title{color:#111820!important;text-decoration:none!important;font-size:15.5px!important;font-weight:950!important;line-height:1.12!important}
+.wdcc-app .vehicle-price{display:block!important;margin-top:8px!important;color:#111820!important;font-size:23px!important;font-weight:1000!important;line-height:1!important}
+.wdcc-app .vehicle-payment{margin:6px 0 0!important;color:#46515a!important;font-size:8.8px!important;line-height:1.35!important}
+.wdcc-app .vehicle-payment b{color:#a8afb4!important}
+.wdcc-app .spec-pills{display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-top:auto!important;padding-top:10px!important}
+.wdcc-app .spec-pills span{display:inline-flex!important;align-items:center!important;min-height:19px!important;padding:2px 6px!important;border-radius:3px!important;background:#f0f2f3!important;color:#4a555d!important;font-size:7.5px!important;font-weight:850!important;text-transform:uppercase!important}
+.wdcc-app .carousel-arrow{position:absolute!important;z-index:12!important;top:62px!important;display:grid!important;place-items:center!important;width:34px!important;height:34px!important;border:1px solid rgba(255,255,255,.28)!important;border-radius:50%!important;background:rgba(5,14,22,.88)!important;color:#fff!important;font-size:22px!important;line-height:1!important;box-shadow:0 8px 20px rgba(0,0,0,.2)!important;cursor:pointer!important}
+.wdcc-app .carousel-prev{left:6px!important}.wdcc-app .carousel-next{right:6px!important}
+.wdcc-app .carousel-dots{display:none!important}
+
+/* === FINANCING STEPS === */
+.wdcc-app .how-section{width:100%!important;padding:28px 24px 31px!important;background:linear-gradient(135deg,#06111b,#081924)!important;color:#fff!important;border-top:1px solid #142738!important;border-bottom:1px solid #142738!important}
+.wdcc-app .how-section .section-heading{max-width:1450px!important;margin:0 auto 17px!important}
+.wdcc-app .how-section .section-kicker{color:#e8eef3!important;font-size:9px!important}
+.wdcc-app .how-section h2{margin:5px 0 0!important;color:#fff!important;font-size:31px!important;font-weight:950!important;line-height:1!important;letter-spacing:-.035em!important;text-transform:uppercase!important}
+.wdcc-app .how-section h2 strong{color:var(--wdcc-red)!important;font:inherit!important}
+.wdcc-app .steps-grid{max-width:1450px!important;margin:0 auto!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
+.wdcc-app .steps-grid article{position:relative!important;min-height:122px!important;padding:16px 15px 14px!important;background:#0a1924!important;border:1px solid #203342!important;border-radius:7px!important;color:#fff!important}
+.wdcc-app .steps-grid article>span{display:grid!important;place-items:center!important;width:29px!important;height:29px!important;border-radius:50%!important;background:var(--wdcc-red)!important;color:#fff!important;font-size:10px!important;font-weight:950!important}
+.wdcc-app .steps-grid h3{margin:14px 0 5px!important;color:#fff!important;font-size:11px!important;font-weight:950!important;text-transform:uppercase!important}
+.wdcc-app .steps-grid p{margin:0!important;color:#cbd5dc!important;font-size:9.5px!important;line-height:1.42!important}
+
+/* === TRUST STRIP === */
+.wdcc-app .trust-grid{width:100%!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;background:#fff!important;border-bottom:1px solid #dde2e5!important;color:#111820!important}
+.wdcc-app .trust-grid article{min-height:92px!important;padding:16px 22px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:12px!important;border-right:1px solid #e1e5e8!important;background:#fff!important}
+.wdcc-app .trust-grid article:last-child{border-right:0!important}
+.wdcc-app .trust-icon,.wdcc-app .trust-avatar{display:grid!important;place-items:center!important;width:36px!important;height:36px!important;min-width:36px!important;border:1px solid #bfc8ce!important;border-radius:50%!important;background:#fff!important;color:#111820!important;font-size:12px!important;font-weight:950!important}
+.wdcc-app .trust-avatar{background:#111820!important;color:#fff!important;border-color:#111820!important}
+.wdcc-app .trust-grid h3{margin:0!important;color:#111820!important;font-size:10px!important;font-weight:950!important;text-transform:uppercase!important}
+.wdcc-app .trust-grid p{margin:4px 0 0!important;color:#59646d!important;font-size:8.8px!important;line-height:1.35!important}
+
+/* === FOOTER / MOBILE ACTIONS === */
+.wdcc-app .site-footer{min-height:82px!important;padding:18px 26px!important;display:grid!important;grid-template-columns:1fr auto auto!important;align-items:center!important;gap:20px!important;background:#050c13!important;color:#fff!important;border-top:1px solid #192733!important}
+.wdcc-app .site-footer>div{display:flex!important;flex-direction:column!important;gap:4px!important}
+.wdcc-app .site-footer strong{font-size:11px!important}.wdcc-app .site-footer span{color:#9eabb5!important;font-size:8.5px!important}
+.wdcc-app .site-footer>a{color:#fff!important;text-decoration:none!important;font-size:11px!important;font-weight:950!important}
+.wdcc-app .footer-links{display:flex!important;gap:12px!important}.wdcc-app .footer-links a{color:#aab5bd!important;text-decoration:none!important;font-size:8.5px!important}
+.wdcc-app .mobile-action-bar{display:none!important}
+
+@media(max-width:1050px) and (min-width:761px){
+ .wdcc-app .main-nav{gap:16px!important}.wdcc-app .main-nav a{font-size:9.5px!important}
+ .wdcc-app .hero{min-height:530px!important}.wdcc-app .hero h1{font-size:58px!important}
+ .wdcc-app .featured-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.wdcc-app .featured-slide:nth-child(5){display:none!important}
 }
 
-@media(max-width:420px){
- .wdcc-app.premiumNine .featured-slide.active{width:min(100%,315px)!important;max-width:315px!important}
- .wdcc-app.premiumNine .featured-slide.active .vehicle-image,
- .wdcc-app.premiumNine .featured-slide.active .vehicle-image img{height:218px!important}
+/* === MOBILE MOCKUP RHYTHM === */
+@media(max-width:760px){
+ .wdcc-app>.intro-sequence .intro-scene,.wdcc-app>.intro-sequence .intro-scene:before{background-position:71% center!important}
+ .wdcc-app>.intro-sequence .intro-badge{width:min(68vw,275px)!important;height:min(68vw,275px)!important}
+ .wdcc-app>.intro-sequence .intro-tagline{top:75%!important;font-size:9px!important}
+ @keyframes wdccCrestImpact{0%{opacity:0;transform:translate(-50%,-50%) scale(.55)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}50%{transform:translate(-50%,-50%) scale(1)}70%{left:50%;top:47%;width:min(68vw,275px);height:min(68vw,275px)}100%{opacity:1;left:50%;top:51px;width:82px;height:82px;transform:translate(-50%,-50%) scale(1)}}
+
+ .wdcc-app .utility-bar{display:none!important}
+ .wdcc-app .site-header{height:74px!important;min-height:74px!important;padding:0 12px!important;grid-template-columns:44px minmax(0,1fr) 44px!important;gap:6px!important;background:#050c13!important}
+ .wdcc-app .mobile-menu{display:grid!important;place-items:center!important;width:42px!important;height:42px!important;padding:0!important;border:0!important;background:transparent!important;color:#fff!important}
+ .wdcc-app .mobile-menu>span{display:grid!important;gap:4px!important}.wdcc-app .mobile-menu i{display:block!important;width:20px!important;height:2px!important;background:#fff!important;border-radius:2px!important}
+ .wdcc-app .logo-button{justify-self:center!important;width:82px!important;height:82px!important;transform:translateY(2px)!important}
+ .wdcc-app .mobile-call{width:42px!important;height:42px!important}.wdcc-app .mobile-call svg{width:18px!important;height:18px!important}
+ .wdcc-app .main-nav{position:absolute!important;z-index:60!important;top:74px!important;left:0!important;right:0!important;display:none!important;padding:8px 12px 12px!important;background:#06111bf5!important;border-top:1px solid #1c2b37!important;box-shadow:0 14px 30px rgba(0,0,0,.28)!important}
+ .wdcc-app .main-nav.open{display:grid!important;gap:0!important}.wdcc-app .main-nav a{display:flex!important;align-items:center!important;min-height:44px!important;border-bottom:1px solid #1d2c38!important;font-size:10px!important}
+
+ .wdcc-app .hero{min-height:565px!important;background-size:auto 100%!important;background-position:70% center!important;background-repeat:no-repeat!important}
+ .wdcc-app .hero-shade{background:linear-gradient(90deg,#02070cf5 0,#03101ade 43%,#06111a75 64%,rgba(5,12,19,.14) 100%),linear-gradient(180deg,rgba(2,7,12,.04) 0,rgba(2,7,12,.10) 60%,rgba(2,7,12,.72) 100%)!important}
+ .wdcc-app .hero-copy{left:17px!important;right:17px!important;top:62px!important;bottom:auto!important;width:auto!important;max-width:330px!important;transform:none!important}
+ .wdcc-app .hero-kicker{margin-bottom:7px!important;font-size:8.5px!important;letter-spacing:.10em!important}
+ .wdcc-app .hero h1{max-width:315px!important;margin-bottom:11px!important;font-size:39px!important;line-height:.92!important;letter-spacing:-.045em!important}
+ .wdcc-app .hero h1 strong{white-space:normal!important}
+ .wdcc-app .hero-lead{max-width:286px!important;font-size:11.8px!important;line-height:1.4!important}
+ .wdcc-app .hero-actions{display:grid!important;grid-template-columns:1fr!important;width:282px!important;gap:7px!important;margin-top:13px!important}
+ .wdcc-app .hero-actions .btn{min-height:43px!important;padding:0 14px!important;font-size:9.5px!important}
+
+ .wdcc-app .benefit-strip{width:100%!important;margin:0!important;border-left:0!important;border-right:0!important;border-radius:0!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;box-shadow:none!important}
+ .wdcc-app .benefit-strip article{min-height:86px!important;padding:10px 5px!important;display:flex!important;flex-direction:column!important;text-align:center!important;gap:6px!important}
+ .wdcc-app .benefit-strip .icon{width:29px!important;height:29px!important;min-width:29px!important;font-size:13px!important}
+ .wdcc-app .benefit-strip strong{font-size:7.2px!important;line-height:1.12!important}.wdcc-app .benefit-strip article div>span{display:none!important}
+
+ .wdcc-app .inventory-showcase{padding:22px 10px 24px!important}
+ .wdcc-app .inventory-showcase .section-heading{margin-bottom:12px!important}.wdcc-app .inventory-showcase h2{font-size:27px!important}.wdcc-app .section-deck{font-size:9.5px!important}.wdcc-app .text-link{font-size:7.5px!important}
+ .wdcc-app .featured-carousel{overflow:hidden!important;padding-bottom:2px!important}
+ .wdcc-app .featured-grid{display:flex!important;gap:8px!important;width:100%!important;min-width:0!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scrollbar-width:none!important;padding:0 1px 3px!important}
+ .wdcc-app .featured-grid::-webkit-scrollbar{display:none!important}
+ .wdcc-app .featured-slide{display:block!important;flex:0 0 calc((100% - 16px)/3)!important;width:calc((100% - 16px)/3)!important;max-width:calc((100% - 16px)/3)!important;min-width:0!important;scroll-snap-align:start!important}
+ .wdcc-app .vehicle-image{height:88px!important}.wdcc-app .vehicle-card-body{min-height:126px!important;padding:8px 7px!important}
+ .wdcc-app .vehicle-card-body .eyebrow{font-size:6.5px!important}.wdcc-app .vehicle-title{font-size:9.7px!important;line-height:1.08!important}.wdcc-app .vehicle-price{margin-top:6px!important;font-size:15.5px!important}.wdcc-app .vehicle-payment{font-size:6.7px!important}.wdcc-app .spec-pills{display:none!important}.wdcc-app .card-badges{left:5px!important;top:5px!important}.wdcc-app .card-badges>span{min-height:15px!important;padding:0 4px!important;font-size:5.3px!important}
+ .wdcc-app .carousel-arrow{display:none!important}
+
+ .wdcc-app .how-section{padding:24px 12px 27px!important}.wdcc-app .how-section h2{font-size:27px!important}.wdcc-app .steps-grid{grid-template-columns:1fr!important;gap:7px!important}.wdcc-app .steps-grid article{min-height:72px!important;padding:11px 12px!important;display:grid!important;grid-template-columns:28px 1fr!important;grid-template-rows:auto auto!important;column-gap:11px!important;align-items:center!important}.wdcc-app .steps-grid article>span{grid-row:1/3!important;width:28px!important;height:28px!important}.wdcc-app .steps-grid h3{margin:0 0 3px!important;font-size:9.5px!important}.wdcc-app .steps-grid p{margin:0!important;font-size:8.5px!important}
+
+ .wdcc-app .trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.wdcc-app .trust-grid article{min-height:78px!important;padding:11px 10px!important;justify-content:flex-start!important}.wdcc-app .trust-grid article:nth-child(2n){border-right:0!important}.wdcc-app .trust-grid h3{font-size:8.6px!important}.wdcc-app .trust-grid p{font-size:7.8px!important}.wdcc-app .trust-icon,.wdcc-app .trust-avatar{width:31px!important;height:31px!important;min-width:31px!important;font-size:9px!important}
+ .wdcc-app .site-footer{min-height:100px!important;padding:18px 14px!important;grid-template-columns:1fr auto!important;gap:10px!important}.wdcc-app .footer-links{grid-column:1/-1!important}.wdcc-app .site-footer strong{font-size:9px!important}.wdcc-app .site-footer span,.wdcc-app .footer-links a{font-size:7.5px!important}.wdcc-app .site-footer>a{font-size:9.5px!important}
+ .wdcc-app .mobile-action-bar{display:none!important}
 }
+
+@media(max-width:380px){.wdcc-app .hero{min-height:550px!important;background-position:71% center!important}.wdcc-app .hero-copy{top:57px!important;max-width:310px!important}.wdcc-app .hero h1{font-size:36px!important}.wdcc-app .hero-lead{max-width:270px!important;font-size:11px!important}.wdcc-app .hero-actions{width:268px!important}.wdcc-app .logo-button{width:78px!important;height:78px!important}}
+
+@media(prefers-reduced-motion:reduce){.wdcc-app>.intro-sequence{display:none!important}}
