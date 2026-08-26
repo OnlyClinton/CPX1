@@ -1,0 +1,67 @@
+name: WDCC One Shot Source Corrector
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-one-shot-source-corrector
+  cancel-in-progress: true
+
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Enforce owner source and consolidated proof contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('app/ReferenceCloneHome.tsx')
+          s=p.read_text()
+          old='<div className="rh-hero-actions"><Link className="rh-btn red" href="/inventory">Browse cars →</Link><Link className="rh-btn dark" href="/get-approved?source=hero-get-approved">Get approved →</Link></div>'
+          new='<div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link><Link className="rh-btn dark" href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY</Link></div>'
+          if old in s:
+              p.write_text(s.replace(old,new,1))
+          elif new not in s:
+              raise SystemExit('CTA_SOURCE_PATTERN_NOT_FOUND')
+
+          p=Path('.github/workflows/wdcc-immutable-visual-acceptance.yml')
+          s=p.read_text()
+          old="""              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              const intro=m.locator('.li');
+              if(await intro.count()){"""
+          new="""              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});
+              const intro=m.locator('.li');
+              await intro.waitFor({state:'attached',timeout:5000});
+              if(await intro.count()){ """
+          if old in s:
+              p.write_text(s.replace(old,new,1))
+          elif new not in s:
+              raise SystemExit('CONSOLIDATED_INTRO_CAPTURE_PATTERN_NOT_FOUND')
+          PY
+          grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
+          grep -q "visual-mobile=.*waitUntil:'commit'" .github/workflows/wdcc-immutable-visual-acceptance.yml
+          grep -q "intro.waitFor({state:'attached',timeout:5000})" .github/workflows/wdcc-immutable-visual-acceptance.yml
+      - name: Commit correction only when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app/ReferenceCloneHome.tsx .github/workflows/wdcc-immutable-visual-acceptance.yml; then
+            echo 'Owner source and consolidated proof contract already correct.'
+            exit 0
+          fi
+          git config user.name 'wdcc-visual-gate'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add app/ReferenceCloneHome.tsx .github/workflows/wdcc-immutable-visual-acceptance.yml
+          git commit -m 'fix(wdcc): make immutable visual acceptance intro race-safe'
+          git push origin HEAD:fix/wdcc-locked-contract-20260826
