@@ -1,0 +1,60 @@
+name: WDCC Edge Asset Diagnose
+
+on:
+  push:
+    branches: [qa/wdcc-edge-asset-diagnose-20260826]
+    paths: ['.github/workflows/wdcc-edge-asset-diagnose.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: https://wdcc-preview.clico-global.workers.dev
+      EXPECTED_HERO_SIZE: '145504'
+      EXPECTED_HERO_SHA256: 1d7a0e4fced7450f2bbc66443d44b1f35bd9e24a6366308362aafa65576d3eb2
+    steps:
+      - name: Inspect current corrected Worker
+        shell: bash
+        run: |
+          set -u
+          echo '=== HOME ==='
+          HOME_CODE="$(curl -sS -L -D /tmp/home.h -o /tmp/home.html -w '%{http_code}' "$URL/?edge-diag=$GITHUB_RUN_ID" || true)"
+          echo "HOME_CODE=$HOME_CODE HOME_BYTES=$(wc -c </tmp/home.html 2>/dev/null || echo 0)"
+          echo "HOME_BRAND=$(grep -qi 'we don.t care' /tmp/home.html && echo yes || echo no)"
+          echo "HOME_HERO_REF=$(grep -q 'wdcc-hero-v2.webp' /tmp/home.html && echo yes || echo no)"
+          echo "HOME_LOGO_REF=$(grep -q 'wdcc-logo-transparent.webp' /tmp/home.html && echo yes || echo no)"
+
+          echo '=== HERO ==='
+          HERO_CODE="$(curl -sS -L -D /tmp/hero.h -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?edge-diag=$GITHUB_RUN_ID" || true)"
+          HERO_BYTES="$(wc -c </tmp/hero.webp 2>/dev/null || echo 0)"
+          HERO_SHA="$(sha256sum /tmp/hero.webp 2>/dev/null | awk '{print $1}')"
+          echo "HERO_CODE=$HERO_CODE HERO_BYTES=$HERO_BYTES HERO_SHA=$HERO_SHA"
+          grep -iE '^(content-type|content-length|content-encoding|cache-control|etag):' /tmp/hero.h || true
+
+          echo '=== LOGO ==='
+          LOGO_CODE="$(curl -sS -L -D /tmp/logo.h -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?edge-diag=$GITHUB_RUN_ID" || true)"
+          echo "LOGO_CODE=$LOGO_CODE LOGO_BYTES=$(wc -c </tmp/logo.webp 2>/dev/null || echo 0) LOGO_SHA=$(sha256sum /tmp/logo.webp 2>/dev/null | awk '{print $1}')"
+          grep -iE '^(content-type|content-length|content-encoding|cache-control|etag):' /tmp/logo.h || true
+
+          echo '=== FALLBACK ==='
+          FALLBACK_CODE="$(curl -sS -L -D /tmp/fallback.h -o /tmp/fallback.webp -w '%{http_code}' "$URL/assets/cars/2004-nissan-350z-1.webp?edge-diag=$GITHUB_RUN_ID" || true)"
+          echo "FALLBACK_CODE=$FALLBACK_CODE FALLBACK_BYTES=$(wc -c </tmp/fallback.webp 2>/dev/null || echo 0) FALLBACK_SHA=$(sha256sum /tmp/fallback.webp 2>/dev/null | awk '{print $1}')"
+
+          echo '=== INVENTORY ==='
+          INV_CODE="$(curl -sS -L -D /tmp/inv.h -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?edge-diag=$GITHUB_RUN_ID" || true)"
+          echo "INV_CODE=$INV_CODE INV_BYTES=$(wc -c </tmp/inventory.json 2>/dev/null || echo 0)"
+          head -c 500 /tmp/inventory.json || true
+          echo
+
+          echo '=== DEALER ==='
+          DEALER_CODE="$(curl -sS -L -D /tmp/dealer.h -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?edge-diag=$GITHUB_RUN_ID" || true)"
+          echo "DEALER_CODE=$DEALER_CODE DEALER_BYTES=$(wc -c </tmp/dealer.html 2>/dev/null || echo 0) DEALER_MARKER=$(grep -qi dealer /tmp/dealer.html && echo yes || echo no)"
+
+          echo '=== EXPECTED ==='
+          echo "EXPECTED_HERO_SIZE=$EXPECTED_HERO_SIZE"
+          echo "EXPECTED_HERO_SHA256=$EXPECTED_HERO_SHA256"
