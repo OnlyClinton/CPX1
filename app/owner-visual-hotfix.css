@@ -4,47 +4,56 @@
 html body .li{position:fixed!important;inset:0!important;width:100vw!important;height:100dvh!important;background:#050d14!important;overflow:hidden!important;opacity:1;transition:opacity .24s ease!important}
 html body .li-exit{opacity:0!important;pointer-events:none!important}
 html body .li-scene{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;background:#050d14!important;overflow:hidden!important}
-html body .li-scene img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;object-position:68% 42%!important;filter:saturate(1.18) contrast(1.02) brightness(1.16)!important;transform:none!important;animation:none!important}
-html body .li-scene:after{content:""!important;position:absolute!important;inset:0!important;background:linear-gradient(180deg,rgba(1,6,10,.02) 0%,rgba(1,6,10,.02) 56%,rgba(1,6,10,.20) 78%,rgba(1,6,10,.48) 100%)!important}
+html body .li-scene img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;object-position:68% 42%!important;filter:saturate(1.24) contrast(1.03) brightness(1.20)!important;transform:none!important;animation:none!important}
+html body .li-scene:after{content:""!important;position:absolute!important;inset:0!important;background:linear-gradient(180deg,rgba(1,6,10,.01) 0%,rgba(1,6,10,.01) 58%,rgba(1,6,10,.16) 80%,rgba(1,6,10,.44) 100%)!important}
 html body .li-badge{position:absolute!important;left:50%!important;top:42%!important;width:clamp(190px,34vw,270px)!important;height:auto!important;aspect-ratio:1!important;display:grid!important;place-items:center!important;border-radius:50%!important;background:#fff!important;box-shadow:0 14px 38px rgba(0,0,0,.38),0 0 0 3px rgba(255,255,255,.86)!important;transform:translate(-50%,-50%)!important;animation:none!important;transition:none!important}
 html body .li-badge img{display:block!important;width:96%!important;height:96%!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;filter:none!important;transform:none!important;animation:none!important}
 html body .li-tag{left:50%!important;top:63%!important;transform:translateX(-50%)!important;font-size:14px!important;letter-spacing:.11em!important;color:#fff!important;white-space:nowrap!important;text-shadow:0 2px 12px rgba(0,0,0,.72)!important}
 html body .li-skip{right:18px!important;bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px))!important;min-height:44px!important;font-size:12px!important}
 
-/* Header: compact enough to leave room for the hero, but logo must read clearly. */
-html body main.reference-home.locked-storefront .rh-utility{display:none!important}
-html body main.reference-home.locked-storefront{padding-top:82px!important}
-html body main.reference-home.locked-storefront header.rh-header{position:fixed!important;top:0!important;left:0!important;right:0!important;height:82px!important;min-height:82px!important;z-index:5000!important;background:#030a10!important}
+/* Utility + header remain in normal flow and pin as a coherent sticky stack. */
+html body main.reference-home.locked-storefront{padding-top:0!important}
+html body main.reference-home.locked-storefront .rh-utility{display:block!important;position:sticky!important;top:0!important;z-index:5001!important;height:28px!important;min-height:28px!important;max-height:28px!important;overflow:hidden!important;background:#07121c!important}
+html body main.reference-home.locked-storefront .rh-utility-inner{display:flex!important;align-items:center!important;height:28px!important;min-height:28px!important}
+html body main.reference-home.locked-storefront header.rh-header{position:sticky!important;top:28px!important;left:auto!important;right:auto!important;height:82px!important;min-height:82px!important;z-index:5000!important;background:#030a10!important}
 html body main.reference-home.locked-storefront header.rh-header .rh-header-inner{height:82px!important;display:grid!important;grid-template-columns:64px 1fr 104px!important;align-items:center!important;padding:0 12px!important;gap:4px!important}
 html body main.reference-home.locked-storefront header.rh-header .rh-logo{width:118px!important;height:82px!important;display:grid!important;place-items:center!important;justify-self:center!important;overflow:visible!important}
 html body main.reference-home.locked-storefront header.rh-header .rh-logo:before,html body main.reference-home.locked-storefront header.rh-header .rh-logo:after{display:none!important;content:none!important}
-html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:92px!important;height:92px!important;max-width:none!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;filter:drop-shadow(0 4px 10px rgba(0,0,0,.3))!important;transform:none!important}
+html body main.reference-home.locked-storefront header.rh-header .rh-logo img{content:url('/wdcc-official-logo.webp')!important;width:94px!important;height:94px!important;max-width:none!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;filter:drop-shadow(0 4px 10px rgba(0,0,0,.3))!important;transform:none!important}
 html body main.reference-home.locked-storefront header.rh-header .rh-menu{width:48px!important;height:48px!important;font-size:28px!important}
 html body main.reference-home.locked-storefront header.rh-header .rh-call{min-width:100px!important;height:46px!important;padding:0 13px!important;font-size:12px!important}
-html body main.reference-home.locked-storefront .rh-nav{top:82px!important}
+html body main.reference-home.locked-storefront .rh-nav{top:110px!important}
 
 /* Hero: skyline and whole Challenger first, then copy. */
 html body main.reference-home.locked-storefront section.rh-hero{position:relative!important;padding:0!important;min-height:0!important;height:auto!important;background:#02070c!important;overflow:hidden!important}
-html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:clamp(350px,57vw,470px)!important;object-fit:cover!important;object-position:68% 43%!important;filter:saturate(1.18) contrast(1.02) brightness(1.18)!important}
-html body main.reference-home.locked-storefront section.rh-hero .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;height:clamp(350px,57vw,470px)!important;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 70%,rgba(2,7,12,.22) 88%,#02070c 100%)!important}
+html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:clamp(350px,57vw,470px)!important;object-fit:cover!important;object-position:68% 43%!important;filter:saturate(1.26) contrast(1.04) brightness(1.22)!important}
+html body main.reference-home.locked-storefront section.rh-hero .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;height:clamp(350px,57vw,470px)!important;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 70%,rgba(2,7,12,.18) 88%,#02070c 100%)!important}
 html body main.reference-home.locked-storefront section.rh-hero:after{content:none!important;display:none!important}
 html body main.reference-home.locked-storefront section.rh-hero .rh-hero-inner{width:100%!important;min-height:0!important;display:block!important}
 html body main.reference-home.locked-storefront section.rh-hero .rh-copy{width:100%!important;max-width:760px!important;margin:0 auto!important;padding:24px 20px 30px!important;background:#02070c!important}
 html body main.reference-home.locked-storefront section.rh-hero h1{font-size:clamp(44px,7.2vw,64px)!important;line-height:.92!important;letter-spacing:-.045em!important;max-width:650px!important;margin-bottom:18px!important}
 html body main.reference-home.locked-storefront section.rh-hero .rh-lead{font-size:16px!important;line-height:1.48!important;max-width:590px!important}
 
+@media(min-width:1101px){
+ html body main.reference-home.locked-storefront header.rh-header{height:90px!important;min-height:90px!important}
+ html body main.reference-home.locked-storefront header.rh-header .rh-header-inner{height:90px!important;grid-template-columns:150px minmax(0,1fr) auto!important;gap:26px!important}
+ html body main.reference-home.locked-storefront header.rh-header .rh-logo{width:138px!important;height:90px!important}
+ html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:96px!important;height:96px!important}
+}
+
 @media(max-width:600px){
- html body .li-scene img{object-position:69% 42%!important;filter:saturate(1.18) contrast(1.01) brightness(1.20)!important}
+ html body .li-scene img{object-position:69% 42%!important;filter:saturate(1.26) contrast(1.02) brightness(1.23)!important}
  html body .li-badge{top:41%!important;width:min(58vw,224px)!important}
  html body .li-tag{top:61%!important;font-size:12px!important;letter-spacing:.09em!important}
- html body main.reference-home.locked-storefront{padding-top:78px!important}
- html body main.reference-home.locked-storefront header.rh-header{height:78px!important;min-height:78px!important}
+ html body main.reference-home.locked-storefront .rh-utility{height:28px!important;min-height:28px!important;max-height:28px!important}
+ html body main.reference-home.locked-storefront .rh-utility-inner{height:28px!important;min-height:28px!important;font-size:10px!important;gap:17px!important;padding:0 12px!important;overflow-x:auto!important;white-space:nowrap!important;scrollbar-width:none!important}
+ html body main.reference-home.locked-storefront header.rh-header{height:78px!important;min-height:78px!important;top:28px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-header-inner{height:78px!important;grid-template-columns:58px 1fr 98px!important;padding:0 10px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-logo{height:78px!important;width:108px!important}
- html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:86px!important;height:86px!important}
+ html body main.reference-home.locked-storefront header.rh-header .rh-logo img{width:90px!important;height:90px!important}
  html body main.reference-home.locked-storefront header.rh-header .rh-call{min-width:94px!important;height:44px!important;font-size:11px!important}
- html body main.reference-home.locked-storefront .rh-nav{top:78px!important}
- html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{height:390px!important;object-position:70% 42%!important;filter:saturate(1.18) contrast(1.02) brightness(1.20)!important}
+ html body main.reference-home.locked-storefront .rh-nav{top:106px!important}
+ html body main.reference-home.locked-storefront section.rh-hero .rh-hero-art{height:390px!important;object-position:70% 42%!important;filter:saturate(1.28) contrast(1.04) brightness(1.24)!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-shade{height:390px!important}
  html body main.reference-home.locked-storefront section.rh-hero .rh-copy{padding:22px 18px 28px!important}
  html body main.reference-home.locked-storefront section.rh-hero h1{font-size:clamp(43px,12vw,51px)!important;max-width:370px!important}
