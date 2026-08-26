@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {FormEvent,useEffect,useMemo,useState} from "react";
+import {FormEvent,useEffect,useState} from "react";
 import {createdAtOf,sourceLabel,stageLabels,stageOf,when,type LeadRecord} from "./crmFilters";
 
 type Vehicle=Record<string,any>;
@@ -32,7 +32,7 @@ export default function DealerDashboard(){
   const applications=Number(summary.applications??leads.filter(l=>String(l.kind||"").toLowerCase()==="approval").length);
   const approved=Number(summary.approved??leads.filter(l=>stageOf(l)==="approved").length);
   const sold=Number(summary.soldThisWeek??summary.sold??leads.filter(l=>stageOf(l)==="sold").length);
-  const sourceRows=useMemo(()=>{const m=new Map<string,number>();for(const l of leads){const s=sourceLabel(l)||"Website";m.set(s,(m.get(s)||0)+1)}const rows=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);const total=Math.max(1,rows.reduce((n,[,v])=>n+v,0));return rows.map(([name,value])=>({name,value,pct:Math.round(value/total*100)}))},[leads]);
+  const sourceRows=(()=>{const m=new Map<string,number>();for(const l of leads){const s=sourceLabel(l)||"Website";m.set(s,(m.get(s)||0)+1)}const rows=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);const total=Math.max(1,rows.reduce((n,[,v])=>n+v,0));return rows.map(([name,value])=>({name,value,pct:Math.round(value/total*100)}))})();
   const recent=[...leads].sort((a,b)=>new Date(createdAtOf(b)||0).getTime()-new Date(createdAtOf(a)||0).getTime()).slice(0,5);
   const topVehicles=[...inventory].sort((a,b)=>Number(b.views||b.leads||0)-Number(a.views||a.leads||0)).slice(0,5);
   const chartNew=[18,31,24,42,35,52,44],chartApproved=[10,21,16,30,22,35,31];
