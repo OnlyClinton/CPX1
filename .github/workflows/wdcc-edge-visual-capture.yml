@@ -1,0 +1,75 @@
+name: WDCC Edge Visual Capture
+
+on:
+  push:
+    branches: [qa/wdcc-edge-asset-diagnose-20260826]
+    paths: ['.github/workflows/wdcc-edge-visual-capture.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      URL: https://wdcc-preview.clico-global.workers.dev
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-visual
+          cd /tmp/wdcc-visual
+          npm init -y >/dev/null
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Capture corrected Worker mobile and desktop
+        shell: bash
+        working-directory: /tmp/wdcc-visual
+        run: |
+          set -euo pipefail
+          mkdir -p screens
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          const fs=require('fs');
+          const url=process.env.URL;
+          async function capture(name,viewport){
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport,deviceScaleFactor:1});
+            const page=await context.newPage();
+            const failures=[];
+            page.on('response',r=>{if(r.status()>=400)failures.push({status:r.status(),url:r.url()})});
+            page.on('pageerror',e=>failures.push({pageerror:String(e)}));
+            await page.goto(url+'/?visual-capture='+Date.now()+'-'+name,{waitUntil:'domcontentloaded',timeout:45000});
+            await page.waitForTimeout(800);
+            await page.screenshot({path:`screens/${name}-intro.png`,fullPage:false});
+            await page.waitForTimeout(2800);
+            await page.screenshot({path:`screens/${name}-home.png`,fullPage:false});
+            await page.screenshot({path:`screens/${name}-home-full.png`,fullPage:true});
+            const metrics=await page.evaluate(()=>{
+              const hero=document.querySelector('.rh-hero-art');
+              const logo=document.querySelector('.rh-logo img');
+              const h1=document.querySelector('.rh-copy h1');
+              const actions=document.querySelector('.rh-hero-actions');
+              const cards=[...document.querySelectorAll('.rh-card img')];
+              const info=(el)=>el?{rect:(()=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom}})(),src:el instanceof HTMLImageElement?el.currentSrc:null,naturalWidth:el instanceof HTMLImageElement?el.naturalWidth:null,naturalHeight:el instanceof HTMLImageElement?el.naturalHeight:null}:null;
+              return {viewport:{width:innerWidth,height:innerHeight},hero:info(hero),logo:info(logo),headline:info(h1),actions:info(actions),cardImages:cards.map(info),bodyHeight:document.body.scrollHeight};
+            });
+            fs.writeFileSync(`screens/${name}-metrics.json`,JSON.stringify({metrics,failures},null,2));
+            await browser.close();
+          }
+          (async()=>{
+            await capture('mobile',{width:390,height:844});
+            await capture('desktop',{width:1440,height:1000});
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-corrected-worker-visuals
+          path: /tmp/wdcc-visual/screens
+          retention-days: 3
