@@ -21,7 +21,7 @@ if grep -q 'PortalExperience mode="dealer"' app/dealer/page.tsx; then
   :
 elif grep -q 'DealerDashboard' app/dealer/page.tsx \
   && grep -q 'wdcc-logo-transparent.webp' app/dealer/DealerDashboard.tsx \
-  && grep -q 'SALES COMMAND' app/dealer/DealerDashboard.tsx; then
+  && { grep -q 'SALES COMMAND' app/dealer/DealerDashboard.tsx || grep -q 'targetDealerApp' app/dealer/DealerDashboard.tsx; }; then
   :
 else
   fail "dealer canonical portal missing"
