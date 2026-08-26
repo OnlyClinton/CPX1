@@ -1,36 +1,30 @@
 name: WDCC Cloudflare Preview
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches:
+      - preview/wdcc-exact-mockup-20260826
+      - dev/wdcc-cinematic-mockup-v1
   workflow_dispatch:
-    inputs:
-      source_ref:
-        description: Git ref to preview
-        required: false
-        default: release/wdcc-mockup-final-2
 
 permissions:
   contents: read
 
 concurrency:
-  group: wdcc-cloudflare-preview-${{ github.event.pull_request.number || github.run_id }}
+  group: wdcc-cloudflare-preview
   cancel-in-progress: true
 
 jobs:
   preview:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'preview/wdcc-') || startsWith(github.head_ref, 'dev/wdcc-') || startsWith(github.head_ref, 'release/wdcc-mockup-')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout requested preview source
+      - name: Checkout preview source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || inputs.source_ref || 'release/wdcc-mockup-final-2' }}
           fetch-depth: 1
 
       - uses: actions/setup-node@v4
@@ -45,7 +39,7 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Install exact source and Cloudflare adapter
+      - name: Install source and Cloudflare adapter
         shell: bash
         run: |
           set -euo pipefail
