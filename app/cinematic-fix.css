@@ -82,14 +82,65 @@ html,body{max-width:100%;overflow-x:hidden!important}
   justify-content:space-between!important;
   gap:24px!important;
 }
+.screenshotContract .featured-carousel{
+  position:relative!important;
+  display:block!important;
+  height:auto!important;
+  min-height:0!important;
+  overflow:visible!important;
+}
 .screenshotContract .featured-grid{
+  position:relative!important;
   display:grid!important;
   grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;
+  align-items:stretch!important;
   gap:13px!important;
   width:100%!important;
+  height:auto!important;
+  min-height:0!important;
 }
-.screenshotContract .featured-slide{display:block!important;min-width:0!important;width:auto!important}
-.screenshotContract .vehicle-image{height:178px!important}
+.screenshotContract .featured-slide{
+  position:relative!important;
+  inset:auto!important;
+  top:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  left:auto!important;
+  display:block!important;
+  min-width:0!important;
+  width:auto!important;
+  height:auto!important;
+  opacity:1!important;
+  transform:none!important;
+}
+.screenshotContract .vehicle-card{
+  position:relative!important;
+  display:flex!important;
+  flex-direction:column!important;
+  height:100%!important;
+  min-height:0!important;
+  overflow:hidden!important;
+}
+.screenshotContract .vehicle-image{position:relative!important;display:block!important;height:178px!important;flex:0 0 178px!important}
+.screenshotContract .card-badges{position:absolute!important;left:10px!important;bottom:10px!important;z-index:4!important;display:flex!important;gap:6px!important}
+.screenshotContract .vehicle-card-body{
+  position:relative!important;
+  display:flex!important;
+  flex:1 1 auto!important;
+  flex-direction:column!important;
+  min-height:150px!important;
+  padding:14px!important;
+  background:#fff!important;
+}
+.screenshotContract .vehicle-card-body .eyebrow,
+.screenshotContract .vehicle-title,
+.screenshotContract .vehicle-price,
+.screenshotContract .vehicle-payment{display:block!important}
+.screenshotContract .vehicle-title{margin-top:2px!important}
+.screenshotContract .vehicle-price{margin-top:7px!important}
+.screenshotContract .vehicle-payment{margin:5px 0 0!important}
+.screenshotContract .spec-pills{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin-top:auto!important;padding-top:10px!important}
+.screenshotContract .spec-pills span{display:inline-flex!important;align-items:center!important;min-height:20px!important;padding:3px 7px!important}
 .screenshotContract .steps-grid{
   display:grid!important;
   grid-template-columns:repeat(4,minmax(0,1fr))!important;
@@ -105,7 +156,6 @@ html,body{max-width:100%;overflow-x:hidden!important}
   visibility:visible!important;
 }
 .screenshotContract .vehicle-image{
-  position:relative!important;
   overflow:hidden!important;
   background:#111b25!important;
 }
@@ -150,11 +200,13 @@ html,body{max-width:100%;overflow-x:hidden!important}
     visibility:visible!important;
   }
   .screenshotContract .mobile-menu>span{
+    position:static!important;
     display:grid!important;
     width:20px!important;
     gap:4px!important;
   }
   .screenshotContract .mobile-menu i{
+    position:static!important;
     display:block!important;
     width:20px!important;
     height:2px!important;
@@ -162,6 +214,7 @@ html,body{max-width:100%;overflow-x:hidden!important}
     border-radius:2px!important;
     background:#fff!important;
     opacity:1!important;
+    transform:none!important;
   }
   .screenshotContract .mobile-call svg{
     display:block!important;
@@ -174,10 +227,12 @@ html,body{max-width:100%;overflow-x:hidden!important}
 
   .screenshotContract .screenshotInventory .section-heading,
   .screenshotContract .screenshotHow .section-heading{display:block!important}
+  .screenshotContract .featured-carousel{overflow:visible!important}
   .screenshotContract .featured-grid{display:block!important;width:100%!important}
   .screenshotContract .featured-slide{display:none!important}
-  .screenshotContract .featured-slide.active{display:block!important}
-  .screenshotContract .vehicle-image{height:205px!important}
+  .screenshotContract .featured-slide.active{display:block!important;position:relative!important}
+  .screenshotContract .vehicle-image{height:205px!important;flex-basis:205px!important}
+  .screenshotContract .vehicle-card-body{min-height:145px!important}
   .screenshotContract .steps-grid{display:grid!important;grid-template-columns:1fr!important;gap:0!important}
 }
 @media(max-width:560px){
