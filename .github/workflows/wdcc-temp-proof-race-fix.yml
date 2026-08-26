@@ -1,0 +1,59 @@
+name: WDCC Temporary Proof Race Fix
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-temp-proof-race-fix
+  cancel-in-progress: true
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Make intro capture race-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-immutable-visual-acceptance.yml')
+          s=p.read_text()
+          old="await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});"
+          new="await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});"
+          if old in s:
+              s=s.replace(old,new,1)
+          elif new not in s:
+              raise SystemExit('VISUAL_MOBILE_GOTO_NOT_FOUND')
+          marker="const intro=m.locator('.li');"
+          wait="await intro.waitFor({state:'attached',timeout:5000});"
+          if wait not in s:
+              if marker not in s:
+                  raise SystemExit('INTRO_MARKER_NOT_FOUND')
+              s=s.replace(marker,marker+"\n              "+wait,1)
+          p.write_text(s)
+          PY
+          grep -q "visual-mobile=.*waitUntil:'commit'" .github/workflows/wdcc-immutable-visual-acceptance.yml
+          grep -q "intro.waitFor({state:'attached',timeout:5000})" .github/workflows/wdcc-immutable-visual-acceptance.yml
+      - name: Commit proof harness correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/wdcc-immutable-visual-acceptance.yml; then
+            echo 'Immutable proof harness already race-safe.'
+            exit 0
+          fi
+          git config user.name 'wdcc-visual-gate'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add .github/workflows/wdcc-immutable-visual-acceptance.yml
+          git commit -m 'fix(wdcc): capture static intro before timer expiry'
+          git pull --rebase origin fix/wdcc-locked-contract-20260826
+          git push origin HEAD:fix/wdcc-locked-contract-20260826
