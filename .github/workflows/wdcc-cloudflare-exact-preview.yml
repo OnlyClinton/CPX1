@@ -48,6 +48,7 @@ jobs:
           test "$(git hash-object public/assets/cars/2019-honda-pilot-1.webp)" = "6136629dac1b352a150587d598e8cdfc2bbd00d9"
           test "$(git hash-object public/assets/cars/2019-kia-sportage-1.webp)" = "7c856e619e8e7a41350be901d49f3b91327345c6"
           test "$(git hash-object public/assets/cars/2019-toyota-rav4-1.webp)" = "72caad4d39e48b21c954388bcd75642e0300d75d"
+          test ! -e 'app/assets/cars/[filename]/route.ts'
           grep -q 'bad-credit' app/Exact2vfDHome.tsx
           grep -q 'Start Pre-Approval' app/Exact2vfDHome.tsx
           echo 'PROVEN_VISUAL_ASSETS=PASS'
