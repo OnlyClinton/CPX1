@@ -49,6 +49,7 @@ jobs:
           grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'owner-visual-polish.css' app/layout.tsx
+          grep -q 'owner-visual-hotfix.css' app/layout.tsx
           ! grep -q 'brand-hero-final.css' app/layout.tsx
           ! grep -q 'owner-optical-final.css' app/layout.tsx
           ! grep -q 'preview-visual-corrections.css' app/layout.tsx
@@ -138,13 +139,13 @@ jobs:
               const intro=await p.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el),b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,clipPath:s.clipPath,opacity:s.opacity,w:b.width}});
               if(!intro.src.includes('wdcc-official-logo.webp')||!String(intro.clipPath).includes('circle')||Number(intro.opacity)<.9||intro.w<120)throw Error(`INTRO_BAD ${JSON.stringify(intro)}`);
               await p.screenshot({path:'visual-proof/mobile-intro.png'}); await waitIntroDone(p); await waitImg(p,'.rh-logo img',200);
-              const before=await p.evaluate(()=>{const r=s=>document.querySelector(s)?.getBoundingClientRect(),st=s=>getComputedStyle(document.querySelector(s));return{logoSrc:document.querySelector('.rh-logo img')?.currentSrc||'',logoW:r('.rh-logo img')?.width||0,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card')?.width||0,utilityTop:r('.rh-utility')?.top,utilityH:r('.rh-utility')?.height,headerTop:r('.rh-header')?.top,headerPosition:st('.rh-header').position,utilityPosition:st('.rh-utility').position}});
-              if(!before.logoSrc.includes('wdcc-official-logo.webp')||before.logoW<70||before.menu==='none'||before.grid!=='flex'||before.cardW>360)throw Error(`MOBILE_LAYOUT_BAD ${JSON.stringify(before)}`);
-              if(!['fixed','sticky'].includes(before.headerPosition)||!['fixed','sticky'].includes(before.utilityPosition))throw Error(`MOBILE_PIN_MODE_BAD ${JSON.stringify(before)}`);
-              if(Math.abs(Number(before.utilityTop||0))>2||Math.abs(Number(before.headerTop||0)-Number(before.utilityH||0))>3)throw Error(`MOBILE_STACK_TOP_BAD ${JSON.stringify(before)}`);
-              await p.evaluate(()=>scrollTo(0,700)); await p.waitForTimeout(160);
-              const after=await p.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top}});
-              if(Math.abs(after.uTop)>2||Math.abs(after.hTop-after.uH)>3)throw Error(`MOBILE_STACK_SCROLL_BAD ${JSON.stringify(after)}`);
+              const before=await p.evaluate(()=>{const r=s=>document.querySelector(s)?.getBoundingClientRect(),st=s=>getComputedStyle(document.querySelector(s));return{logoSrc:document.querySelector('.rh-logo img')?.currentSrc||'',logoW:r('.rh-logo img')?.width||0,menu:st('.rh-menu').display,grid:st('.rh-grid').display,cardW:r('.rh-card')?.width||0,utilityDisplay:st('.rh-utility').display,utilityTop:r('.rh-utility')?.top,utilityH:r('.rh-utility')?.height,headerTop:r('.rh-header')?.top,headerPosition:st('.rh-header').position,utilityPosition:st('.rh-utility').position}});
+              if(!before.logoSrc.includes('wdcc-official-logo.webp')||before.logoW<88||before.menu==='none'||before.grid!=='flex'||before.cardW>360)throw Error(`MOBILE_LAYOUT_BAD ${JSON.stringify(before)}`);
+              if(before.utilityDisplay==='none'||before.utilityH<24)throw Error(`MOBILE_UTILITY_COLLAPSED ${JSON.stringify(before)}`);
+              if(before.headerPosition!=='sticky'||before.utilityPosition!=='sticky')throw Error(`MOBILE_PIN_MODE_BAD ${JSON.stringify(before)}`);
+              await p.evaluate(()=>scrollTo(0,700)); await p.waitForTimeout(180);
+              const after=await p.evaluate(()=>{const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect();return{uTop:u.top,uH:u.height,hTop:h.top,hH:h.height}});
+              if(Math.abs(after.uTop)>2||after.uH<24||Math.abs(after.hTop-after.uH)>3)throw Error(`MOBILE_STACK_SCROLL_BAD ${JSON.stringify(after)}`);
               await p.evaluate(()=>scrollTo(0,0)); await p.waitForTimeout(100);
               const h1=p.locator('.rh-copy h1'),hb=await h1.boundingBox();if(await h1.locator('span').count()!==3||!hb||hb.x<0||hb.x+hb.width>390)throw Error(`MOBILE_HEADLINE_BAD ${JSON.stringify(hb)}`);
               const hero=await p.locator('.rh-hero-art').boundingBox(),copy=await p.locator('.rh-copy').boundingBox();if(!hero||!copy||hero.height>420||copy.height>500)throw Error(`MOBILE_SCALE_BAD ${JSON.stringify({hero,copy})}`);
@@ -152,7 +153,7 @@ jobs:
               await p.screenshot({path:'visual-proof/mobile-hero.png'});await p.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});proof.mobile={intro,before,after,hb,hero,copy,errors};await m.close();
 
               const d=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});const q=await d.newPage();await q.goto(`${url}/?d=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await waitImg(q,'.li-scene img',1000);await waitImg(q,'.li-badge img',200);await q.waitForTimeout(650);await q.screenshot({path:'visual-proof/desktop-intro.png'});await waitIntroDone(q);await waitImg(q,'.rh-logo img',200);
-              const dl=await q.locator('.rh-logo img').evaluate(el=>{const b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,w:b.width}});if(!dl.src.includes('wdcc-official-logo.webp')||dl.w<80)throw Error(`DESKTOP_LOGO_BAD ${JSON.stringify(dl)}`);
+              const dl=await q.locator('.rh-logo img').evaluate(el=>{const b=el.getBoundingClientRect();return{src:el.currentSrc||el.src,w:b.width}});if(!dl.src.includes('wdcc-official-logo.webp')||dl.w<88)throw Error(`DESKTOP_LOGO_BAD ${JSON.stringify(dl)}`);
               const dh=q.locator('.rh-copy h1'),db=await dh.boundingBox();if(!db||db.x<0||db.x+db.width>1440)throw Error('DESKTOP_HEADLINE_BAD');const comp=await q.evaluate(()=>({grid:getComputedStyle(document.querySelector('.rh-grid')).display,menu:getComputedStyle(document.querySelector('.rh-menu')).display}));if(comp.grid!=='grid'||comp.menu!=='none')throw Error(`DESKTOP_LAYOUT_BAD ${JSON.stringify(comp)}`);
               await q.screenshot({path:'visual-proof/desktop-hero.png'});await q.screenshot({path:'visual-proof/desktop-full.png',fullPage:true});proof.desktop={dl,db,comp};
               const dealer=await d.newPage();await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await dealer.waitForTimeout(800);await dealer.screenshot({path:'visual-proof/dealer.png'});proof.dealer={url:dealer.url(),title:await dealer.title()};await d.close();
@@ -170,7 +171,7 @@ jobs:
           echo '### WDCC final-perfect visual proof' >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Official round badge, pinned mobile header, mobile carousel and static intro are behaviorally verified.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Official round badge, visible sticky utility/header stack, mobile carousel and static intro are behaviorally verified.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No production route, alias, DNS, or provider setting changed.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
