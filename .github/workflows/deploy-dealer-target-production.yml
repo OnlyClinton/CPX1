@@ -62,15 +62,19 @@ jobs:
           vercel build --prod --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
           test -d .vercel/output
 
-      - name: Deploy prebuilt artifact to dealer project only
+      - name: Deploy archived prebuilt artifact to dealer project only
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" | tail -1)"
+          log=/tmp/vercel-deploy.log
+          if ! vercel deploy --prebuilt --prod --yes --archive=tgz --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee "$log"; then
+            exit 1
+          fi
+          url="$(grep -Eo 'https://wdcc-dealer-portal-[A-Za-z0-9-]+\.vercel\.app' "$log" | tail -1)"
+          test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Dealer deployment: $url"
-          case "$url" in https://wdcc-dealer-portal-*.vercel.app) ;; *) echo "Unexpected deployment URL: $url" >&2; exit 1;; esac
 
       - name: Verify dealer project alias and target markers
         id: verify
@@ -119,7 +123,7 @@ jobs:
           dealer.wedontcarecars.com HTTP: \`$LIVE_HTTP\`
           dealer.wedontcarecars.com visual target: **$LIVE_TARGET**
 
-          This workflow deploys only the dealer Vercel project. It does not modify the WDCC customer storefront project or apex aliases.
+          Prebuilt output was uploaded as one tgz archive to avoid Vercel Hobby file-upload quota. This workflow deploys only the dealer Vercel project and does not modify the WDCC customer storefront project or apex aliases.
           EOF
           )
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target production ${GITHUB_RUN_ID}" --body "$body" || true
