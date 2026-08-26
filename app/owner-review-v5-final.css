@@ -1,4 +1,19 @@
 /* V5 hard lock: beats legacy element-qualified selectors. Load last. */
+
+/* Owner CTA hierarchy: approval is primary; inventory is secondary. Keep link destinations unchanged. */
+html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actions>.rh-btn.dark{
+  order:1!important;background:#f2263d!important;border-color:#f2263d!important;color:#fff!important;box-shadow:0 7px 18px rgba(242,38,61,.18)!important;font-size:0!important;
+}
+html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actions>.rh-btn.dark::before{
+  content:"GET PRE-APPROVED →"!important;font-size:11px!important;font-weight:950!important;letter-spacing:.01em!important;
+}
+html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actions>.rh-btn.red{
+  order:2!important;background:#081622!important;border-color:#415466!important;color:#fff!important;box-shadow:none!important;font-size:0!important;
+}
+html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actions>.rh-btn.red::before{
+  content:"BROWSE INVENTORY →"!important;font-size:11px!important;font-weight:950!important;letter-spacing:.01em!important;
+}
+
 @media(max-width:760px){
   html body main.reference-home.locked-storefront.locked-storefront>header.rh-header.rh-header{
     position:sticky!important;top:22px!important;height:68px!important;min-height:68px!important;max-height:68px!important;z-index:5000!important;
@@ -47,6 +62,15 @@
     font-size:1em!important;letter-spacing:-.055em!important;transform:scaleX(.86)!important;transform-origin:left center!important;
   }
   html body main.reference-home.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-lead.rh-lead{font-size:14px!important;line-height:1.42!important;max-width:350px!important}
+
+  /* Be explicit that V5 may show the verified real-data snapshot while the provider feed is reconnecting. */
+  html body main.reference-home.locked-storefront.locked-storefront .rh-inventory .rh-section-head>p{
+    font-size:0!important;line-height:0!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront .rh-inventory .rh-section-head>p::after{
+    content:"Real inventory data · latest verified snapshot only if the live feed is reconnecting."!important;
+    display:block!important;max-width:350px!important;font-size:11px!important;line-height:1.34!important;color:#65737e!important;
+  }
 
   html body .commandStrip.commandStrip{display:flex!important;position:sticky!important;top:0!important;height:22px!important;min-height:22px!important;max-height:22px!important;z-index:6001!important}
   html body header.premiumHeader.premiumHeader{position:sticky!important;top:22px!important;height:68px!important;min-height:68px!important;max-height:68px!important;z-index:6000!important}
