@@ -95,7 +95,7 @@ html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actio
     max-width:350px!important;margin:8px 0 12px!important;font-size:46px!important;line-height:.95!important;letter-spacing:-.055em!important;
   }
 
-  /* Keep quick actions present but less obstructive over forms/cards. */
+  /* VDP keeps the compact quick actions; inventory and lead forms already contain their own CTAs. */
   html body .stickyCtaBar.stickyCtaBar{
     height:44px!important;min-height:44px!important;max-height:44px!important;grid-template-columns:1fr 1fr .82fr!important;
     box-shadow:0 -5px 16px rgba(0,0,0,.20)!important;
@@ -103,7 +103,11 @@ html body main.reference-home.locked-storefront.locked-storefront .rh-hero-actio
   html body .stickyCtaBar.stickyCtaBar a{
     height:44px!important;min-height:44px!important;font-size:8.75px!important;
   }
+  html body:has(main>.inventoryTop)>.stickyCtaBar,
+  html body:has(main.section.light>.wrap.leadPage)>.stickyCtaBar{
+    display:none!important;
+  }
   html body main>.inventoryTop+.section.light,
-  html body main.section.light:has(>.wrap.leadPage),
+  html body main.section.light:has(>.wrap.leadPage){padding-bottom:28px!important}
   html body main.vdp-page{padding-bottom:68px!important}
 }
