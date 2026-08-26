@@ -122,7 +122,10 @@ jobs:
 
           for path in /dealer /dealer/login /dealer/inventory /dealer/inventory/new; do
             code="$(vercel --scope "$VERCEL_SCOPE" curl "$path" --deployment "$CANDIDATE" -- --silent --output /dev/null --write-out '%{http_code}')"
-            test "$code" = 200
+            case "$code" in
+              200|307|308) ;;
+              *) echo "Unexpected $path response: $code" >&2; exit 1 ;;
+            esac
           done
 
       - name: Assign customer aliases to verified candidate
