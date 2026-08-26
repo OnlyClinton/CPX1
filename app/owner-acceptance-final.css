@@ -19,6 +19,21 @@ html body main.reference-home.locked-storefront>header.rh-header{
 html body main.reference-home.locked-storefront>header.rh-header>.rh-header-inner{height:var(--accept-header)!important}
 html body main.reference-home.locked-storefront .rh-nav{top:var(--accept-stack)!important}
 
+/* Locked CTA hierarchy: pre-approval is always the primary action. */
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.red{
+  order:2!important;background:#07121c!important;color:#fff!important;border:1px solid #647482!important;font-size:0!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.red::after{
+  content:"BROWSE INVENTORY  →";font-size:12px!important;font-weight:950!important;letter-spacing:.01em!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.dark{
+  order:1!important;background:#f2263d!important;color:#fff!important;border:1px solid #f2263d!important;font-size:0!important;
+  box-shadow:0 8px 24px rgba(242,38,61,.22)!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.dark::after{
+  content:"GET PRE-APPROVED  →";font-size:12px!important;font-weight:950!important;letter-spacing:.01em!important;
+}
+
 @media(max-width:600px){
   html body main.reference-home.locked-storefront section.rh-hero h1{
     font-size:clamp(38px,10.7vw,42px)!important;
@@ -29,6 +44,12 @@ html body main.reference-home.locked-storefront .rh-nav{top:var(--accept-stack)!
   html body main.reference-home.locked-storefront section.rh-hero h1 .white{
     font-size:.92em!important;
     letter-spacing:-.052em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    display:flex!important;flex-direction:column!important;gap:9px!important;width:100%!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn{
+    width:100%!important;min-height:50px!important;
   }
 }
 
