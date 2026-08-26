@@ -1,0 +1,103 @@
+name: WDCC Dealer Hydration Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-dealer-hydration-diag.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-dealer-hydration-diag
+  cancel-in-progress: true
+
+env:
+  DEALER: https://dealer.wedontcarecars.com
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install runtime
+        run: |
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          mkdir -p .vercel /tmp/diag
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+      - name: Create disposable dealer
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-hydration-user.mjs <<'NODE'
+          import crypto from'node:crypto';import fs from'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',run=process.env.RUN_TAG;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,password=`Hydrate-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`hydrate-${crypto.randomUUID()}`,email=`hydrate-${run}@invalid.example`;s.users=Array.isArray(s.users)?s.users:[];s.users.push({id,email,username:email,displayName:`WDCC Hydration ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/hydration.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\n`);console.log(JSON.stringify({ok:true,id,email}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-hydration-user.mjs
+          set -a;. /tmp/hydration.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Instrument authenticated browser
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/hydration.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD";export DEALER QA_EMAIL QA_PASSWORD
+          node <<'NODE'
+          const fs=require('fs'),{chromium}=require('playwright');
+          (async()=>{const logs=[],responses=[],failures=[],errors=[];const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});
+          const login=await c.request.post(`${process.env.DEALER}/api/auth/login`,{headers:{'content-type':'application/json'},data:{username:process.env.QA_EMAIL,email:process.env.QA_EMAIL,password:process.env.QA_PASSWORD}});const loginText=await login.text();
+          const session=await c.request.get(`${process.env.DEALER}/api/auth/session`);const sessionText=await session.text();
+          const p=await c.newPage();p.on('console',m=>logs.push({type:m.type(),text:m.text()}));p.on('pageerror',e=>errors.push(String(e)));p.on('requestfailed',r=>failures.push({url:r.url(),failure:r.failure()?.errorText||''}));p.on('response',r=>{const u=r.url();if(u.includes('/_next/')||u.includes('/api/auth/session'))responses.push({url:u,status:r.status(),contentType:r.headers()['content-type']||'',contentEncoding:r.headers()['content-encoding']||'',acao:r.headers()['access-control-allow-origin']||''})});
+          const nav=await p.goto(`${process.env.DEALER}/dealer?hydrate_diag=${Date.now()}`,{waitUntil:'networkidle'});await p.waitForTimeout(6000);
+          let pageSession=null,pageSessionError=null;try{pageSession=await p.evaluate(async()=>{const r=await fetch('/api/auth/session',{cache:'no-store',credentials:'include'});return{status:r.status,json:await r.json()}})}catch(e){pageSessionError=String(e)}
+          const state=await p.evaluate(()=>({readyState:document.readyState,target:Boolean(document.querySelector('.targetDealerApp')),login:Boolean(document.querySelector('.targetDealerLogin')),bodyText:(document.body?.innerText||'').slice(0,5000),scripts:[...document.scripts].map(s=>s.src).filter(Boolean),links:[...document.querySelectorAll('link[rel=stylesheet]')].map(x=>x.href)}));
+          await p.screenshot({path:'/tmp/diag/live-dealer-after-login.png',fullPage:true});fs.writeFileSync('/tmp/diag/result.json',JSON.stringify({loginStatus:login.status(),loginText,sessionStatus:session.status(),sessionText,navStatus:nav?.status()||null,pageSession,pageSessionError,state,logs,errors,failures,responses},null,2));console.log(JSON.stringify({loginStatus:login.status(),sessionStatus:session.status(),navStatus:nav?.status()||null,pageSession,target:state.target,loginShell:state.login,consoleErrors:logs.filter(x=>x.type==='error'),pageErrors:errors,failures,responses},null,2));await b.close()})().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-dealer-hydration-${{ github.run_id }}
+          path: /tmp/diag/*
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Cleanup disposable dealer
+        id: cleanup
+        if: always() && steps.identity.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/hydration.env;set +a;export QA_ID
+          cat > .wdcc-hydration-clean.mjs <<'NODE'
+          import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',id=process.env.QA_ID;async function stable(){for(let i=0;i<6;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=5;n++){const before=await stable(),s=before.s,u=s.users||[];s.users=u.filter(x=>x.id!==id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});console.log(JSON.stringify({ok:true,removedUsers:u.length-s.users.length,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<5)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-hydration-clean.mjs
+          echo ok=true >> "$GITHUB_OUTPUT"
+      - name: Report diagnostic
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          BROWSER: ${{ steps.browser.outputs.ok }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        shell: bash
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer hydration diagnostic $GITHUB_RUN_ID" --body "Status: **$STATUS**\nInstrumented browser completed: **${BROWSER:-false}**\nCleanup: **${CLEAN:-false}**\nSee run artifact for console/network/session evidence." || true
