@@ -143,6 +143,11 @@ jobs:
               await page.waitForFunction(({selector,minWidth})=>{const el=document.querySelector(selector);return !!el&&el.complete===true&&Number(el.naturalWidth||0)>=minWidth},{selector,minWidth},{timeout:12000});
               return page.locator(selector).evaluate(el=>({naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,src:el.currentSrc||el.src}));
             };
+            const waitIntroDone=async page=>{
+              const intro=page.locator('.li');
+              if(await intro.count()) await intro.waitFor({state:'detached',timeout:5000}).catch(async()=>{if(await intro.count()) await page.getByRole('button',{name:/skip intro/i}).click({force:true,timeout:1500}).catch(()=>{})});
+              await page.locator('.rh-hero-art').waitFor({state:'visible',timeout:5000});
+            };
             const browser=await chromium.launch({headless:true});
             const evidence={preview:url,sha:process.env.GITHUB_SHA,mobile:{},desktop:{},dealer:{}};
             try{
@@ -154,12 +159,12 @@ jobs:
               await page.goto(`${url}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               const introHero=await waitImage(page,'.li-scene img',1000);
               const introLogo=await waitImage(page,'.li-badge img',200);
-              await page.waitForTimeout(900);
+              await page.waitForTimeout(700);
               const introStyle=await page.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);return{clipPath:s.clipPath,opacity:s.opacity,visibility:s.visibility}});
               if(!String(introStyle.clipPath).includes('circle')) throw new Error(`INTRO_BADGE_NOT_CIRCULAR ${JSON.stringify(introStyle)}`);
               if(Number(introStyle.opacity)<.9||introStyle.visibility==='hidden') throw new Error(`INTRO_BADGE_NOT_VISIBLE ${JSON.stringify(introStyle)}`);
               await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
-              await page.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
+              await waitIntroDone(page);
               const mobileHero=await waitImage(page,'.rh-hero-art',1000);
               const headerLogo=await waitImage(page,'.rh-logo img',200);
               const h1=page.locator('.rh-copy h1');
@@ -168,6 +173,15 @@ jobs:
               const mobileSpanCount=await h1.locator('span').count();
               if(mobileSpanCount!==3) throw new Error(`MOBILE_HEADLINE_SPANS_${mobileSpanCount}`);
               if(!mobileBox||mobileBox.x<0||mobileBox.x+mobileBox.width>392) throw new Error('MOBILE_HEADLINE_OVERFLOW');
+              const mobileLayout=await page.evaluate(()=>{
+                const header=document.querySelector('.rh-header'),utility=document.querySelector('.rh-utility'),menu=document.querySelector('.rh-menu'),grid=document.querySelector('.rh-grid'),card=document.querySelector('.rh-card');
+                const style=e=>e?getComputedStyle(e):null;
+                return {viewport:innerWidth,headerPosition:style(header)?.position,utilityPosition:style(utility)?.position,menuDisplay:style(menu)?.display,gridDisplay:style(grid)?.display,cardWidth:card?.getBoundingClientRect().width||0,headerLogoWidth:document.querySelector('.rh-logo img')?.getBoundingClientRect().width||0};
+              });
+              if(mobileLayout.headerPosition!=='sticky'||mobileLayout.utilityPosition!=='sticky') throw new Error(`MOBILE_STICKY_NOT_ACTIVE ${JSON.stringify(mobileLayout)}`);
+              if(mobileLayout.menuDisplay==='none') throw new Error(`MOBILE_BREAKPOINT_NOT_ACTIVE ${JSON.stringify(mobileLayout)}`);
+              if(mobileLayout.gridDisplay!=='flex'||mobileLayout.cardWidth>360) throw new Error(`MOBILE_CAROUSEL_NOT_ACTIVE ${JSON.stringify(mobileLayout)}`);
+              if(mobileLayout.headerLogoWidth<62) throw new Error(`MOBILE_HEADER_LOGO_TOO_SMALL ${JSON.stringify(mobileLayout)}`);
               if(await page.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count()) throw new Error('INVENTORY_REUSES_CHALLENGER_HERO');
               if(await page.locator('.rh-card a[href*="/vehicle/"]').count()<1) throw new Error('VEHICLE_LINKS_MISSING');
               const critical404=mobileFailures.filter(x=>x.status===404&&typeof x.url==='string'&&(/\/inventory\//.test(x.url)||/\/vehicle\//.test(x.url)));
@@ -176,7 +190,7 @@ jobs:
               if(await callSean.count()<1) throw new Error('MOBILE_CALL_SEAN_MISSING');
               await page.screenshot({path:'visual-proof/mobile-hero.png',fullPage:false});
               await page.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-              evidence.mobile={introHero,introLogo,introStyle,mobileHero,headerLogo,headline:mobileBox,headlineSpans:mobileSpanCount,placeholders:await page.locator('.rh-photo-placeholder').count(),failures:mobileFailures};
+              evidence.mobile={introHero,introLogo,introStyle,mobileHero,headerLogo,headline:mobileBox,headlineSpans:mobileSpanCount,layout:mobileLayout,placeholders:await page.locator('.rh-photo-placeholder').count(),failures:mobileFailures};
               await mobile.close();
 
               const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -184,9 +198,9 @@ jobs:
               await desk.goto(`${url}/?desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await waitImage(desk,'.li-scene img',1000);
               await waitImage(desk,'.li-badge img',200);
-              await desk.waitForTimeout(900);
+              await desk.waitForTimeout(700);
               await desk.screenshot({path:'visual-proof/desktop-intro.png',fullPage:false});
-              await desk.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
+              await waitIntroDone(desk);
               const desktopHero=await waitImage(desk,'.rh-hero-art',1000);
               await waitImage(desk,'.rh-logo img',200);
               const desktopHeadline=desk.locator('.rh-copy h1');
@@ -221,6 +235,7 @@ jobs:
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
             echo 'Canonical 8AR hero + visible round WDCC badge: enforced.'
+            echo 'Mobile sticky banner/header + carousel breakpoint: enforced.'
             echo 'Inventory hero-reuse: forbidden; missing media uses honest placeholder.'
             echo 'Vehicle links: /vehicle/[id] contract enforced.'
             echo 'Mobile + desktop screenshots: required.'
