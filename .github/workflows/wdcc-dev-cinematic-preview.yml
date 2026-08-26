@@ -1,0 +1,121 @@
+name: WDCC Dev Cinematic Preview
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/wdcc-dev-cinematic-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dev-cinematic-preview
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  verify-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Exact recovered 2vfD asset gate
+        shell: bash
+        run: |
+          test "$(git hash-object public/wdcc-hero-v2.webp)" = "f75ea69f3aee373bb4e3ee393d37290836266127"
+          test "$(git hash-object public/wdcc-logo-transparent.webp)" = "983e6fffee3786712b8878594ceb79495ac5a891"
+      - name: Type/build gate
+        run: npm run build
+      - name: Start local production build
+        shell: bash
+        run: |
+          nohup npm start -- -p 3000 >/tmp/wdcc-dev.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:3000/ >/tmp/home.html && break
+            sleep 1
+          done
+          test -s /tmp/home.html
+          grep -q 'wdcc-app' /tmp/home.html
+      - name: Install browser verifier
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Capture desktop/mobile proof
+        shell: bash
+        run: |
+          mkdir -p visual-proof
+          cat > visual-proof/capture.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+            const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
+            await page.goto('http://127.0.0.1:3000/?dev-proof=1',{waitUntil:'networkidle',timeout:30000});
+            const sw=await page.evaluate(()=>document.documentElement.scrollWidth);
+            if(sw>width+3) throw new Error(`${name}: horizontal overflow ${sw}>${width}`);
+            await page.screenshot({path:`visual-proof/${name}-home.png`,fullPage:true});
+            await page.close();
+          }
+          await browser.close();
+          NODE
+          node visual-proof/capture.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-exact-mockup-visual-proof
+          path: visual-proof/*.png
+          retention-days: 7
+      - name: Require preview deployment credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: test -n "$VERCEL_TOKEN"
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+      - name: Link preview project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Build preview artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="$VERCEL_TOKEN" --scope=cpxagency
+      - name: Deploy preview only
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -o pipefail
+          vercel deploy --prebuilt --yes --archive=tgz --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/vercel-preview.log
+          url="$(tr -d '\r' </tmp/vercel-preview.log | sed -E $'s/\x1B\[[0-9;]*[A-Za-z]//g' | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          printf '%s\n' "$url" | tee preview-url.txt
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-exact-mockup-preview-url
+          path: preview-url.txt
+          retention-days: 7
+      - name: Summary
+        run: |
+          echo '### WDCC exact mockup preview' >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Production aliases were not touched.' >> "$GITHUB_STEP_SUMMARY"
