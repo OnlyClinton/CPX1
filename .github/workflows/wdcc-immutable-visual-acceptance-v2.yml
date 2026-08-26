@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-immutable-visual-acceptance-v2
-  cancel-in-progress: true
+  group: wdcc-immutable-visual-acceptance-v2-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   visual-proof:
@@ -104,6 +104,7 @@ jobs:
           test "$code" = 200
 
       - name: Prove intro smoke-to-clear contract
+        id: intro_proof
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -176,6 +177,7 @@ jobs:
           NODE
 
       - name: Prove storefront and dealer visual contract
+        id: visual_contract
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -183,15 +185,39 @@ jobs:
           set -euo pipefail
           node scripts/wdcc-immutable-visual-proof.mjs
 
+      - name: Require current branch head before owner handoff
+        id: head_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo "STALE_HEAD expected=$GITHUB_SHA current=$current" >&2
+            exit 1
+          fi
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+
       - name: Publish visual acceptance summary
         if: always()
         env:
           URL: ${{ steps.deploy.outputs.url }}
+          INTRO_OUTCOME: ${{ steps.intro_proof.outcome }}
+          VISUAL_OUTCOME: ${{ steps.visual_contract.outcome }}
+          HEAD_GATE_OUTCOME: ${{ steps.head_gate.outcome }}
         shell: bash
         run: |
           echo '### WDCC immutable visual acceptance V2' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Immutable preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Intro proof: ${INTRO_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Storefront/dealer proof: ${VISUAL_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Current-head gate: ${HEAD_GATE_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${INTRO_OUTCOME:-}" = success ] && [ "${VISUAL_OUTCOME:-}" = success ] && [ "${HEAD_GATE_OUTCOME:-}" = success ]; then
+            echo 'OWNER_REVIEW_ELIGIBLE: YES' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'OWNER_REVIEW_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -s immutable-visual-proof/intro-reveal.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./immutable-visual-proof/intro-reveal.json');
