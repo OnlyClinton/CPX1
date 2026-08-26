@@ -79,7 +79,7 @@ jobs:
           printf '::add-mask::%s\n' "$SESSION_COOKIE"
           node <<'NODE'
           const fs=require('fs'),{chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.SESSION_COOKIE,domain:'dealer.wedontcarecars.com',path:'/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
+          (async()=>{const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.SESSION_COOKIE,url:'https://dealer.wedontcarecars.com/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
           await p.goto(process.env.DEALER+'/dealer',{waitUntil:'networkidle'});await p.waitForSelector('.targetDealerApp',{timeout:20000});let t=(await p.locator('body').innerText()).toLowerCase();for(const x of['dashboard','leads overview','leads by source','top performing vehicles','recent activity'])if(!t.includes(x))throw Error('DASH_'+x);await p.screenshot({path:'/tmp/screens/dealer-dashboard.png',fullPage:true});
           await p.goto(process.env.DEALER+'/dealer/inventory',{waitUntil:'networkidle'});await p.waitForSelector('.refDealerShell',{timeout:20000});await p.screenshot({path:'/tmp/screens/dealer-inventory.png',fullPage:true});
           await p.goto(process.env.DEALER+'/dealer/leads',{waitUntil:'networkidle'});await p.waitForTimeout(1200);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('leads'))throw Error('LEADS_VIEW');await p.screenshot({path:'/tmp/screens/dealer-leads.png',fullPage:true});
