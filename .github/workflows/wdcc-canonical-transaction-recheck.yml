@@ -1,0 +1,137 @@
+name: WDCC Canonical Transaction Recheck
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-canonical-transaction-recheck.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-canonical-transaction-recheck
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER: https://dealer.wedontcarecars.com
+      STOREFRONT: https://wedontcarecars.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install verifier runtime
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Create disposable dealer from canonical Phoenix state
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUN_TAG="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > .wdcc-canonical-create.mjs <<'NODE'
+          import crypto from 'node:crypto';import fs from 'node:fs';import{get,head,put,BlobPreconditionFailedError}from'@vercel/blob';
+          const path='private/state/platform-v3.json',run=process.env.RUN_TAG;
+          async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('STATE_READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,state:JSON.parse(raw.toString())}}throw Error('STATE_HOT')}
+          for(let n=1;n<=6;n++){const before=await stable(),s=before.state,password=`Canonical-${crypto.randomBytes(18).toString('base64url')}!`,salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64),hash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`,id=`canonical-recheck-${crypto.randomUUID()}`,email=`canonical-recheck-${run}@invalid.example`,now=new Date().toISOString();s.users=Array.isArray(s.users)?s.users:[];s.audit=Array.isArray(s.audit)?s.audit:[];s.users.push({id,email,username:email,displayName:`WDCC Canonical Recheck ${run}`,role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hash});s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.canonical_recheck.user_create',actor:'github-actions',run,userId:id});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:before.etag});fs.writeFileSync('/tmp/canonical.env',`QA_ID=${id}\nQA_EMAIL=${email}\nQA_PASSWORD=${password}\nRUN_TAG=${run}\n`);console.log(JSON.stringify({ok:true,id,email,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-canonical-create.mjs
+          set -a;. /tmp/canonical.env;set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Exercise live auth APIs and three customer lead paths
+        id: api
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/canonical.env;set +a
+          printf '::add-mask::%s\n' "$QA_PASSWORD"
+          payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
+          LOGIN="$(curl -sS -D /tmp/login.h -c /tmp/dealer.cookies -o /tmp/login.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$payload")"; test "$LOGIN" = 200; jq -e '.ok==true' /tmp/login.json >/dev/null
+          SESSION="$(curl -sS -b /tmp/dealer.cookies -o /tmp/session.json -w '%{http_code}' "$DEALER/api/auth/session")"; test "$SESSION" = 200; jq -e '.authenticated==true and (.user.role|ascii_downcase)=="dealer_agent"' /tmp/session.json >/dev/null
+          DASH="$(curl -sS -b /tmp/dealer.cookies -o /tmp/dashboard.json -w '%{http_code}' "$DEALER/api/crm/dashboard")"; test "$DASH" = 200
+          LEADS0="$(curl -sS -b /tmp/dealer.cookies -o /tmp/leads0.json -w '%{http_code}' "$DEALER/api/leads")"; test "$LEADS0" = 200
+          INV0="$(curl -sS -b /tmp/dealer.cookies -o /tmp/inv0.json -w '%{http_code}' "$DEALER/api/inventory")"; test "$INV0" = 200
+          : >/tmp/new-lead-ids
+          for spec in 'schedule schedule-test-drive' 'approval get-approved' 'contact call-sean'; do
+            set -- $spec; kind="$1"; source="$2"; key="wdcc-qa-canonical-${kind}-${RUN_TAG}"; body="$(jq -nc --arg k "$kind" --arg s "$source" --arg r "$RUN_TAG" '{qa:true,kind:$k,name:("WDCC QA CANONICAL "+$k+" "+$r),phone:"813-555-0198",email:("canonical-"+$k+"-"+$r+"@invalid.example"),vehicleInterest:"Canonical multi-vector recheck",message:"Automated WDCC contract verification",consent:true,source:$s,pagePath:("/qa/canonical-"+$k)}')"; code="$(curl -sS -o "/tmp/${kind}.json" -w '%{http_code}' -H 'content-type: application/json' -H "Idempotency-Key: $key" -X POST "$STOREFRONT/api/leads" --data "$body")"; case "$code" in 200|201);;*) echo "$kind HTTP $code";cat "/tmp/${kind}.json";exit 1;;esac; jq -e '.ok==true and .persisted==true and .item.id!=null' "/tmp/${kind}.json" >/dev/null; jq -r '.item.id' "/tmp/${kind}.json" >>/tmp/new-lead-ids; done
+          LEADS1="$(curl -sS -b /tmp/dealer.cookies -o /tmp/leads1.json -w '%{http_code}' "$DEALER/api/leads")"; test "$LEADS1" = 200
+          while read -r id; do jq -e --arg id "$id" 'any((.items//[])[];.id==$id)' /tmp/leads1.json >/dev/null; done </tmp/new-lead-ids
+          echo "login=$LOGIN" >> "$GITHUB_OUTPUT";echo "session=$SESSION" >> "$GITHUB_OUTPUT";echo "dashboard=$DASH" >> "$GITHUB_OUTPUT";echo "leads=$LEADS1" >> "$GITHUB_OUTPUT";echo "inventory=$INV0" >> "$GITHUB_OUTPUT";echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Create photo-backed QA vehicle and prove dealer/public separation
+        id: vehicle
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a;. /tmp/canonical.env;set +a
+          STOCK="R36TEST-CANONICAL-${RUN_TAG}"
+          body="$(jq -nc --arg s "$STOCK" '{year:2021,make:"Honda",model:"Civic",trim:"Canonical QA",price:12995,downPayment:1500,mileage:43210,stock:$s,bodyStyle:"Sedan",condition:"Used",transmission:"Automatic",exteriorColor:"Black",interiorColor:"Black",drivetrain:"FWD",fuelType:"Gasoline",description:"Temporary canonical production recheck",status:"draft"}')"
+          CREATE="$(curl -sS -b /tmp/dealer.cookies -o /tmp/vehicle-create.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$DEALER/api/inventory" --data "$body")"; case "$CREATE" in 200|201);;*) cat /tmp/vehicle-create.json;exit 1;;esac
+          VEHICLE_ID="$(jq -r '.item.id' /tmp/vehicle-create.json)"; test -n "$VEHICLE_ID"; echo "$VEHICLE_ID" >/tmp/vehicle-id
+          export VEHICLE_ID STOCK
+          cat > .wdcc-canonical-photo.mjs <<'NODE'
+          import{put}from'@vercel/blob';const id=process.env.VEHICLE_ID;const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=','base64');const pathname=`media/wdcc/${id}/canonical-recheck.png`;await put(pathname,png,{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'image/png'});console.log(pathname)
+          NODE
+          PATHNAME="$(env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-canonical-photo.mjs | tail -1)"; test -n "$PATHNAME"; echo "$PATHNAME" >/tmp/photo-path
+          patch="$(jq -nc --arg p "$PATHNAME" '{photoPathnames:[$p],primaryPhotoPathname:$p,status:"published"}')"
+          PATCH="$(curl -sS -b /tmp/dealer.cookies -o /tmp/vehicle-patch.json -w '%{http_code}' -H 'content-type: application/json' -X PATCH "$DEALER/api/inventory/$VEHICLE_ID" --data "$patch")"; test "$PATCH" = 200
+          READ="$(curl -sS -b /tmp/dealer.cookies -o /tmp/inv1.json -w '%{http_code}' "$DEALER/api/inventory?canonical=${RANDOM}")"; test "$READ" = 200; jq -e --arg id "$VEHICLE_ID" --arg p "$PATHNAME" 'any((.items//[])[];.id==$id and .status=="published" and ((.photoPathnames//[])|index($p)!=null))' /tmp/inv1.json >/dev/null
+          PUBLIC="$(curl -sS -o /tmp/public-inv.json -w '%{http_code}' "$STOREFRONT/api/inventory?canonical=${RANDOM}")"; test "$PUBLIC" = 200; jq -e --arg id "$VEHICLE_ID" 'all((.items//[])[];.id!=$id)' /tmp/public-inv.json >/dev/null
+          echo "create=$CREATE" >> "$GITHUB_OUTPUT";echo "patch=$PATCH" >> "$GITHUB_OUTPUT";echo "dealer_read=$READ" >> "$GITHUB_OUTPUT";echo "public_read=$PUBLIC" >> "$GITHUB_OUTPUT";echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup all disposable state and media
+        if: always()
+        id: cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f /tmp/canonical.env || { echo ok=true >> "$GITHUB_OUTPUT";exit 0; }
+          set -a;. /tmp/canonical.env;set +a
+          export VEHICLE_ID="$(cat /tmp/vehicle-id 2>/dev/null || true)" PHOTO_PATH="$(cat /tmp/photo-path 2>/dev/null || true)" LEAD_IDS="$(paste -sd, /tmp/new-lead-ids 2>/dev/null || true)"
+          cat > .wdcc-canonical-clean.mjs <<'NODE'
+          import crypto from'node:crypto';import{get,head,put,del,BlobPreconditionFailedError}from'@vercel/blob';const path='private/state/platform-v3.json',uid=process.env.QA_ID,vid=process.env.VEHICLE_ID||'',media=process.env.PHOTO_PATH||'',ids=new Set((process.env.LEAD_IDS||'').split(',').filter(Boolean));async function stable(){for(let i=0;i<8;i++){const a=await head(path),r=await get(path,{access:'private',useCache:false});if(!r?.stream)throw Error('READ');const c=[];for await(const x of r.stream)c.push(x);const raw=Buffer.concat(c),b=await head(path);if(a.etag===b.etag)return{etag:b.etag,s:JSON.parse(raw.toString())}}throw Error('HOT')}for(let n=1;n<=6;n++){const b=await stable(),s=b.s,now=new Date().toISOString(),u=(s.users||[]).length,l=(s.leads||[]).length,v=(s.vehicles||[]).length;s.users=(s.users||[]).filter(x=>x.id!==uid);s.leads=(s.leads||[]).filter(x=>!ids.has(x.id));s.vehicles=(s.vehicles||[]).filter(x=>x.id!==vid);s.audit=Array.isArray(s.audit)?s.audit:[];s.audit.push({id:crypto.randomUUID(),at:now,action:'qa.canonical_recheck.cleanup',actor:'github-actions',userId:uid,vehicleId:vid,leadCount:ids.size});s.revision=Number(s.revision||0)+1;s.updatedAt=now;try{await put(path,JSON.stringify(s,null,2)+'\n',{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',ifMatch:b.etag});if(media)await del(media).catch(()=>{});console.log(JSON.stringify({ok:true,removedUsers:u-s.users.length,removedLeads:l-s.leads.length,removedVehicles:v-s.vehicles.length,media:!!media,revision:s.revision}));process.exit(0)}catch(e){if(e instanceof BlobPreconditionFailedError&&n<6)continue;throw e}}
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-canonical-clean.mjs | tee /tmp/cleanup.jsonl
+          grep -q '"ok":true' /tmp/cleanup.jsonl
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Publish canonical transactional evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+          IDENTITY: ${{ steps.identity.outputs.ok }}
+          API_OK: ${{ steps.api.outputs.ok }}
+          LOGIN: ${{ steps.api.outputs.login }}
+          SESSION: ${{ steps.api.outputs.session }}
+          DASH: ${{ steps.api.outputs.dashboard }}
+          LEADS: ${{ steps.api.outputs.leads }}
+          INV: ${{ steps.api.outputs.inventory }}
+          VEHICLE: ${{ steps.vehicle.outputs.ok }}
+          CREATE: ${{ steps.vehicle.outputs.create }}
+          PATCH: ${{ steps.vehicle.outputs.patch }}
+          DEALER_READ: ${{ steps.vehicle.outputs.dealer_read }}
+          PUBLIC_READ: ${{ steps.vehicle.outputs.public_read }}
+          CLEAN: ${{ steps.cleanup.outputs.ok }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC canonical transactional recheck $GITHUB_RUN_ID" --body "Overall: **$STATUS**\nCanonical temp identity: **${IDENTITY:-false}**\nLogin/Session/Dashboard/Leads/Inventory: \`${LOGIN:-?}/${SESSION:-?}/${DASH:-?}/${LEADS:-?}/${INV:-?}\`\nThree customer QA lead paths + dealer readback: **${API_OK:-false}**\nPhoto-backed QA vehicle create/patch/dealer-read/public-hide: **${VEHICLE:-false}** (\`${CREATE:-?}/${PATCH:-?}/${DEALER_READ:-?}/${PUBLIC_READ:-?}\`)\nCleanup: **${CLEAN:-false}**\n\nThis verifier uses the canonical Phoenix production Blob binding and leaves no test user, lead, vehicle, or media intentionally." || true
