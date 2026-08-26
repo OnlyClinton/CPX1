@@ -1,0 +1,172 @@
+/* Final artifact-driven correction. Loaded last. Preserve real inventory and static intro. */
+
+@media (min-width:1101px){
+  main.reference-home.locked-storefront .rh-hero{
+    position:relative!important;
+    min-height:560px!important;
+    height:560px!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    object-position:64% 44%!important;
+    filter:saturate(1.34) contrast(1.10) brightness(1.24)!important;
+    transform:none!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    height:100%!important;
+    background:linear-gradient(90deg,rgba(2,7,12,.94) 0%,rgba(2,7,12,.86) 28%,rgba(2,7,12,.50) 46%,rgba(2,7,12,.10) 66%,rgba(2,7,12,.04) 100%)!important;
+  }
+  main.reference-home.locked-storefront .rh-hero:after{
+    content:""!important;
+    position:absolute!important;
+    inset:auto 0 0 0!important;
+    height:130px!important;
+    background:linear-gradient(180deg,transparent,#02070c)!important;
+    pointer-events:none!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-inner{
+    position:relative!important;
+    z-index:3!important;
+    width:min(1320px,calc(100% - 72px))!important;
+    min-height:560px!important;
+    height:560px!important;
+    margin:0 auto!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+  }
+  main.reference-home.locked-storefront .rh-copy{
+    position:relative!important;
+    z-index:4!important;
+    width:min(570px,44vw)!important;
+    max-width:570px!important;
+    padding:26px 0 34px!important;
+    margin:0!important;
+    background:transparent!important;
+  }
+  main.reference-home.locked-storefront .rh-kicker{
+    margin:0 0 12px!important;
+    font-size:13px!important;
+    letter-spacing:.05em!important;
+  }
+  main.reference-home.locked-storefront .rh-copy h1{
+    width:100%!important;
+    max-width:570px!important;
+    margin:0 0 18px!important;
+    font-size:clamp(58px,4.65vw,72px)!important;
+    line-height:.90!important;
+    letter-spacing:-.045em!important;
+    overflow:visible!important;
+  }
+  main.reference-home.locked-storefront .rh-copy h1 span{
+    display:block!important;
+    white-space:nowrap!important;
+  }
+  main.reference-home.locked-storefront .rh-lead{
+    max-width:470px!important;
+    font-size:17px!important;
+    line-height:1.45!important;
+    margin-bottom:0!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-actions{
+    display:flex!important;
+    gap:12px!important;
+    margin-top:18px!important;
+  }
+  main.reference-home.locked-storefront .rh-btn{
+    min-width:205px!important;
+    min-height:50px!important;
+  }
+  main.reference-home.locked-storefront .rh-phone{
+    margin-top:12px!important;
+  }
+  main.reference-home.locked-storefront .rh-benefits{
+    position:relative!important;
+    z-index:5!important;
+    margin-top:-34px!important;
+    width:min(1320px,calc(100% - 72px))!important;
+  }
+  main.reference-home.locked-storefront .rh-inventory{
+    padding-top:54px!important;
+  }
+}
+
+@media (max-width:1100px){
+  main.reference-home.locked-storefront .rh-hero{
+    padding-top:252px!important;
+    overflow:hidden!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-art,
+  main.reference-home.locked-storefront .rh-hero-shade,
+  main.reference-home.locked-storefront .rh-hero:after{
+    height:306px!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-art{
+    object-position:68% 39%!important;
+    filter:saturate(1.34) contrast(1.08) brightness(1.27)!important;
+  }
+  main.reference-home.locked-storefront .rh-copy{
+    width:100%!important;
+    max-width:100%!important;
+    box-sizing:border-box!important;
+    padding:22px 14px 24px!important;
+    overflow:visible!important;
+  }
+  main.reference-home.locked-storefront .rh-copy h1{
+    width:100%!important;
+    max-width:100%!important;
+    box-sizing:border-box!important;
+    font-size:clamp(34px,9.2vw,40px)!important;
+    line-height:.93!important;
+    letter-spacing:-.035em!important;
+    overflow:visible!important;
+  }
+  main.reference-home.locked-storefront .rh-copy h1 span{
+    display:block!important;
+    max-width:100%!important;
+    white-space:nowrap!important;
+  }
+  main.reference-home.locked-storefront .rh-lead{
+    max-width:100%!important;
+    font-size:14px!important;
+    line-height:1.42!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-actions{
+    grid-template-columns:1fr 1fr!important;
+    gap:8px!important;
+  }
+  main.reference-home.locked-storefront .rh-benefits{
+    margin-top:0!important;
+  }
+  main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:30px!important;
+  }
+}
+
+@media (max-width:430px){
+  main.reference-home.locked-storefront .rh-copy h1{
+    font-size:clamp(33px,9.25vw,37px)!important;
+    letter-spacing:-.04em!important;
+  }
+  main.reference-home.locked-storefront .rh-copy h1 span:last-child{
+    font-size:.96em!important;
+  }
+  main.reference-home.locked-storefront .rh-hero-actions{
+    grid-template-columns:1fr 1fr!important;
+  }
+  main.reference-home.locked-storefront .rh-btn{
+    min-width:0!important;
+    width:100%!important;
+    padding-inline:8px!important;
+    font-size:11px!important;
+  }
+}
