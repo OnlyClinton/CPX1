@@ -1,9 +1,6 @@
-name: WDCC Current Live Smoke
+name: WDCC Acceptance
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-current-live-smoke.yml'
   workflow_dispatch:
 
 jobs:

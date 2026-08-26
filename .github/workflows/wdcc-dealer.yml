@@ -1,10 +1,6 @@
-name: WDCC Dealer Target Frontdoor V3
+name: WDCC Dealer
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-dealer-target-frontdoor-v3.yml'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +8,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: wdcc-dealer-target-frontdoor-v3-live
+  group: wdcc-dealer-live
   cancel-in-progress: false
 
 env:

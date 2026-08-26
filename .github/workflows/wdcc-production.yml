@@ -1,14 +1,10 @@
-name: WDCC CLOUDFLARE 2VFD LIVE V2
+name: WDCC Production
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-cloudflare-2vfd-live-v2.yml'
 
 concurrency:
-  group: wdcc-cloudflare-2vfd-live-v2
+  group: wdcc-production
   cancel-in-progress: true
 
 permissions:
