@@ -1,0 +1,113 @@
+name: WDCC Authenticated Dealer Visual Proof
+
+on:
+  push:
+    branches:
+      - dev/wdcc-cinematic-mockup-v1
+    paths:
+      - '.github/workflows/wdcc-authenticated-dealer-visual-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-authenticated-dealer-visual-proof
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require masked dealer credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+      - run: npm ci
+      - run: npm run build
+      - name: Start local production build
+        shell: bash
+        run: |
+          nohup npm start -- -p 3000 >/tmp/wdcc-auth-proof.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000/dealer >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/dealer >/dev/null
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+      - name: Authenticate and capture dealer surfaces
+        shell: bash
+        run: |
+          mkdir -p dealer-proof
+          node --input-type=module <<'NODE'
+          import {chromium} from 'playwright';
+          const password=process.env.WDCC_DEALER_E2E_PASSWORD||'';
+          if(!password)throw Error('dealer credential unavailable');
+          const base='http://127.0.0.1:3000';
+          const browser=await chromium.launch({headless:true});
+
+          async function signIn(page){
+            await page.goto(`${base}/dealer`,{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForTimeout(900);
+            await page.getByLabel('USERNAME').fill('dealer');
+            await page.getByLabel('PASSWORD').fill(password);
+            await page.getByRole('button',{name:'SIGN IN'}).click();
+            await page.waitForSelector('.dealerApp',{timeout:20000});
+            const session=await page.request.get(`${base}/api/auth/session`);
+            const sj=await session.json().catch(()=>({}));
+            if(!session.ok()||!sj.authenticated)throw Error(`authenticated dealer session missing: ${session.status()}`);
+          }
+
+          const desktop=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+          await signIn(desktop);
+          await desktop.waitForTimeout(1800);
+          const dashboardText=await desktop.locator('body').innerText();
+          for(const required of ['Dashboard','New Leads','Applications','Approved','Sold This Week','TOP PERFORMING VEHICLES','RECENT ACTIVITY','ADD VEHICLE'])if(!dashboardText.includes(required))throw Error(`dashboard missing ${required}`);
+          const dashOverflow=await desktop.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
+          if(dashOverflow>3)throw Error(`desktop dealer dashboard horizontal overflow ${dashOverflow}`);
+          await desktop.screenshot({path:'dealer-proof/dealer-dashboard-desktop.png',fullPage:true});
+          await desktop.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded'});
+          await desktop.waitForTimeout(1600);
+          const addText=await desktop.locator('body').innerText();
+          if(addText.includes('Dealer Sign In'))throw Error('authenticated Add Vehicle fell back to login');
+          if(!/Add|Vehicle|Photos|Basic/i.test(addText))throw Error('Add Vehicle workflow did not render expected content');
+          await desktop.screenshot({path:'dealer-proof/dealer-add-vehicle-desktop.png',fullPage:true});
+
+          const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+          const state=await desktop.context().storageState();
+          await mobile.context().addCookies(state.cookies.filter(c=>c.domain==='127.0.0.1'||c.domain==='localhost'));
+          await mobile.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});
+          await mobile.waitForTimeout(1500);
+          if((await mobile.locator('body').innerText()).includes('Dealer Sign In')){
+            await signIn(mobile);
+            await mobile.waitForTimeout(1200);
+          }
+          const mobileText=await mobile.locator('body').innerText();
+          if(!mobileText.includes('Dashboard')||!mobileText.includes('ADD VEHICLE'))throw Error('mobile authenticated dashboard incomplete');
+          const mobileOverflow=await mobile.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
+          if(mobileOverflow>3)throw Error(`mobile dealer dashboard horizontal overflow ${mobileOverflow}`);
+          await mobile.screenshot({path:'dealer-proof/dealer-dashboard-mobile.png',fullPage:true});
+          await mobile.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded'});
+          await mobile.waitForTimeout(1300);
+          if((await mobile.locator('body').innerText()).includes('Dealer Sign In'))throw Error('mobile Add Vehicle lost session');
+          await mobile.screenshot({path:'dealer-proof/dealer-add-vehicle-mobile.png',fullPage:true});
+
+          await browser.close();
+          console.log('WDCC_AUTHENTICATED_DEALER_VISUAL_PROOF=PASS');
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-authenticated-dealer-visual-proof
+          path: dealer-proof/*.png
+          retention-days: 7
