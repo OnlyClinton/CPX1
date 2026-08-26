@@ -104,7 +104,7 @@ jobs:
             sleep 2
           done
           test "$code" = 200
-          grep -q 'BAD CREDIT' /tmp/wdcc-remote-root.html
+          grep -qi 'bad credit' /tmp/wdcc-remote-root.html
           grep -q 'GET PRE-APPROVED' /tmp/wdcc-remote-root.html
           dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA")"
           test "$dealer_code" = 200
@@ -138,7 +138,7 @@ jobs:
             cat /tmp/wdcc-exact-browser.log >&2 || true
             exit 1
           fi
-          grep -q 'BAD CREDIT' /tmp/wdcc-local-root.html
+          grep -qi 'bad credit' /tmp/wdcc-local-root.html
           grep -q 'GET PRE-APPROVED' /tmp/wdcc-local-root.html
           echo 'url=http://127.0.0.1:4173' >> "$GITHUB_OUTPUT"
 
