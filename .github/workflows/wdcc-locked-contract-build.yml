@@ -66,8 +66,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '<LockedIntro/>' app/ReferenceCloneHome.tsx
-          grep -qi 'Get approved' app/ReferenceCloneHome.tsx
-          grep -qi 'Browse cars' app/ReferenceCloneHome.tsx
+          grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
+          grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
           grep -q 'rh-hero-art' app/ReferenceCloneHome.tsx
           grep -q '/vehicle/' app/ReferenceCloneHome.tsx
           test -f 'app/vehicle/[id]/page.tsx'
