@@ -76,7 +76,6 @@ jobs:
             return errors;
           }
 
-          // Responsive geometry + broken-resource + accessibility smoke at five widths.
           for(const width of [390,768,1024,1440,1920]){
             const page=await browser.newPage({viewport:{width,height:1000}});
             const errors=await attachGuards(page);
@@ -87,16 +86,7 @@ jobs:
               const imgs=[...document.querySelectorAll('img')].filter(visible);
               const badButtons=[...document.querySelectorAll('button')].filter(visible).filter(b=>!(b.getAttribute('aria-label')||b.textContent||'').trim());
               const badLinks=[...document.querySelectorAll('a')].filter(visible).filter(a=>!(a.getAttribute('aria-label')||a.textContent||'').trim());
-              return {
-                innerWidth:innerWidth,scrollWidth:document.documentElement.scrollWidth,
-                broken:imgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),
-                missingAlt:imgs.filter(i=>!i.hasAttribute('alt')).map(i=>i.currentSrc||i.src),
-                badButtons:badButtons.length,badLinks:badLinks.length,
-                h1:document.querySelectorAll('h1').length,
-                benefits:document.querySelectorAll('.screenshotBenefits article').length,
-                steps:document.querySelectorAll('.steps-grid article').length,
-                trust:document.querySelectorAll('.premiumTrust article').length
-              };
+              return {innerWidth,scrollWidth:document.documentElement.scrollWidth,broken:imgs.filter(i=>!i.complete||i.naturalWidth===0).map(i=>i.currentSrc||i.src),missingAlt:imgs.filter(i=>!i.hasAttribute('alt')).map(i=>i.currentSrc||i.src),badButtons:badButtons.length,badLinks:badLinks.length,h1:document.querySelectorAll('h1').length,benefits:document.querySelectorAll('.screenshotBenefits article').length,steps:document.querySelectorAll('.steps-grid article').length,trust:document.querySelectorAll('.premiumTrust article').length};
             });
             console.log(`${width} state=${JSON.stringify(state)}`);
             assert(state.scrollWidth<=state.innerWidth+3,`${width}px horizontal overflow ${state.scrollWidth}>${state.innerWidth}`);
@@ -113,7 +103,6 @@ jobs:
             await page.close();
           }
 
-          // Reduced-motion must bypass the cinematic intro.
           {
             const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
             const errors=await attachGuards(page);
@@ -125,7 +114,6 @@ jobs:
             await page.close();
           }
 
-          // Desktop interactions: carousel, CTAs, and every visible internal homepage link.
           {
             const page=await browser.newPage({viewport:{width:1440,height:1000}});
             const errors=await attachGuards(page);
@@ -151,24 +139,26 @@ jobs:
             await page.close();
           }
 
-          // Mobile menu must open, expose real links, and close.
           {
             const page=await browser.newPage({viewport:{width:390,height:844}});
             const errors=await attachGuards(page);
             await settleHome(page);
-            const menu=page.getByRole('button',{name:'Open navigation'});
+            const menu=page.locator('.mobile-menu');
+            assert(await menu.getAttribute('aria-label')==='Open navigation','mobile menu initial label wrong');
+            assert(await menu.getAttribute('aria-expanded')==='false','mobile menu initial aria-expanded wrong');
             await menu.click();
             assert(await menu.getAttribute('aria-expanded')==='true','mobile menu aria-expanded did not become true');
+            assert(await menu.getAttribute('aria-label')==='Close navigation','mobile menu open label wrong');
             const visibleMenuLinks=await page.locator('.main-nav.open a').count();
             assert(visibleMenuLinks>=6,`mobile menu has only ${visibleMenuLinks} links`);
-            await page.getByRole('button',{name:'Close navigation'}).click();
-            assert(await page.getByRole('button',{name:'Open navigation'}).getAttribute('aria-expanded')==='false','mobile menu did not close');
+            await menu.click();
+            assert(await menu.getAttribute('aria-expanded')==='false','mobile menu did not close');
+            assert(await menu.getAttribute('aria-label')==='Open navigation','mobile menu close label wrong');
             assert(await page.locator('.mobile-action-bar a').count()===3,'mobile sticky action bar does not have 3 actions');
             assert(errors.length===0,`mobile menu errors ${JSON.stringify(errors)}`);
             await page.close();
           }
 
-          // Known public route crawl. No 404/500 is acceptable.
           {
             const page=await browser.newPage();
             for(const path of ['/','/inventory','/financing','/get-approved','/schedule-test-drive','/contact','/privacy','/terms']){
@@ -211,9 +201,7 @@ jobs:
             return captured;
           }
 
-          const approval=await testLeadForm('/get-approved?source=max-approval&vehicle=QA-VEHICLE','approval',async page=>{
-            await page.getByLabel('Vehicle of interest').fill('QA Vehicle');
-          });
+          const approval=await testLeadForm('/get-approved?source=max-approval&vehicle=QA-VEHICLE','approval',async page=>{await page.getByLabel('Vehicle of interest').fill('QA Vehicle');});
           assert(approval.source==='max-approval',`approval source attribution wrong ${approval.source}`);
           assert(approval.vehicleId==='QA-VEHICLE',`approval vehicle attribution wrong ${approval.vehicleId}`);
           assert(approval.pagePath==='/get-approved',`approval pagePath wrong ${approval.pagePath}`);
