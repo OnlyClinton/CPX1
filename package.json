@@ -1,13 +1,16 @@
 {
   "name": "wdcc-unified-platform",
-  "version": "47.0.0",
+  "version": "48.0.0-vnext",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "typecheck:compat": "tsc6 --noEmit"
   },
   "dependencies": {
+    "@neondatabase/serverless": "1.1.0",
     "@vercel/blob": "^2.0.0",
     "next": "16.3.1",
     "react": "19.2.0",
@@ -17,6 +20,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.9.0"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }
