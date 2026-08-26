@@ -131,7 +131,7 @@
 
 @media(max-width:420px){
   .screenshotContract .screenshotHero{
-    min-height:675px!important;
+    min-height:690px!important;
     background-size:auto 285px!important;
     background-position:72% top!important;
   }
