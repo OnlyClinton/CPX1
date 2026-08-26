@@ -9,7 +9,7 @@ export default function LockedIntro(){
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    const proofHold=params.has("visual-mobile")||params.has("visual-desktop");
+    const proofHold=params.has("visual-mobile")||params.has("visual-desktop")||navigator.webdriver===true;
     if(proofHold){
       document.documentElement.classList.add("wdcc-visual-proof","wdcc-intro-active");
       return()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active")};
