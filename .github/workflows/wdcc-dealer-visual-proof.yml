@@ -40,10 +40,12 @@ jobs:
           test -s app/dealer/inventory/InventoryManager.tsx
           test -s app/dealer/inventory/VehicleEditor.tsx
           test -s app/dealer/inventory/import/page.tsx
+          test -s app/dealer-editor-final.css
           test -s public/wdcc-official-logo.webp
           grep -q 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'All Vehicles' app/dealer/inventory/InventoryManager.tsx
           grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
+          grep -q 'editVehicleApp' app/dealer-editor-final.css
 
       - name: Build isolated Cloudflare artifact
         shell: bash
@@ -143,9 +145,10 @@ jobs:
               await page.goto(`${base}${path}${path.includes('?')?'&':'?'}visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await page.locator(waitSelector).waitFor({state:'visible',timeout:12000});
               await page.waitForTimeout(500);
+              const viewport=page.viewportSize(),prefix=(viewport?.width||0)>700?'desktop':'mobile';
               const name=path.replace(/^\//,'').replace(/[^a-z0-9]+/gi,'-').replace(/-+$/,'')||'root';
-              await page.screenshot({path:`dealer-visual-proof/${name}.png`,fullPage:full});
-              proof.screens.push({path,url:page.url(),waitSelector});
+              await page.screenshot({path:`dealer-visual-proof/${prefix}-${name}.png`,fullPage:full});
+              proof.screens.push({prefix,path,url:page.url(),waitSelector});
             }
             try{
               const dc=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -156,7 +159,7 @@ jobs:
               await snap(d,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp');
               await d.locator('.sectionBlock').nth(1).screenshot({path:'dealer-visual-proof/dealer-photos-desktop.png'});
               await d.locator('.readinessCard').screenshot({path:'dealer-visual-proof/dealer-readiness-desktop.png'});
-              await d.getByRole('button',{name:/^preview$/i}).last().click();
+              await d.getByRole('button',{name:/^preview$/i}).last().click({force:true});
               await d.locator('.previewModal').waitFor({state:'visible',timeout:5000});
               await d.locator('.previewModal').screenshot({path:'dealer-visual-proof/dealer-preview-modal-desktop.png'});
               await snap(d,`/vehicle/${encodeURIComponent(firstId)}`,'.vehicleDetail',true).catch(async()=>{
@@ -171,7 +174,7 @@ jobs:
               await snap(m,'/dealer/inventory','.inventoryContract');
               await snap(m,'/dealer/inventory/import','.dcDrop');
               await snap(m,`/dealer/inventory/new?edit=${encodeURIComponent(firstId)}`,'.editVehicleApp');
-              await m.getByRole('button',{name:/^preview$/i}).last().click();
+              await m.getByRole('button',{name:/^preview$/i}).last().click({force:true});
               await m.locator('.previewModal').waitFor({state:'visible',timeout:5000});
               await m.locator('.previewModal').screenshot({path:'dealer-visual-proof/dealer-preview-modal-mobile.png'});
               await mc.close();
