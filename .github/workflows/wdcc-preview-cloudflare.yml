@@ -5,6 +5,7 @@ on:
     branches:
       - preview/wdcc-exact-mockup-20260826
       - dev/wdcc-cinematic-mockup-v1
+      - fix/wdcc-locked-contract-20260826
   workflow_dispatch:
 
 permissions:
