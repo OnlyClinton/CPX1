@@ -14,7 +14,7 @@ Before this candidate can go live on **either Cloudflare production or Vercel pr
 
 ## Visual source of truth
 
-1. Opening intro: supplied desktop/mobile Tampa skyline + American-flag Challenger + centered circular WDCC badge + `TAMPA BAY · DRIVE TODAY`.
+1. Opening intro: supplied desktop/mobile Tampa skyline + American-flag Challenger + centered circular WDCC badge + cinematic logo handoff.
 2. Public storefront: supplied desktop/mobile BAD CREDIT / NO CREDIT / WE DON'T CARE board.
 3. Dealer dashboard: supplied light-canvas desktop/mobile dashboard board.
 4. All Vehicles: supplied dark chrome + white workspace desktop/mobile inventory board.
@@ -29,6 +29,7 @@ Before this candidate can go live on **either Cloudflare production or Vercel pr
 - Existing authenticated WDCC session remains authoritative.
 - Existing `/api/inventory`, `/api/inventory/:id`, `/api/upload`, `/api/media`, and CRM APIs remain the backend contract.
 - Public storefront uses real dealer-published inventory and excludes QA/internal inventory.
+- Missing vehicle media must never substitute the Challenger hero; show an honest non-photo placeholder instead.
 - All Vehicles reads canonical dealer inventory, searches, filters, sorts and exports CSV.
 - Edit loads an existing vehicle and PATCHes it rather than creating a duplicate.
 - Add creates a draft, uploads private media through `/api/upload`, checkpoints photo pathnames, and publishes only after the final PATCH succeeds.
@@ -45,6 +46,7 @@ Do not merge or promote until:
 - `npm run build` passes on the branch.
 - Public home, dealer dashboard, inventory, import, Add/Edit, photo/readiness and preview routes compile.
 - A Cloudflare `workers.dev` preview of the exact visual candidate is live and visually inspected by the owner.
+- Automated desktop/mobile evidence rejects headline overflow and any inventory reuse of `wdcc-hero-v2.webp`.
 - Owner explicitly approves that Cloudflare preview.
 - Only after visual approval, authenticated dealer create/edit/photo/publish and storefront lead/inventory APIs retain their existing contracts.
 - No production deployment, alias, DNS or Cloudflare production routing change is required to validate the source.
