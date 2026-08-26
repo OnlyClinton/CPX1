@@ -1,0 +1,110 @@
+/* WDCC dealer-only visual system. Do not use on the public storefront. */
+:root{
+  --dealer-navy:#07131f;
+  --dealer-navy-2:#0b1a28;
+  --dealer-line:#d9e0e6;
+  --dealer-canvas:#f4f6f8;
+  --dealer-card:#ffffff;
+  --dealer-ink:#111820;
+  --dealer-muted:#66727e;
+  --dealer-red:#ef1f2f;
+  --dealer-red-dark:#ce1221;
+  --dealer-green:#168a4b;
+  --dealer-amber:#c47b00;
+  --dealer-radius:10px;
+  --dealer-shadow:0 8px 24px rgba(6,17,28,.08);
+}
+html body .mockDealerApp,html body .refDealerShell,html body .vehicleScreen{background:var(--dealer-canvas)!important;color:var(--dealer-ink)!important}
+html body .mockDealerTop,html body .refDealerTop,html body .vehicleTop{background:var(--dealer-navy)!important;border-color:#203143!important;box-shadow:none!important}
+html body .mockDealerSide,html body .refDealerSide,html body .vehicleRail{background:var(--dealer-navy)!important;border-color:#203143!important}
+html body .mockDealerSide nav a,html body .refDealerSide nav a,html body .vehicleRail nav a{color:#cbd4dc!important;border-radius:6px!important}
+html body .mockDealerSide nav a:hover,html body .refDealerSide nav a:hover,html body .vehicleRail nav a:hover{background:#102236!important;color:#fff!important}
+html body .mockDealerSide nav a.active,html body .refDealerSide nav a.active,html body .vehicleRail nav a.active{background:var(--dealer-red)!important;color:#fff!important;box-shadow:none!important}
+html body .mockDealerTop>a,html body .refDealerTop>a,html body .vehicleTop>a{background:transparent!important;color:#fff!important;border:1px solid #47596a!important;box-shadow:none!important}
+html body .mockDealerTop>button,html body .vehicleTop>button{background:transparent!important;color:#e9edf1!important;border:1px solid #47596a!important}
+html body .mockDealerTop>button:hover,html body .vehicleTop>button:hover{background:#102236!important}
+html body .mockDealerMain{background:var(--dealer-canvas)!important;color:var(--dealer-ink)!important}
+html body .mockTitleRow h1{color:var(--dealer-ink)!important;letter-spacing:-.02em!important}
+html body .mockStats article,html body .mockCharts>section,html body .mockLower>section{background:var(--dealer-card)!important;border:1px solid var(--dealer-line)!important;border-radius:var(--dealer-radius)!important;box-shadow:var(--dealer-shadow)!important;color:var(--dealer-ink)!important}
+html body .mockStats article span,html body .mockStats article small,html body .mockCharts header,html body .mockLower header{color:var(--dealer-muted)!important}
+html body .mockStats article b,html body .mockCharts header b,html body .mockLower header b{color:var(--dealer-ink)!important}
+html body .mockSidePromo{display:none!important}
+html body .mockQuick{display:grid!important;grid-template-columns:minmax(180px,240px) minmax(180px,240px)!important;justify-content:start!important;gap:10px!important;margin-top:16px!important}
+html body .mockQuick>a{min-height:44px!important;border-radius:7px!important;font-weight:800!important;letter-spacing:.01em!important;box-shadow:none!important}
+html body .mockQuick>a:nth-child(1){background:var(--dealer-red)!important;color:#fff!important;border:1px solid var(--dealer-red)!important}
+html body .mockQuick>a:nth-child(2){display:flex!important;background:#fff!important;color:var(--dealer-ink)!important;border:1px solid #bbc6cf!important}
+html body .mockQuick>a:nth-child(n+3){display:none!important}
+html body .mockQuick>a:nth-child(1):hover{background:var(--dealer-red-dark)!important}
+html body .mockQuick>a:nth-child(2):hover{background:#eef2f5!important}
+html body .refDealerBody{background:var(--dealer-canvas)!important}
+html body .refDealerContent{background:var(--dealer-card)!important;border-radius:10px!important;box-shadow:var(--dealer-shadow)!important;margin:16px!important;padding:22px!important}
+html body .refDealerTitle h1{color:var(--dealer-ink)!important;letter-spacing:-.02em!important}
+html body .refDealerTitle p{color:var(--dealer-muted)!important}
+html body .refDealerTitleActions .primary{background:var(--dealer-red)!important;color:#fff!important;border:1px solid var(--dealer-red)!important;border-radius:7px!important;box-shadow:none!important}
+html body .refDealerTitleActions button{background:#fff!important;color:#26323e!important;border:1px solid #c9d2da!important;border-radius:7px!important;box-shadow:none!important}
+html body .refDealerStats article{background:#fff!important;border:1px solid var(--dealer-line)!important;border-radius:8px!important;box-shadow:none!important}
+html body .refDealerFilters{background:#f7f8fa!important;border:1px solid var(--dealer-line)!important;border-radius:8px!important;padding:10px!important}
+html body .refDealerFilters input,html body .refDealerFilters select,html body .refDealerFilters button{background:#fff!important;color:var(--dealer-ink)!important;border:1px solid #cfd7de!important;border-radius:6px!important}
+html body .refDealerVehicleRow{background:#fff!important;border-bottom:1px solid #e2e7eb!important}
+html body .refStatus.published{background:#e8f6ee!important;color:var(--dealer-green)!important}
+html body .refStatus.draft{background:#fff4df!important;color:var(--dealer-amber)!important}
+html body .refStatus.archived{background:#edf0f2!important;color:#68737d!important}
+html body .refDealerActions a,html body .refDealerActions button{background:transparent!important;color:#33404b!important;border:0!important}
+html body .refDealerActions a:hover,html body .refDealerActions button:hover{color:var(--dealer-red)!important}
+html body .vehicleWorkspace{background:var(--dealer-canvas)!important}
+html body .editorGrid{gap:14px!important;padding:16px!important;align-items:start!important}
+html body .editorMain,html body .previewCard{background:#fff!important;border:1px solid var(--dealer-line)!important;border-radius:10px!important;box-shadow:var(--dealer-shadow)!important;color:var(--dealer-ink)!important}
+html body .editorHead{background:#fff!important;border-bottom:1px solid #e0e5e9!important}
+html body .editorHead h1,html body .formCard h2,html body .readinessCard h3,html body .previewCard h2,html body .previewCard h4{color:var(--dealer-ink)!important}
+html body .editorHead>span,html body .formCard>p,html body .previewCard>p{color:var(--dealer-muted)!important}
+html body .step b{background:#fff!important;color:#27333e!important;border:1px solid #bbc6cf!important;box-shadow:none!important}
+html body .step.done b{background:#f2f4f6!important;color:#45525e!important;border-color:#bbc6cf!important}
+html body .step.active b{background:var(--dealer-red)!important;color:#fff!important;border-color:var(--dealer-red)!important}
+html body .step.active span{color:var(--dealer-red)!important;font-weight:800!important}
+html body .photoButtons button{background:#fff!important;color:var(--dealer-ink)!important;border:1px solid #cbd4dc!important;border-radius:8px!important;box-shadow:none!important}
+html body .photoButtons button:hover{background:#f4f6f8!important;border-color:#9daab6!important}
+html body .thumb{border:1px solid #cfd7de!important;border-radius:7px!important;background:#f4f6f8!important;box-shadow:none!important}
+html body .thumb.primary{border:2px solid #f0b400!important}
+html body .addPhoto{background:#fafbfc!important;color:#34414d!important;border:1px dashed #aab6c0!important;border-radius:7px!important}
+html body .readinessCard{background:#fff!important;border:0!important;border-top:1px solid #e0e5e9!important;border-radius:0!important;box-shadow:none!important;padding-top:18px!important}
+html body .progress{background:#e7ebee!important;height:5px!important;border-radius:99px!important;overflow:hidden!important}
+html body .progress i{background:var(--dealer-red)!important}
+html body .bottomActions{display:grid!important;grid-template-columns:1fr 1fr 2fr!important;gap:10px!important}
+html body .bottomActions button{min-height:44px!important;background:#fff!important;color:var(--dealer-ink)!important;border:1px solid #c7d0d8!important;border-radius:7px!important;font-weight:800!important;box-shadow:none!important}
+html body .bottomActions .publish{background:var(--dealer-red)!important;color:#fff!important;border-color:var(--dealer-red)!important}
+html body .bottomActions .publish:hover{background:var(--dealer-red-dark)!important}
+html body .previewActions button{background:#f1f4f6!important;color:#26323e!important;border:1px solid #c7d0d8!important}
+html body .previewActions a{background:#101a24!important;color:#fff!important;border:1px solid #101a24!important}
+html body .helpBox{display:none!important}
+html body .dealerLoginPage{background:#06111c!important}
+html body .dealerLoginCard{background:#0b1723!important;border:1px solid #2b3c4c!important;box-shadow:0 20px 60px rgba(0,0,0,.35)!important}
+html body .dealerLoginBrand>span{color:var(--dealer-red)!important}
+html body .dealerLoginCard>button{background:var(--dealer-red)!important;border-radius:8px!important;box-shadow:none!important}
+@media(max-width:760px){
+  html body .mockDealerTop,html body .refDealerTop,html body .vehicleTop{min-height:64px!important;height:auto!important;padding:8px 12px!important}
+  html body .mockDealerTop>a,html body .mockManager,html body .refDealerTop>a,html body .refDealerTop>span,html body .vehicleTop>a,html body .vehicleTop>span,html body .vehicleTop>button{display:none!important}
+  html body .mockDealerMain{padding:12px 12px 86px!important}
+  html body .mockStats{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  html body .mockCharts,html body .mockLower{grid-template-columns:1fr!important;gap:10px!important}
+  html body .mockQuick{grid-template-columns:1fr 1fr!important;margin-bottom:8px!important}
+  html body .refDealerContent{margin:0!important;border-radius:0!important;padding:14px 12px 88px!important;box-shadow:none!important}
+  html body .refDealerTitle{align-items:stretch!important;gap:12px!important}
+  html body .refDealerTitleActions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
+  html body .refDealerTitleActions .primary{grid-column:1 / -1!important}
+  html body .refDealerTitleActions button:nth-of-type(2){display:none!important}
+  html body .refDealerStats{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  html body .refDealerStats article:nth-child(n+5){display:none!important}
+  html body .refDealerFilters{grid-template-columns:1fr auto!important}
+  html body .refDealerFilters select{display:none!important}
+  html body .editorGrid{display:block!important;padding:0!important}
+  html body .editorMain{border-radius:0!important;border-left:0!important;border-right:0!important;box-shadow:none!important}
+  html body .previewCard{margin:10px 12px 92px!important;box-shadow:none!important}
+  html body .photoButtons{grid-template-columns:1fr!important;gap:7px!important}
+  html body .bottomActions{position:sticky!important;bottom:0!important;background:#fff!important;padding:10px 0 calc(10px + env(safe-area-inset-bottom))!important;z-index:10!important;grid-template-columns:1fr 1fr!important}
+  html body .bottomActions .publish{grid-column:1 / -1!important;grid-row:1!important;min-height:48px!important}
+  html body .bottomActions button:not(.publish){min-height:40px!important}
+  html body .previewActions{grid-template-columns:1fr 1fr!important}
+  html body .refDealerMobileNav,html body .mockMobileNav{background:#07131f!important;border-top:1px solid #24384a!important}
+  html body .refDealerMobileNav .active,html body .mockMobileNav .active{color:var(--dealer-red)!important}
+  html body .refDealerMobileNav .add,html body .mockMobileNav .add{background:var(--dealer-red)!important;color:#fff!important;box-shadow:none!important}
+}
