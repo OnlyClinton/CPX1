@@ -37,17 +37,19 @@ jobs:
 
           p=Path('.github/workflows/wdcc-immutable-visual-acceptance.yml')
           s=p.read_text()
-          old="""              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              const intro=m.locator('.li');
-              if(await intro.count()){"""
-          new="""              await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});
-              const intro=m.locator('.li');
-              await intro.waitFor({state:'attached',timeout:5000});
-              if(await intro.count()){ """
-          if old in s:
-              p.write_text(s.replace(old,new,1))
-          elif new not in s:
-              raise SystemExit('CONSOLIDATED_INTRO_CAPTURE_PATTERN_NOT_FOUND')
+          old_goto="await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});"
+          new_goto="await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});"
+          if old_goto in s:
+              s=s.replace(old_goto,new_goto,1)
+          elif new_goto not in s:
+              raise SystemExit('CONSOLIDATED_GOTO_PATTERN_NOT_FOUND')
+          marker="const intro=m.locator('.li');"
+          wait="await intro.waitFor({state:'attached',timeout:5000});"
+          if wait not in s:
+              if marker not in s:
+                  raise SystemExit('CONSOLIDATED_INTRO_MARKER_NOT_FOUND')
+              s=s.replace(marker,marker+"\n              "+wait,1)
+          p.write_text(s)
           PY
           grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
           grep -q "visual-mobile=.*waitUntil:'commit'" .github/workflows/wdcc-immutable-visual-acceptance.yml
