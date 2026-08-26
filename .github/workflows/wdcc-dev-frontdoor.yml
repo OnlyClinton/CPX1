@@ -71,11 +71,15 @@ jobs:
           set -euo pipefail
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
           curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" "${auth[@]}" > /tmp/routes-before.json
-          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=5000" "${auth[@]}" > /tmp/dns-before.json
           jq -e '.success == true' /tmp/routes-before.json >/dev/null
-          jq -e '.success == true' /tmp/dns-before.json >/dev/null
           jq -S '[.result[] | select(.pattern == "wedontcarecars.com/*" or .pattern == "www.wedontcarecars.com/*" or .pattern == "dealer.wedontcarecars.com/*") | {id,pattern,script}] | sort_by(.id)' /tmp/routes-before.json > /tmp/protected-routes-before.json
-          jq -S '[.result[] | select(.name == "wedontcarecars.com" or .name == "www.wedontcarecars.com" or .name == "dealer.wedontcarecars.com") | {id,type,name,content,proxied,ttl}] | sort_by(.id)' /tmp/dns-before.json > /tmp/protected-dns-before.json
+          : > /tmp/protected-dns-before.txt
+          for host in wedontcarecars.com www.wedontcarecars.com dealer.wedontcarecars.com; do
+            echo "[$host]" >> /tmp/protected-dns-before.txt
+            for type in A AAAA CNAME; do
+              dig @1.1.1.1 +short "$host" "$type" | sort -u | sed "s/^/$type /" >> /tmp/protected-dns-before.txt
+            done
+          done
 
       - name: Install Wrangler
         run: npm install --global wrangler@4.90.0 >/dev/null
@@ -142,13 +146,17 @@ jobs:
           set -euo pipefail
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
           curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" "${auth[@]}" > /tmp/routes-after.json
-          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=5000" "${auth[@]}" > /tmp/dns-after.json
           jq -e '.success == true' /tmp/routes-after.json >/dev/null
-          jq -e '.success == true' /tmp/dns-after.json >/dev/null
           jq -S '[.result[] | select(.pattern == "wedontcarecars.com/*" or .pattern == "www.wedontcarecars.com/*" or .pattern == "dealer.wedontcarecars.com/*") | {id,pattern,script}] | sort_by(.id)' /tmp/routes-after.json > /tmp/protected-routes-after.json
-          jq -S '[.result[] | select(.name == "wedontcarecars.com" or .name == "www.wedontcarecars.com" or .name == "dealer.wedontcarecars.com") | {id,type,name,content,proxied,ttl}] | sort_by(.id)' /tmp/dns-after.json > /tmp/protected-dns-after.json
+          : > /tmp/protected-dns-after.txt
+          for host in wedontcarecars.com www.wedontcarecars.com dealer.wedontcarecars.com; do
+            echo "[$host]" >> /tmp/protected-dns-after.txt
+            for type in A AAAA CNAME; do
+              dig @1.1.1.1 +short "$host" "$type" | sort -u | sed "s/^/$type /" >> /tmp/protected-dns-after.txt
+            done
+          done
           cmp /tmp/protected-routes-before.json /tmp/protected-routes-after.json
-          cmp /tmp/protected-dns-before.json /tmp/protected-dns-after.json
+          cmp /tmp/protected-dns-before.txt /tmp/protected-dns-after.txt
           for url in https://wedontcarecars.com https://www.wedontcarecars.com https://dealer.wedontcarecars.com/dealer; do
             code="$(curl -sS -L --max-time 25 -D /tmp/protected.h -o /dev/null -w '%{http_code}' "$url" || true)"
             echo "$url -> $code"
