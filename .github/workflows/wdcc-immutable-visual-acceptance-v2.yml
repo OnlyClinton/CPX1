@@ -123,7 +123,7 @@ jobs:
             const page=await ctx.newPage();
             let ready=false,lastStatus=0;
             for(let attempt=1;attempt<=5;attempt++){
-              const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}-${attempt}`,{waitUntil:'domcontentloaded',timeout:30000}).catch(()=>null);
+              const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}-${attempt}`,{waitUntil:'commit',timeout:20000}).catch(()=>null);
               lastStatus=response?.status()||0;
               if(lastStatus===200){
                 try{await page.locator('.li').waitFor({state:'attached',timeout:10000});ready=true;break}catch{}
