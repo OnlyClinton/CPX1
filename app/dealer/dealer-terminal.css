@@ -1,0 +1,53 @@
+/* Terminal WDCC dealer visual lock. Dealer-route only; loaded after every legacy dealer stylesheet. */
+html body main.dealerDashboardLocked{background:#f3f5f7!important;color:#111820!important}
+html body main.dealerDashboardLocked .dcContent.dashboardContent{background:#f6f7f9!important;color:#111820!important}
+html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle h1{color:#111820!important;text-shadow:none!important}
+html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle p{color:#687580!important}
+html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle .dcButton{background:#fff!important;color:#26333d!important;border-color:#cbd4dc!important}
+
+html body main.dealerDashboardLocked .dcTop .brand{display:flex!important;align-items:center!important;gap:12px!important;color:#fff!important}
+html body main.dealerDashboardLocked .dcTop .brand img{display:none!important}
+html body main.dealerDashboardLocked .dcTop .brand:before{
+  content:""!important;display:block!important;flex:0 0 58px!important;width:58px!important;height:58px!important;
+  background:url('/wdcc-official-logo.webp') center/contain no-repeat!important;border-radius:50%!important;
+  filter:drop-shadow(0 7px 16px rgba(0,0,0,.48))!important;
+}
+html body main.dealerDashboardLocked .dcTop .brand b{color:#fff!important;font-size:12px!important}
+html body main.dealerDashboardLocked .dcTop .brand small{color:#9fb0be!important;font-size:9px!important}
+html body main.dealerDashboardLocked .dashTopActions>a{color:#fff!important}
+html body main.dealerDashboardLocked .dashTopActions>span{color:#c3ced6!important}
+
+html body main.dealerDashboardLocked .dashMetrics article,
+html body main.dealerDashboardLocked .dashboardGridLocked .dcCard,
+html body main.dealerDashboardLocked .opsCards .dcCard,
+html body main.dealerDashboardLocked .activityLocked.dcCard{
+  background:#fff!important;color:#111820!important;border:1px solid #d9e0e6!important;
+  box-shadow:0 6px 18px rgba(9,22,35,.07)!important;
+}
+html body main.dealerDashboardLocked .dashMetrics article span{color:#697580!important}
+html body main.dealerDashboardLocked .dashMetrics article b{color:#111820!important}
+html body main.dealerDashboardLocked .dashMetrics article b.green{color:#16924e!important}
+html body main.dealerDashboardLocked .dashMetrics article b.red{color:#e72131!important}
+html body main.dealerDashboardLocked .dashMetrics article b.blue{color:#1478dc!important}
+html body main.dealerDashboardLocked .dcCard header b,
+html body main.dealerDashboardLocked .recentVehicles b,
+html body main.dealerDashboardLocked .opsCards b,
+html body main.dealerDashboardLocked .activityLocked span b{color:#111820!important}
+html body main.dealerDashboardLocked .dcCard header a{color:#2674a8!important}
+html body main.dealerDashboardLocked .recentVehicles>a,
+html body main.dealerDashboardLocked .activityLocked>a{color:#26323c!important;border-color:#e6eaed!important}
+html body main.dealerDashboardLocked .recentVehicles small,
+html body main.dealerDashboardLocked .opsCards small,
+html body main.dealerDashboardLocked .activityLocked span small,
+html body main.dealerDashboardLocked .emptyDash{color:#74808a!important}
+html body main.dealerDashboardLocked .opsCards article>a{background:#fff!important;color:#26333d!important;border-color:#cbd4dc!important}
+html body main.dealerDashboardLocked .donutLocked i{background:#fff!important}
+html body main.dealerDashboardLocked .legend p{color:#65717b!important}
+html body main.dealerDashboardLocked .legend p b{color:#1b252e!important}
+
+@media(max-width:760px){
+  html body main.dealerDashboardLocked .dcTop .brand:before{flex-basis:50px!important;width:50px!important;height:50px!important}
+  html body main.dealerDashboardLocked .dcTop .brand b{font-size:10px!important}
+  html body main.dealerDashboardLocked .dcTop .brand small{font-size:8px!important}
+  html body main.dealerDashboardLocked .dcContent.dashboardContent .dcTitle h1{color:#111820!important;font-size:30px!important}
+}
