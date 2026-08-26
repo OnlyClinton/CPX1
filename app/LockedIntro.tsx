@@ -75,7 +75,7 @@ export default function LockedIntro(){
   return <div className="li gpu-intro" aria-label="WDCC opening intro">
     <style>{`
       .wdcc-intro-active{overflow:hidden!important}.wdcc-intro-active main.locked-storefront .rh-logo img{opacity:0!important}
-      .gpu-intro{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:#06111a;isolation:isolate;animation:none!important}
+      .gpu-intro{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:transparent!important;isolation:isolate;animation:none!important}
       .li-scene{position:absolute;inset:0;z-index:1;background:#06111a;opacity:1;will-change:opacity}.li-scene img{width:100%;height:100%;display:block;object-fit:cover;object-position:68% 43%;filter:saturate(1.18) contrast(1.02) brightness(1.20);transform:none!important;animation:none!important}.li-scene:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,0) 68%,rgba(2,7,12,.14) 85%,rgba(2,7,12,.38) 100%)}
       .gpu-canvas{position:absolute;inset:0;z-index:5;width:100%;height:100%;pointer-events:none;animation:none!important}
       .li-badge{position:absolute;inset:0;z-index:4;pointer-events:none;background:transparent!important;box-shadow:none!important;animation:none!important;transform:none!important}.li-badge img{position:absolute;display:block;object-fit:contain;border-radius:50%;clip-path:circle(48% at 50% 50%);opacity:1;animation:none!important;transition:opacity .08s linear;will-change:left,top,width,height}
