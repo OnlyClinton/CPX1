@@ -1,0 +1,32 @@
+/* Owner visual proof correction — 2026-08-26
+   Keep the round WDCC badge visually dominant on both desktop and mobile.
+   Preview-only; no routing or functional behavior changes. */
+
+@media(min-width:1366px){
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo{
+    width:132px!important;
+    height:84px!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo img{
+    width:96px!important;
+    height:96px!important;
+    max-width:none!important;
+    max-height:none!important;
+  }
+}
+
+@media(max-width:820px),(hover:none) and (pointer:coarse){
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo{
+    width:104px!important;
+    height:66px!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header .rh-logo img{
+    width:96px!important;
+    height:96px!important;
+    max-width:none!important;
+    max-height:none!important;
+    transform:none!important;
+  }
+}
