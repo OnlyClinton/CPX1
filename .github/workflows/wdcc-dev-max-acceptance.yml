@@ -57,7 +57,6 @@ jobs:
           import { chromium } from 'playwright';
           const BASE='http://127.0.0.1:3000';
           const browser=await chromium.launch({headless:true});
-          const failures=[];
           const assert=(condition,message)=>{if(!condition)throw new Error(message)};
           const cleanPath=href=>{const u=new URL(href,BASE);return `${u.pathname}${u.search}`};
 
@@ -72,8 +71,8 @@ jobs:
             const errors=[];
             page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
             page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
-            page.on('requestfailed',r=>{if(!r.url().includes('/api/inventory'))errors.push(`request:${r.failure()?.errorText||'failed'}:${r.url()}`)});
-            await page.route('**/api/inventory**',route=>route.abort());
+            page.on('requestfailed',r=>errors.push(`request:${r.failure()?.errorText||'failed'}:${r.url()}`));
+            await page.route('**/api/inventory**',route=>route.fulfill({status:200,contentType:'application/json',body:'{"items":[],"inventory":[]}'}));
             return errors;
           }
 
@@ -99,6 +98,7 @@ jobs:
                 trust:document.querySelectorAll('.premiumTrust article').length
               };
             });
+            console.log(`${width} state=${JSON.stringify(state)}`);
             assert(state.scrollWidth<=state.innerWidth+3,`${width}px horizontal overflow ${state.scrollWidth}>${state.innerWidth}`);
             assert(state.broken.length===0,`${width}px broken images ${JSON.stringify(state.broken)}`);
             assert(state.missingAlt.length===0,`${width}px images missing alt ${JSON.stringify(state.missingAlt)}`);
