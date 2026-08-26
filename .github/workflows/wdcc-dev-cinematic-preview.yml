@@ -22,7 +22,7 @@ concurrency:
 jobs:
   verify-preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,7 +57,7 @@ jobs:
       - name: Install browser verifier
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
       - name: Visual and interaction acceptance
         shell: bash
         run: |
@@ -98,16 +98,20 @@ jobs:
           await click.goto(`${base}/`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(3000);
           await click.locator('.hero-cta-qualify').click();await click.waitForURL('**/inventory**',{timeout:15000});
           if(!click.url().includes('/inventory'))throw Error('inventory CTA route failed');
+          await click.goto(`${base}/`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(3000);
+          await click.locator('.main-nav a[href="/financing"]').click();await click.waitForURL('**/financing',{timeout:15000});
+          if(!(await click.locator('body').innerText()).includes('In-house financing'))throw Error('financing page content missing');
           for(const path of ['/financing','/get-approved','/inventory','/dealer']){const r=await click.request.get(`${base}${path}`);if(!r.ok())throw Error(`${path} returned ${r.status()}`)}
           await click.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(1200);
           if(!(await click.locator('body').innerText()).includes('Dealer Sign In'))throw Error('dealer entrance missing');
           await click.screenshot({path:'visual-proof/desktop-dealer-login.png',fullPage:true});
           await click.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded'});await click.waitForTimeout(1400);
-          if(!click.url().includes('/dealer'))throw Error('protected dealer add-vehicle route failed');
+          if(!(await click.locator('body').innerText()).includes('Dealer Sign In'))throw Error('add-vehicle route is not protected by dealer sign-in');
           await click.close();
 
           const dealerMobile=await browser.newPage({viewport:{width:390,height:844}});
           await dealerMobile.goto(`${base}/dealer`,{waitUntil:'domcontentloaded'});await dealerMobile.waitForTimeout(1000);
+          if(!(await dealerMobile.locator('body').innerText()).includes('Dealer Sign In'))throw Error('mobile dealer entrance missing');
           await dealerMobile.screenshot({path:'visual-proof/mobile-dealer-login.png',fullPage:true});
           await dealerMobile.close();
           await browser.close();
@@ -122,5 +126,5 @@ jobs:
       - name: Summary
         run: |
           echo '### WDCC private visual acceptance' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Storefront desktop/mobile, intro, real media, primary CTAs, dealer entrance, and protected add-vehicle routing passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Storefront desktop/mobile, intro, real media, primary CTAs, Financing nav, dealer entrance, and protected add-vehicle routing passed.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Canonical preview is deployed separately by the Cloudflare preview workflow. No production alias is touched here.' >> "$GITHUB_STEP_SUMMARY"
