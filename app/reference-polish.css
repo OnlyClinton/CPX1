@@ -13,7 +13,10 @@
  .wdcc-app .site-header{grid-template-columns:44px minmax(0,1fr) 44px!important}
  .wdcc-app .header-apply{display:none!important}
  .wdcc-app .mobile-call{display:grid!important}
+ .wdcc-app .hero h1{max-width:355px!important;font-size:38px!important}
+ .wdcc-app .hero h1 strong{white-space:nowrap!important;display:inline!important}
  .wdcc-app .hero-call{font-size:9.2px!important;margin-top:7px!important}
  .wdcc-app .how-section .section-heading{align-items:flex-start!important}
  .wdcc-app .start-approval{display:none!important}
 }
+@media(max-width:380px){.wdcc-app .hero h1{font-size:35px!important}}
