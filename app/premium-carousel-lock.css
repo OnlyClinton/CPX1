@@ -1,0 +1,155 @@
+/* Final preview-only mockup lock. Loaded last. No production routing changes. */
+html,body{max-width:100%;overflow-x:hidden!important}
+
+/* One opener only: CinematicMockupHome owns the intro on this branch. */
+.cinematic-v2 + .wdcc-app > .intro-sequence{display:none!important}
+
+/* Make the cinematic logo land on the same crest used by the finished header. */
+.cinematic-v2{--dock-x:max(66px,calc((100vw - 1450px)/2 + 54px));--dock-y:71px;--dock-w:96px}
+
+/* Approved full crest, not the undersized synthetic WDCC wordmark. */
+.premiumNine .logo-button{position:relative!important;width:112px!important;height:82px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;overflow:visible!important}
+.premiumNine .logo-button .wdcc-wordmark{display:none!important}
+.premiumNine .logo-button:before{content:"";display:block!important;width:96px!important;height:96px!important;background:url('/wdcc-logo-transparent.webp') center/contain no-repeat!important;filter:drop-shadow(0 7px 18px rgba(0,0,0,.72))!important;transform:translateY(3px)!important}
+.premiumNine .site-header{height:82px!important;padding:0 24px!important;grid-template-columns:112px minmax(0,1fr) auto auto!important;gap:16px!important}
+.premiumNine .main-nav{gap:clamp(14px,1.45vw,24px)!important}
+.premiumNine .main-nav a{font-size:10.5px!important;letter-spacing:.015em!important}
+.premiumNine .header-phone{min-height:40px!important;padding:0 13px!important}
+.premiumNine .header-apply{min-height:43px!important;padding:0 18px!important}
+
+/* Re-center the page on the approved storefront composition instead of the editorial drift. */
+.premiumNine .screenshotHero{min-height:535px!important;background-position:68% center!important;background-size:cover!important;border-bottom:0!important}
+.premiumNine .screenshotHero .hero-shade{background:linear-gradient(90deg,#02070cf7 0,#06101ae7 30%,#07111aa8 45%,#07111a36 64%,rgba(6,16,25,.08) 82%,rgba(6,16,25,.04) 100%)!important}
+.premiumNine .hero-copy{left:max(26px,calc((100vw - 1450px)/2))!important;top:50%!important;width:min(570px,calc(100vw - 52px))!important;max-width:570px!important;transform:translateY(-50%)!important}
+.premiumNine .hero-kicker{font-size:10.5px!important;letter-spacing:.105em!important}
+.premiumNine .hero h1{margin:8px 0 13px!important;font-size:clamp(48px,4.7vw,72px)!important;line-height:.91!important;letter-spacing:-.048em!important}
+.premiumNine .hero-lead{font-size:15.5px!important;line-height:1.45!important;max-width:430px!important}
+.premiumNine .screenshotHeroActions{gap:10px!important;margin-top:19px!important;max-width:470px!important}
+.premiumNine .screenshotHeroActions .btn{min-height:47px!important;padding:0 19px!important;font-size:10.5px!important;border-radius:4px!important}
+.premiumNine .screenshotCallSean{margin-top:8px!important;min-height:32px!important;padding:0!important;border:0!important;background:transparent!important;font-size:11px!important}
+
+/* Tight four-benefit strip from the reference. */
+.premiumNine .screenshotBenefits{max-width:calc(100% - 30px)!important;margin:-1px auto 0!important;border-radius:9px!important;box-shadow:0 10px 28px rgba(7,18,29,.14)!important}
+.premiumNine .screenshotBenefits article{min-height:92px!important;padding:16px 20px!important}
+.premiumNine .screenshotBenefits .icon{width:34px!important;height:34px!important}
+.premiumNine .screenshotBenefits strong{font-size:10.5px!important}
+.premiumNine .screenshotBenefits article span:last-child{font-size:9.4px!important;line-height:1.35!important}
+
+/* Inventory should read like the mockup, not a magazine spread. */
+.premiumNine .screenshotInventory{max-width:1500px!important;padding:24px 24px 28px!important;background:#f5f6f6!important}
+.premiumNine .screenshotInventory .section-heading{margin-bottom:16px!important}
+.premiumNine .screenshotInventory h2{font-size:30px!important;line-height:1!important;letter-spacing:-.035em!important}
+.premiumNine .screenshotInventory .section-kicker{font-size:9px!important}
+.premiumNine .section-deck{font-size:11px!important;margin-top:6px!important}
+.premiumNine .text-link{font-size:9px!important}
+.premiumNine .featured-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:14px!important}
+.premiumNine .vehicle-card{border-radius:9px!important;box-shadow:0 8px 24px rgba(8,18,28,.09)!important}
+.premiumNine .vehicle-image{height:205px!important;flex-basis:205px!important}
+.premiumNine .vehicle-card-body{min-height:165px!important;padding:13px!important}
+.premiumNine .vehicle-title{font-size:17px!important}
+.premiumNine .vehicle-price{font-size:27px!important}
+.premiumNine .down-summary,.premiumNine .vehicle-payment{font-size:9px!important}
+.premiumNine .vehicle-card-cta{font-size:8.5px!important;margin-top:9px!important}
+
+/* Carousel controls stay visible but stop dominating the cards. */
+.premiumNine .featured-carousel{position:relative!important;isolation:isolate!important;overflow:visible!important}
+.premiumNine .featured-carousel > .carousel-arrow{display:grid!important;place-items:center!important;position:absolute!important;top:84px!important;width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;padding:0!important;margin:0!important;z-index:30!important;visibility:visible!important;opacity:.94!important;pointer-events:auto!important;transform:none!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.28)!important;background:rgba(5,14,22,.88)!important;color:#fff!important;box-shadow:0 8px 22px rgba(0,0,0,.22)!important;cursor:pointer!important;font-size:21px!important;line-height:1!important}
+.premiumNine .featured-carousel > .carousel-prev{left:8px!important;right:auto!important}
+.premiumNine .featured-carousel > .carousel-next{right:8px!important;left:auto!important}
+
+/* Financing block returns to the compact four-step panel in the reference. */
+.premiumNine .screenshotHow{padding:28px 24px 30px!important}
+.premiumNine .screenshotHow .section-heading{margin-bottom:18px!important}
+.premiumNine .screenshotHow h2{font-size:31px!important;line-height:1!important}
+.premiumNine .screenshotHow .section-kicker{font-size:9px!important}
+.premiumNine .steps-grid{gap:12px!important}
+.premiumNine .steps-grid article{min-height:118px!important;padding:16px!important;border-radius:7px!important}
+.premiumNine .step-number{width:28px!important;height:28px!important;font-size:10px!important}
+.premiumNine .step-icon{width:34px!important;height:34px!important}
+.premiumNine .steps-grid h3{font-size:11px!important}
+.premiumNine .steps-grid p{font-size:9.5px!important;line-height:1.35!important}
+
+/* Replace the oversized extra Why-WDCC section with the simple proof strip used by the approved board. */
+.premiumNine .whyWdcc{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:0!important;padding:18px 24px!important;background:#fff!important;border-top:1px solid #dfe3e6!important;border-bottom:1px solid #dfe3e6!important}
+.premiumNine .whyWdcc .trust-heading{display:none!important}
+.premiumNine .whyWdcc article{min-height:72px!important;margin:0!important;padding:10px 18px!important;border:0!important;border-right:1px solid #e2e5e8!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;display:flex!important;align-items:center!important;gap:12px!important}
+.premiumNine .whyWdcc article:last-child{border-right:0!important}
+.premiumNine .whyWdcc article>span{width:32px!important;height:32px!important;min-width:32px!important;background:#fff!important;color:#111b24!important;border:1px solid #ced5da!important}
+.premiumNine .whyWdcc article b{font-size:10px!important;color:#111820!important}
+.premiumNine .whyWdcc article small{font-size:8.8px!important;color:#58636d!important;line-height:1.3!important}
+.premiumNine .whyWdcc .talkSean{background:#fff!important}
+.premiumNine .whyWdcc .talkSean .sean-badge{background:#ed1c2e!important;color:#fff!important;border:0!important}
+.premiumNine .whyWdcc .talkSean a{font-size:9px!important;color:#ed1c2e!important}
+
+/* Footer stays compact and secondary. */
+.premiumNine .screenshotFooter{padding:24px!important;min-height:120px!important}
+.premiumNine .footer-copy strong{font-size:15px!important}
+.premiumNine .footer-copy span,.premiumNine .footer-brand-lock p{font-size:9px!important}
+
+/* The three-button dock was visual noise and duplicated the hero CTAs. */
+.premiumNine .mobile-action-bar{display:none!important}
+
+@media(max-width:1100px) and (min-width:901px){
+ .premiumNine .site-header{grid-template-columns:100px minmax(0,1fr) auto!important}
+ .premiumNine .header-phone{display:none!important}
+ .premiumNine .logo-button:before{width:88px!important;height:88px!important}
+ .premiumNine .main-nav{gap:13px!important}
+}
+
+@media(max-width:900px){
+ .cinematic-v2{--dock-x:50%;--dock-y:59px;--dock-w:84px}
+ .premiumNine .utility-bar{display:none!important}
+ .premiumNine .site-header{height:76px!important;padding:0 14px!important;grid-template-columns:46px minmax(0,1fr) 46px!important;gap:8px!important}
+ .premiumNine .logo-button{width:auto!important;height:76px!important;justify-content:center!important}
+ .premiumNine .logo-button:before{width:82px!important;height:82px!important;transform:translateY(2px)!important}
+ .premiumNine .mobile-menu,.premiumNine .mobile-call{width:42px!important;height:42px!important}
+ .premiumNine .main-nav{top:76px!important}
+
+ /* Mobile follows the reference: one integrated hero, not image-first + giant empty text field. */
+ .premiumNine .screenshotHero{min-height:590px!important;background-size:auto 100%!important;background-position:69% center!important;background-repeat:no-repeat!important}
+ .premiumNine .screenshotHero:after{background:radial-gradient(circle at 72% 42%,rgba(29,153,255,.08),transparent 30%)!important}
+ .premiumNine .screenshotHero .hero-shade{background:linear-gradient(90deg,#03080df5 0,#03080dcc 46%,#03080d59 68%,rgba(3,8,13,.18) 100%),linear-gradient(180deg,rgba(3,8,13,.02) 0,rgba(3,8,13,.12) 55%,#03080dc7 100%)!important}
+ .premiumNine .hero-copy{left:17px!important;right:17px!important;top:72px!important;bottom:auto!important;width:auto!important;max-width:355px!important;transform:none!important}
+ .premiumNine .hero-kicker{font-size:9px!important;margin-bottom:6px!important}
+ .premiumNine .hero h1{max-width:325px!important;margin:0 0 11px!important;font-size:clamp(37px,10.8vw,46px)!important;line-height:.92!important}
+ .premiumNine .hero-lead{max-width:305px!important;font-size:12.5px!important;line-height:1.4!important}
+ .premiumNine .screenshotHeroActions{display:grid!important;grid-template-columns:1fr!important;width:min(100%,315px)!important;gap:7px!important;margin-top:13px!important}
+ .premiumNine .screenshotHeroActions .btn{min-height:44px!important;font-size:9.8px!important}
+ .premiumNine .screenshotCallSean{margin-top:7px!important;min-height:28px!important;font-size:9.5px!important}
+
+ .premiumNine .screenshotBenefits{max-width:100%!important;margin:0!important;border-radius:0!important;display:grid!important;grid-template-columns:1fr 1fr!important;box-shadow:none!important}
+ .premiumNine .screenshotBenefits article{min-height:84px!important;padding:12px 13px!important;border-bottom:1px solid #e1e5e8!important}
+ .premiumNine .screenshotBenefits article:nth-child(2n){border-right:0!important}
+
+ .premiumNine .screenshotInventory{padding:22px 12px 28px!important}
+ .premiumNine .screenshotInventory h2{font-size:29px!important;max-width:245px!important}
+ .premiumNine .featured-grid{display:block!important}
+ .premiumNine .featured-slide{display:none!important}
+ .premiumNine .featured-slide.active{display:block!important;width:min(100%,330px)!important;margin:0 auto!important}
+ .premiumNine .vehicle-image{height:230px!important;flex-basis:230px!important}
+ .premiumNine .vehicle-card-body{min-height:160px!important}
+ .premiumNine .featured-carousel > .carousel-arrow{top:103px!important;width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}
+ .premiumNine .featured-carousel > .carousel-prev{left:2px!important}
+ .premiumNine .featured-carousel > .carousel-next{right:2px!important}
+
+ .premiumNine .screenshotHow{padding:25px 12px 28px!important}
+ .premiumNine .screenshotHow h2{font-size:28px!important;max-width:330px!important}
+ .premiumNine .steps-grid{grid-template-columns:1fr!important;gap:8px!important}
+ .premiumNine .steps-grid article{min-height:76px!important;padding:12px!important;display:grid!important;grid-template-columns:28px 34px 1fr!important;align-items:center!important}
+
+ .premiumNine .whyWdcc{grid-template-columns:1fr 1fr!important;padding:0!important}
+ .premiumNine .whyWdcc article{min-height:82px!important;padding:12px!important;border-right:1px solid #e2e5e8!important;border-bottom:1px solid #e2e5e8!important}
+ .premiumNine .whyWdcc article:nth-child(2n){border-right:0!important}
+ .premiumNine .screenshotFooter{padding:22px 14px 30px!important}
+}
+
+@media(max-width:420px){
+ .premiumNine .screenshotHero{min-height:570px!important;background-position:70% center!important}
+ .premiumNine .hero-copy{top:67px!important;max-width:330px!important}
+ .premiumNine .hero h1{font-size:39px!important}
+ .premiumNine .hero-lead{font-size:12px!important;max-width:285px!important}
+ .premiumNine .screenshotHeroActions{width:285px!important}
+ .premiumNine .logo-button:before{width:78px!important;height:78px!important}
+ .premiumNine .whyWdcc{grid-template-columns:1fr!important}
+ .premiumNine .whyWdcc article{border-right:0!important}
+}
