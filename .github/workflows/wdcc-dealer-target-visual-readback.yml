@@ -120,4 +120,6 @@ jobs:
           RENDER: ${{ steps.render.outputs.ok }}
           CLEAN: ${{ steps.cleanup.outputs.ok }}
         shell: bash
-        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target visual readback $GITHUB_RUN_ID" --body "Status: **$STATUS**\nLive login: \`$AUTH\`\nAuthenticated rendered dashboard/inventory/leads/add-vehicle: **${RENDER:-false}**\nVerifier cleanup: **${CLEAN:-false}**\nLive Worker remains the already-proven target V3 version." || true
+        run: |
+          body="Status: **$STATUS**\nLive login: \`$AUTH\`\nAuthenticated rendered dashboard/inventory/leads/add-vehicle: **${RENDER:-false}**\nVerifier cleanup: **${CLEAN:-false}**\nLive Worker remains the already-proven target V3 version."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target visual readback $GITHUB_RUN_ID" --body "$body" || true
