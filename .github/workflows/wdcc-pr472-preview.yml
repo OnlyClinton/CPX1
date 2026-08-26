@@ -39,7 +39,7 @@ jobs:
           cat /tmp/build.log
           test "$build_rc" = 0
           set +e
-          vercel deploy --prebuilt --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/tmp/deploy.log 2>&1
+          vercel deploy --prebuilt --archive=tgz --yes --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/tmp/deploy.log 2>&1
           deploy_rc=$?
           set -e
           cat /tmp/deploy.log
