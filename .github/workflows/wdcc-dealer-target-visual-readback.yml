@@ -58,7 +58,7 @@ jobs:
           set -a;. /tmp/visual.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD"
           echo ok=true >> "$GITHUB_OUTPUT"
 
-      - name: Create authenticated live session
+      - name: Prove authenticated live session with curl
         id: auth
         shell: bash
         run: |
@@ -67,25 +67,28 @@ jobs:
           payload="$(jq -nc --arg u "$QA_EMAIL" --arg p "$QA_PASSWORD" '{username:$u,email:$u,password:$p}')"
           code="$(curl -sS -c /tmp/visual.cookies -o /tmp/visual-login.json -w '%{http_code}' -H 'content-type: application/json' -X POST "$DEALER/api/auth/login" --data "$payload")"
           test "$code" = 200;jq -e '.ok==true' /tmp/visual-login.json >/dev/null
-          cookie="$(awk '$6=="__Host-wdcc_session"{print $7}' /tmp/visual.cookies|tail -1)";test -n "$cookie";printf '::add-mask::%s\n' "$cookie";printf '%s' "$cookie" >/tmp/session-cookie
-          echo login=$code >> "$GITHUB_OUTPUT"
+          scode="$(curl -sS -b /tmp/visual.cookies -o /tmp/visual-session.json -w '%{http_code}' "$DEALER/api/auth/session")"
+          test "$scode" = 200;jq -e '.authenticated==true' /tmp/visual-session.json >/dev/null
+          echo login=$code >> "$GITHUB_OUTPUT";echo session=$scode >> "$GITHUB_OUTPUT"
 
-      - name: Render exact live dealer target
+      - name: Render exact live dealer target using browser-native login
         id: render
         shell: bash
         run: |
           set -euo pipefail
-          export DEALER SESSION_COOKIE="$(cat /tmp/session-cookie)"
-          printf '::add-mask::%s\n' "$SESSION_COOKIE"
+          set -a;. /tmp/visual.env;set +a;printf '::add-mask::%s\n' "$QA_PASSWORD";export DEALER QA_EMAIL QA_PASSWORD
           node <<'NODE'
           const fs=require('fs'),{chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});await c.addCookies([{name:'__Host-wdcc_session',value:process.env.SESSION_COOKIE,url:'https://dealer.wedontcarecars.com/',httpOnly:true,secure:true,sameSite:'Strict'}]);const p=await c.newPage();
-          await p.goto(process.env.DEALER+'/dealer',{waitUntil:'networkidle'});await p.waitForSelector('.targetDealerApp',{timeout:20000});let t=(await p.locator('body').innerText()).toLowerCase();for(const x of['dashboard','leads overview','leads by source','top performing vehicles','recent activity'])if(!t.includes(x))throw Error('DASH_'+x);await p.screenshot({path:'/tmp/screens/dealer-dashboard.png',fullPage:true});
-          await p.goto(process.env.DEALER+'/dealer/inventory',{waitUntil:'networkidle'});await p.waitForSelector('.refDealerShell',{timeout:20000});await p.screenshot({path:'/tmp/screens/dealer-inventory.png',fullPage:true});
-          await p.goto(process.env.DEALER+'/dealer/leads',{waitUntil:'networkidle'});await p.waitForTimeout(1200);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('leads'))throw Error('LEADS_VIEW');await p.screenshot({path:'/tmp/screens/dealer-leads.png',fullPage:true});
-          await p.goto(process.env.DEALER+'/dealer/inventory/new',{waitUntil:'networkidle'});await p.waitForTimeout(1200);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('vehicle'))throw Error('ADD_VEHICLE_VIEW');await p.screenshot({path:'/tmp/screens/dealer-add-vehicle.png',fullPage:true});
-          fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:true,url:p.url()},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
+          (async()=>{const b=await chromium.launch({headless:true});const c=await b.newContext({viewport:{width:1440,height:1000}});
+          const lr=await c.request.post(`${process.env.DEALER}/api/auth/login`,{headers:{'content-type':'application/json'},data:{username:process.env.QA_EMAIL,email:process.env.QA_EMAIL,password:process.env.QA_PASSWORD}});if(lr.status()!==200)throw Error(`BROWSER_LOGIN_${lr.status()}_${await lr.text()}`);
+          const sr=await c.request.get(`${process.env.DEALER}/api/auth/session`);if(sr.status()!==200)throw Error(`BROWSER_SESSION_${sr.status()}`);const sj=await sr.json();if(!sj.authenticated)throw Error('BROWSER_SESSION_NOT_AUTHENTICATED');
+          const p=await c.newPage();await p.goto(process.env.DEALER+'/dealer',{waitUntil:'networkidle'});await p.waitForSelector('.targetDealerApp',{timeout:30000});let t=(await p.locator('body').innerText()).toLowerCase();for(const x of['dashboard','leads overview','leads by source','top performing vehicles','recent activity'])if(!t.includes(x))throw Error('DASH_'+x);await p.screenshot({path:'/tmp/screens/dealer-dashboard.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/inventory',{waitUntil:'networkidle'});await p.waitForSelector('.refDealerShell',{timeout:30000});await p.screenshot({path:'/tmp/screens/dealer-inventory.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/leads',{waitUntil:'networkidle'});await p.waitForTimeout(1000);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('leads'))throw Error('LEADS_VIEW');await p.screenshot({path:'/tmp/screens/dealer-leads.png',fullPage:true});
+          await p.goto(process.env.DEALER+'/dealer/inventory/new',{waitUntil:'networkidle'});await p.waitForTimeout(1000);t=(await p.locator('body').innerText()).toLowerCase();if(!t.includes('vehicle'))throw Error('ADD_VEHICLE_VIEW');await p.screenshot({path:'/tmp/screens/dealer-add-vehicle.png',fullPage:true});
+          fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:true,sessionRole:sj?.user?.role||null,url:p.url()},null,2));await b.close()})().catch(e=>{fs.writeFileSync('/tmp/visual-result.json',JSON.stringify({ok:false,error:String(e.message||e)},null,2));console.error(e);process.exit(1)})
           NODE
+          cat /tmp/visual-result.json
           jq -e '.ok==true' /tmp/visual-result.json >/dev/null
           echo ok=true >> "$GITHUB_OUTPUT"
 
@@ -117,9 +120,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STATUS: ${{ job.status }}
           AUTH: ${{ steps.auth.outputs.login }}
+          SESSION: ${{ steps.auth.outputs.session }}
           RENDER: ${{ steps.render.outputs.ok }}
           CLEAN: ${{ steps.cleanup.outputs.ok }}
         shell: bash
         run: |
-          body="Status: **$STATUS**\nLive login: \`$AUTH\`\nAuthenticated rendered dashboard/inventory/leads/add-vehicle: **${RENDER:-false}**\nVerifier cleanup: **${CLEAN:-false}**\nLive Worker remains the already-proven target V3 version."
+          body="Status: **$STATUS**\nLive Login/Session: \`$AUTH/$SESSION\`\nAuthenticated rendered dashboard/inventory/leads/add-vehicle: **${RENDER:-false}**\nVerifier cleanup: **${CLEAN:-false}**\nLive Worker remains target V3."
           gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC dealer target visual readback $GITHUB_RUN_ID" --body "$body" || true
