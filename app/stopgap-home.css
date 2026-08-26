@@ -1,0 +1,987 @@
+/* WDCC storefront recovery layer.
+   Owns the homepage structure so legacy global styles cannot collapse the hero. */
+
+.wdcc-app {
+  --wdcc-red: #ef2031;
+  --wdcc-red-cta: #d51027;
+  --wdcc-blue: #1593ff;
+  --wdcc-ink: #02070c;
+  --wdcc-navy: #071522;
+  --wdcc-navy-2: #0d1e2d;
+  --wdcc-paper: #f4f6f8;
+  --wdcc-text: #111923;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: #f7fafc;
+  background: var(--wdcc-ink);
+}
+
+.wdcc-app main,
+.wdcc-app section,
+.wdcc-app header,
+.wdcc-app footer,
+.wdcc-app nav,
+.wdcc-app article,
+.wdcc-app div { box-sizing: border-box; }
+
+.wdcc-app button,
+.wdcc-app a { -webkit-tap-highlight-color: transparent; }
+
+/* Opening animation: recovered 2vfD skyline/car and corrected reveal -> dock states. */
+.wdcc-app .intro-sequence {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  overflow: hidden !important;
+  background: #02060a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.wdcc-app .intro-scene {
+  position: absolute !important;
+  inset: -3% !important;
+  background-image: var(--hero-image) !important;
+  background-position: 64% center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  filter: saturate(1.1) contrast(1.08) brightness(.82) !important;
+  transform: scale(1.08);
+  animation: wdccSceneReveal 2.4s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+.wdcc-app .intro-sequence::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #02060ac2 0%, #02060a6b 34%, #02060a12 70%),
+    linear-gradient(0deg, #02060a99 0%, transparent 45%) !important;
+  transition: opacity .6s ease;
+}
+
+.wdcc-app .intro-badge {
+  position: absolute !important;
+  z-index: 5 !important;
+  top: 49% !important;
+  left: 50% !important;
+  width: min(28vw, 300px) !important;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.78);
+  animation: wdccBadgeReveal .72s .12s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+.wdcc-app .intro-badge img {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 16px 36px #000c) drop-shadow(0 0 30px #168af44a) !important;
+}
+
+.wdcc-app .intro-tagline {
+  position: absolute !important;
+  z-index: 6 !important;
+  top: 70% !important;
+  left: 50% !important;
+  margin: 0 !important;
+  color: #f2f6f9 !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  animation: wdccTagReveal .65s .4s ease forwards !important;
+}
+
+.wdcc-app .intro-skip {
+  position: absolute !important;
+  right: 18px !important;
+  bottom: 18px !important;
+  z-index: 8 !important;
+  min-height: 40px !important;
+  padding: 0 15px !important;
+  color: #fff !important;
+  background: #02070cbd !important;
+  border: 1px solid #ffffff45 !important;
+  border-radius: 999px !important;
+  font: inherit !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  cursor: pointer !important;
+}
+
+.wdcc-app .intro-smoke {
+  position: absolute !important;
+  z-index: 2 !important;
+  bottom: 0 !important;
+  width: 58% !important;
+  height: 38% !important;
+  border-radius: 50% !important;
+  filter: blur(38px) !important;
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.wdcc-app .smoke-one {
+  left: 7% !important;
+  background: radial-gradient(circle, #ffffff2e, transparent 67%) !important;
+  animation: wdccSmoke 2.2s .15s ease-out both !important;
+}
+
+.wdcc-app .smoke-two {
+  right: -4% !important;
+  background: radial-gradient(circle, #1593ff3d, transparent 67%) !important;
+  animation: wdccSmoke 2.35s .3s ease-out both reverse !important;
+}
+
+.wdcc-app .intro-dock .intro-scene,
+.wdcc-app .intro-dock .intro-tagline,
+.wdcc-app .intro-dock .intro-smoke,
+.wdcc-app .intro-dock .intro-skip { opacity: 0 !important; transition: opacity .55s ease !important; }
+
+.wdcc-app .intro-dock::after { opacity: .82 !important; }
+
+.wdcc-app .intro-dock .intro-badge {
+  animation: wdccBadgeDock .86s cubic-bezier(.16, 1, .3, 1) forwards !important;
+}
+
+@keyframes wdccSceneReveal {
+  from { transform: scale(1.08); filter: saturate(1.04) contrast(1.04) brightness(.72); }
+  to { transform: scale(1.01); filter: saturate(1.1) contrast(1.08) brightness(.88); }
+}
+
+@keyframes wdccBadgeReveal {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.78); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes wdccBadgeDock {
+  from { top: 49%; left: 50%; width: min(28vw, 300px); opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { top: 30px; left: max(24px, calc((100vw - 1500px) / 2 + 24px)); width: 98px; opacity: .98; transform: translate(0, 0) scale(.82); }
+}
+
+@keyframes wdccTagReveal {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes wdccSmoke {
+  0% { opacity: 0; transform: scale(.72) translate3d(0, 12%, 0); }
+  35% { opacity: .7; }
+  100% { opacity: 0; transform: scale(1.5) translate3d(8%, -5%, 0); }
+}
+
+/* Header */
+.wdcc-app .home-header-shell {
+  position: absolute !important;
+  inset: 0 0 auto !important;
+  z-index: 60 !important;
+  width: 100% !important;
+  background: #02070cd9 !important;
+  border-bottom: 1px solid #ffffff18 !important;
+  backdrop-filter: blur(15px) !important;
+}
+
+.wdcc-app .utility-bar {
+  width: min(1500px, 100%) !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 28px !important;
+  color: #dce5ed !important;
+  background: transparent !important;
+  border-bottom: 1px solid #ffffff0f !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .utility-bar b { color: var(--wdcc-red) !important; }
+
+.wdcc-app .site-header {
+  position: relative !important;
+  width: min(1500px, 100%) !important;
+  min-height: 78px !important;
+  height: 78px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
+  display: grid !important;
+  grid-template-columns: 112px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 24px !important;
+  background: transparent !important;
+}
+
+.wdcc-app .logo-button {
+  display: block !important;
+  width: 96px !important;
+  height: 96px !important;
+  margin: 0 !important;
+  background: none !important;
+  filter: drop-shadow(0 6px 16px #000c) !important;
+}
+
+.wdcc-app .logo-button img { display: block !important; width: 100% !important; height: 100% !important; object-fit: contain !important; }
+
+.wdcc-app .main-nav {
+  position: static !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: clamp(18px, 2.3vw, 34px) !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #f7fafc !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.wdcc-app .main-nav a {
+  color: #f7fafc !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.wdcc-app .main-nav a:hover { color: #8bc8ff !important; }
+
+.wdcc-app .header-cta {
+  min-height: 44px !important;
+  padding: 0 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fff !important;
+  background: var(--wdcc-red-cta) !important;
+  border: 1px solid #f33145 !important;
+  border-radius: 5px !important;
+  box-shadow: 0 10px 25px #9f091f4a !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.wdcc-app .mobile-menu,
+.wdcc-app .mobile-call { display: none !important; }
+
+/* Hero */
+.wdcc-app .hero {
+  position: relative !important;
+  isolation: isolate !important;
+  min-height: 720px !important;
+  display: block !important;
+  overflow: hidden !important;
+  background-image: var(--hero-image) !important;
+  background-position: 59% center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+}
+
+.wdcc-app .hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #02070cf5 0%, #02070cdd 28%, #02070c74 48%, #02070c10 72%),
+    linear-gradient(0deg, #02070ccf 0%, transparent 34%);
+}
+
+.wdcc-app .hero::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: auto 0 0 !important;
+  z-index: 1 !important;
+  height: 130px !important;
+  background: linear-gradient(0deg, #02070ce8 0%, transparent 100%) !important;
+  pointer-events: none !important;
+}
+
+.wdcc-app .hero-shade {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: radial-gradient(circle at 70% 65%, #168af416 0%, transparent 34%) !important;
+  pointer-events: none !important;
+}
+
+.wdcc-app .hero-car-glow {
+  position: absolute !important;
+  z-index: 1 !important;
+  right: 4% !important;
+  bottom: 4% !important;
+  width: min(54vw, 850px) !important;
+  height: 34% !important;
+  background: radial-gradient(ellipse, #147bd51e 0%, transparent 68%) !important;
+  filter: blur(22px) !important;
+  pointer-events: none !important;
+}
+
+.wdcc-app .hero-copy {
+  position: relative !important;
+  z-index: 3 !important;
+  top: auto !important;
+  left: auto !important;
+  width: min(680px, 52vw) !important;
+  margin: 0 0 0 max(0px, calc((100vw - 1500px) / 2)) !important;
+  padding: 186px 0 76px 32px !important;
+  transform: none !important;
+}
+
+.wdcc-app .hero-kicker {
+  margin: 0 0 13px !important;
+  color: #79bfff !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .13em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .hero-kicker::before {
+  content: "";
+  display: inline-block;
+  width: 34px;
+  height: 2px;
+  margin-right: 10px;
+  vertical-align: middle;
+  background: var(--wdcc-red);
+}
+
+.wdcc-app .hero h1 {
+  margin: 0 0 20px !important;
+  color: var(--wdcc-red) !important;
+  font-size: clamp(56px, 6.25vw, 96px) !important;
+  font-weight: 950 !important;
+  letter-spacing: -.062em !important;
+  line-height: .87 !important;
+  text-transform: uppercase !important;
+  text-shadow: 0 7px 26px #000e !important;
+}
+
+.wdcc-app .hero h1 em { color: var(--wdcc-blue) !important; font-style: normal !important; }
+.wdcc-app .hero h1 strong { color: #fff !important; }
+
+.wdcc-app .hero-lead {
+  max-width: 540px !important;
+  margin: 0 !important;
+  color: #f2f6f9 !important;
+  font-size: clamp(15px, 1.25vw, 18px) !important;
+  font-weight: 560 !important;
+  line-height: 1.5 !important;
+  text-shadow: 0 3px 15px #000 !important;
+}
+
+.wdcc-app .hero-actions {
+  width: min(570px, 100%) !important;
+  margin: 25px 0 0 !important;
+  display: grid !important;
+  grid-template-columns: 1.12fr 1fr !important;
+  gap: 12px !important;
+}
+
+.wdcc-app .hero-actions .btn {
+  min-height: 52px !important;
+  padding: 0 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 9px !important;
+  border-radius: 5px !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .035em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.wdcc-app .hero-actions .btn-primary {
+  color: #fff !important;
+  background: var(--wdcc-red-cta) !important;
+  border: 1px solid #f33145 !important;
+  box-shadow: 0 12px 28px #a0051f5c !important;
+}
+
+.wdcc-app .hero-actions .btn-outline {
+  color: #fff !important;
+  background: #071522d9 !important;
+  border: 1px solid #9dabb7 !important;
+  box-shadow: 0 12px 28px #0007 !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.wdcc-app .hero-actions .btn:hover,
+.wdcc-app .header-cta:hover { transform: translateY(-1px); filter: brightness(1.08); }
+
+.wdcc-app .hero-call {
+  width: fit-content !important;
+  margin-top: 17px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #f5f8fa !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .035em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .hero-call strong { color: var(--wdcc-red) !important; }
+
+/* Benefits: distinct dark band between cinematic hero and light inventory. */
+.wdcc-app .benefit-strip {
+  position: relative !important;
+  z-index: 8 !important;
+  width: min(1468px, calc(100% - 32px)) !important;
+  margin: -18px auto 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  color: #fff !important;
+  background: var(--wdcc-navy) !important;
+  border: 1px solid #274156 !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  box-shadow: 0 18px 42px #0006 !important;
+}
+
+.wdcc-app .benefit-strip article {
+  min-height: 104px !important;
+  padding: 18px 18px !important;
+  display: grid !important;
+  grid-template-columns: 46px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 12px !important;
+  color: #fff !important;
+  background: linear-gradient(145deg, #0a1a28, #06131e) !important;
+  border-right: 1px solid #284052 !important;
+}
+
+.wdcc-app .benefit-strip article:last-child { border-right: 0 !important; }
+
+.wdcc-app .benefit-strip .icon {
+  width: 40px !important;
+  height: 40px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #fff !important;
+  border: 2px solid var(--wdcc-red) !important;
+  border-radius: 50% !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+}
+
+.wdcc-app .benefit-strip strong {
+  display: block !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .02em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .benefit-strip article div > span {
+  display: block !important;
+  margin-top: 5px !important;
+  color: #b9c7d2 !important;
+  font-size: 10px !important;
+  line-height: 1.38 !important;
+}
+
+/* Inventory: intentionally light for hard section contrast. */
+.wdcc-app .inventory-showcase {
+  position: relative !important;
+  z-index: 2 !important;
+  padding: 66px 24px 64px !important;
+  color: var(--wdcc-text) !important;
+  background: var(--wdcc-paper) !important;
+}
+
+.wdcc-app .section-heading {
+  width: min(1460px, 100%) !important;
+  margin: 0 auto 24px !important;
+  display: flex !important;
+  align-items: end !important;
+  justify-content: space-between !important;
+  gap: 24px !important;
+}
+
+.wdcc-app .section-kicker {
+  display: block !important;
+  color: #53606d !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .inventory-showcase h2,
+.wdcc-app .how-section h2 {
+  margin: 5px 0 !important;
+  font-size: clamp(34px, 4vw, 54px) !important;
+  font-weight: 950 !important;
+  letter-spacing: -.05em !important;
+  line-height: .98 !important;
+}
+
+.wdcc-app .inventory-showcase h2 { color: var(--wdcc-text) !important; }
+
+.wdcc-app .section-deck {
+  margin: 8px 0 0 !important;
+  color: #4d5965 !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.wdcc-app .text-link {
+  padding-bottom: 4px !important;
+  color: #1b2732 !important;
+  border-bottom: 2px solid var(--wdcc-red) !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.wdcc-app .featured-carousel {
+  position: relative !important;
+  width: min(1500px, 100%) !important;
+  margin: 0 auto !important;
+}
+
+.wdcc-app .featured-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 13px !important;
+}
+
+.wdcc-app .featured-slide { display: block !important; min-width: 0 !important; }
+
+.wdcc-app .vehicle-card {
+  height: 100% !important;
+  overflow: hidden !important;
+  color: var(--wdcc-text) !important;
+  background: #fff !important;
+  border: 1px solid #d3dae1 !important;
+  border-radius: 9px !important;
+  box-shadow: 0 7px 20px #10182816 !important;
+}
+
+.wdcc-app .vehicle-image {
+  position: relative !important;
+  display: block !important;
+  aspect-ratio: 4 / 3 !important;
+  overflow: hidden !important;
+  background: #101820 !important;
+}
+
+.wdcc-app .vehicle-image img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transition: transform .3s ease !important;
+}
+
+.wdcc-app .vehicle-card:hover .vehicle-image img { transform: scale(1.025); }
+
+.wdcc-app .card-badges {
+  position: absolute !important;
+  top: 9px !important;
+  left: 9px !important;
+}
+
+.wdcc-app .card-badges span {
+  padding: 5px 7px !important;
+  color: #fff !important;
+  background: #087a45 !important;
+  border-radius: 4px !important;
+  font-size: 8px !important;
+  font-weight: 950 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+
+.wdcc-app .vehicle-card-body { padding: 14px !important; color: var(--wdcc-text) !important; background: #fff !important; }
+.wdcc-app .vehicle-card-body .eyebrow { margin: 0 0 3px !important; color: #66727e !important; font-size: 9px !important; font-weight: 900 !important; letter-spacing: .07em !important; text-transform: uppercase !important; }
+.wdcc-app .vehicle-title { display: block !important; min-height: 36px !important; color: var(--wdcc-text) !important; font-size: 15px !important; font-weight: 950 !important; line-height: 1.18 !important; }
+.wdcc-app .vehicle-price { display: block !important; margin-top: 8px !important; color: #080d12 !important; font-size: 23px !important; font-weight: 950 !important; letter-spacing: -.035em !important; }
+.wdcc-app .vehicle-payment { min-height: 28px !important; margin: 5px 0 9px !important; color: #46525e !important; font-size: 9px !important; line-height: 1.35 !important; }
+.wdcc-app .spec-pills { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; }
+.wdcc-app .spec-pills span { padding: 4px 6px !important; color: #35414c !important; background: #edf1f4 !important; border-radius: 4px !important; font-size: 8px !important; font-weight: 850 !important; text-transform: uppercase !important; }
+
+.wdcc-app .carousel-arrow {
+  position: absolute !important;
+  z-index: 4 !important;
+  top: 34% !important;
+  width: 38px !important;
+  height: 38px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #fff !important;
+  background: #071522ee !important;
+  border: 1px solid #ffffff40 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 8px 22px #0005 !important;
+  font-size: 25px !important;
+  cursor: pointer !important;
+}
+
+.wdcc-app .carousel-prev { left: -18px !important; }
+.wdcc-app .carousel-next { right: -18px !important; }
+
+/* How it works: dark section and single supporting CTA. */
+.wdcc-app .how-section {
+  padding: 64px 24px 70px !important;
+  color: #fff !important;
+  background: linear-gradient(145deg, #071522, #03101a) !important;
+  border-top: 1px solid #23384a !important;
+  border-bottom: 1px solid #23384a !important;
+}
+
+.wdcc-app .how-section .section-kicker { color: #aebdca !important; }
+.wdcc-app .how-section h2 { color: #fff !important; }
+.wdcc-app .how-section h2 strong { color: var(--wdcc-red) !important; }
+
+.wdcc-app .how-cta {
+  min-height: 44px !important;
+  padding: 0 17px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  color: #fff !important;
+  background: var(--wdcc-red-cta) !important;
+  border: 1px solid #f33145 !important;
+  border-radius: 5px !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.wdcc-app .steps-grid {
+  width: min(1460px, 100%) !important;
+  margin: 0 auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.wdcc-app .steps-grid article {
+  position: relative !important;
+  min-height: 160px !important;
+  padding: 22px !important;
+  color: #fff !important;
+  background: var(--wdcc-navy-2) !important;
+  border: 1px solid #2b4256 !important;
+  border-radius: 8px !important;
+}
+
+.wdcc-app .steps-grid article > span {
+  width: 34px !important;
+  height: 34px !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #fff !important;
+  background: var(--wdcc-red-cta) !important;
+  border-radius: 50% !important;
+  font-size: 10px !important;
+  font-weight: 950 !important;
+}
+
+.wdcc-app .steps-grid h3 { margin: 18px 0 7px !important; color: #fff !important; font-size: 14px !important; font-weight: 950 !important; text-transform: uppercase !important; }
+.wdcc-app .steps-grid p { margin: 0 !important; color: #becbd5 !important; font-size: 11px !important; line-height: 1.5 !important; }
+
+/* Trust strip: light conclusion before footer. */
+.wdcc-app .trust-strip {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  color: var(--wdcc-text) !important;
+  background: #fff !important;
+  border-bottom: 1px solid #d8dfe5 !important;
+}
+
+.wdcc-app .trust-strip article {
+  min-height: 112px !important;
+  padding: 27px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  border-right: 1px solid #dce2e7 !important;
+}
+
+.wdcc-app .trust-strip article:last-child { border-right: 0 !important; }
+.wdcc-app .trust-strip strong { color: #131c25 !important; font-size: 11px !important; font-weight: 950 !important; letter-spacing: .03em !important; text-transform: uppercase !important; }
+.wdcc-app .trust-strip span { margin-top: 6px !important; color: #4b5864 !important; font-size: 10px !important; line-height: 1.45 !important; }
+
+.wdcc-app .site-footer {
+  min-height: 96px !important;
+  padding: 25px max(24px, calc((100vw - 1460px) / 2)) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 24px !important;
+  color: #d8e1e8 !important;
+  background: #02070c !important;
+  border-top: 1px solid #ffffff16 !important;
+}
+
+.wdcc-app .site-footer div { display: grid !important; gap: 4px !important; }
+.wdcc-app .site-footer strong { color: #fff !important; font-size: 12px !important; }
+.wdcc-app .site-footer span,
+.wdcc-app .site-footer a { color: #afbdc8 !important; font-size: 10px !important; }
+.wdcc-app .site-footer > a { color: var(--wdcc-red) !important; font-size: 13px !important; font-weight: 950 !important; }
+.wdcc-app .footer-links { display: flex !important; gap: 16px !important; }
+.wdcc-app .mobile-action-bar { display: none !important; }
+
+@media (max-width: 980px) {
+  .wdcc-app { padding-bottom: 62px !important; }
+
+  .wdcc-app .utility-bar { display: none !important; }
+
+  .wdcc-app .site-header {
+    min-height: 74px !important;
+    height: 74px !important;
+    padding: 0 13px !important;
+    grid-template-columns: 46px minmax(0, 1fr) 46px !important;
+    gap: 8px !important;
+  }
+
+  .wdcc-app .mobile-menu {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+    color: #fff !important;
+    background: #081621dd !important;
+    border: 1px solid #ffffff24 !important;
+    border-radius: 11px !important;
+  }
+
+  .wdcc-app .mobile-menu > span { width: 20px !important; height: 15px !important; display: grid !important; align-content: space-between !important; }
+  .wdcc-app .mobile-menu i { display: block !important; width: 20px !important; height: 2px !important; margin: 0 !important; background: #fff !important; border: 0 !important; border-radius: 3px !important; transition: .2s ease !important; }
+  .wdcc-app .mobile-menu[aria-expanded="true"] i:nth-child(1) { transform: translateY(6.5px) rotate(45deg) !important; }
+  .wdcc-app .mobile-menu[aria-expanded="true"] i:nth-child(2) { opacity: 0 !important; }
+  .wdcc-app .mobile-menu[aria-expanded="true"] i:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg) !important; }
+
+  .wdcc-app .logo-button {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: center !important;
+    width: 82px !important;
+    height: 82px !important;
+  }
+
+  .wdcc-app .header-cta { display: none !important; }
+
+  .wdcc-app .mobile-call {
+    position: static !important;
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    width: 44px !important;
+    height: 44px !important;
+    display: grid !important;
+    place-items: center !important;
+    color: #fff !important;
+    background: var(--wdcc-red-cta) !important;
+    border: 1px solid #f33145 !important;
+    border-radius: 50% !important;
+  }
+
+  .wdcc-app .mobile-call svg { width: 22px !important; height: 22px !important; fill: #fff !important; }
+
+  .wdcc-app .main-nav {
+    position: absolute !important;
+    z-index: 520 !important;
+    top: 68px !important;
+    left: 9px !important;
+    right: 9px !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    display: none !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2px !important;
+    color: #fff !important;
+    background: #07131ff8 !important;
+    border: 1px solid #ffffff24 !important;
+    border-radius: 13px !important;
+    box-shadow: 0 22px 58px #000e !important;
+    backdrop-filter: blur(18px) !important;
+  }
+
+  .wdcc-app .main-nav.open { display: grid !important; }
+  .wdcc-app .main-nav a { min-height: 46px !important; padding: 0 13px !important; display: flex !important; align-items: center !important; border-radius: 8px !important; font-size: 10px !important; }
+  .wdcc-app .main-nav a:active { background: #ffffff0e !important; }
+
+  .wdcc-app .hero {
+    min-height: 700px !important;
+    background-position: 71% top !important;
+    background-size: auto 700px !important;
+  }
+
+  .wdcc-app .hero::before {
+    background:
+      linear-gradient(0deg, #02070cff 4%, #02070ce8 36%, #02070c96 55%, transparent 79%),
+      linear-gradient(90deg, #02070c4f 0%, transparent 62%) !important;
+  }
+
+  .wdcc-app .hero::after { height: 80px !important; }
+
+  .wdcc-app .hero-copy {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 318px 18px 35px !important;
+  }
+
+  .wdcc-app .hero h1 { font-size: clamp(46px, 12.8vw, 66px) !important; line-height: .89 !important; margin-bottom: 15px !important; }
+  .wdcc-app .hero-lead { font-size: 14px !important; line-height: 1.45 !important; }
+  .wdcc-app .hero-actions { width: 100% !important; grid-template-columns: 1fr !important; gap: 9px !important; margin-top: 19px !important; }
+  .wdcc-app .hero-actions .btn { min-height: 48px !important; }
+  .wdcc-app .hero-call { margin-top: 14px !important; }
+
+  .wdcc-app .benefit-strip {
+    width: 100% !important;
+    margin: 0 !important;
+    grid-template-columns: 1fr 1fr !important;
+    border-right: 0 !important;
+    border-left: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .wdcc-app .benefit-strip article { min-height: 98px !important; padding: 14px 12px !important; border-bottom: 1px solid #284052 !important; }
+  .wdcc-app .benefit-strip article:nth-child(2) { border-right: 0 !important; }
+  .wdcc-app .benefit-strip article:nth-child(3),
+  .wdcc-app .benefit-strip article:nth-child(4) { border-bottom: 0 !important; }
+
+  .wdcc-app .inventory-showcase { padding: 38px 13px 44px !important; }
+  .wdcc-app .section-heading { align-items: flex-start !important; }
+  .wdcc-app .featured-grid { display: flex !important; gap: 12px !important; overflow-x: auto !important; padding: 2px 1px 12px !important; scroll-snap-type: x mandatory !important; scrollbar-width: none !important; }
+  .wdcc-app .featured-grid::-webkit-scrollbar { display: none !important; }
+  .wdcc-app .featured-slide { min-width: min(78%, 330px) !important; scroll-snap-align: start !important; }
+  .wdcc-app .carousel-arrow { display: none !important; }
+
+  .wdcc-app .how-section { padding: 48px 14px 54px !important; }
+  .wdcc-app .steps-grid { grid-template-columns: 1fr 1fr !important; }
+  .wdcc-app .trust-strip { grid-template-columns: 1fr 1fr !important; }
+  .wdcc-app .trust-strip article { min-height: 104px !important; border-bottom: 1px solid #dce2e7 !important; }
+  .wdcc-app .trust-strip article:nth-child(2) { border-right: 0 !important; }
+  .wdcc-app .trust-strip article:nth-child(3),
+  .wdcc-app .trust-strip article:nth-child(4) { border-bottom: 0 !important; }
+
+  .wdcc-app .site-footer { padding: 26px 18px 30px !important; flex-direction: column !important; align-items: flex-start !important; gap: 15px !important; }
+
+  .wdcc-app .mobile-action-bar {
+    position: fixed !important;
+    z-index: 650 !important;
+    inset: auto 0 0 !important;
+    height: 62px !important;
+    display: grid !important;
+    grid-template-columns: 1.15fr 1fr .8fr !important;
+    color: #fff !important;
+    background: #050c13f9 !important;
+    border-top: 1px solid #ffffff22 !important;
+    box-shadow: 0 -12px 34px #0009 !important;
+    backdrop-filter: blur(14px) !important;
+  }
+
+  .wdcc-app .mobile-action-bar a {
+    min-width: 0 !important;
+    min-height: 62px !important;
+    padding: 0 7px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    color: #fff !important;
+    background: #0c1b28 !important;
+    border-right: 1px solid #ffffff16 !important;
+    font-size: 9px !important;
+    font-weight: 950 !important;
+    letter-spacing: .015em !important;
+    text-transform: uppercase !important;
+    white-space: nowrap !important;
+  }
+
+  .wdcc-app .mobile-action-bar a:first-child { background: var(--wdcc-red-cta) !important; }
+  .wdcc-app .mobile-action-bar a:last-child { border-right: 0 !important; }
+
+  @keyframes wdccBadgeDock {
+    from { top: 49%; left: 50%; width: min(58vw, 240px); opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { top: 0; left: 50%; width: 82px; opacity: .98; transform: translate(-50%, 0) scale(.78); }
+  }
+}
+
+@media (max-width: 560px) {
+  .wdcc-app .intro-scene { inset: -1% !important; background-position: 71% center !important; }
+  .wdcc-app .intro-badge { width: min(62vw, 235px) !important; }
+  .wdcc-app .intro-tagline { top: 74% !important; font-size: 9px !important; }
+
+  .wdcc-app .site-header { min-height: 70px !important; height: 70px !important; padding: 0 10px !important; }
+  .wdcc-app .logo-button { width: 78px !important; height: 78px !important; }
+  .wdcc-app .mobile-menu,
+  .wdcc-app .mobile-call { width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; }
+  .wdcc-app .main-nav { top: 66px !important; left: 7px !important; right: 7px !important; }
+
+  .wdcc-app .hero { min-height: 680px !important; background-size: auto 680px !important; background-position: 72% top !important; }
+  .wdcc-app .hero-copy { padding: 298px 14px 28px !important; }
+  .wdcc-app .hero-kicker { margin-bottom: 10px !important; font-size: 9px !important; }
+  .wdcc-app .hero h1 { font-size: clamp(43px, 13.2vw, 59px) !important; }
+  .wdcc-app .hero-lead { font-size: 13.5px !important; }
+  .wdcc-app .hero-actions .btn { font-size: 10px !important; }
+
+  .wdcc-app .benefit-strip article { min-height: 96px !important; grid-template-columns: 37px minmax(0, 1fr) !important; gap: 9px !important; padding: 12px 9px !important; }
+  .wdcc-app .benefit-strip .icon { width: 33px !important; height: 33px !important; font-size: 15px !important; }
+  .wdcc-app .benefit-strip strong { font-size: 9px !important; }
+  .wdcc-app .benefit-strip article div > span { font-size: 8px !important; }
+
+  .wdcc-app .inventory-showcase h2,
+  .wdcc-app .how-section h2 { font-size: 34px !important; }
+  .wdcc-app .text-link { font-size: 9px !important; }
+  .wdcc-app .section-deck { font-size: 11px !important; }
+  .wdcc-app .featured-slide { min-width: 84% !important; }
+
+  .wdcc-app .how-section .section-heading { flex-direction: column !important; }
+  .wdcc-app .steps-grid { grid-template-columns: 1fr !important; }
+  .wdcc-app .steps-grid article { min-height: 142px !important; }
+
+  .wdcc-app .trust-strip article { padding: 22px 17px !important; }
+  .wdcc-app .mobile-action-bar a { font-size: 8px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wdcc-app .intro-sequence { display: none !important; }
+  .wdcc-app *,
+  .wdcc-app *::before,
+  .wdcc-app *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
