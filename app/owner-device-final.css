@@ -1,56 +1,124 @@
-/* OWNER REAL-DEVICE FINAL — Android/iPhone acceptance corrections.
-   Visual-only storefront authority. No production routing/provider changes. */
+/* OWNER REAL-DEVICE FINAL — Android/iPhone acceptance authority.
+   Loaded last. Visual-only storefront correction; no production routing/provider changes. */
 
 @media (max-width:1100px),(hover:none) and (pointer:coarse){
-  /* Both bars remain pinned but stay in normal flow. This prevents the 106px double-offset/dead band
-     seen on physical Android while retaining the required pinned stack. */
+  html body main.reference-home.locked-storefront{
+    overflow-x:hidden!important;
+  }
+
+  /* Pinned bars stay in normal flow: no duplicate hero offset. */
   html body main.reference-home.locked-storefront > .rh-utility{
     position:sticky!important;
     top:0!important;
     z-index:3201!important;
-    height:28px!important;
-    min-height:28px!important;
+    height:27px!important;
+    min-height:27px!important;
     overflow:hidden!important;
+    background:#07121c!important;
   }
   html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner{
-    height:28px!important;
-    min-height:28px!important;
+    height:27px!important;
+    min-height:27px!important;
     width:100%!important;
     max-width:none!important;
     margin:0!important;
-    padding:0 10px!important;
+    padding:0 9px!important;
     display:flex!important;
     align-items:center!important;
-    gap:14px!important;
-    overflow-x:auto!important;
-    overflow-y:hidden!important;
+    justify-content:space-between!important;
+    gap:8px!important;
+    overflow:hidden!important;
     white-space:nowrap!important;
-    font-size:9px!important;
+    font-size:8px!important;
     line-height:1!important;
-    scrollbar-width:none!important;
+    letter-spacing:.02em!important;
   }
-  html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner::-webkit-scrollbar{display:none!important}
+  html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner span{
+    flex:0 1 auto!important;
+    min-width:0!important;
+  }
+  html body main.reference-home.locked-storefront > .rh-utility .rh-utility-inner span:nth-child(4){display:none!important}
 
   html body main.reference-home.locked-storefront > header.rh-header{
     position:sticky!important;
-    top:28px!important;
+    top:27px!important;
     z-index:3200!important;
-    height:82px!important;
-    min-height:82px!important;
+    height:76px!important;
+    min-height:76px!important;
     margin:0!important;
+    background:#02090f!important;
   }
   html body main.reference-home.locked-storefront > header.rh-header .rh-header-inner{
-    height:82px!important;
-    min-height:82px!important;
+    height:76px!important;
+    min-height:76px!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:0 12px!important;
+    display:grid!important;
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+    gap:6px!important;
+    align-items:center!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-menu{
+    width:44px!important;
+    height:44px!important;
+    padding:0!important;
+    justify-self:start!important;
+    font-size:27px!important;
+    line-height:1!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-logo{
+    width:84px!important;
+    height:76px!important;
+    justify-self:center!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-logo img{
+    width:80px!important;
+    height:80px!important;
+    max-width:none!important;
+    transform:none!important;
+    animation:none!important;
+    transition:none!important;
+    filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-call{
+    display:grid!important;
+    place-items:center!important;
+    width:46px!important;
+    min-width:46px!important;
+    max-width:46px!important;
+    height:46px!important;
+    min-height:46px!important;
+    padding:0!important;
+    justify-self:end!important;
+    border-radius:50%!important;
+    background:#f2263d!important;
+    color:#fff!important;
+    font-size:0!important;
+    line-height:1!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-call span{display:none!important}
+  html body main.reference-home.locked-storefront > header.rh-header .rh-call:before{
+    content:"☎"!important;
+    display:block!important;
+    font-size:21px!important;
+    line-height:1!important;
+    font-weight:900!important;
+  }
+  html body main.reference-home.locked-storefront > header.rh-header .rh-nav{
+    top:103px!important;
   }
 
-  /* Header already occupies flow space. Never add another manual header offset to the hero. */
+  /* One deterministic mobile hero: image directly after header, then copy. */
   html body main.reference-home.locked-storefront > section.rh-hero{
-    margin:0!important;
-    padding:0!important;
+    position:relative!important;
+    display:block!important;
     min-height:0!important;
     height:auto!important;
-    display:block!important;
+    margin:0!important;
+    padding:0!important;
     overflow:hidden!important;
     background:#02070c!important;
   }
@@ -60,11 +128,11 @@
     display:block!important;
     width:100%!important;
     max-width:none!important;
-    height:218px!important;
+    height:214px!important;
     margin:0!important;
     object-fit:cover!important;
     object-position:70% 61%!important;
-    filter:saturate(1.30) contrast(1.08) brightness(1.22)!important;
+    filter:saturate(1.32) contrast(1.08) brightness(1.23)!important;
     transform:none!important;
     animation:none!important;
     transition:none!important;
@@ -74,23 +142,22 @@
   html body main.reference-home.locked-storefront > section.rh-hero:after{
     position:absolute!important;
     inset:0 0 auto 0!important;
-    height:218px!important;
+    height:214px!important;
     pointer-events:none!important;
+    z-index:2!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade{
-    background:linear-gradient(180deg,transparent 0%,transparent 58%,rgba(2,7,12,.10) 74%,rgba(2,7,12,.48) 91%,#02070c 100%)!important;
-    z-index:2!important;
+    background:linear-gradient(180deg,transparent 0%,transparent 58%,rgba(2,7,12,.08) 73%,rgba(2,7,12,.40) 90%,#02070c 100%)!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero:after{
-    background:linear-gradient(180deg,transparent 0%,transparent 65%,rgba(2,7,12,.10) 82%,#02070c 100%)!important;
-    z-index:2!important;
+    background:linear-gradient(180deg,transparent 0%,transparent 66%,rgba(2,7,12,.10) 82%,#02070c 100%)!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-inner{
     position:relative!important;
+    display:block!important;
     width:100%!important;
     min-height:0!important;
     height:auto!important;
-    display:block!important;
     margin:0!important;
     padding:0!important;
     z-index:3!important;
@@ -100,95 +167,115 @@
     width:100%!important;
     max-width:none!important;
     margin:0!important;
-    padding:14px 17px 26px!important;
+    padding:13px 17px 25px!important;
     background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-kicker{
+    margin:0 0 9px!important;
+    font-size:10px!important;
+    line-height:1.1!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero .rh-copy h1{
     max-width:100%!important;
-    font-size:clamp(39px,10.6vw,45px)!important;
+    margin:0 0 14px!important;
+    font-size:clamp(37px,10vw,42px)!important;
     line-height:.94!important;
-    letter-spacing:-.045em!important;
-    margin:0 0 16px!important;
+    letter-spacing:-.044em!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero .rh-lead{
     max-width:100%!important;
-    font-size:15px!important;
-    line-height:1.43!important;
+    margin:0!important;
+    font-size:14.5px!important;
+    line-height:1.42!important;
   }
-
-  /* Physical phones use the approved stacked CTA hierarchy. */
   html body main.reference-home.locked-storefront > section.rh-hero .rh-hero-actions{
     display:grid!important;
     grid-template-columns:1fr!important;
     gap:10px!important;
     width:100%!important;
-    margin-top:18px!important;
+    margin-top:17px!important;
   }
   html body main.reference-home.locked-storefront > section.rh-hero .rh-hero-actions .rh-btn{
     width:100%!important;
     min-height:52px!important;
-    font-size:12px!important;
+    padding:0 14px!important;
+    font-size:11.5px!important;
+    border-radius:7px!important;
+  }
+  html body main.reference-home.locked-storefront > section.rh-hero .rh-phone{
+    margin-top:12px!important;
+    font-size:11.5px!important;
   }
 
-  /* Make the 2x2 benefit band readable on an actual 360-430 CSS-pixel viewport. */
+  /* Readable 2x2 benefit band. */
   html body main.reference-home.locked-storefront .rh-benefits{
+    width:100%!important;
     display:grid!important;
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    border-radius:0!important;
   }
   html body main.reference-home.locked-storefront .rh-benefit{
     min-width:0!important;
-    min-height:102px!important;
+    min-height:98px!important;
     padding:13px 12px!important;
     display:grid!important;
     grid-template-columns:34px minmax(0,1fr)!important;
     gap:9px!important;
+    align-items:center!important;
     text-align:left!important;
   }
-  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{margin:0!important}
-
-  /* Fix the real-device financing auto-placement bug. Markup is b + strong + small, so explicitly
-     anchor the number in column 1 and both text rows in the flexible column 2. */
-  html body main.reference-home.locked-storefront .rh-finance .rh-step{
-    display:grid!important;
-    grid-template-columns:44px minmax(0,1fr)!important;
-    grid-template-rows:auto auto!important;
-    column-gap:14px!important;
-    row-gap:4px!important;
-    align-items:start!important;
-    min-height:92px!important;
-    padding:16px 17px!important;
-  }
-  html body main.reference-home.locked-storefront .rh-finance .rh-step > b{
-    grid-column:1!important;
-    grid-row:1 / span 2!important;
-    width:44px!important;
-    height:44px!important;
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{
+    width:32px!important;
+    height:32px!important;
     margin:0!important;
-    align-self:start!important;
   }
-  html body main.reference-home.locked-storefront .rh-finance .rh-step > strong{
-    grid-column:2!important;
-    grid-row:1!important;
-    min-width:0!important;
-    width:auto!important;
-    margin:2px 0 0!important;
-    font-size:14px!important;
-    line-height:1.2!important;
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:11.5px!important;
+    line-height:1.16!important;
   }
-  html body main.reference-home.locked-storefront .rh-finance .rh-step > small{
-    grid-column:2!important;
-    grid-row:2!important;
-    min-width:0!important;
-    width:auto!important;
-    max-width:none!important;
-    margin:0!important;
-    font-size:12px!important;
-    line-height:1.38!important;
-    white-space:normal!important;
-    overflow-wrap:normal!important;
-    word-break:normal!important;
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    margin-top:3px!important;
+    font-size:10.5px!important;
+    line-height:1.3!important;
   }
 
+  /* Inventory: real swipe carousel with sane fallback geometry. */
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:32px 0 40px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    padding:0 17px!important;
+    margin-bottom:15px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:29px!important;
+    line-height:1.02!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    width:100%!important;
+    gap:12px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:7vw!important;
+    padding:0 7vw 8px!important;
+    margin:0!important;
+    scrollbar-width:none!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card{
+    flex:0 0 82vw!important;
+    min-width:82vw!important;
+    max-width:82vw!important;
+    scroll-snap-align:center!important;
+    scroll-snap-stop:always!important;
+    border-radius:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo{
+    aspect-ratio:1.70!important;
+    min-height:0!important;
+  }
   html body main.reference-home.locked-storefront .rh-inventory-state{
     margin:4px 17px 0!important;
     padding:16px!important;
@@ -202,13 +289,88 @@
     line-height:1.4!important;
   }
   html body main.reference-home.locked-storefront .rh-inventory-state strong{font-size:15px!important}
+
+  /* Financing cards: number left, all copy in the flexible column. */
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:36px 15px 42px!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:28px!important;
+    line-height:1.04!important;
+  }
+  html body main.reference-home.locked-storefront .rh-steps{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step{
+    display:grid!important;
+    grid-template-columns:44px minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    column-gap:14px!important;
+    row-gap:4px!important;
+    align-items:start!important;
+    min-height:90px!important;
+    padding:15px 16px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > b{
+    grid-column:1!important;
+    grid-row:1 / span 2!important;
+    width:42px!important;
+    height:42px!important;
+    margin:0!important;
+    align-self:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > strong{
+    grid-column:2!important;
+    grid-row:1!important;
+    min-width:0!important;
+    width:auto!important;
+    margin:2px 0 0!important;
+    font-size:13.5px!important;
+    line-height:1.2!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance .rh-step > small{
+    grid-column:2!important;
+    grid-row:2!important;
+    min-width:0!important;
+    width:auto!important;
+    max-width:none!important;
+    margin:0!important;
+    font-size:11.5px!important;
+    line-height:1.36!important;
+    white-space:normal!important;
+    overflow-wrap:normal!important;
+    word-break:normal!important;
+  }
+
+  /* Keep the static intro logo consistent across real phones. */
+  html body .li .li-badge{
+    top:42%!important;
+    width:clamp(160px,45vw,190px)!important;
+  }
+  html body .li .li-tag{
+    top:60%!important;
+    font-size:11px!important;
+    letter-spacing:.075em!important;
+  }
+  html body .li .li-skip{
+    right:16px!important;
+    bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px))!important;
+    min-height:44px!important;
+    padding:0 16px!important;
+    font-size:11px!important;
+  }
 }
 
 @media(max-width:430px){
   html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art,
   html body main.reference-home.locked-storefront > section.rh-hero > .rh-hero-shade,
   html body main.reference-home.locked-storefront > section.rh-hero:after{
-    height:205px!important;
+    height:202px!important;
   }
-  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{object-position:70% 62%!important}
+  html body main.reference-home.locked-storefront > section.rh-hero > img.rh-hero-art{
+    object-position:70% 62%!important;
+  }
+  html body .li .li-badge{width:clamp(156px,44vw,184px)!important}
 }
