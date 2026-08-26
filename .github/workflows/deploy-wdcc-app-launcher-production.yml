@@ -99,8 +99,11 @@ jobs:
         run: |
           set -euo pipefail
           vercel --scope "$VERCEL_SCOPE" curl / --deployment "$CANDIDATE" > /tmp/candidate-home.html
-          grep -q 'screenshotContract' /tmp/candidate-home.html
-          grep -q 'header-logo-image' /tmp/candidate-home.html
+          grep -q 'class="wdcc-app"' /tmp/candidate-home.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/candidate-home.html
+          grep -qi 'Schedule a test drive' /tmp/candidate-home.html
+          grep -qi 'Get approved' /tmp/candidate-home.html
+          grep -qi 'Call Sean' /tmp/candidate-home.html
           grep -q 'mobile-action-bar' /tmp/candidate-home.html
 
           vercel --scope "$VERCEL_SCOPE" curl /app --deployment "$CANDIDATE" > /tmp/candidate-app.html
@@ -149,8 +152,11 @@ jobs:
               download_code="$(curl -sS -D /tmp/live-download.headers -o /dev/null -w '%{http_code}' "https://$host/app/download/android?app-release=$key" || true)"
               download_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,""); print $2}' /tmp/live-download.headers | tail -n1)"
               if [ "$home_code" = 200 ] && [ "$app_code" = 200 ] && [ "$health_code" = 200 ] && [ "$inventory_code" = 200 ] && [ "$download_code" = 307 ] \
-                && grep -q 'screenshotContract' /tmp/live-home.html \
-                && grep -q 'header-logo-image' /tmp/live-home.html \
+                && grep -q 'class="wdcc-app"' /tmp/live-home.html \
+                && grep -q 'wdcc-logo-transparent.webp' /tmp/live-home.html \
+                && grep -qi 'Schedule a test drive' /tmp/live-home.html \
+                && grep -qi 'Get approved' /tmp/live-home.html \
+                && grep -qi 'Call Sean' /tmp/live-home.html \
                 && grep -q 'mobile-action-bar' /tmp/live-home.html \
                 && grep -q 'Run your inventory from anywhere' /tmp/live-app.html \
                 && grep -q 'Open Web Portal' /tmp/live-app.html \
