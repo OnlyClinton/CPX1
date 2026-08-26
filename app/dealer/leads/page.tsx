@@ -61,7 +61,7 @@ export default function DealerLeads(){
 
   return <main className="targetLeadShell">
     <aside className="targetLeadSide">
-      <Link href="/dealer" className="targetLeadBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
+      <Link href="/dealer" className="targetLeadBrand"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
       <nav>
         <Link href="/dealer">⌂ Dashboard</Link>
         <strong>INVENTORY</strong>
@@ -82,7 +82,7 @@ export default function DealerLeads(){
 
     <section className="targetLeadWorkspace">
       <header className="targetLeadTop">
-        <div><img src="/wdcc-logo-transparent.webp" alt=""/><span><b>WDCC · DEALER PORTAL</b><small>CRM & Lead Management</small></span></div>
+        <div><img src="/wdcc-official-logo.webp" alt=""/><span><b>WDCC · DEALER PORTAL</b><small>CRM & Lead Management</small></span></div>
         <a href="tel:18135164752">☎ (813) 516-4752</a>
         <span>Sean · Sales Manager</span>
       </header>

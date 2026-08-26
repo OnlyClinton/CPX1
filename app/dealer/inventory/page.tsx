@@ -35,13 +35,13 @@ export default function DealerInventory(){
 
   return <main className="targetInventoryShell">
     <aside className="targetInventorySide">
-      <Link href="/dealer" className="targetInventoryBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
+      <Link href="/dealer" className="targetInventoryBrand"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><b>WDCC</b><span>DEALER PORTAL</span></div></Link>
       <nav><Link href="/dealer">⌂ Dashboard</Link><strong>INVENTORY</strong><Link className="active" href="/dealer/inventory">▣ All Vehicles</Link><Link href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link><Link href="/dealer/inventory?status=live">Customer Live</Link><Link href="/dealer/inventory?status=internal">Internal Only</Link><Link href="/dealer/inventory?status=attention">Needs Attention</Link><strong>OPERATIONS</strong><Link href="/dealer/leads">♙ Leads</Link><Link href="/dealer/leads?view=appointments">▣ Appointments</Link><Link href="/dealer/leads?view=appointments">◉ Test Drives</Link><Link href="/dealer/leads">◎ Customers</Link><Link href="/dealer/leads">▤ Applications</Link><Link href="/dealer/leads">✉ Messages</Link><Link href="/dealer/inventory/logs">▥ Reports</Link><Link href="/dealer">⚙ Settings</Link></nav>
       <div className="targetInventoryHelp"><small>NEED HELP?</small><span>Call Sean anytime.</span><a href="tel:18135164752">813-516-4752</a></div>
     </aside>
 
     <section className="targetInventoryWorkspace">
-      <header className="targetInventoryTop"><div><img src="/wdcc-logo-transparent.webp" alt=""/><span><b>WDCC · DEALER PORTAL</b><small>Inventory Operations</small></span></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span></header>
+      <header className="targetInventoryTop"><div><img src="/wdcc-official-logo.webp" alt=""/><span><b>WDCC · DEALER PORTAL</b><small>Inventory Operations</small></span></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span></header>
       <div className="targetInventoryContent">
         <div className="targetInventoryTitle"><div><h1>{viewTitle(status)}</h1><p>Manage dealership inventory without losing sight of what is actually customer-live.</p></div><div><Link className="primary" href="/dealer/inventory/new">＋ Add Vehicle</Link><button>⇧ Import</button><button>⇧ Export</button></div></div>
         <div className="targetInventoryStats"><article><span>Total Vehicles</span><b>{items.length}</b></article><article><span>Customer Live</span><b>{live}</b><em>{items.length?Math.round(live/items.length*100):0}%</em></article><article><span>Published</span><b>{published}</b></article><article><span>Drafts</span><b>{drafts}</b></article><article><span>Needs Attention</span><b>{attention}</b></article></div>
