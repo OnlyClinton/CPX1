@@ -9,118 +9,113 @@
 }
 
 /* Intro: one static Challenger scene only. Logo may reveal/dock independently. */
-.li .li-car,
-.li-reveal .li-car,
-.li-dock .li-car{
-  display:none!important;
-  animation:none!important;
-  transform:none!important;
-  opacity:0!important;
-  transition:none!important;
-}
+.li .li-car,.li-reveal .li-car,.li-dock .li-car{display:none!important;animation:none!important;transform:none!important;opacity:0!important;transition:none!important}
 
-/* Stronger section rhythm and contrast. */
-.locked-storefront{
-  --owner-black:#02070c;
-  --owner-navy:#071724;
-  --owner-card:#0b1c29;
-  --owner-paper:#f3f5f7;
-  --owner-white:#fff;
-  --owner-red:#f01f2f;
-  --owner-blue:#168af4;
+.locked-storefront{--owner-black:#02070c;--owner-navy:#071724;--owner-card:#0b1c29;--owner-paper:#f3f5f7;--owner-white:#fff;--owner-red:#f01f2f;--owner-blue:#168af4}
+.locked-storefront .rh-benefit-wrap{background:#fff!important}.locked-storefront .rh-inventory{background:var(--owner-paper)!important}.locked-storefront .rh-finance{background:var(--owner-navy)!important}.locked-storefront .rh-trust{background:#fff!important}.locked-storefront .rh-footer{background:#02070c!important}
+
+/* Global readability pass: undo legacy micro-type without changing layout ownership. */
+.locked-storefront .rh-utility-inner{font-size:10px!important}
+.locked-storefront .rh-nav{font-size:12px!important}
+.locked-storefront .rh-header-phone{font-size:11px!important}
+.locked-storefront .rh-kicker{font-size:12px!important}
+.locked-storefront .rh-lead{font-size:16px!important;line-height:1.5!important}
+.locked-storefront .rh-btn{font-size:11px!important;font-weight:950!important}
+.locked-storefront .rh-phone{font-size:11px!important}
+.locked-storefront .rh-benefit strong{font-size:12px!important}.locked-storefront .rh-benefit small{font-size:10.5px!important}
+.locked-storefront .rh-section-head small{font-size:11px!important}.locked-storefront .rh-section-head p{font-size:12px!important}
+.locked-storefront .rh-view-all{font-size:11px!important}
+.locked-storefront .rh-step strong{font-size:12px!important}.locked-storefront .rh-step small{font-size:11px!important}
+.locked-storefront .rh-trust-grid b{font-size:12px!important}.locked-storefront .rh-trust-grid span{font-size:10.5px!important}
+.locked-storefront .rh-footer-inner{font-size:11px!important}
+
+@media(min-width:821px){
+  .locked-storefront .rh-header{height:82px!important}
+  .locked-storefront .rh-header-inner{grid-template-columns:132px minmax(0,1fr) auto!important}
+  .locked-storefront .rh-logo{width:118px!important;height:80px!important}
+  .locked-storefront .rh-logo:before{width:72px!important;height:72px!important}
+  .locked-storefront .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;width:70px!important;height:70px!important;object-fit:contain!important;background:transparent!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.45))!important}
+  .locked-storefront h1{font-size:clamp(64px,5.6vw,82px)!important;line-height:.9!important}
+  .locked-storefront .rh-section-head h2{font-size:40px!important}
 }
-.locked-storefront .rh-benefit-wrap{background:#fff!important}
-.locked-storefront .rh-inventory{background:var(--owner-paper)!important}
-.locked-storefront .rh-finance{background:var(--owner-navy)!important}
-.locked-storefront .rh-trust{background:#fff!important}
-.locked-storefront .rh-footer{background:#02070c!important}
 
 @media(max-width:820px){
-  /* Header: centered clean badge with balanced controls. */
-  .locked-storefront .rh-header{height:70px!important;min-height:70px!important;background:#02070c!important;border-bottom:1px solid rgba(255,255,255,.10)!important}
-  .locked-storefront .rh-header-inner{height:70px!important;width:100%!important;padding:0 14px!important;grid-template-columns:78px 1fr 78px!important;gap:4px!important}
-  .locked-storefront .rh-menu{width:46px!important;height:46px!important;font-size:24px!important;justify-self:start!important}
-  .locked-storefront .rh-logo{width:92px!important;height:70px!important;justify-self:center!important;background:transparent!important;overflow:visible!important}
-  .locked-storefront .rh-logo:before{width:62px!important;height:62px!important;background:radial-gradient(circle,rgba(255,255,255,.08),transparent 70%)!important;box-shadow:none!important}
+  /* Header: larger clean transparent badge, balanced controls. */
+  .locked-storefront .rh-header{height:72px!important;min-height:72px!important;background:#02070c!important;border-bottom:1px solid rgba(255,255,255,.10)!important}
+  .locked-storefront .rh-header-inner{height:72px!important;width:100%!important;padding:0 14px!important;grid-template-columns:80px 1fr 80px!important;gap:4px!important}
+  .locked-storefront .rh-menu{width:46px!important;height:46px!important;font-size:26px!important;justify-self:start!important}
+  .locked-storefront .rh-logo{width:104px!important;height:72px!important;justify-self:center!important;background:transparent!important;overflow:visible!important}
+  .locked-storefront .rh-logo:before{display:none!important;content:none!important}
   .locked-storefront .rh-logo:after{display:none!important;content:none!important}
-  .locked-storefront .rh-logo img{display:block!important;visibility:visible!important;opacity:1!important;width:60px!important;height:60px!important;object-fit:contain!important;background:transparent!important;filter:drop-shadow(0 5px 12px rgba(0,0,0,.55))!important}
-  .locked-storefront .rh-call{width:auto!important;min-width:74px!important;height:40px!important;padding:0 11px!important;border-radius:999px!important;font-size:9px!important;font-weight:950!important;background:var(--owner-red)!important;justify-self:end!important}
+  .locked-storefront .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;visibility:visible!important;opacity:1!important;width:70px!important;height:70px!important;object-fit:contain!important;background:transparent!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))!important}
+  .locked-storefront .rh-call{width:auto!important;min-width:78px!important;height:42px!important;padding:0 12px!important;border-radius:999px!important;font-size:10px!important;font-weight:950!important;background:var(--owner-red)!important;justify-self:end!important}
 
-  /* Hero: let Tampa skyline breathe and make the Challenger stand off the background. */
-  .locked-storefront .rh-hero{position:relative!important;min-height:0!important;height:auto!important;padding-top:342px!important;background:#02070c!important;overflow:hidden!important}
-  .locked-storefront .rh-hero-art{position:absolute!important;inset:0 0 auto 0!important;width:100%!important;height:425px!important;object-fit:cover!important;object-position:72% 31%!important;filter:saturate(1.18) contrast(1.08) brightness(1.18) drop-shadow(0 12px 22px rgba(0,0,0,.22))!important}
-  .locked-storefront .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;height:425px!important;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,.01) 34%,rgba(2,7,12,.18) 58%,rgba(2,7,12,.72) 81%,#02070c 100%)!important}
-  .locked-storefront .rh-hero:after{height:425px!important;bottom:auto!important;background:linear-gradient(180deg,transparent 0%,transparent 58%,rgba(2,7,12,.35) 76%,#02070c 100%)!important}
+  /* Hero: cinematic image, readable skyline, slightly calmer headline scale. */
+  .locked-storefront .rh-hero{position:relative!important;min-height:0!important;height:auto!important;padding-top:330px!important;background:#02070c!important;overflow:hidden!important}
+  .locked-storefront .rh-hero-art{position:absolute!important;inset:0 0 auto 0!important;width:100%!important;height:410px!important;object-fit:cover!important;object-position:72% 30%!important;filter:saturate(1.17) contrast(1.07) brightness(1.17)!important}
+  .locked-storefront .rh-hero-shade{position:absolute!important;inset:0 0 auto 0!important;height:410px!important;background:linear-gradient(180deg,rgba(2,7,12,0) 0%,rgba(2,7,12,.01) 38%,rgba(2,7,12,.14) 60%,rgba(2,7,12,.68) 82%,#02070c 100%)!important}
+  .locked-storefront .rh-hero:after{height:410px!important;bottom:auto!important;background:linear-gradient(180deg,transparent 0%,transparent 60%,rgba(2,7,12,.30) 77%,#02070c 100%)!important}
   .locked-storefront .rh-hero-inner{width:100%!important;min-height:0!important;display:block!important}
-  .locked-storefront .rh-copy{width:100%!important;max-width:none!important;padding:26px 18px 30px!important;background:#02070c!important}
-  .locked-storefront .rh-kicker{margin:0 0 12px!important;font-size:10px!important;letter-spacing:.12em!important}
-  .locked-storefront h1{margin:0 0 18px!important;font-size:clamp(41px,11.5vw,49px)!important;line-height:.91!important;letter-spacing:-.047em!important;max-width:360px!important;text-shadow:0 5px 20px rgba(0,0,0,.82)!important}
+  .locked-storefront .rh-copy{width:100%!important;max-width:none!important;padding:25px 18px 30px!important;background:#02070c!important}
+  .locked-storefront .rh-kicker{margin:0 0 12px!important;font-size:11px!important;letter-spacing:.12em!important}
+  .locked-storefront h1{margin:0 0 18px!important;font-size:clamp(40px,10.7vw,45px)!important;line-height:.92!important;letter-spacing:-.045em!important;max-width:360px!important;text-shadow:0 5px 20px rgba(0,0,0,.82)!important}
   .locked-storefront h1>span{display:block!important;width:max-content!important;max-width:100%!important;white-space:nowrap!important}
-  .locked-storefront h1 .white{font-size:.94em!important;letter-spacing:-.052em!important}
-  .locked-storefront .rh-lead{max-width:355px!important;margin:0!important;font-size:14px!important;line-height:1.48!important;color:#f4f7fa!important}
-  .locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:9px!important;margin-top:19px!important}
-  .locked-storefront .rh-btn{width:100%!important;min-width:0!important;min-height:48px!important;padding:0 10px!important;font-size:9px!important;border-radius:7px!important}
-  .locked-storefront .rh-phone{display:flex!important;margin-top:14px!important;font-size:10px!important}
+  .locked-storefront h1 .white{font-size:.94em!important;letter-spacing:-.050em!important}
+  .locked-storefront .rh-lead{max-width:360px!important;margin:0!important;font-size:14.5px!important;line-height:1.48!important;color:#f4f7fa!important}
+  .locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin-top:20px!important}
+  .locked-storefront .rh-btn{width:100%!important;min-width:0!important;min-height:50px!important;padding:0 10px!important;font-size:10px!important;border-radius:7px!important}
+  .locked-storefront .rh-phone{display:flex!important;margin-top:15px!important;font-size:11px!important}
 
-  /* Benefits: compact 2x2 visual rail instead of four repetitive cards. */
+  /* Benefits: compact but readable 2x2 rail. */
   .locked-storefront .rh-benefit-wrap{padding:0!important;background:#fff!important}
   .locked-storefront .rh-benefits{width:100%!important;grid-template-columns:1fr 1fr!important;border-radius:0!important;box-shadow:0 10px 24px rgba(6,18,28,.10)!important}
-  .locked-storefront .rh-benefit{min-height:88px!important;padding:13px 12px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:9px!important;border-color:#e2e6e9!important}
-  .locked-storefront .rh-icon{width:34px!important;height:34px!important;font-size:13px!important;border-width:2px!important}
-  .locked-storefront .rh-benefit strong{font-size:10px!important;line-height:1.15!important}
-  .locked-storefront .rh-benefit small{margin-top:3px!important;font-size:8.5px!important;line-height:1.28!important;color:#6f7a83!important}
+  .locked-storefront .rh-benefit{min-height:96px!important;padding:15px 14px!important;grid-template-columns:38px minmax(0,1fr)!important;gap:11px!important;border-color:#e2e6e9!important}
+  .locked-storefront .rh-icon{width:36px!important;height:36px!important;font-size:14px!important;border-width:2px!important}
+  .locked-storefront .rh-benefit strong{font-size:11.5px!important;line-height:1.18!important}
+  .locked-storefront .rh-benefit small{margin-top:4px!important;font-size:10px!important;line-height:1.35!important;color:#6f7a83!important}
 
-  /* Inventory: unmistakable swipe carousel, one focused card with next-card peek. */
-  .locked-storefront .rh-inventory{padding:34px 0 42px!important;background:var(--owner-paper)!important;border-top:1px solid #e1e5e8!important}
-  .locked-storefront .rh-section-head{display:block!important;padding:0 18px!important;margin-bottom:18px!important}
-  .locked-storefront .rh-section-head small{font-size:10px!important;letter-spacing:.10em!important}
-  .locked-storefront .rh-section-head h2{font-size:31px!important;line-height:1!important;margin:7px 0 7px!important}
-  .locked-storefront .rh-section-head p{display:block!important;max-width:340px!important;font-size:10.5px!important;line-height:1.4!important;color:#67727b!important}
-  .locked-storefront .rh-view-all{display:inline-flex!important;margin-top:11px!important;padding:0!important;font-size:9.5px!important}
+  /* Inventory: mobile carousel with consistent proportions and readable card hierarchy. */
+  .locked-storefront .rh-inventory{padding:38px 0 44px!important;background:var(--owner-paper)!important;border-top:1px solid #e1e5e8!important}
+  .locked-storefront .rh-section-head{display:block!important;padding:0 18px!important;margin-bottom:20px!important}
+  .locked-storefront .rh-section-head small{font-size:11px!important;letter-spacing:.10em!important}
+  .locked-storefront .rh-section-head h2{font-size:32px!important;line-height:1.02!important;margin:7px 0 8px!important}
+  .locked-storefront .rh-section-head p{display:block!important;max-width:350px!important;font-size:12px!important;line-height:1.42!important;color:#67727b!important}
+  .locked-storefront .rh-view-all{display:inline-flex!important;margin-top:12px!important;padding:0!important;font-size:10.5px!important}
   .locked-storefront .rh-grid{display:flex!important;width:100%!important;gap:14px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:7vw!important;padding:0 7vw 10px!important;margin:0!important;scrollbar-width:none!important;-webkit-overflow-scrolling:touch!important;overscroll-behavior-x:contain!important}
   .locked-storefront .rh-grid::-webkit-scrollbar{display:none!important}
-  .locked-storefront .rh-card{flex:0 0 86vw!important;min-width:86vw!important;max-width:86vw!important;scroll-snap-align:center!important;scroll-snap-stop:always!important;border-radius:12px!important;box-shadow:0 12px 28px rgba(7,23,36,.12)!important;overflow:hidden!important;background:#fff!important}
+  .locked-storefront .rh-card{flex:0 0 84vw!important;min-width:84vw!important;max-width:84vw!important;scroll-snap-align:center!important;scroll-snap-stop:always!important;border-radius:12px!important;box-shadow:0 12px 28px rgba(7,23,36,.12)!important;overflow:hidden!important;background:#fff!important}
   .locked-storefront .rh-card.active{box-shadow:0 14px 32px rgba(7,23,36,.18)!important;transform:none!important}
-  .locked-storefront .rh-photo{aspect-ratio:1.62!important;min-height:0!important;background:#0c1d2b!important}
-  .locked-storefront .rh-photo-placeholder{padding:16px!important;background:radial-gradient(circle at 50% 28%,#264052 0,#142938 45%,#09151f 100%)!important}
-  .locked-storefront .rh-photo-placeholder:before{width:48px!important;height:48px!important;margin-bottom:8px!important}
-  .locked-storefront .rh-photo-placeholder small{font-size:8px!important}.locked-storefront .rh-photo-placeholder strong{font-size:14px!important}
-  .locked-storefront .rh-card-body{padding:14px 16px 16px!important}
-  .locked-storefront .rh-eyebrow{font-size:8.5px!important;margin-bottom:3px!important}
-  .locked-storefront .rh-title{font-size:16px!important;line-height:1.1!important;margin-bottom:11px!important}
-  .locked-storefront .rh-price{font-size:28px!important;line-height:1!important;margin-top:0!important}
-  .locked-storefront .rh-payment{font-size:11px!important;margin:5px 0 10px!important}
-  .locked-storefront .rh-pills{gap:5px!important}.locked-storefront .rh-pills span{font-size:8px!important;padding:5px 7px!important}
-  .locked-storefront .rh-mobile-dots{display:flex!important;justify-content:center!important;align-items:center!important;gap:8px!important;margin:12px 0 0!important}
+  .locked-storefront .rh-photo{aspect-ratio:1.7!important;min-height:0!important;background:#0c1d2b!important}
+  .locked-storefront .rh-card-body{padding:15px 17px 17px!important}
+  .locked-storefront .rh-eyebrow{font-size:9.5px!important;margin-bottom:4px!important}
+  .locked-storefront .rh-title{font-size:17px!important;line-height:1.1!important;margin-bottom:12px!important}
+  .locked-storefront .rh-price{font-size:29px!important;line-height:1!important;margin-top:0!important}
+  .locked-storefront .rh-payment{font-size:11.5px!important;margin:5px 0 10px!important}
+  .locked-storefront .rh-pills{gap:5px!important}.locked-storefront .rh-pills span{font-size:9px!important;padding:5px 7px!important}
+  .locked-storefront .rh-mobile-dots{display:flex!important;justify-content:center!important;align-items:center!important;gap:8px!important;margin:13px 0 0!important}
   .locked-storefront .rh-mobile-dots button{width:8px!important;height:8px!important;border-radius:999px!important;background:#b8c0c6!important;opacity:1!important;transition:width .2s ease,background .2s ease!important}
   .locked-storefront .rh-mobile-dots button.active{width:20px!important;background:var(--owner-red)!important}
 
-  /* Financing: compact process, stronger contrast, less dead space. */
-  .locked-storefront .rh-finance{padding:36px 16px 40px!important;background:var(--owner-navy)!important}
-  .locked-storefront .rh-finance-inner{width:100%!important}
-  .locked-storefront .finance-heading{margin-bottom:18px!important}.locked-storefront .finance-heading h2{font-size:26px!important;line-height:1!important}.locked-storefront .finance-heading p{margin-top:7px!important;font-size:10px!important;color:#aebac3!important}
+  /* Financing and trust: readable, compact, distinct from surrounding sections. */
+  .locked-storefront .rh-finance{padding:38px 16px 42px!important;background:var(--owner-navy)!important}
+  .locked-storefront .finance-heading{margin-bottom:20px!important}.locked-storefront .finance-heading h2{font-size:27px!important;line-height:1!important}.locked-storefront .finance-heading p{margin-top:8px!important;font-size:11px!important;color:#aebac3!important}
   .locked-storefront .rh-steps{gap:12px!important}
-  .locked-storefront .rh-step{min-height:108px!important;padding:17px 18px!important;background:var(--owner-card)!important;border:1px solid #294050!important;border-radius:10px!important;grid-template-columns:48px 1fr!important;column-gap:13px!important}
+  .locked-storefront .rh-step{min-height:104px!important;padding:17px 18px!important;background:var(--owner-card)!important;border:1px solid #294050!important;border-radius:10px!important;grid-template-columns:48px 1fr!important;column-gap:13px!important}
   .locked-storefront .rh-step b{width:44px!important;height:44px!important;font-size:17px!important}
-  .locked-storefront .rh-step strong{font-size:11px!important}.locked-storefront .rh-step small{font-size:9.5px!important;line-height:1.35!important;color:#b9c4cb!important}
-
-  /* Trust: lightweight scan rows, not another stack of giant cards. */
-  .locked-storefront .rh-trust{background:#fff!important}
+  .locked-storefront .rh-step strong{font-size:12px!important}.locked-storefront .rh-step small{font-size:10.5px!important;line-height:1.35!important;color:#b9c4cb!important}
   .locked-storefront .rh-trust-grid{grid-template-columns:1fr!important;background:#fff!important}
-  .locked-storefront .rh-trust-grid article{min-height:72px!important;padding:12px 18px!important;border-right:0!important;border-bottom:1px solid #e3e7ea!important;gap:13px!important}
-  .locked-storefront .rh-trust-grid article:last-child{border-bottom:0!important}
-  .locked-storefront .rh-trust-grid b{font-size:10.5px!important}.locked-storefront .rh-trust-grid span{font-size:9px!important;line-height:1.3!important;color:#727e87!important}
+  .locked-storefront .rh-trust-grid article{min-height:76px!important;padding:13px 18px!important;border-right:0!important;border-bottom:1px solid #e3e7ea!important;gap:13px!important}
+  .locked-storefront .rh-trust-grid b{font-size:11.5px!important}.locked-storefront .rh-trust-grid span{font-size:10.5px!important;line-height:1.35!important;color:#727e87!important}
   .locked-storefront .trust-symbol,.locked-storefront .trust-avatar{width:40px!important;height:40px!important;min-width:40px!important}
-  .locked-storefront .rh-footer{padding:24px 18px 28px!important;background:#02070c!important}.locked-storefront .rh-footer-inner{display:grid!important;gap:7px!important;font-size:10px!important;line-height:1.35!important}
+  .locked-storefront .rh-footer{padding:24px 18px 28px!important}.locked-storefront .rh-footer-inner{display:grid!important;gap:7px!important;font-size:11px!important;line-height:1.4!important}
 }
 
 @media(max-width:430px){
-  .locked-storefront .rh-hero{padding-top:330px!important}
-  .locked-storefront .rh-hero-art,.locked-storefront .rh-hero-shade{height:410px!important}
+  .locked-storefront .rh-hero{padding-top:322px!important}
+  .locked-storefront .rh-hero-art,.locked-storefront .rh-hero-shade{height:400px!important}
   .locked-storefront .rh-hero-art{object-position:73% 30%!important}
-  .locked-storefront .rh-copy{padding:25px 15px 28px!important}
-  .locked-storefront h1{font-size:clamp(40px,11.4vw,46px)!important;max-width:350px!important}
-  .locked-storefront h1 .white{font-size:.92em!important}
-  .locked-storefront .rh-lead{font-size:13.5px!important}
-  .locked-storefront .rh-card{flex-basis:86vw!important;min-width:86vw!important;max-width:86vw!important}
+  .locked-storefront .rh-copy{padding:24px 15px 28px!important}
+  .locked-storefront h1{font-size:clamp(39px,10.5vw,43px)!important;max-width:350px!important}
+  .locked-storefront .rh-lead{font-size:14px!important}
+  .locked-storefront .rh-card{flex-basis:84vw!important;min-width:84vw!important;max-width:84vw!important}
 }
