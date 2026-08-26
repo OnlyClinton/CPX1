@@ -5,6 +5,7 @@ import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {v5SnapshotPayload,v5VisualSnapshotEnabled} from "../../../lib/v5InventorySnapshot";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -23,25 +24,37 @@ function publicEligible(item:any){
   return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
 }
 
+function previewSnapshot(upstreamStatus?:number,error?:unknown){
+  if(!v5VisualSnapshotEnabled())return null;
+  return NextResponse.json(v5SnapshotPayload({upstreamStatus:upstreamStatus??null,upstreamError:error instanceof Error?error.message:error?String(error):null}),{status:200,headers:{"Cache-Control":"private, no-store","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":"verified-v5-snapshot","X-WDCC-Visual-Only":"1"}});
+}
+
 async function proxyPublicInventory(request:Request){
-  const upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok)return upstream;
-  const json=await upstream.json().catch(()=>({}));
-  const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
-  const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+  try{
+    const upstream=await proxyDealer(request,"/api/inventory");
+    if(!upstream.ok)return previewSnapshot(upstream.status)||upstream;
+    const json=await upstream.json().catch(()=>({}));
+    const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
+    const items=source.filter(publicEligible);
+    return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+  }catch(error){
+    const fallback=previewSnapshot(undefined,error);
+    if(fallback)return fallback;
+    throw error;
+  }
 }
 
 export async function GET(request:Request){
   if(!isDealerRuntime(request)){
     const hasSession=String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=");
-    return hasSession?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
+    if(hasSession)return proxyDealer(request,"/api/inventory");
+    try{return await proxyPublicInventory(request);}catch(error){return response({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},500,requestId(request));}
   }
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     let items;
-    if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
+    if(user&&editorRoles.has(String(user.role||"").toLowerCase()) ){
       items=String(user.role).toLowerCase()==="platform_admin"?state.vehicles:state.vehicles.filter(vehicle=>String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc"));
     }else items=publicVehicles(state).filter(publicEligible);
     return response({ok:true,count:items.length,items,revision:state.revision},200,rid);
