@@ -43,9 +43,10 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+          test -s public/wdcc-official-logo.webp
           test -s public/wdcc-logo-transparent.webp
           grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
           grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'visual-perfect.css' app/layout.tsx
@@ -105,13 +106,16 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
+          grep -q "wdcc-official-logo.webp" /tmp/home.html
           grep -q "wdcc-logo-transparent.webp" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
-          test -s /tmp/logo.webp
+          test "$(curl -sS -L -o /tmp/intro-logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?proof=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/intro-logo.webp
+          test "$(curl -sS -L -o /tmp/header-logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/header-logo.webp
           test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?proof=$GITHUB_RUN_ID")" = 200
           jq -e '((.items // .inventory // []) | length) >= 1' /tmp/inventory.json >/dev/null
           test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?proof=$GITHUB_RUN_ID")" = 200
@@ -161,7 +165,7 @@ jobs:
               await page.waitForTimeout(700);
               const introStyle=await page.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);return{clipPath:s.clipPath,opacity:s.opacity,visibility:s.visibility,src:el.getAttribute('src')}});
               if(!String(introStyle.clipPath).includes('circle')) throw new Error(`INTRO_BADGE_NOT_CIRCULAR ${JSON.stringify(introStyle)}`);
-              if(Number(introStyle.opacity)<.9||introStyle.visibility==='hidden'||!String(introStyle.src).includes('wdcc-logo-transparent.webp')) throw new Error(`INTRO_BADGE_NOT_VISIBLE_OR_CANONICAL ${JSON.stringify(introStyle)}`);
+              if(Number(introStyle.opacity)<.9||introStyle.visibility==='hidden'||!String(introStyle.src).includes('wdcc-official-logo.webp')) throw new Error(`INTRO_BADGE_NOT_VISIBLE_OR_CANONICAL ${JSON.stringify(introStyle)}`);
               await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
               await waitIntroDone(page);
               const mobileHero=await waitImage(page,'.rh-hero-art',1000);
@@ -235,7 +239,7 @@ jobs:
             echo "Preview: ${URL:-not-created}"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Canonical transparent WDCC logo in intro + header: enforced.'
+            echo 'Official round WDCC intro badge + canonical transparent header source: enforced.'
             echo 'Mobile sticky banner/header + carousel breakpoint: enforced.'
             echo 'Inventory hero-reuse: forbidden; missing media uses honest placeholder.'
             echo 'Vehicle links: /vehicle/[id] contract enforced.'
