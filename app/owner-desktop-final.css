@@ -36,3 +36,9 @@
   html body main.reference-home.locked-storefront .rh-trust-grid{width:min(1280px,100%)!important;margin:0 auto!important;grid-template-columns:repeat(4,1fr)!important}
   html body main.reference-home.locked-storefront .rh-trust-grid article{min-height:96px!important;padding:18px 20px!important;border-right:1px solid #e2e7ea!important;border-bottom:0!important}
 }
+
+/* Phone optical closeout: all three headline lines must fit the viewport. */
+@media(max-width:600px){
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:clamp(38px,10.35vw,42px)!important;line-height:.93!important;max-width:100%!important;letter-spacing:-.047em!important}
+  html body main.reference-home.locked-storefront .rh-copy h1 span{max-width:100%!important}
+}
