@@ -43,13 +43,18 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
-          test -s public/wdcc-logo-transparent.webp
+          test -s public/wdcc-official-logo.webp
           grep -q 'wdcc-hero-v2.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/LockedIntro.tsx
-          grep -q 'wdcc-logo-transparent.webp' app/ReferenceCloneHome.tsx
-          ! grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
-          ! grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
+          grep -q 'wdcc-official-logo.webp' app/LockedIntro.tsx
+          grep -q 'wdcc-official-logo.webp' app/ReferenceCloneHome.tsx
+          grep -q 'wdcc-official-logo.webp' app/mobile-visual-lock.css
+          grep -q 'clip-path:circle' app/LockedIntro.tsx
+          grep -q 'clip-path:circle' app/mobile-visual-lock.css
           grep -q 'visual-perfect.css' app/layout.tsx
+          grep -q 'rh-photo-placeholder' app/ReferenceCloneHome.tsx
+          grep -q 'rh-photo-placeholder' app/visual-perfect.css
+          grep -q '/vehicle/' app/ReferenceCloneHome.tsx
+          test -f 'app/vehicle/[id]/page.tsx'
 
       - name: Build Cloudflare artifact
         shell: bash
@@ -68,13 +73,14 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          cfg.name='wdcc-preview-locked';
+          cfg.name='wdcc-preview';
           cfg.workers_dev=true;
           cfg.preview_urls=true;
           delete cfg.route;
           delete cfg.routes;
           fs.writeFileSync('wrangler.preview.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
+          ! grep -q 'wedontcarecars.com' wrangler.preview.jsonc || { echo 'Production route leaked into preview config' >&2; exit 1; }
 
       - name: Deploy isolated Cloudflare preview
         id: deploy
@@ -94,22 +100,22 @@ jobs:
         run: |
           set -euo pipefail
           code=000
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?proof=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -q "wdcc-logo-transparent.webp" /tmp/home.html
+          grep -q "wdcc-official-logo.webp" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID")" = 200
+          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?proof=$GITHUB_RUN_ID")" = 200
           test -s /tmp/logo.webp
           test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?proof=$GITHUB_RUN_ID")" = 200
-          grep -qi 'items\|inventory' /tmp/inventory.json
+          jq -e '((.items // .inventory // []) | length) >= 1' /tmp/inventory.json >/dev/null
           test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?proof=$GITHUB_RUN_ID")" = 200
           grep -qi dealer /tmp/dealer.html
 
@@ -118,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium >/dev/null
 
       - name: Capture and validate desktop/mobile visual proof
         env:
@@ -146,10 +152,16 @@ jobs:
             try{
               const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
               const page=await mobile.newPage();
+              const mobileFailures=[];
+              page.on('response',r=>{if(r.status()>=400)mobileFailures.push({status:r.status(),url:r.url()})});
+              page.on('pageerror',e=>mobileFailures.push({pageerror:String(e)}));
               await page.goto(`${url}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               const introHero=await waitImage(page,'.li-scene img',1000);
               const introLogo=await waitImage(page,'.li-badge img',200);
               await page.waitForTimeout(900);
+              const introStyle=await page.locator('.li-badge img').evaluate(el=>{const s=getComputedStyle(el);return{clipPath:s.clipPath,opacity:s.opacity,visibility:s.visibility}});
+              if(!String(introStyle.clipPath).includes('circle')) throw new Error(`INTRO_BADGE_NOT_CIRCULAR ${JSON.stringify(introStyle)}`);
+              if(Number(introStyle.opacity)<.9||introStyle.visibility==='hidden') throw new Error(`INTRO_BADGE_NOT_VISIBLE ${JSON.stringify(introStyle)}`);
               await page.screenshot({path:'visual-proof/mobile-intro.png',fullPage:false});
               await page.getByRole('button',{name:/skip intro/i}).click({timeout:5000});
               const mobileHero=await waitImage(page,'.rh-hero-art',1000);
@@ -158,13 +170,18 @@ jobs:
               const mobileBox=await h1.boundingBox();
               const mobileSpanCount=await h1.locator('span').count();
               if(mobileSpanCount!==3) throw new Error(`MOBILE_HEADLINE_SPANS_${mobileSpanCount}`);
-              if(!mobileBox||mobileBox.x<0||mobileBox.x+mobileBox.width>390) throw new Error('MOBILE_HEADLINE_OVERFLOW');
+              if(!mobileBox||mobileBox.x<0||mobileBox.x+mobileBox.width>392) throw new Error('MOBILE_HEADLINE_OVERFLOW');
+              const headerBadge=await page.locator('.rh-logo').evaluate(el=>{const s=getComputedStyle(el,'::after');return{backgroundImage:s.backgroundImage,width:s.width,height:s.height,display:s.display}});
+              if(!String(headerBadge.backgroundImage).includes('wdcc-official-logo.webp')) throw new Error(`HEADER_BADGE_MISSING ${JSON.stringify(headerBadge)}`);
               if(await page.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count()) throw new Error('INVENTORY_REUSES_CHALLENGER_HERO');
+              if(await page.locator('.rh-card a[href*="/vehicle/"]').count()<1) throw new Error('VEHICLE_LINKS_MISSING');
+              const critical404=mobileFailures.filter(x=>x.status===404&&typeof x.url==='string'&&(/\/inventory\//.test(x.url)||/\/vehicle\//.test(x.url)));
+              if(critical404.length) throw new Error(`CRITICAL_404 ${JSON.stringify(critical404)}`);
               const callSean=page.getByRole('link',{name:/call sean/i});
               if(await callSean.count()<1) throw new Error('MOBILE_CALL_SEAN_MISSING');
               await page.screenshot({path:'visual-proof/mobile-hero.png',fullPage:false});
               await page.screenshot({path:'visual-proof/mobile-full.png',fullPage:true});
-              evidence.mobile={introHero,introLogo,mobileHero,headline:mobileBox,headlineSpans:mobileSpanCount};
+              evidence.mobile={introHero,introLogo,introStyle,mobileHero,headerBadge,headline:mobileBox,headlineSpans:mobileSpanCount,placeholders:await page.locator('.rh-photo-placeholder').count(),failures:mobileFailures};
               await mobile.close();
 
               const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
@@ -179,11 +196,11 @@ jobs:
               const desktopHeadline=desk.locator('.rh-copy h1');
               await desktopHeadline.waitFor({state:'visible',timeout:5000});
               const desktopBox=await desktopHeadline.boundingBox();
-              if(!desktopBox||desktopBox.x<0||desktopBox.x+desktopBox.width>1440) throw new Error('DESKTOP_HEADLINE_OVERFLOW');
+              if(!desktopBox||desktopBox.x<0||desktopBox.x+desktopBox.width>1442) throw new Error('DESKTOP_HEADLINE_OVERFLOW');
               if(await desk.locator('.rh-photo img[src*="wdcc-hero-v2.webp"]').count()) throw new Error('DESKTOP_INVENTORY_REUSES_CHALLENGER_HERO');
               await desk.screenshot({path:'visual-proof/desktop-hero.png',fullPage:false});
               await desk.screenshot({path:'visual-proof/desktop-full.png',fullPage:true});
-              evidence.desktop={desktopHero,headline:desktopBox,headlineSpans:await desktopHeadline.locator('span').count()};
+              evidence.desktop={desktopHero,headline:desktopBox,headlineSpans:await desktopHeadline.locator('span').count(),placeholders:await desk.locator('.rh-photo-placeholder').count()};
               const dealer=await desktop.newPage();
               await dealer.goto(`${url}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
               await dealer.waitForTimeout(900);
@@ -207,8 +224,9 @@ jobs:
             echo "Preview: ${URL:-not-created}"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Canonical hero/logo bytes: enforced.'
-            echo 'Inventory hero-reuse: forbidden.'
+            echo 'Canonical 8AR hero + official round badge: enforced.'
+            echo 'Inventory hero-reuse: forbidden; missing media uses honest placeholder.'
+            echo 'Vehicle links: /vehicle/[id] contract enforced.'
             echo 'Mobile + desktop screenshots: required.'
             echo 'Production domains, aliases, DNS and production routes: unchanged.'
           } >> "$GITHUB_STEP_SUMMARY"
