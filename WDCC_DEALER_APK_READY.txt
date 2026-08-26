@@ -1,5 +1,5 @@
 status=READY
 version=1.1.0
-build_commit=d36835105e8082a53b2157608b5b8e5d293c53b0
-sha256=c537c178cbca099204169beb16f175e6f22e000c5634d2d85b09c615486dcb1a
+build_commit=9515a3ca589725248d1058428b1efde7e67414d9
+sha256=a05d3b001de3129633585c4b21b34b9406bc228c1976b8b4dd61de3a440ef0b6
 download=https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v1/WDCC-Dealer.apk
