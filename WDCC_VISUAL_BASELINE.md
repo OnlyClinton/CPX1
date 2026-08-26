@@ -29,3 +29,5 @@ Required promotion gates:
 ## 2026-08-26 preview lock
 
 Branch `preview/wdcc-exact-mockup-20260826` is a render-only acceptance build cloned from this exact baseline. It must not be promoted until the supplied storefront and dealer screenshots are matched and explicitly approved.
+
+Preview build trigger: exact donor render requested 2026-08-26.
