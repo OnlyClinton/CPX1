@@ -30,13 +30,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Validate controlling visual source
+      - name: Validate supplied-board visual source
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
+          test -s public/wdcc-logo-transparent.webp
           test -s app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           test -s app/wdcc-owner-logo/route.ts
@@ -46,9 +47,12 @@ jobs:
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq 'li-smoke' app/LockedIntro.tsx
           grep -Fq '@keyframes liSmokeClear' app/LockedIntro.tsx
-          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
-          grep -Fq '/wdcc-owner-logo' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
+          ! grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
+          grep -Fq 'OWNER-SUPPLIED BOARD CLOSEOUT' app/wdcc-round-header-contract.css
+          grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
           grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
           ! grep -Fq 'wdcc-system-v2.css' app/layout.tsx
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
@@ -110,7 +114,9 @@ jobs:
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/wiva-home.html
-          grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/wiva-home.html
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' /tmp/wiva-home.html
+          test "$(curl --http1.1 -sS -L -o /tmp/wiva-wordmark.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(sha256sum /tmp/wiva-wordmark.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-logo-transparent.webp | awk '{print $1}')"
           test "$(curl --http1.1 -sS -L -o /tmp/wiva-hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(sha256sum /tmp/wiva-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
           test "$(curl --http1.1 -sS -D /tmp/wiva-logo.headers -L -o /tmp/wiva-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?asset=$GITHUB_RUN_ID")" = 200
@@ -137,7 +143,7 @@ jobs:
             if(!response||response.status()!==200)throw new Error(`INTRO_HTTP_${response?.status()||0}`);
             await page.locator('.li-smoke').waitFor({state:'visible',timeout:10000});
             await page.locator('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]').waitFor({state:'visible',timeout:10000});
-            const snap=()=>page.evaluate(()=>{const smoke=document.querySelector('.li-smoke'),badge=document.querySelector('.li-badge'),scene=document.querySelector('.li-scene img'),art=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');const sr=getComputedStyle(smoke),b=badge.getBoundingClientRect(),s=scene.getBoundingClientRect();return{smokeOpacity:Number(sr.opacity),smokeFilter:sr.backdropFilter||sr.webkitBackdropFilter||'',badge:{x:b.x,y:b.y,w:b.width,h:b.height,cx:b.x+b.width/2},scene:{x:s.x,y:s.y,w:s.width,h:s.height},art:{src:art.getAttribute('src')||'',naturalWidth:art.naturalWidth,naturalHeight:art.naturalHeight},winW:innerWidth}});
+            const snap=()=>page.evaluate(()=>{const smoke=document.querySelector('.li-smoke'),badge=document.querySelector('.li-badge'),scene=document.querySelector('.li-scene img'),art=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');const sr=getComputedStyle(smoke),b=badge.getBoundingClientRect(),s=scene.getBoundingClientRect();return{smokeOpacity:Number(sr.opacity),badge:{x:b.x,y:b.y,w:b.width,h:b.height,cx:b.x+b.width/2},scene:{x:s.x,y:s.y,w:s.width,h:s.height},art:{src:art.getAttribute('src')||'',naturalWidth:art.naturalWidth,naturalHeight:art.naturalHeight},winW:innerWidth}});
             const start=await snap();
             await page.screenshot({path:'immutable-visual-proof/intro-start.png'});
             await page.waitForTimeout(1450);
@@ -151,7 +157,7 @@ jobs:
           }finally{await browser.close()}
           NODE
 
-      - name: Prove storefront and dealer owner boards
+      - name: Prove supplied storefront and dealer boards
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -181,13 +187,13 @@ jobs:
           if [ -s immutable-visual-proof/intro-result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./immutable-visual-proof/intro-result.json');
-          console.log(`Intro smoke → clear: ${p.start.smokeOpacity.toFixed(2)} → ${p.end.smokeOpacity.toFixed(2)} · badge movement ${p.badgeDelta.toFixed(2)} px · scene movement ${p.sceneDelta.toFixed(2)} px`);
+          console.log(`Intro round badge smoke → clear: ${p.start.smokeOpacity.toFixed(2)} → ${p.end.smokeOpacity.toFixed(2)} · badge movement ${p.badgeDelta.toFixed(2)} px · scene movement ${p.sceneDelta.toFixed(2)} px`);
           NODE
           fi
           if [ -s owner-board-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./owner-board-proof/result.json');
-          console.log(`Owner boards: pass=${p.pass} · desktop logo ${p.desktop.home.headerLogo.w.toFixed(0)}px · mobile logo ${p.mobile.home.headerLogo.w.toFixed(0)}px · writes=${p.writes.length}`);
+          console.log(`Owner supplied boards: pass=${p.pass} · board families=${Object.keys(p.boards||{}).length} · writes=${p.writes.length}`);
           NODE
           fi
           echo 'Visual success does not authorize merge or production promotion.' >> "$GITHUB_STEP_SUMMARY"
