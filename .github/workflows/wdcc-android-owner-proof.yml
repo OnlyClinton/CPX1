@@ -30,24 +30,24 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Lock the actual owner visual authority
+      - name: Lock exact owner-emblem authority
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
-          test -s public/wdcc-logo-transparent.webp
           test -s app/wdccCorrectLogoData.ts
           grep -q 'WDCC_CORRECT_LOGO_DATA_URI' app/LockedIntro.tsx
+          grep -q 'WDCC_CORRECT_LOGO_DATA_URI' app/WdccPublicChrome.tsx
           grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
-          grep -q 'data-wdcc-logo-art="horizontal-owner-approved"' app/WdccPublicChrome.tsx
-          grep -q 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
+          grep -q 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -q 'wdcc-owner-approved-logo-final.css' app/layout.tsx
           last_owner_css="$(grep -o 'wdcc-owner-[^"]*\.css' app/layout.tsx | tail -1)"
           test "$last_owner_css" = 'wdcc-owner-approved-logo-final.css'
           grep -q 'left:50%!important' app/wdcc-owner-approved-logo-final.css
           grep -q 'transform:translate(-50%,-50%)!important' app/wdcc-owner-approved-logo-final.css
+          grep -q 'img.rh-logo-art\[data-wdcc-logo-art="owner-approved"\]' app/wdcc-owner-approved-logo-final.css
           grep -q 'content:normal!important' app/wdcc-owner-approved-logo-final.css
 
       - name: Build exact Cloudflare candidate
@@ -91,7 +91,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > android-owner-preview-url.txt
 
-      - name: Verify remote assets actually used
+      - name: Verify remote build and hero asset
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -105,13 +105,13 @@ jobs:
             sleep 2
           done
           test "$code" = 200
-          grep -q 'wdcc-logo-transparent.webp' /tmp/home.html
-          for asset in wdcc-hero-v2.webp wdcc-logo-transparent.webp; do
-            curl --http1.1 -fsSL "$URL/$asset" -o "/tmp/$asset"
-            test "$(sha256sum "/tmp/$asset" | awk '{print $1}')" = "$(sha256sum "public/$asset" | awk '{print $1}')"
-          done
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq -- "$local_build" /tmp/home.html
+          grep -q 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
+          curl --http1.1 -fsSL "$URL/wdcc-hero-v2.webp" -o /tmp/wdcc-hero-v2.webp
+          test "$(sha256sum /tmp/wdcc-hero-v2.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
 
-      - name: Prove Android-class intro, header, and owner inventory
+      - name: Prove Android-class intro, owner header emblem, and review inventory
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -141,24 +141,25 @@ jobs:
               const b=document.querySelector('.li-badge');
               const a=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');
               const br=b.getBoundingClientRect(),ar=a.getBoundingClientRect(),bs=getComputedStyle(b),as=getComputedStyle(a);
-              return {winW:innerWidth,badge:{x:br.x,y:br.y,w:br.width,h:br.height,cx:br.x+br.width/2,cy:br.y+br.height/2,left:bs.left,transform:bs.transform},art:{x:ar.x,y:ar.y,w:ar.width,h:ar.height,opacity:as.opacity,display:as.display,visibility:as.visibility,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}};
+              return{winW:innerWidth,badge:{x:br.x,y:br.y,w:br.width,h:br.height,cx:br.x+br.width/2,cy:br.y+br.height/2,left:bs.left,transform:bs.transform},art:{x:ar.x,y:ar.y,w:ar.width,h:ar.height,opacity:Number(as.opacity),display:as.display,visibility:as.visibility,content:as.content,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}};
             });
             if(intro.badge.w<236||Math.abs(intro.badge.cx-intro.winW/2)>3)throw new Error(`ANDROID_INTRO_NOT_CENTERED_${JSON.stringify(intro)}`);
-            if(intro.art.w<intro.badge.w*.9||intro.art.h<intro.badge.h*.9||Number(intro.art.opacity)<.99||intro.art.naturalWidth<1||!intro.art.src.startsWith('data:image/'))throw new Error(`ANDROID_INTRO_ART_BAD_${JSON.stringify(intro)}`);
+            if(intro.art.w<intro.badge.w*.9||intro.art.h<intro.badge.h*.9||intro.art.opacity<.99||intro.art.naturalWidth<1||!intro.art.src.startsWith('data:image/'))throw new Error(`ANDROID_INTRO_ART_BAD_${JSON.stringify(intro)}`);
             await page.screenshot({path:`${out}/android-intro.png`,fullPage:false});
 
             await page.getByRole('button',{name:/skip intro/i}).click();
             await page.locator('.li').waitFor({state:'detached',timeout:5000});
-            const logo=page.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="horizontal-owner-approved"]');
+            const logo=page.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
             await logo.waitFor({state:'visible',timeout:10000});
-            await page.waitForFunction(()=>{const x=document.querySelector('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="horizontal-owner-approved"]');return x&&x.complete&&x.naturalWidth>0},null,{timeout:10000});
+            await page.waitForFunction(()=>{const x=document.querySelector('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');return x&&x.complete&&x.naturalWidth>0&&x.naturalHeight>0},null,{timeout:10000});
             const header=await page.evaluate(()=>{
               const h=document.querySelector('[data-wdcc-public-chrome="header"]');
-              const a=h.querySelector('img[data-wdcc-logo-art="horizontal-owner-approved"]');
+              const a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]');
               const hr=h.getBoundingClientRect(),r=a.getBoundingClientRect(),s=getComputedStyle(a);
-              return{winW:innerWidth,header:{x:hr.x,y:hr.y,w:hr.width,h:hr.height},logo:{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,opacity:Number(s.opacity),display:s.display,visibility:s.visibility,content:s.content,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}};
+              return{winW:innerWidth,header:{x:hr.x,y:hr.y,w:hr.width,h:hr.height},logo:{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,opacity:Number(s.opacity),display:s.display,visibility:s.visibility,content:s.content,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight,borderRadius:s.borderRadius,clipPath:s.clipPath}};
             });
-            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.w<140||header.logo.w>160||header.logo.h<25||header.logo.h>55||header.logo.opacity<.99||header.logo.src!=='/wdcc-logo-transparent.webp')throw new Error(`ANDROID_HEADER_WORDMARK_BAD_${JSON.stringify(header)}`);
+            const ratio=header.logo.w/Math.max(1,header.logo.h);
+            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<60||header.logo.h>74||header.logo.w<55||header.logo.w>112||ratio<.72||ratio>1.45||header.logo.opacity<.99||!header.logo.src.startsWith('data:image/')||header.logo.content!=='normal'||header.logo.clipPath!=='none')throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
             await page.locator('[data-wdcc-public-chrome="header"]').screenshot({path:`${out}/android-header.png`});
 
             r=await page.goto(`${base}/?owner-review=1&android-owner=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
@@ -178,7 +179,7 @@ jobs:
 
             if(writes.length)throw new Error(`ANDROID_OWNER_WRITE_REQUESTS_${JSON.stringify(writes)}`);
             fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,userAgent:ua,intro,header,inventory,writes,pass:true},null,2)+'\n');
-            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({introCenter:intro.badge.cx,expected:intro.winW/2,headerCenter:header.logo.cx,inventoryCards:inventory.count,writes:writes.length}));
+            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({introCenter:intro.badge.cx,expected:intro.winW/2,headerCenter:header.logo.cx,headerSize:[header.logo.w,header.logo.h],inventoryCards:inventory.count,writes:writes.length}));
           }finally{await ctx.close();await browser.close()}
           NODE
 
@@ -203,7 +204,7 @@ jobs:
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./android-owner-proof/result.json');
           console.log(`Intro center: ${r.intro.badge.cx.toFixed(1)} / ${(r.intro.winW/2).toFixed(1)} px`);
-          console.log(`Header wordmark center: ${r.header.logo.cx.toFixed(1)} px`);
+          console.log(`Header owner emblem: ${r.header.logo.w.toFixed(1)} × ${r.header.logo.h.toFixed(1)} px · center ${r.header.logo.cx.toFixed(1)} px`);
           console.log(`Owner-review inventory cards: ${r.inventory.count} · ${r.inventory.label}`);
           console.log(`Browser writes: ${r.writes.length}`);
           NODE
