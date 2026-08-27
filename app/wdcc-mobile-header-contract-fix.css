@@ -132,3 +132,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
 /* Exact-head sync after diagnostics cleanup: render unchanged. */
 /* Resilient background render prevents blank replaced-image output. */
 /* Canonical wordmark now paints on the non-replaced public-logo link. */
+/* Final synchronization: hardened build-id proof + canonical header renderer. */
