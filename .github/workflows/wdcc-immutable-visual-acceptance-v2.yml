@@ -45,6 +45,7 @@ jobs:
           test -s app/WdccVehicleCard.module.css
           test -s app/wdcc-system-v2.css
           test -s scripts/wdcc-immutable-visual-proof.mjs
+          test -s scripts/wdcc-immutable-owner-board-runner.mjs
           grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
           grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
@@ -229,7 +230,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/wdcc-immutable-visual-proof.mjs
+          node scripts/wdcc-immutable-owner-board-runner.mjs
 
       - name: Require current branch head before owner handoff
         id: head_gate
