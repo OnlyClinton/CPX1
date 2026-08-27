@@ -49,7 +49,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          c.name=`wdcc-fullreview-${process.env.GITHUB_SHA}`;
+          c.name=`wdcc-review-${process.env.GITHUB_SHA}`;
           c.workers_dev=true;
           c.preview_urls=true;
           delete c.route;
