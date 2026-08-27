@@ -28,11 +28,11 @@
   html body main.reference-home.locked-storefront .rh-step>b{margin-bottom:13px!important}
 }
 
-/* 3294 storefront contract: five Featured Inventory cards across wide desktop. */
+/* Owner-locked storefront contract: three Featured Inventory cards across wide desktop. */
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-grid{
-    grid-template-columns:repeat(5,minmax(0,1fr))!important;
-    gap:14px!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:18px!important;
     max-width:var(--wdcc-shell)!important;
   }
 }
