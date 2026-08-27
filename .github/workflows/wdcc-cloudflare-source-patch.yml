@@ -1,0 +1,79 @@
+name: WDCC Cloudflare Source Patch
+
+on:
+  push:
+    branches:
+      - emergency/wdcc-cloudflare-r2-20260827
+    paths:
+      - .github/workflows/wdcc-cloudflare-source-patch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: emergency/wdcc-cloudflare-r2-20260827
+
+      - name: Patch dealer form and five-car fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('app/dealer/inventory/new/page.tsx')
+          s=p.read_text()
+          s=s.replace('import{upload}from"@vercel/blob/client";\n','')
+          pattern=r'''const blob=await upload\(`media/wdcc/\$\{draftId\}/\$\{safe\}`,file,\{access:"private",handleUploadUrl:"/api/upload",clientPayload:JSON\.stringify\(\{vehicleId:draftId,requestId\}\),contentType:file\.type\}\);if\(!blob\?\.pathname\)throw new Error\(`Photo \$\{i\+1\} upload failed`\);paths\.push\(blob\.pathname\);'''
+          repl='''const uploadResponse=await fetch(`/api/media-upload?vehicleId=${encodeURIComponent(draftId)}&filename=${encodeURIComponent(safe)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type,"X-WDCC-Request-ID":requestId},body:file}),uploadJson=await uploadResponse.json().catch(()=>({}));if(!uploadResponse.ok||!uploadJson?.pathname)throw new Error(uploadJson.error||`Photo ${i+1} upload failed`);paths.push(String(uploadJson.pathname));'''
+          s2,n=re.subn(pattern,repl,s,count=1)
+          if n!=1:
+            raise SystemExit(f'upload patch count={n}')
+          p.write_text(s2)
+
+          p=Path('app/Exact2vfDHome.tsx')
+          s=p.read_text()
+          old=re.search(r'const fallback:Vehicle\[\]=\[.*?\];\nfunction customerVisible',s,re.S)
+          if not old:
+            raise SystemExit('fallback array not found')
+          fallback='''const fallback:Vehicle[]=[
+          {id:"2004-nissan-350z",slug:"2004-nissan-350z",year:2004,make:"Nissan",model:"350Z",price:4900,downPayment:2000,mileage:154000,image:"/assets/cars/2004-nissan-350z-1.webp",bodyStyle:"Car",drivetrain:"RWD",status:"published",stock:"RECOVERED-2004-NISSAN-350Z"},
+          {id:"2016-ford-f150-limited",slug:"2016-ford-f150-limited",year:2016,make:"Ford",model:"F-150",trim:"Limited",price:15000,downPayment:6000,mileage:164000,image:"/assets/cars/2016-ford-f150-limited-1.webp",bodyStyle:"Truck",transmission:"Automatic",status:"published",stock:"RECOVERED-2016-FORD-F150-LIM"},
+          {id:"2019-honda-pilot",slug:"2019-honda-pilot",year:2019,make:"Honda",model:"Pilot",price:7900,downPayment:3000,mileage:380000,image:"/assets/cars/2019-honda-pilot-1.webp",bodyStyle:"SUV",transmission:"Automatic",status:"published",stock:"RECOVERED-2019-HONDA-PILOT"},
+          {id:"2019-kia-sportage",slug:"2019-kia-sportage",year:2019,make:"Kia",model:"Sportage",price:6500,downPayment:2500,mileage:127000,image:"/assets/cars/2019-kia-sportage-1.webp",bodyStyle:"SUV",transmission:"Automatic",status:"published",stock:"RECOVERED-2019-KIA-SPORTAGE"},
+          {id:"2019-toyota-rav4",slug:"2019-toyota-rav4",year:2019,make:"Toyota",model:"RAV4",price:10500,downPayment:4500,mileage:240000,image:"/assets/cars/2019-toyota-rav4-1.webp",bodyStyle:"SUV",transmission:"Automatic",status:"published",stock:"RECOVERED-2019-TOYOTA-RAV4"}
+          ];
+          function customerVisible'''
+          s=s[:old.start()]+fallback+s[old.end():]
+          p.write_text(s)
+          PY
+
+          grep -q '/api/media-upload?vehicleId=' app/dealer/inventory/new/page.tsx
+          ! grep -q '@vercel/blob/client' app/dealer/inventory/new/page.tsx
+          grep -q '2019-toyota-rav4' app/Exact2vfDHome.tsx
+          grep -q '2019-kia-sportage' app/Exact2vfDHome.tsx
+
+      - name: Typecheck patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+
+      - name: Commit source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "WDCC Recovery Bot"
+          git config user.email "wdcc-recovery@users.noreply.github.com"
+          git add app/dealer/inventory/new/page.tsx app/Exact2vfDHome.tsx
+          git commit -m "feat(wdcc): move dealer photo form to Cloudflare and restore five-car fallback" || exit 0
+          git push origin HEAD:emergency/wdcc-cloudflare-r2-20260827
