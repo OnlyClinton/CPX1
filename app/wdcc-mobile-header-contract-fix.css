@@ -99,13 +99,14 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
 @media (max-width:767px){
   html body .editVehicleApp .fieldGrid{
     display:grid!important;
-    grid-template-columns:repeat(2,minmax(0,1fr))!important;
-    gap:10px!important;
+    grid-template-columns:1fr!important;
+    gap:12px!important;
     width:100%!important;
   }
   html body .editVehicleApp .fieldGrid>label{
     display:grid!important;
-    width:auto!important;
+    grid-column:1/-1!important;
+    width:100%!important;
     min-width:0!important;
     max-width:none!important;
     margin:0!important;
@@ -133,3 +134,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
 /* Resilient background render prevents blank replaced-image output. */
 /* Canonical wordmark now paints on the non-replaced public-logo link. */
 /* Final synchronization: hardened build-id proof + canonical header renderer. */
+/* Human visual QA: full-width single-column dealer fields on phone. */
