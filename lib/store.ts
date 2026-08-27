@@ -66,9 +66,9 @@ async function readCloudflareState(authority:any):Promise<State>{
     },
     cache:"no-store"
   });
-  if(!response.ok)throw Error(`STATE_R2_READ_FAILED:${response.status}`);
+  if(!response.ok)throw Error(`STATE_CLOUDFLARE_READ_FAILED:${response.status}`);
   const parsed=await response.json();
-  return validateState(normalizeState(parsed),"cloudflare-r2");
+  return validateState(normalizeState(parsed),"cloudflare-do");
 }
 
 export async function readState():Promise<State>{
@@ -78,11 +78,11 @@ export async function readState():Promise<State>{
     throw Error("STATE_AUTHORITY_MISSING");
   }
 
-  if(authority.mode==="cloudflare-r2"){
+  if(authority.mode==="cloudflare-do"){
     try{
       return await readCloudflareState(authority);
     }catch(error){
-      console.error("WDCC_STATE_R2_READ_FAILED",JSON.stringify({authority:authority.mode,error:error instanceof Error?error.message:"unknown"}));
+      console.error("WDCC_STATE_CLOUDFLARE_READ_FAILED",JSON.stringify({authority:authority.mode,error:error instanceof Error?error.message:"unknown"}));
       throw Error("STATE_READ_FAILED");
     }
   }
@@ -116,7 +116,7 @@ export async function writeState(input:State){
   state.updatedAt=new Date().toISOString();
   const body=JSON.stringify(state,null,2)+"\n";
 
-  if(authority.mode==="cloudflare-r2"){
+  if(authority.mode==="cloudflare-do"){
     const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
       method:"PUT",
       headers:{
@@ -128,7 +128,7 @@ export async function writeState(input:State){
       cache:"no-store"
     });
     const result:any=await response.json().catch(()=>({}));
-    if(!response.ok||result?.ok!==true)throw Error(`STATE_R2_WRITE_FAILED:${response.status}:${result?.error||"unknown"}`);
+    if(!response.ok||result?.ok!==true)throw Error(`STATE_CLOUDFLARE_WRITE_FAILED:${response.status}:${result?.error||"unknown"}`);
     return state;
   }
 
