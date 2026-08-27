@@ -115,12 +115,11 @@ try{
   await m.goto(`${base}/?pointer-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
   const intro=m.locator('.li');
   if(await intro.count()){
-    await assertBrandPixels(m,'MOBILE_INTRO_BADGE',{selector:'.li-badge-art',background:'#ffffff',minWidth:220,minHeight:220,minInkFraction:.012,minLumaStd:4,minLumaRange:32,centerTolerance:4,expectedAsset:'wdcc-official-logo.webp'});
+    await assertBrandPixels(m,'MOBILE_INTRO_BADGE',{selector:'.li-badge img[data-wdcc-intro-badge-art="owner-approved"]',background:'#ffffff',minWidth:220,minHeight:220,minInkFraction:.012,minLumaStd:4,minLumaRange:32,centerTolerance:4});
     await m.getByRole('button',{name:/skip intro/i}).click({timeout:2500}).catch(()=>{});
     await intro.waitFor({state:'detached',timeout:7000}).catch(()=>{});
   }else throw new Error('MOBILE_INTRO_MISSING_FOR_BRAND_PROOF');
-  await assertBrandPixels(m,'MOBILE_HEADER_WORDMARK',{selector:'.rh-logo-art',background:'#02080d',minWidth:120,minHeight:40,minInkFraction:.015,minLumaStd:8,minLumaRange:80,centerTolerance:4,expectedText:'WDCC'});
-  const headerText=(await m.locator('.rh-logo-art').innerText()).replace(/\s+/g,' ').toUpperCase();if(!headerText.includes("WE DON'T CARE CARS"))throw new Error(`MOBILE_HEADER_WORDMARK_COPY_BAD_${headerText}`);
+  await assertBrandPixels(m,'MOBILE_HEADER_EMBLEM',{selector:'[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]',background:'#02080d',minWidth:90,minHeight:90,minInkFraction:.015,minLumaStd:8,minLumaRange:80,centerTolerance:4});
   await assertHits(m,'MOBILE_STOREFRONT',['.rh-menu','.rh-call','.rh-hero-actions .rh-btn']);
   await m.locator('.rh-menu').click();await m.waitForTimeout(120);await assertHits(m,'MOBILE_NAV',['.rh-nav a']);
   await mobile.close();
