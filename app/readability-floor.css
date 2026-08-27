@@ -1,0 +1,47 @@
+/* WDCC launch readability floor.
+   Typography minimums only; no layout, breakpoint, routing, auth, data, or production behavior changes. */
+
+@media (min-width:768px){
+  html body form label,
+  html body .approvalBoard label,
+  html body .leadPage label,
+  html body .lockedDealerLogin label,
+  html body .editVehicleApp label,
+  html body .fieldGrid label,
+  html body main.dcPage label{
+    font-size:10px!important;
+    line-height:1.25!important;
+  }
+
+  html body [class*="Side"] nav a,
+  html body [class*="side"] nav a,
+  html body .dcSide nav a,
+  html body .portalSide nav a,
+  html body .editSide nav a{
+    font-size:11.5px!important;
+    line-height:1.2!important;
+  }
+}
+
+@media (max-width:767px){
+  html body form label,
+  html body .approvalBoard label,
+  html body .leadPage label,
+  html body .lockedDealerLogin label,
+  html body .editVehicleApp label,
+  html body .fieldGrid label,
+  html body main.dcPage label{
+    font-size:10.5px!important;
+    line-height:1.25!important;
+  }
+
+  html body [class*="MobileNav"] span,
+  html body [class*="mobileNav"] span,
+  html body [class*="BottomNav"] span,
+  html body [class*="bottomNav"] span,
+  html body .dashMobileNav span,
+  html body .inventoryMobileNav span{
+    font-size:9px!important;
+    line-height:1.1!important;
+  }
+}
