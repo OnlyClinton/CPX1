@@ -1,18 +1,19 @@
 /* WDCC OWNER-BOARD ACCEPTANCE CLOSEOUT.
    Loaded last. This file exists only to prevent earlier acceptance CSS from
    overriding the latest owner-supplied 9194/50869/10702/10668/10667/51074 geometry.
-   The main.reference-home prefix is intentional: older !important rules use
-   that specificity, so the newest owner board must meet or exceed it. */
+   Public chrome is rendered outside main.reference-home, so header rules must
+   target the header itself. Repeated .rh-header is an intentional specificity
+   guard against superseded !important mobile-header layers. */
 
 @media(max-width:767px){
   /* Compact owner header from the supplied mobile boards. */
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{box-sizing:border-box!important;width:calc(100% - 20px)!important;max-width:none!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0 auto!important;padding:0!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;gap:8px!important;align-items:center!important}
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-menu,
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;max-width:42px!important;max-height:42px!important}
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{position:static!important;left:auto!important;right:auto!important;top:auto!important;transform:none!important;grid-column:2!important;grid-row:1!important;justify-self:center!important;align-self:center!important;display:grid!important;place-items:center!important;width:66px!important;min-width:66px!important;max-width:66px!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0!important;padding:0!important;overflow:visible!important}
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{content:normal!important;display:block!important;visibility:visible!important;opacity:1!important;width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;object-fit:contain!important;object-position:center!important;clip-path:none!important;border-radius:0!important;transform:none!important;filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important}
-  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-nav{top:64px!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{box-sizing:border-box!important;width:calc(100% - 20px)!important;max-width:none!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0 auto!important;padding:0!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;gap:8px!important;align-items:center!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;max-width:42px!important;max-height:42px!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{position:static!important;left:auto!important;right:auto!important;top:auto!important;transform:none!important;grid-column:2!important;grid-row:1!important;justify-self:center!important;align-self:center!important;display:grid!important;place-items:center!important;width:66px!important;min-width:66px!important;max-width:66px!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0!important;padding:0!important;overflow:visible!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{content:normal!important;display:block!important;visibility:visible!important;opacity:1!important;width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;object-fit:contain!important;object-position:center!important;clip-path:none!important;border-radius:0!important;transform:none!important;filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{top:64px!important}
 
   /* Public hero conversion controls stack like the latest mobile board. */
   html body main.reference-home.locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:7px!important}
