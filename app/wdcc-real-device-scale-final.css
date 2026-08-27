@@ -1,133 +1,143 @@
 /* WDCC REAL-DEVICE SCALE FINAL
-   Mobile-first visual correction from physical Android evidence.
-   Public presentation only: no routing, auth, provider, persistence or production changes. */
+   Physical Android/iPhone evidence is authoritative.
+   Visual-only preview contract: no provider, routing, auth, persistence, schema, DNS or production changes. */
 
-@media (max-width:767px){
-  /* Storefront support sections: stop micro-type and excessive empty space. */
-  html body main.reference-home.locked-storefront .rh-benefit{
-    min-height:112px!important;
-    padding:16px 14px!important;
-    grid-template-columns:36px minmax(0,1fr)!important;
-    gap:10px!important;
-  }
-  html body main.reference-home.locked-storefront .rh-benefit strong{
-    font-size:12.5px!important;
-    line-height:1.18!important;
-  }
-  html body main.reference-home.locked-storefront .rh-benefit small{
-    font-size:11px!important;
-    line-height:1.38!important;
-  }
-  html body main.reference-home.locked-storefront .rh-section-head{
-    width:calc(100% - 32px)!important;
-    gap:12px!important;
-  }
+/* Wide desktop contract: never squeeze five cards across the storefront. */
+html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}
+html body .inventoryPage .wdccVehicleGrid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}
+
+@media(min-width:768px) and (max-width:1199px){
+  html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  html body .inventoryPage .wdccVehicleGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* Real phones sometimes expose a desktop-like CSS viewport. Coarse pointer keeps the phone composition authoritative. */
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html,body{max-width:100%!important;overflow-x:clip!important}
+
+  /* Storefront hero */
+  html body main.reference-home.locked-storefront{overflow-x:clip!important}
+  html body main.reference-home.locked-storefront .rh-hero{height:auto!important;min-height:640px!important;background:#02080d!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront .rh-hero-art{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;object-position:62% 42%!important;filter:saturate(1.13) contrast(1.05) brightness(1.10)!important}
+  html body main.reference-home.locked-storefront .rh-hero-shade{background:linear-gradient(180deg,rgba(2,8,13,.08) 0%,rgba(2,8,13,.22) 34%,rgba(2,8,13,.82) 64%,rgba(2,8,13,.99) 100%)!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{width:calc(100% - 28px)!important;min-height:640px!important;height:auto!important;align-items:flex-end!important}
+  html body main.reference-home.locked-storefront .rh-copy{max-width:none!important;width:100%!important;padding:275px 0 26px!important}
+  html body main.reference-home.locked-storefront .rh-kicker{font-size:11px!important;margin-bottom:10px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:clamp(40px,11.5vw,52px)!important;line-height:.92!important;letter-spacing:-.047em!important}
+  html body main.reference-home.locked-storefront .rh-proof-list{font-size:13.5px!important;gap:6px!important;margin:15px 0!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:9px!important;margin-top:17px!important}
+  html body main.reference-home.locked-storefront .rh-btn{width:100%!important;min-width:0!important;min-height:52px!important;font-size:11.5px!important}
+
+  /* Support rail */
+  html body main.reference-home.locked-storefront .rh-benefits{grid-template-columns:1fr 1fr!important;background:#fff!important;color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:112px!important;padding:16px 14px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:10px!important;border-right:1px solid #e0e5e8!important;border-bottom:1px solid #e0e5e8!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:12.5px!important;line-height:1.18!important;color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:11px!important;line-height:1.38!important;color:#5f6c76!important}
+
+  /* Featured inventory is a swipe carousel on phones. */
+  html body main.reference-home.locked-storefront .rh-inventory{padding:30px 0 36px!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront .rh-section-head{width:calc(100% - 32px)!important;margin-bottom:15px!important;display:block!important}
   html body main.reference-home.locked-storefront .rh-section-head small{font-size:10.5px!important}
-  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:28px!important;line-height:1.02!important}
-  html body main.reference-home.locked-storefront .rh-section-head p{font-size:12.5px!important;line-height:1.42!important}
-  html body main.reference-home.locked-storefront .rh-view-all{font-size:10px!important}
-  html body main.reference-home.locked-storefront .rh-card{flex-basis:82vw!important;min-width:82vw!important;max-width:82vw!important}
-  html body main.reference-home.locked-storefront .rh-photo{aspect-ratio:16/9!important}
-  html body main.reference-home.locked-storefront .rh-card-body{padding:16px 17px 18px!important}
-  html body main.reference-home.locked-storefront .rh-title{font-size:20px!important}
-  html body main.reference-home.locked-storefront .rh-price{font-size:29px!important}
-  html body main.reference-home.locked-storefront .rh-payment{font-size:12px!important}
+  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:29px!important;line-height:1.02!important;margin:5px 0 6px!important}
+  html body main.reference-home.locked-storefront .rh-section-head p{font-size:12.5px!important;line-height:1.42!important;max-width:420px!important}
+  html body main.reference-home.locked-storefront .rh-view-all{display:inline-flex!important;margin-top:9px!important;font-size:10px!important}
+  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;width:100%!important;grid-template-columns:none!important;gap:12px!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:8vw!important;padding:0 8vw 7px!important;margin:0!important;overscroll-behavior-inline:contain!important;scrollbar-width:none!important;-webkit-overflow-scrolling:touch!important}
+  html body main.reference-home.locked-storefront .rh-grid::-webkit-scrollbar{display:none!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots{display:flex!important;justify-content:center!important;gap:7px!important;margin-top:12px!important}
 
-  html body main.reference-home.locked-storefront .rh-finance{padding:34px 16px 38px!important}
-  html body main.reference-home.locked-storefront .finance-heading h2{font-size:29px!important;line-height:1.04!important}
-  html body main.reference-home.locked-storefront .finance-heading p{font-size:12.5px!important;line-height:1.42!important}
-  html body main.reference-home.locked-storefront .rh-step{
-    min-height:94px!important;
-    padding:15px!important;
-    grid-template-columns:42px minmax(0,1fr)!important;
-    column-gap:13px!important;
-  }
-  html body main.reference-home.locked-storefront .rh-step>b{width:38px!important;height:38px!important;font-size:16px!important}
+  /* Finance + trust */
+  html body main.reference-home.locked-storefront .rh-finance{padding:35px 16px 40px!important}
+  html body main.reference-home.locked-storefront .finance-heading{display:block!important;margin-bottom:15px!important}
+  html body main.reference-home.locked-storefront .finance-heading h2{font-size:30px!important;line-height:1.04!important}
+  html body main.reference-home.locked-storefront .finance-heading p{font-size:12.5px!important;line-height:1.42!important;margin-top:6px!important}
+  html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important;gap:9px!important}
+  html body main.reference-home.locked-storefront .rh-step{min-height:94px!important;padding:15px!important;grid-template-columns:42px minmax(0,1fr)!important;grid-template-rows:auto auto!important;column-gap:13px!important}
+  html body main.reference-home.locked-storefront .rh-step>b{grid-row:1 / span 2!important;width:38px!important;height:38px!important;margin:0!important;font-size:16px!important}
   html body main.reference-home.locked-storefront .rh-step>strong{font-size:14px!important;line-height:1.22!important}
-  html body main.reference-home.locked-storefront .rh-step>small{font-size:12px!important;line-height:1.42!important}
+  html body main.reference-home.locked-storefront .rh-step>small{font-size:12px!important;line-height:1.42!important;margin-top:2px!important}
   html body main.reference-home.locked-storefront .rh-trust{padding:22px 16px!important}
-  html body main.reference-home.locked-storefront .rh-trust-grid{gap:18px 12px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:1fr 1fr!important;gap:18px 12px!important}
   html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:10.5px!important;line-height:1.2!important}
   html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:10px!important;line-height:1.4!important}
 
-  /* Public inventory: the cars should arrive quickly and cards should fit one phone screen naturally. */
-  html body .inventoryPage .inventoryTop{
-    min-height:0!important;
-    padding:22px 0 20px!important;
-  }
+  /* Public inventory: compact branded masthead + one readable card per row. */
+  html body .inventoryPage .inventoryTop{min-height:250px!important;padding:34px 0 28px!important;color:#fff!important;background:linear-gradient(90deg,rgba(4,14,23,.96) 0%,rgba(4,14,23,.88) 54%,rgba(4,14,23,.42) 100%),url('/wdcc-hero-v2.webp') 68% 48%/cover no-repeat!important}
+  html body .inventoryPage .inventoryTop:before,
+  html body .inventoryPage .inventoryTop:after{display:none!important;content:none!important}
   html body .inventoryPage .inventoryTop>.wrap,
   html body .inventoryPage>.section.light>.wrap{width:calc(100% - 28px)!important}
-  html body .inventoryPage .inventoryTop .eyebrow{font-size:10px!important;margin-bottom:8px!important}
-  html body .inventoryPage .inventoryTop h1{
-    margin:4px 0 9px!important;
-    font-size:34px!important;
-    line-height:.97!important;
-    letter-spacing:-.04em!important;
-  }
-  html body .inventoryPage .inventoryTop .lede{font-size:14px!important;line-height:1.45!important}
-  html body .inventoryPage>.section.light{padding:14px 0 82px!important}
-  html body .inventoryPage .inventoryGrid{gap:14px!important}
-  html body .inventoryPage .emptyInventory{
-    min-height:0!important;
-    padding:24px 18px!important;
-    border-radius:12px!important;
-  }
+  html body .inventoryPage .inventoryTop .eyebrow{font-size:10.5px!important;margin-bottom:9px!important;color:#c5d0d8!important}
+  html body .inventoryPage .inventoryTop h1{margin:4px 0 10px!important;font-size:clamp(38px,10.8vw,48px)!important;line-height:.95!important;letter-spacing:-.045em!important;color:#fff!important}
+  html body .inventoryPage .inventoryTop .lede{font-size:14.5px!important;line-height:1.47!important;color:#d4dde4!important;max-width:560px!important}
+  html body .inventoryPage>.section.light{padding:16px 0 92px!important}
+  html body .inventoryPage .wdccVehicleGrid,
+  html body .inventoryPage .inventoryGrid{display:grid!important;grid-template-columns:1fr!important;gap:14px!important;width:100%!important}
+  html body .inventoryPage .emptyInventory{min-height:0!important;padding:24px 18px!important;border-radius:12px!important}
   html body .inventoryPage .emptyInventory h3{font-size:23px!important;line-height:1.08!important}
   html body .inventoryPage .emptyInventory p{font-size:13.5px!important;line-height:1.5!important}
 
-  /* Shared inventory card module, including real listings. */
-  html body [class*="WdccVehicleCard_card__"]{border-radius:12px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_photo__"]{aspect-ratio:16/9!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_body__"]{padding:16px 16px 17px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_eyebrow__"]{font-size:11px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_title__"]{font-size:20px!important;line-height:1.14!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_price__"]{margin-top:10px!important;font-size:29px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_down__"]{font-size:11.5px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_pills__"] span{min-height:25px!important;font-size:9.5px!important;padding:0 8px!important}
-  html body [class*="WdccVehicleCard_card__"] [class*="WdccVehicleCard_actions__"] a{min-height:50px!important;font-size:11px!important;padding:0 8px!important}
-  html body [class*="WdccVehicleCard_placeholder__"] small{font-size:10px!important}
-  html body [class*="WdccVehicleCard_placeholder__"] strong{font-size:15px!important}
+  /* Lead funnels: no desktop form squeezed onto a phone. */
+  html body main.wdcc-public-page.section.light{padding:24px 0 78px!important}
+  html body main.wdcc-public-page .leadPage{width:calc(100% - 28px)!important;display:block!important;padding:22px 16px!important;border-radius:18px!important}
+  html body main.wdcc-public-page .leadPage>h1{font-size:clamp(38px,10.5vw,48px)!important;line-height:.96!important;margin-bottom:12px!important}
+  html body main.wdcc-public-page .leadPage>p{font-size:14px!important;line-height:1.5!important;margin-bottom:18px!important}
+  html body main.wdcc-public-page .leadForm{margin-top:18px!important;padding:18px!important;border-radius:14px!important}
+  html body main.wdcc-public-page .leadGrid{grid-template-columns:1fr!important;gap:13px!important}
+  html body main.wdcc-public-page .leadGrid label.wide{grid-column:auto!important}
+  html body main.wdcc-public-page .leadGrid input:not([type="checkbox"]),
+  html body main.wdcc-public-page .leadGrid textarea{min-height:50px!important;font-size:16px!important}
+  html body main.wdcc-public-page .leadForm>.cta.red{min-height:52px!important;width:100%!important;font-size:12px!important}
 
-  /* Vehicle listing/detail page: photo + price + facts should fit naturally without a giant masthead. */
-  html body .vehiclePage .vehicleTop{
-    min-height:0!important;
-    padding:20px 0 18px!important;
-  }
+  /* Vehicle detail */
+  html body .vehiclePage .vehicleTop{min-height:0!important;padding:20px 0 18px!important}
   html body .vehiclePage .vehicleTop>.wrap,
   html body .vehiclePage .vehicleSection>.wrap{width:calc(100% - 28px)!important}
-  html body .vehiclePage .vehicleTop .eyebrow{font-size:10px!important;margin-bottom:7px!important}
-  html body .vehiclePage .vehicleTop h1{
-    margin:3px 0 8px!important;
-    font-size:32px!important;
-    line-height:1!important;
-    letter-spacing:-.04em!important;
-  }
-  html body .vehiclePage .vehicleTop .lede{font-size:13.5px!important;line-height:1.45!important}
-  html body .vehiclePage .vehicleSection{padding:12px 0 82px!important}
-  html body .vehiclePage .vehicleLayout{gap:12px!important}
+  html body .vehiclePage .vehicleTop h1{font-size:34px!important;line-height:.98!important}
+  html body .vehiclePage .vehicleSection{padding:12px 0 88px!important}
+  html body .vehiclePage .vehicleLayout{grid-template-columns:1fr!important;gap:12px!important}
   html body .vehiclePage .vehiclePhoto{aspect-ratio:16/9!important}
-  html body .vehiclePage .vehicleMedia>p{padding:10px 13px!important;margin:0!important;font-size:11.5px!important;line-height:1.4!important}
   html body .vehiclePage .vehicleSummary{padding:18px!important}
-  html body .vehiclePage .vehicleSummary h2{font-size:28px!important;line-height:1.02!important;margin-bottom:12px!important}
-  html body .vehiclePage .vehicleSummary .price{font-size:35px!important}
-  html body .vehiclePage .vehicleSummary .down{font-size:11px!important}
-  html body .vehiclePage .vehicleFacts{gap:8px!important;margin:17px 0!important}
-  html body .vehiclePage .vehicleFacts span{min-height:68px!important;padding:12px!important}
-  html body .vehiclePage .vehicleFacts small{font-size:10.5px!important}
-  html body .vehiclePage .vehicleFacts b{font-size:14.5px!important}
-  html body .vehiclePage .vehicleDescription{font-size:14.5px!important;line-height:1.55!important}
-  html body .vehiclePage .vehicleActions{gap:8px!important;margin-top:18px!important}
-  html body .vehiclePage .vehicleActions .cta{min-height:52px!important;font-size:11.5px!important}
-  html body .vehiclePage .vehicleUnavailable,
-  html body .vehiclePage .vehicleStatus{padding:22px!important}
-  html body .vehiclePage .vehicleUnavailable h2,
-  html body .vehiclePage .vehicleStatus h2{font-size:24px!important;line-height:1.08!important}
-  html body .vehiclePage .vehicleUnavailable p,
-  html body .vehiclePage .vehicleStatus p{font-size:13.5px!important;line-height:1.5!important}
+  html body .vehiclePage .vehicleActions{grid-template-columns:1fr!important;gap:8px!important}
+  html body .vehiclePage .vehicleActions .cta{min-height:52px!important}
+
+  /* Dealer app: force mobile composition on physical phones even if the viewport is reported wide. */
+  html body main.dcPage .dcShell{display:block!important;min-height:0!important}
+  html body main.dcPage .dcSide{display:none!important}
+  html body main.dcPage .dcContent{padding:16px 12px 92px!important}
+  html body main.dealerDashboardLocked .dashboardContent{padding:16px 12px 92px!important}
+  html body main.dealerDashboardLocked .dashMetrics{grid-template-columns:1fr 1fr!important;gap:9px!important}
+  html body main.dealerDashboardLocked .dashboardGridLocked{grid-template-columns:1fr!important;gap:9px!important}
+  html body main.dealerDashboardLocked .opsCards{grid-template-columns:1fr 1fr!important;gap:9px!important}
+  html body main.inventoryContract .inventoryStats{display:none!important}
+  html body main.inventoryContract .inventoryFilters{grid-template-columns:1fr 122px!important}
+  html body main.inventoryContract .inventoryHead{display:none!important}
+  html body main.inventoryContract .inventoryRow{display:grid!important;grid-template-columns:1fr auto!important;gap:8px!important;margin:8px!important;border:1px solid #dce2e6!important;border-radius:9px!important;padding:10px!important;min-height:0!important}
+  html body main.inventoryContract .vehicleCell{grid-column:1/-1!important;display:grid!important;grid-template-columns:92px 1fr!important;gap:10px!important}
+  html body main.inventoryContract .readyCell,
+  html body main.inventoryContract .actionCell{grid-column:1/-1!important}
+  html body main.inventoryContract .actionCell{border-top:1px solid #e4e8eb!important;padding-top:8px!important;justify-content:space-around!important}
+  html body .editVehicleApp{display:block!important;padding-bottom:86px!important}
+  html body .editVehicleApp .editSide{display:none!important}
+  html body .editVehicleApp .editLayout{display:block!important;max-width:none!important;padding:12px!important}
+  html body .editVehicleApp .fieldGrid{grid-template-columns:1fr!important}
+  html body .editVehicleApp .photoTools{grid-template-columns:1fr 1fr 1fr!important}
+  html body .lockedDealerLogin{display:block!important;min-height:100svh!important}
+  html body .lockedDealerLogin .loginVisual{min-height:40svh!important}
+  html body .lockedDealerLogin>form{min-height:60svh!important;padding:24px 18px!important}
+
+  /* CRM families */
+  html body main.crmShell,
+  html body main.targetLeadShell{display:block!important;grid-template-columns:1fr!important}
+  html body main.crmShell .crmSidebar,
+  html body main.targetLeadShell .targetLeadSide{display:none!important}
+  html body main.crmShell .crmMain,
+  html body main.targetLeadShell .targetLeadMain{padding:18px 12px 92px!important}
 }
 
 @media(max-width:430px){
-  html body main.reference-home.locked-storefront .rh-card{flex-basis:86vw!important;min-width:86vw!important;max-width:86vw!important}
-  html body .inventoryPage .inventoryTop h1{font-size:32px!important}
-  html body .vehiclePage .vehicleTop h1{font-size:30px!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding-top:260px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:40px!important}
+  html body .inventoryPage .inventoryTop h1{font-size:36px!important}
+  html body .vehiclePage .vehicleTop h1{font-size:31px!important}
+  html body main.dealerDashboardLocked .opsCards{grid-template-columns:1fr!important}
 }
