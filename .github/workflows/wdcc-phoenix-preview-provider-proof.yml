@@ -9,6 +9,7 @@ on:
       - 'lib/wdccAuthority.ts'
       - 'app/api/health/route.ts'
       - 'app/api/inventory/**'
+      - 'tsconfig.json'
       - '.github/workflows/wdcc-phoenix-preview-provider-proof.yml'
   workflow_dispatch:
 
