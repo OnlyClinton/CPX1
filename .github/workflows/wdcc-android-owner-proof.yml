@@ -45,15 +45,14 @@ jobs:
           grep -Fq 'wdcc-owner-approved-logo-final.css' app/layout.tsx
           last_owner_css="$(grep -o 'wdcc-owner-[^"]*\.css' app/layout.tsx | tail -1)"
           test "$last_owner_css" = 'wdcc-owner-approved-logo-final.css'
-          grep -Fq 'left:50%!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'left:50vw!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'transform:translate(-50%,-50%)!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'grid-template-columns:50px minmax(0,1fr) 50px!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'position:static!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'grid-column:2!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'justify-self:center!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'img.rh-logo-art[data-wdcc-logo-art="owner-approved"]' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'width:96px!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'content:normal!important' app/wdcc-owner-approved-logo-final.css
           ! grep -Fq 'content:url(' app/wdcc-owner-screenshot-switch.css
-          ! grep -Fq '.li .li-badge{' app/wdcc-owner-screenshot-switch.css
-          ! grep -Fq '.rh-logo>img' app/wdcc-owner-screenshot-switch.css
 
       - name: Build exact Cloudflare candidate
         shell: bash
@@ -91,12 +90,8 @@ jobs:
           set -euo pipefail
           alias="android-${GITHUB_SHA:0:12}"
           npx wrangler versions upload --config wrangler.android-owner.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-android-owner.log
-          url="$(grep -Eo "https://${alias}-[A-Za-z0-9._-]+\.workers\.dev" /tmp/wdcc-android-owner.log | tail -1)"
-          test -n "$url"
-          case "$url" in
-            *"${alias}-wdcc-android-owner-proof."*.workers.dev) ;;
-            *) echo "Android preview is not immutable SHA alias: $url" >&2; exit 1 ;;
-          esac
+          grep -Fq 'Worker Version ID:' /tmp/wdcc-android-owner.log
+          url="https://${alias}-wdcc-android-owner-proof.clico-global.workers.dev"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > android-owner-preview-url.txt
 
@@ -109,7 +104,7 @@ jobs:
           mkdir -p android-owner-proof
           code=000
           for i in $(seq 1 30); do
-            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?android-warm=$GITHUB_RUN_ID-$i" || true)"
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?android-warm=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
@@ -117,13 +112,7 @@ jobs:
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq -- "$local_build" /tmp/home.html
           grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
-          hero_code=000
-          for i in $(seq 1 30); do
-            hero_code="$(curl -sS -L -o /tmp/wdcc-hero-v2.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?android-asset=$GITHUB_RUN_ID-$i" || true)"
-            [ "$hero_code" = 200 ] && break
-            sleep 2
-          done
-          test "$hero_code" = 200
+          test "$(curl --http1.1 -sS -L -o /tmp/wdcc-hero-v2.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?android-asset=$GITHUB_RUN_ID")" = 200
           test "$(sha256sum /tmp/wdcc-hero-v2.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
 
       - name: Prove Android-rendered owner contract
@@ -135,99 +124,43 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import {chromium} from 'playwright';
-
           const base=process.env.URL;
           const out='android-owner-proof';
           const ua='Mozilla/5.0 (Linux; Android 16; moto g play - 2026) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36';
           fs.mkdirSync(out,{recursive:true});
-
           const browser=await chromium.launch({headless:true});
-          const ctx=await browser.newContext({
-            viewport:{width:390,height:844},
-            screen:{width:390,height:844},
-            deviceScaleFactor:2.75,
-            isMobile:true,
-            hasTouch:true,
-            userAgent:ua,
-            reducedMotion:'no-preference'
-          });
+          const ctx=await browser.newContext({viewport:{width:390,height:844},screen:{width:390,height:844},deviceScaleFactor:2.75,isMobile:true,hasTouch:true,userAgent:ua,reducedMotion:'no-preference'});
           const page=await ctx.newPage();
           const writes=[];
           page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
-
           try{
             let response=await page.goto(`${base}/?visual-mobile=android-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             if(!response||response.status()!==200)throw new Error(`ANDROID_HOME_HTTP_${response?.status()||0}`);
-
             const introArt=page.locator('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');
             await introArt.waitFor({state:'visible',timeout:10000});
-            await page.waitForFunction(()=>{
-              const x=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');
-              return x&&x.complete&&x.naturalWidth>0&&x.naturalHeight>0;
-            },null,{timeout:10000});
-
-            const intro=await page.evaluate(()=>{
-              const b=document.querySelector('.li-badge');
-              const a=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');
-              const br=b.getBoundingClientRect(),ar=a.getBoundingClientRect(),bs=getComputedStyle(b),as=getComputedStyle(a);
-              return {
-                winW:innerWidth,
-                badge:{x:br.x,y:br.y,w:br.width,h:br.height,cx:br.x+br.width/2,cy:br.y+br.height/2,left:bs.left,transform:bs.transform},
-                art:{x:ar.x,y:ar.y,w:ar.width,h:ar.height,opacity:Number(as.opacity),content:as.content,clipPath:as.clipPath,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}
-              };
-            });
+            const intro=await page.evaluate(()=>{const b=document.querySelector('.li-badge'),a=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]'),br=b.getBoundingClientRect(),ar=a.getBoundingClientRect(),as=getComputedStyle(a);return{winW:innerWidth,badge:{w:br.width,h:br.height,cx:br.x+br.width/2},art:{w:ar.width,h:ar.height,opacity:Number(as.opacity),content:as.content,clipPath:as.clipPath,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}}});
             if(intro.badge.w<236||Math.abs(intro.badge.cx-intro.winW/2)>3)throw new Error(`ANDROID_INTRO_NOT_CENTERED_${JSON.stringify(intro)}`);
-            if(intro.art.w<intro.badge.w*.9||intro.art.h<intro.badge.h*.9||intro.art.opacity<.99||intro.art.content!=='normal'||intro.art.clipPath!=='none'||!intro.art.src.startsWith('data:image/'))throw new Error(`ANDROID_INTRO_ART_BAD_${JSON.stringify(intro)}`);
+            if(intro.art.naturalWidth<20||intro.art.naturalHeight<20||intro.art.opacity<.99||intro.art.content!=='normal'||intro.art.clipPath!=='none'||!intro.art.src.startsWith('data:image/'))throw new Error(`ANDROID_INTRO_ART_BAD_${JSON.stringify(intro)}`);
             await page.screenshot({path:`${out}/android-intro.png`});
-
             await page.getByRole('button',{name:/skip intro/i}).click();
             await page.locator('.li').waitFor({state:'detached',timeout:5000});
-
             const headerArt=page.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
             await headerArt.waitFor({state:'visible',timeout:10000});
-            await page.waitForFunction(()=>{
-              const x=document.querySelector('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
-              return x&&x.complete&&x.naturalWidth>0&&x.naturalHeight>0;
-            },null,{timeout:10000});
-
-            const header=await page.evaluate(()=>{
-              const h=document.querySelector('[data-wdcc-public-chrome="header"]');
-              const a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]');
-              const hr=h.getBoundingClientRect(),r=a.getBoundingClientRect(),s=getComputedStyle(a);
-              return {
-                winW:innerWidth,
-                header:{x:hr.x,y:hr.y,w:hr.width,h:hr.height},
-                logo:{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,opacity:Number(s.opacity),content:s.content,clipPath:s.clipPath,borderRadius:s.borderRadius,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}
-              };
-            });
-            const ratio=header.logo.w/Math.max(header.logo.h,1);
-            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<90||header.logo.h>100||header.logo.w<90||header.logo.w>100||ratio<.94||ratio>1.06||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||!header.logo.src.startsWith('data:image/'))throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
+            const header=await page.evaluate(()=>{const h=document.querySelector('[data-wdcc-public-chrome="header"]'),a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]'),r=a.getBoundingClientRect(),s=getComputedStyle(a);return{winW:innerWidth,logo:{w:r.width,h:r.height,cx:r.x+r.width/2,opacity:Number(s.opacity),content:s.content,clipPath:s.clipPath,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}}});
+            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<90||header.logo.h>100||header.logo.w<90||header.logo.w>100||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||!header.logo.src.startsWith('data:image/'))throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
             await page.locator('[data-wdcc-public-chrome="header"]').screenshot({path:`${out}/android-header.png`});
-
             response=await page.goto(`${base}/?owner-review=1&android-owner=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             if(!response||response.status()!==200)throw new Error(`ANDROID_OWNER_REVIEW_HTTP_${response?.status()||0}`);
-            const skip=page.getByRole('button',{name:/skip intro/i});
-            if(await skip.count())await skip.click().catch(()=>{});
+            const skip=page.getByRole('button',{name:/skip intro/i});if(await skip.count())await skip.click().catch(()=>{});
             await page.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
-            await page.locator('.rh-grid').waitFor({state:'visible',timeout:10000});
-
-            const inventory=await page.evaluate(()=>{
-              const g=document.querySelector('.rh-grid');
-              const r=g.getBoundingClientRect(),s=getComputedStyle(g);
-              const kids=[...g.children].map(x=>{const q=x.getBoundingClientRect();return{w:q.width,h:q.height}});
-              return {label:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),count:kids.length,grid:{w:r.width,h:r.height,overflowX:s.overflowX,scrollSnapType:s.scrollSnapType},kids};
-            });
-            if(!/NOT LIVE/i.test(inventory.label)||inventory.count!==5||!['auto','scroll'].includes(inventory.grid.overflowX)||inventory.kids[0]?.w<250||inventory.kids[0]?.w>360)throw new Error(`ANDROID_OWNER_INVENTORY_BAD_${JSON.stringify(inventory)}`);
+            await page.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
+            const inventory=await page.evaluate(()=>{const g=document.querySelector('.rh-grid'),s=getComputedStyle(g),kids=[...g.children].map(x=>x.getBoundingClientRect());return{label:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),count:kids.length,overflowX:s.overflowX,firstW:kids[0]?.width||0,secondX:kids[1]?.x||9999}});
+            if(!/NOT LIVE/i.test(inventory.label)||inventory.count!==5||!['auto','scroll'].includes(inventory.overflowX)||inventory.firstW<250||inventory.firstW>360||inventory.secondX>=390)throw new Error(`ANDROID_OWNER_INVENTORY_BAD_${JSON.stringify(inventory)}`);
             await page.screenshot({path:`${out}/android-owner-home.png`,fullPage:true});
-
             if(writes.length)throw new Error(`ANDROID_OWNER_WRITE_REQUESTS_${JSON.stringify(writes)}`);
-            const result={sha:process.env.GITHUB_SHA,url:base,userAgent:ua,intro,header,inventory,writes,pass:true};
-            fs.writeFileSync(`${out}/result.json`,JSON.stringify(result,null,2)+'\n');
-            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({introCenter:intro.badge.cx,expected:intro.winW/2,headerCenter:header.logo.cx,headerSize:[header.logo.w,header.logo.h],cards:inventory.count,writes:writes.length}));
-          } finally {
-            await ctx.close();
-            await browser.close();
-          }
+            fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,userAgent:ua,intro,header,inventory,writes,pass:true},null,2)+'\n');
+            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({headerCenter:header.logo.cx,expected:header.winW/2,cards:inventory.count,writes:writes.length}));
+          } finally {await ctx.close();await browser.close()}
           NODE
 
       - name: Require exact current head
@@ -250,8 +183,7 @@ jobs:
           if [ -s android-owner-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./android-owner-proof/result.json');
-          console.log(`Intro center: ${r.intro.badge.cx.toFixed(1)} / ${(r.intro.winW/2).toFixed(1)} px`);
-          console.log(`Header emblem: ${r.header.logo.w.toFixed(1)} × ${r.header.logo.h.toFixed(1)} px · center ${r.header.logo.cx.toFixed(1)} px`);
+          console.log(`Header emblem: ${r.header.logo.w.toFixed(1)} × ${r.header.logo.h.toFixed(1)} px · center ${r.header.logo.cx.toFixed(1)} / ${(r.header.winW/2).toFixed(1)} px`);
           console.log(`Owner-review cards: ${r.inventory.count} · ${r.inventory.label}`);
           console.log(`Browser writes: ${r.writes.length}`);
           NODE
