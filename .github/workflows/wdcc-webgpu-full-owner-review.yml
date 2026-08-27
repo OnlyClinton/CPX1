@@ -5,6 +5,7 @@ on:
     branches: [feat/wdcc-webgpu-intro-owner-override-20260827]
     paths:
       - '.github/workflows/wdcc-webgpu-full-owner-review.yml'
+      - '.github/workflows/wdcc-dealer-isolated-e2e.yml'
   workflow_dispatch:
 
 permissions:
