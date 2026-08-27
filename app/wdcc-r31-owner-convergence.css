@@ -89,8 +89,8 @@ html body main.reference-home.locked-storefront .rh-phone::before{
   }
 
   html body main.reference-home.locked-storefront .rh-hero{
-    height:650px!important;
-    min-height:650px!important;
+    height:535px!important;
+    min-height:535px!important;
     overflow:hidden!important;
   }
   html body main.reference-home.locked-storefront .rh-hero-art{
@@ -111,8 +111,8 @@ html body main.reference-home.locked-storefront .rh-phone::before{
   }
   html body main.reference-home.locked-storefront .rh-hero-inner{
     width:min(1380px,calc(100% - 56px))!important;
-    height:650px!important;
-    min-height:650px!important;
+    height:535px!important;
+    min-height:535px!important;
     margin:0 auto!important;
     padding:0!important;
     align-items:center!important;
