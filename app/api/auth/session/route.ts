@@ -1,7 +1,7 @@
 import {currentUser} from "../../../../lib/auth";
 import {readState,type User} from "../../../../lib/store";
 
-const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
+const AUTH_BASE=(process.env.WDCC_NEON_AUTH_BASE||"https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth").trim().replace(/\/$/,"");
 export const dynamic="force-dynamic";
 
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
