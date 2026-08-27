@@ -112,7 +112,13 @@ jobs:
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq -- "$local_build" /tmp/home.html
           grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
-          curl --http1.1 -fsSL "$URL/wdcc-hero-v2.webp" -o /tmp/wdcc-hero-v2.webp
+          hero_code=000
+          for i in $(seq 1 20); do
+            hero_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-hero-v2.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?android-asset=$GITHUB_RUN_ID-$i" || true)"
+            [ "$hero_code" = 200 ] && break
+            sleep 2
+          done
+          test "$hero_code" = 200
           test "$(sha256sum /tmp/wdcc-hero-v2.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
 
       - name: Prove Android-rendered owner contract
