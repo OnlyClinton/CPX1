@@ -1,0 +1,88 @@
+name: WDCC R2 Bootstrap Preview
+
+on:
+  push:
+    branches:
+      - ops/wdcc-r2-bootstrap-20260826
+    paths:
+      - .github/workflows/wdcc-r2-bootstrap-preview.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-r2-bootstrap-preview
+  cancel-in-progress: true
+
+env:
+  R2_BUCKET: wdcc-state-preview
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Cloudflare credentials are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Create private R2 preview bucket if needed
+        id: r2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          set +e
+          npx --yes wrangler@latest r2 bucket list > /tmp/r2-list-before.txt 2>&1
+          rc=$?
+          set -e
+          cat /tmp/r2-list-before.txt
+
+          if [ "$rc" -ne 0 ]; then
+            echo "status=manual_activation_or_permission" >> "$GITHUB_OUTPUT"
+            {
+              echo '## WDCC R2 bootstrap'
+              echo
+              echo 'Cloudflare credentials reached Wrangler, but R2 listing failed.'
+              echo 'Likely causes: R2 is not yet enabled for the account, or the existing API token lacks R2 permissions.'
+              echo 'No DNS, Worker route, production alias, Vercel setting, or customer data was changed.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          if grep -Fq "$R2_BUCKET" /tmp/r2-list-before.txt; then
+            echo "R2 bucket already exists: $R2_BUCKET"
+            status=exists
+          else
+            npx --yes wrangler@latest r2 bucket create "$R2_BUCKET"
+            status=created
+          fi
+
+          npx --yes wrangler@latest r2 bucket list > /tmp/r2-list-after.txt
+          cat /tmp/r2-list-after.txt
+          grep -Fq "$R2_BUCKET" /tmp/r2-list-after.txt
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          {
+            echo '## WDCC R2 bootstrap'
+            echo
+            echo "Bucket: \`$R2_BUCKET\`"
+            echo "Result: **$status**"
+            echo 'Scope: private preview storage only.'
+            echo 'No DNS, Worker production route, production alias, Vercel setting, schema, or customer data mutation was performed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Safety assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'R2_BOOTSTRAP_PREVIEW_ONLY=PASS' >> "$GITHUB_STEP_SUMMARY"
