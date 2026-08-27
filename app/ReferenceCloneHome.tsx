@@ -5,6 +5,7 @@ import {useEffect,useMemo,useRef,useState} from "react";
 import LockedIntro from "./LockedIntro";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
 import {WdccPublicFooter,WdccPublicHeader} from "./WdccPublicChrome";
+import TrackedCallLink from "./TrackedCallLink";
 
 type Vehicle=WdccVehicle&{status?:string;stock?:string;stock_id?:string;badges?:string[];visibility?:string;internalOnly?:boolean};
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase(),stock=String(v?.stock||v?.stock_id||"").trim().toUpperCase(),visibility=String(v?.visibility||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x||"").toUpperCase());const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!qa&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"}
@@ -28,6 +29,7 @@ export default function ReferenceCloneHome(){
        <h1 aria-label="Bad credit? No credit? We don't care."><span className="red">BAD CREDIT?</span><span className="blue">NO CREDIT?</span><span className="white">WE DON&apos;T CARE.</span></h1>
        <ul className="rh-proof-list"><li>In-house financing</li><li>Low down payments</li><li>Fast approvals</li><li>Drive today with confidence</li></ul>
        <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link><Link className="rh-btn dark" href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY</Link></div>
+       <TrackedCallLink className="rh-phone" source="home-hero-phone" label="Call Sean"><span>CALL SEAN</span><b>813-516-4752</b></TrackedCallLink>
      </div></div>
    </section>
    <section className="rh-benefit-wrap"><div className="rh-benefits">
