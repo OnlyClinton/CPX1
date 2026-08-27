@@ -5,6 +5,7 @@ import {useState} from "react";
 import TrackedCallLink from "./TrackedCallLink";
 import styles from "./WdccPublicChrome.module.css";
 
+// Shared public chrome is the single storefront header/footer source for exact-head acceptance proof.
 export function WdccPublicHeader(){
   const[open,setOpen]=useState(false);
   const close=()=>setOpen(false);
