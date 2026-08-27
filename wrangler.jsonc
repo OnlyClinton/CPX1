@@ -10,11 +10,16 @@
     "binding": "ASSETS",
     "run_worker_first": false
   },
+  "r2_buckets": [
+    {
+      "binding": "WDCC_DATA",
+      "bucket_name": "wdcc-data"
+    }
+  ],
   "observability": {
     "enabled": true
   },
   "vars": {
-    "WDCC_RUNTIME_ROLE": "frontend",
-    "WDCC_DEALER_BACKEND_URL": "https://wdcc-cpx-launch-cpxagency.vercel.app"
+    "WDCC_RUNTIME_ROLE": "canonical"
   }
 }

@@ -1,6 +1,7 @@
 import {NextResponse} from "next/server";
 import {backendHealth} from "../../../lib/dealerProxy";
 import {readState} from "../../../lib/store";
+import {cloudflareDataAvailable} from "../../../lib/cloudflareR2";
 import {blobAuthority,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
 
 export const dynamic="force-dynamic";
@@ -12,9 +13,15 @@ function canonicalRuntime(){
 }
 
 function provider(){
+  if(String(process.env.WDCC_STORAGE_PROVIDER||"").trim().toLowerCase()==="cloudflare-r2"||cloudflareDataAvailable())return "cloudflare";
   if(process.env.RAILWAY_DEPLOYMENT_ID||process.env.RAILWAY_GIT_COMMIT_SHA)return "railway";
   if(process.env.VERCEL_PROJECT_ID)return "vercel";
   return "portable";
+}
+
+function storageAuthority(){
+  if(cloudflareDataAvailable())return "cloudflare-r2";
+  return blobAuthority().mode;
 }
 
 function integrations(){
@@ -25,31 +32,29 @@ function integrations(){
 }
 
 export async function GET(){
-  const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
+  const commit=process.env.WDCC_RELEASE_SHA||process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
 
   if(canonicalRuntime()){
-    const storage=blobAuthority();
+    const storage=storageAuthority();
     const session=Boolean((process.env.SESSION_SECRET||"").trim());
     const notificationIntegrations=integrations();
-    if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
+    if(storage==="missing"||!session){
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-CLOUDFLARE-R2",backend:"local",storage,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
     }
     try{
       const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
+      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-CLOUDFLARE-R2",backend:"local",storage,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
     }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-CLOUDFLARE-R2",backend:"local",storage,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
     }
   }
 
   try{
     const {response,json}=await backendHealth();
     const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    // Older immutable canonical backends do not expose integration readiness.
-    // In that case report the facade runtime's actual configuration instead of null.
     const notificationIntegrations=json?.integrations||integrations();
-    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
+    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-CLOUDFLARE-R2",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
-    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:integrations(),integrationReadinessSource:"facade-runtime",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
+    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-CLOUDFLARE-R2",backend:"unreachable",integrations:integrations(),integrationReadinessSource:"facade-runtime",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
   }
 }

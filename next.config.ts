@@ -76,6 +76,11 @@ const privilegedApiHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  turbopack: {
+    resolveAlias: {
+      "@vercel/blob/client": {browser:"./app/dealer/inventory/cloudflareBlobClient.ts"}
+    }
+  },
   async headers() {
     return [
       { source: "/:path*", headers: storefrontHeaders },
