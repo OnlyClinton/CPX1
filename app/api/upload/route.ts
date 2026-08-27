@@ -4,7 +4,7 @@ import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {mediaAuthority} from "../../../lib/wdccAuthority";
-import {readState} from "../../../lib/store";
+import {mutateState,readState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
@@ -24,6 +24,25 @@ async function authorizeVehicle(rid:string,vehicleId:string){
   if(String(user.role).toLowerCase()!=="platform_admin"&&String(vehicle.tenantId||"wdcc")!==String(user.tenantId||"wdcc"))throw Error("Forbidden");
   if(String(vehicle.status||"").toLowerCase()==="archived")throw Error("Vehicle archived");
   return {user,vehicle};
+}
+
+async function checkpointUploadedPath({vehicleId,pathname,rid,user}:{vehicleId:string;pathname:string;rid:string;user:any}){
+  const mutation=await mutateState(state=>{
+    const index=state.vehicles.findIndex(item=>String(item.id)===vehicleId);
+    if(index<0)throw Error("Vehicle not found");
+    const vehicle:any={...state.vehicles[index]};
+    if(String(user.role||"").toLowerCase()!=="platform_admin"&&String(vehicle.tenantId||"wdcc")!==String(user.tenantId||"wdcc"))throw Error("Forbidden");
+    if(String(vehicle.status||"").toLowerCase()==="archived")throw Error("Vehicle archived");
+    if(!pathname.startsWith(`media/wdcc/${vehicleId}/`))throw Error("Invalid upload path");
+    const paths=[...new Set([...(Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames:[]),pathname])].slice(0,50);
+    vehicle.photoPathnames=paths;
+    if(!vehicle.primaryPhotoPathname)vehicle.primaryPhotoPathname=pathname;
+    vehicle.updatedAt=new Date().toISOString();
+    state.vehicles[index]=vehicle;
+    state.audit.push({id:crypto.randomUUID(),at:vehicle.updatedAt,action:"vehicle.photo_checkpoint_auto",actor:user.id,actorRole:user.role,vehicleId,requestId:rid,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:paths.length});
+    return vehicle;
+  });
+  return mutation;
 }
 
 async function cloudflareUpload(request:Request,rid:string,authority:any){
@@ -47,8 +66,9 @@ async function cloudflareUpload(request:Request,rid:string,authority:any){
     });
     const result:any=await response.json().catch(()=>({}));
     if(!response.ok||result?.ok!==true)throw Error(`media_provider_failed:${response.status}:${result?.error||"unknown"}`);
-    await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:suppliedRid,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,detail:pathname});
-    return json({ok:true,pathname,contentType:file.type,size:file.size,sha256:result.sha256,provider:"cloudflare"},200,suppliedRid);
+    const checkpoint=await checkpointUploadedPath({vehicleId,pathname,rid:suppliedRid,user});
+    await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:suppliedRid,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,detail:`${pathname};checkpoint_revision:${checkpoint.state.revision};attempt:${checkpoint.attempt}`});
+    return json({ok:true,pathname,contentType:file.type,size:file.size,sha256:result.sha256,provider:"cloudflare",checkpointed:true,revision:checkpoint.state.revision},200,suppliedRid);
   }catch(error){
     const detail=error instanceof Error?error.message:"upload_failed";
     await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:suppliedRid,vehicleId:vehicleId||null,detail});
