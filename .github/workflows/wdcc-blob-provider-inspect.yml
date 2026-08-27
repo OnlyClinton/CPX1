@@ -1,0 +1,45 @@
+name: WDCC Blob Provider Inspect
+
+on:
+  push:
+    branches: [proof/wdcc-blob-recovery-20260827]
+    paths:
+      - '.github/workflows/wdcc-blob-provider-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Link Phoenix project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Inspect project-connected Blob stores
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== CONNECTED STORES ==='
+          vercel blob list-stores --token="$VERCEL_TOKEN" --scope=cpxagency
+          echo '=== PRIMARY STORE ==='
+          vercel blob get-store store_cNUyQRVlXtyvZQ5N --token="$VERCEL_TOKEN" --scope=cpxagency
+          echo '=== RECOVERY STORE CLEAN ==='
+          vercel blob get-store store_vVJ5kU6x76yZVkGs --token="$VERCEL_TOKEN" --scope=cpxagency
+          echo '=== RECOVERY STORE RESCUE ==='
+          vercel blob get-store store_KopvAQeMcatdS5DS --token="$VERCEL_TOKEN" --scope=cpxagency
+          echo '=== RECOVERY STORE PRIVATE ==='
+          vercel blob get-store store_LdMSV1550BRgc0SP --token="$VERCEL_TOKEN" --scope=cpxagency
+
+# READ-ONLY provider metadata only. No create/connect/delete/env/deploy operations.
