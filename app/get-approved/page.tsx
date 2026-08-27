@@ -9,23 +9,25 @@ export default function Page(){
         <img className="approvalSceneArt" src="/wdcc-hero-v2.webp" alt="American-flag Challenger with the Tampa skyline"/>
         <div className="approvalSceneShade"/>
         <div className="approvalSceneCopy">
-          <div className="eyebrow">TAMPA BAY · START HERE</div>
-          <h1><span className="red">BAD CREDIT?</span><br/><span className="blue">NO CREDIT?</span><br/>WE DON&apos;T CARE.</h1>
-          <p>Tell us the basics and Sean can start with your real budget, down payment and vehicle goals. This screen does not perform a hard-credit inquiry.</p>
-          <ul className="approvalProof"><li>In-house financing</li><li>Real Tampa Bay team</li><li>Clear starting numbers</li><li>No hard pull on this screen</li></ul>
+          <div className="eyebrow">HOME　›　GET PRE-APPROVED</div>
+          <h1><span>GET PRE-APPROVED</span><br/><span className="red">IN MINUTES.</span><br/><span className="red">DRIVE TODAY.</span></h1>
+          <p>Simple. Secure. No impact on your credit score.</p>
+          <ul className="approvalProof"><li>Fast approvals — usually in minutes</li><li>In-house financing for all credit types</li><li>No pressure — just honest help</li><li>Talk directly with Sean — real answers</li></ul>
+          <div className="approvalSean"><span>QUESTIONS? TALK TO SEAN</span><a href="tel:18135164752">☎ <b>(813) 516-4752</b></a><small>Call or Text Anytime</small></div>
         </div>
       </section>
       <section className="approvalFormSide">
         <div className="approvalCard">
-          <div className="approvalCardTop"><div><small>PRE-APPROVAL REQUEST</small><h2>Let&apos;s get started.</h2></div><a href="tel:18135164752">CALL SEAN<br/><b>813-516-4752</b></a></div>
+          <div className="approvalCardTop"><div><h2>GET PRE-APPROVED</h2><p>Take 2 minutes to complete our secure pre-approval.<br/>No SSN required to get started.</p></div></div>
           <ApprovalLeadForm/>
         </div>
       </section>
     </main>
     <section className="approvalTrust" aria-label="WDCC pre-approval trust points">
-      <article><i>✓</i><div><b>NO HARD PULL HERE</b><span>This request starts a conversation; it is not a hard-credit application.</span></div></article>
-      <article><i>$</i><div><b>YOUR STARTING NUMBERS</b><span>Share income and down payment so the first call is useful.</span></div></article>
-      <article><i>SE</i><div><b>REAL PEOPLE</b><span>Talk directly with Sean&apos;s Tampa Bay sales team.</span></div></article>
+      <article><i>✓</i><div><b>FAST APPROVALS</b><span>Get approved in minutes, not days.</span></div></article>
+      <article><i>◇</i><div><b>IN-HOUSE FINANCING</b><span>We work with all credit types.</span></div></article>
+      <article><i>☏</i><div><b>DIRECT WITH SEAN</b><span>Talk to Sean directly. Get real answers.</span></div></article>
+      <article><i>0</i><div><b>HIDDEN FEES</b><span>Clear starting numbers and direct help.</span></div></article>
     </section>
     <WdccPublicFooter/>
   </>;
