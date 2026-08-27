@@ -30,18 +30,21 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Lock exact lower-page correction source
+      - name: Lock exact supplied-board lower-page source
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          test -s app/wdcc-owner-board-final.css
+          test -s public/wdcc-logo-transparent.webp
+          test -s app/WdccPublicChrome.tsx
           test -s app/wdcc-round-header-contract.css
           test -s app/wdcc-review-media/[id]/route.ts
-          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-owner-board-final.css
-          grep -Fq 'scroll-snap-type:none!important' app/wdcc-owner-board-final.css
-          grep -Fq 'owner-approved' app/wdcc-round-header-contract.css
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
+          grep -Fq 'Public header = WDCC wordmark' app/wdcc-round-header-contract.css
+          grep -Fq 'COMPACT DESKTOP / ANDROID DESKTOP-SITE' app/wdcc-round-header-contract.css
+          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-round-header-contract.css
           grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
           grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
@@ -131,6 +134,7 @@ jobs:
             if(!response||response.status()!==200)throw new Error(`ANDROID_LOWER_HOME_HTTP_${response?.status()||0}`);
             const skip=page.getByRole('button',{name:/skip intro/i});
             if(await skip.count())await skip.click().catch(()=>{});
+            await page.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-wordmark"]').waitFor({state:'visible',timeout:10000});
             await page.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
             await page.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
             await page.waitForFunction(()=>{
@@ -143,6 +147,7 @@ jobs:
               const R=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}:null};
               const utility=q('[data-wdcc-public-chrome="utility"]');
               const header=q('[data-wdcc-public-chrome="header"]');
+              const logo=q('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-wordmark"]');
               const hero=q('.rh-hero');
               const buttons=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(R);
               const benefits=q('.rh-benefits');
@@ -155,7 +160,7 @@ jobs:
               const gridStyle=getComputedStyle(grid);
               return{
                 winW:innerWidth,
-                utility:R(utility),header:R(header),hero:R(hero),buttons,
+                utility:R(utility),header:R(header),logo:R(logo),logoSrc:logo?.getAttribute('src')||'',hero:R(hero),buttons,
                 benefitTracks:getComputedStyle(benefits).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
                 gridDisplay:gridStyle.display,
                 gridTracks:gridStyle.gridTemplateColumns.split(/\s+/).filter(Boolean).length,
@@ -170,7 +175,7 @@ jobs:
             });
 
             if(!result.utility||result.utility.h<28)throw new Error(`ANDROID_LOWER_UTILITY_${JSON.stringify(result)}`);
-            if(!result.header||result.header.h<82||result.header.h>90)throw new Error(`ANDROID_LOWER_HEADER_${JSON.stringify(result)}`);
+            if(!result.header||result.header.h<56||result.header.h>64||!result.logo||result.logoSrc!=='/wdcc-logo-transparent.webp'||result.logo.w<105||result.logo.w>120)throw new Error(`ANDROID_LOWER_HEADER_${JSON.stringify(result)}`);
             if(!result.hero||Math.abs(result.hero.y-result.header.bottom)>3)throw new Error(`ANDROID_LOWER_HERO_${JSON.stringify(result)}`);
             if(result.buttons.length!==2||Math.abs(result.buttons[0].y-result.buttons[1].y)>3||result.buttons.some(b=>!b||b.w<160))throw new Error(`ANDROID_LOWER_CTAS_${JSON.stringify(result)}`);
             if(result.benefitTracks!==4)throw new Error(`ANDROID_LOWER_BENEFITS_${JSON.stringify(result)}`);
@@ -184,7 +189,7 @@ jobs:
             await page.locator('.rh-inventory').screenshot({path:`${out}/android-desktop-site-featured.png`});
             await page.screenshot({path:`${out}/android-desktop-site-lower-full.png`,fullPage:true});
             fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,result,writes,pass:true},null,2)+'\n');
-            console.log('WDCC_ANDROID_LOWER_PAGE_PASS',JSON.stringify({benefits:result.benefitTracks,featuredTracks:result.gridTracks,cardW:result.cards[0].w,photos:result.imgs.length,finance:result.financeTracks,trust:result.trustTracks,writes:writes.length}));
+            console.log('WDCC_ANDROID_LOWER_PAGE_PASS',JSON.stringify({wordmark:result.logo,benefits:result.benefitTracks,featuredTracks:result.gridTracks,cardW:result.cards[0].w,photos:result.imgs.length,finance:result.financeTracks,trust:result.trustTracks,writes:writes.length}));
             await ctx.close();
           }finally{await browser.close()}
           NODE
@@ -209,6 +214,7 @@ jobs:
           if [ -s android-lower-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./android-lower-proof/result.json').result;
+          console.log(`Wordmark: ${r.logo.w.toFixed(1)} × ${r.logo.h.toFixed(1)} px`);
           console.log(`Benefits: ${r.benefitTracks} tracks`);
           console.log(`Featured inventory: ${r.gridTracks} tracks · ${r.cards[0].w.toFixed(1)} px first card · ${r.imgs.length} recovered photos`);
           console.log(`Financing: ${r.financeTracks} tracks · Trust: ${r.trustTracks} tracks`);
