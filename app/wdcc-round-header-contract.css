@@ -50,6 +50,11 @@
   html body .wdcc-public-header .rh-header-inner{
     grid-template-columns:96px minmax(0,1fr) auto!important;
   }
+  /* Match the compact-desktop owner board at Android Chrome "Desktop site" widths.
+     The full selector is intentional: the canonical base grid is also !important. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
 }
 
 @media(max-width:767px){
