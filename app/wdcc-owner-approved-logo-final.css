@@ -44,7 +44,7 @@ html body .li .li-badge>img[data-wdcc-intro-badge-art="owner-approved"]{
 }
 html body .li .li-tag{display:block!important}
 
-/* Persistent public chrome: same exact owner emblem, never an alternate wordmark. */
+/* Persistent public chrome: same exact owner emblem, complete inside the 78px bar. */
 html body [data-wdcc-public-chrome="header"] .rh-header-inner{
   grid-template-columns:112px minmax(0,1fr) auto!important;
   gap:20px!important;
@@ -68,12 +68,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   visibility:visible!important;
   opacity:1!important;
   position:static!important;
-  width:100px!important;
-  min-width:100px!important;
-  max-width:100px!important;
-  height:100px!important;
-  min-height:100px!important;
-  max-height:100px!important;
+  width:72px!important;
+  min-width:72px!important;
+  max-width:72px!important;
+  height:72px!important;
+  min-height:72px!important;
+  max-height:72px!important;
   object-fit:contain!important;
   object-position:center!important;
   border:0!important;
@@ -81,7 +81,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   clip-path:none!important;
   background:transparent!important;
   box-shadow:none!important;
-  filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.48))!important;
   transform:none!important;
 }
 
@@ -144,12 +144,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
-    width:96px!important;
-    min-width:96px!important;
-    max-width:96px!important;
-    height:96px!important;
-    min-height:96px!important;
-    max-height:96px!important;
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
     object-fit:contain!important;
     object-position:center!important;
     border-radius:0!important;
@@ -159,8 +159,8 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
 
   /* Specificity bridge: wdcc-system-v2 has a more-specific !important mobile
-     .rh-logo flex rule (116px wide). A 96px emblem inside that flex box sits 10px
-     left of center. These selectors outrank that legacy rule on every public page. */
+     .rh-logo flex rule. These selectors force the centered logo link into grid
+     mode, then center a complete 72px emblem inside the 78px header. */
   html body header[data-wdcc-public-chrome="header"].rh-header.wdcc-public-header .rh-header-inner{
     position:static!important;
   }
@@ -183,12 +183,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     content:normal!important;
     position:static!important;
     display:block!important;
-    width:96px!important;
-    min-width:96px!important;
-    max-width:96px!important;
-    height:96px!important;
-    min-height:96px!important;
-    max-height:96px!important;
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
     margin:0!important;
     object-fit:contain!important;
     object-position:center!important;
@@ -214,11 +214,11 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
-    width:96px!important;
-    min-width:96px!important;
-    max-width:96px!important;
-    height:96px!important;
-    min-height:96px!important;
-    max-height:96px!important;
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
   }
 }
