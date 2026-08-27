@@ -1,0 +1,203 @@
+/* Owner screenshot correction — preview-only, loaded last.
+   Corrects only the defects visible in the 2026-08-27 owner mobile screenshots. */
+
+/* Persistent public header: horizontal WDCC wordmark, never a clipped round treatment. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+  grid-template-columns:184px minmax(0,1fr) auto!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  width:176px!important;
+  min-width:176px!important;
+  height:78px!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:visible!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:164px!important;
+  min-width:164px!important;
+  max-width:164px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:52px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.42))!important;
+}
+
+/* Intro: car/Tampa stay dominant. Keep the official round badge small and clean. */
+html body .li .li-badge{
+  left:50%!important;
+  top:34%!important;
+  width:150px!important;
+  min-width:150px!important;
+  max-width:150px!important;
+  aspect-ratio:1!important;
+  transform:translate(-50%,-50%)!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+html body .li .li-badge:before{display:none!important;content:none!important}
+html body .li .li-badge>img{
+  inset:0!important;
+  width:100%!important;
+  min-width:100%!important;
+  max-width:100%!important;
+  height:100%!important;
+  min-height:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  filter:drop-shadow(0 10px 24px rgba(0,0,0,.44))!important;
+}
+html body .li .li-tag{display:none!important;visibility:hidden!important;opacity:0!important}
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  /* Exactly one mobile header. */
+  html body [data-wdcc-public-chrome="utility"]{
+    display:none!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    visibility:hidden!important;
+    opacity:0!important;
+    overflow:hidden!important;
+  }
+  html body [data-wdcc-public-chrome="header"]{
+    top:0!important;
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+    width:calc(100% - 20px)!important;
+    height:72px!important;
+    min-height:72px!important;
+    grid-template-columns:48px minmax(0,1fr) 48px!important;
+    gap:8px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-menu,
+  html body [data-wdcc-public-chrome="header"] .rh-call{
+    display:grid!important;
+    width:44px!important;
+    height:44px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-actions{display:none!important}
+  html body [data-wdcc-public-chrome="header"] #wdcc-public-nav:not(.open){display:none!important}
+  html body [data-wdcc-public-chrome="header"] #wdcc-public-nav.open{
+    display:grid!important;
+    position:absolute!important;
+    left:0!important;
+    right:0!important;
+    top:72px!important;
+    z-index:10!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    grid-column:2!important;
+    grid-row:1!important;
+    width:160px!important;
+    min-width:160px!important;
+    height:72px!important;
+    justify-self:center!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+    width:150px!important;
+    min-width:150px!important;
+    max-width:150px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:46px!important;
+    border-radius:0!important;
+    clip-path:none!important;
+  }
+
+  /* Smaller intro badge; no text pill laid over the Challenger. */
+  html body .li .li-badge{
+    top:31%!important;
+    width:132px!important;
+    min-width:132px!important;
+    max-width:132px!important;
+  }
+  html body .li .li-scene img{
+    object-position:61% 46%!important;
+    filter:saturate(1.18) contrast(1.03) brightness(1.18)!important;
+  }
+
+  /* Home featured inventory: one readable card plus a controlled next-card peek. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:10px!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:14px!important;
+    padding-left:14px!important;
+    padding-right:14px!important;
+    padding-bottom:5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 min(82vw,330px)!important;
+    width:min(82vw,330px)!important;
+    min-width:min(82vw,330px)!important;
+    max-width:330px!important;
+    scroll-snap-align:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{
+    aspect-ratio:1.55!important;
+    min-height:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{
+    padding:13px 14px 15px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{
+    font-size:17px!important;
+    min-height:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{
+    font-size:25px!important;
+  }
+
+  /* Full inventory: keep one column but stop photo placeholders from consuming the screen. */
+  html body .inventoryPage [class*="WdccVehicleCard_photo__"]{
+    aspect-ratio:1.95!important;
+    min-height:0!important;
+    max-height:215px!important;
+  }
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"]{
+    padding:12px!important;
+    gap:4px!important;
+  }
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"]::before{
+    width:44px!important;
+    height:44px!important;
+  }
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"] small{font-size:8px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"] strong{font-size:12px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_body__"]{
+    padding:13px 14px 15px!important;
+  }
+  html body .inventoryPage [class*="WdccVehicleCard_title__"]{font-size:18px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_price__"]{font-size:27px!important;margin-top:9px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_down__"]{font-size:10.5px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_actions__"]{margin-top:10px!important;gap:7px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_actions__"] a{min-height:44px!important;font-size:9.5px!important}
+}
+
+@media(max-width:420px){
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:154px!important;min-width:154px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{width:144px!important;min-width:144px!important;max-width:144px!important}
+  html body .li .li-badge{width:124px!important;min-width:124px!important;max-width:124px!important}
+}
