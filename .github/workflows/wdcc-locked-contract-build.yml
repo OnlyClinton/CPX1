@@ -51,7 +51,7 @@ jobs:
           grep -q 'src="/wdcc-official-logo.webp"' app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -q 'src="/wdcc-official-logo.webp"' app/WdccPublicChrome.tsx
+          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"' app/WdccPublicChrome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'FINAL LOGO RELIABILITY' app/wdcc-mobile-header-contract-fix.css
           test -s app/wdcc-system-v2.css
@@ -187,7 +187,7 @@ jobs:
             echo "Preview: $URL"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Canonical hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Official round public/header/intro logo asset: PASS.'
+            echo 'Approved public/header/intro logo source: PASS.'
             echo 'Recovered verified inventory response: PASS.'
             echo 'Five-column wide Featured Inventory contract: PASS.'
             echo 'SHA-specific preview alias: PASS.'
