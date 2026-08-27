@@ -146,7 +146,7 @@ jobs:
               if(entry.label==='home'&&isMobile){
                 if(!data.hero||data.hero.h<490||data.hero.h>720)fail(name,'HOME_HERO_PROPORTION',data);
                 const t=data.homeType||{};
-                if(t.benefitStrong<11.5||t.benefitSmall<9.75||t.inventoryLabel<9.5||t.inventoryCopy<11.5||t.financeStrong<12||t.financeSmall<10||t.trustStrong<10||t.trustCopy<10)fail(name,'HOME_MICROTYPE',t);
+                if(t.benefitStrong<11.5||t.benefitSmall<10.5||t.inventoryLabel<9.5||t.inventoryCopy<11.5||t.financeStrong<12.5||t.financeSmall<10.5||t.trustStrong<10||t.trustCopy<10)fail(name,'HOME_MICROTYPE',t);
                 if(!Array.isArray(t.buttonData)||t.buttonData.length!==2||t.buttonData.some(b=>b.h<46||b.font<11))fail(name,'HOME_CTA_SCALE',t);
                 if(t.heroPhoneVisible)fail(name,'HOME_REDUNDANT_PHONE_CTA',t);
               }
