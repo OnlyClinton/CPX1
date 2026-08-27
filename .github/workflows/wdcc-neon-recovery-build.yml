@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wdcc-neon-recovery-build
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,6 +35,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Verify exact checked-out SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Build recovery source without deployment
         run: npm run build
       - name: Verify provider-independent recovery boundaries
