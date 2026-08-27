@@ -52,7 +52,7 @@ jobs:
           test -s app/WdccPublicChrome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
           grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"|src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
-          grep -q 'clip-path:circle' app/LockedIntro.tsx
+          grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -q 'FINAL LOGO RELIABILITY' app/wdcc-mobile-header-contract-fix.css
           test -s app/wdcc-system-v2.css
           grep -q 'wdcc-system-v2.css' app/layout.tsx
