@@ -17,6 +17,10 @@ function provider(){
   return "portable";
 }
 
+function sessionAuthority(){
+  return (process.env.SESSION_SECRET||"").trim().length>=32?"signed-local":"neon";
+}
+
 function integrations(){
   const email=Boolean((process.env.RESEND_API_KEY||"").trim());
   const sms=Boolean((process.env.TWILIO_ACCOUNT_SID||"").trim()&&(process.env.TWILIO_AUTH_TOKEN||"").trim()&&(process.env.TWILIO_FROM_NUMBER||"").trim()&&(process.env.WDCC_LEAD_NOTIFICATION_PHONE||"").trim());
@@ -29,24 +33,22 @@ export async function GET(){
 
   if(canonicalRuntime()){
     const storage=blobAuthority();
-    const session=Boolean((process.env.SESSION_SECRET||"").trim());
+    const session=sessionAuthority();
     const notificationIntegrations=integrations();
-    if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
+    if(storage.mode==="missing"){
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session,state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
     }
     try{
       const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
+      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session,state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
     }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session,state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
     }
   }
 
   try{
     const {response,json}=await backendHealth();
     const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    // Older immutable canonical backends do not expose integration readiness.
-    // In that case report the facade runtime's actual configuration instead of null.
     const notificationIntegrations=json?.integrations||integrations();
     return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
