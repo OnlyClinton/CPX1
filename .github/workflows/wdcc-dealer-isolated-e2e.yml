@@ -95,7 +95,14 @@ jobs:
 
           node /tmp/wdcc-isolated-authority.mjs >/tmp/wdcc-isolated-authority.log 2>&1 &
           AUTH_PID=$!
-          trap 'kill ${APP_PID:-} ${AUTH_PID:-} 2>/dev/null || true' EXIT
+          cleanup(){
+            cp /tmp/wdcc-isolated-app.log dealer-isolated-e2e/app.log 2>/dev/null || true
+            cp /tmp/wdcc-isolated-authority.log dealer-isolated-e2e/authority.log 2>/dev/null || true
+            cp /tmp/wdcc-isolated-state.json dealer-isolated-e2e/final-isolated-state.json 2>/dev/null || true
+            cp /tmp/wdcc-isolated-media.json dealer-isolated-e2e/final-isolated-media.json 2>/dev/null || true
+            kill ${APP_PID:-} ${AUTH_PID:-} 2>/dev/null || true
+          }
+          trap cleanup EXIT
           for i in $(seq 1 30); do curl -sS -H "Authorization: Bearer $STATE_TOKEN" http://127.0.0.1:4311/state >/dev/null 2>&1 && break; sleep 1; done
           curl -fsS -H "Authorization: Bearer $STATE_TOKEN" http://127.0.0.1:4311/state >/dev/null
 
@@ -116,12 +123,22 @@ jobs:
           import fs from 'node:fs';
           import {chromium} from 'playwright';
           const base='http://localhost:3100',stock=process.env.LOCAL_STOCK;
-          const metrics={sha:process.env.GITHUB_SHA,base,stock,login:false,session:false,create:false,upload:false,checkpoint:false,publish:false,edit:false,publicInventory:false,publicListing:false,externalWrites:[],consoleErrors:[]};
+          const metrics={sha:process.env.GITHUB_SHA,base,stock,login:false,session:false,create:false,upload:false,checkpoint:false,publish:false,edit:false,publicInventory:false,publicListing:false,externalWrites:[],serverErrors:[],consoleErrors:[]};
           const browser=await chromium.launch({headless:true});
           const guard=page=>{
             page.on('request',r=>{const u=new URL(r.url());if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&!['localhost','127.0.0.1'].includes(u.hostname))metrics.externalWrites.push({method:r.method(),url:r.url()})});
+            page.on('response',r=>{if(r.status()>=500)metrics.serverErrors.push({status:r.status(),url:r.url()})});
             page.on('console',m=>{if(m.type()==='error')metrics.consoleErrors.push(m.text())});
             page.on('pageerror',e=>metrics.consoleErrors.push(String(e)));
+          };
+          const clickVisiblePublish=async page=>{
+            const buttons=page.locator('form button[type="submit"]').filter({hasText:/publish/i});
+            const count=await buttons.count();
+            for(let i=0;i<count;i++){
+              const button=buttons.nth(i);
+              if(await button.isVisible()){await button.click();return}
+            }
+            throw Error(`VISIBLE_PUBLISH_MISSING_${count}`);
           };
           try{
             const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
@@ -161,10 +178,7 @@ jobs:
             await page.locator('textarea').fill('Owner exact-head dealer upload proof. Local isolated state only.');
             await page.locator('.stepper > button').nth(4).click();
             await page.screenshot({path:'dealer-isolated-e2e/03-editor-review.png',fullPage:true});
-            const submitters=page.locator('form button[type="submit"]');
-            if(await submitters.count()<1)throw Error('PUBLISH_SUBMIT_MISSING');
-            const publish=submitters.filter({hasText:/publish/i});
-            if(await publish.count())await publish.last().click();else await submitters.last().click();
+            await clickVisiblePublish(page);
             await page.waitForURL(/\/dealer\/inventory(?:\?|$)/,{timeout:20000});
 
             const dealerInventory=await page.evaluate(async()=>{const x=await fetch('/api/inventory',{credentials:'include',cache:'no-store'});return {status:x.status,body:await x.json()}});
@@ -184,8 +198,7 @@ jobs:
             await page.locator('input[name="trim"]').waitFor({state:'visible',timeout:10000});
             await page.locator('input[name="trim"]').fill('R/T Plus');
             await page.locator('.stepper > button').nth(4).click();
-            const editSubmitters=page.locator('form button[type="submit"]'),editPublish=editSubmitters.filter({hasText:/publish/i});
-            if(await editPublish.count())await editPublish.last().click();else await editSubmitters.last().click();
+            await clickVisiblePublish(page);
             await page.waitForURL(/\/dealer\/inventory(?:\?|$)/,{timeout:20000});
             const edited=await page.evaluate(async id=>{const x=await fetch(`/api/inventory/${encodeURIComponent(id)}`,{credentials:'include',cache:'no-store'});return {status:x.status,body:await x.json()}},item.id);
             if(edited.status!==200||edited.body?.item?.trim!=='R/T Plus'||edited.body?.item?.status!=='published')throw Error(`EDIT_NOT_PERSISTED_${JSON.stringify(edited)}`);
@@ -223,8 +236,6 @@ jobs:
           }catch(error){metrics.failure=String(error);fs.writeFileSync('dealer-isolated-e2e/metrics.json',JSON.stringify(metrics,null,2)+'\n');throw error}finally{await browser.close()}
           NODE
 
-          cp /tmp/wdcc-isolated-state.json dealer-isolated-e2e/final-isolated-state.json
-          cp /tmp/wdcc-isolated-media.json dealer-isolated-e2e/final-isolated-media.json
           if grep -Eqi 'https://(dealer\.)?wedontcarecars\.com|wdcc-cpx-launch.*vercel\.app' /tmp/wdcc-isolated-app.log; then
             echo 'Unexpected production-origin reference in isolated app runtime log' >&2
             tail -100 /tmp/wdcc-isolated-app.log >&2
