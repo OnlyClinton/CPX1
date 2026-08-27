@@ -1,0 +1,151 @@
+name: WDCC Owner Approved P0 Storefront Final
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: wdcc-owner-approved-p0-storefront-final
+  cancel-in-progress: false
+
+env:
+  APPROVED_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
+  TARGET_VERSION: 87b1be1d-ee34-4f8e-82bc-1cfb939bc687
+  TARGET_PREVIEW: https://87b1be1d-wdcc-reference-root.clico-global.workers.dev
+  LIVE_WORKER: wdcc-reference-root
+  PROD_ROOT: https://wedontcarecars.com
+  PROD_WWW: https://www.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-P0-STOREFRONT-FINAL-3D255FA8'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Fail-closed owner and release-control gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/issue.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue.json >/dev/null
+          body="$(jq -r '.body // ""' /tmp/issue.json)"
+          grep -Fq 'OWNER-APPROVED P0 LIVE PRIORITY — MAIN + DEALER + VEHICLE UPLOAD' <<<"$body"
+          grep -Fq "exact owner-approved visual source SHA \`$APPROVED_SHA\`" <<<"$body"
+          grep -Fq '`wdcc-reference-root`' <<<"$body"
+          grep -Fq 'routes/DNS left attached exactly as they are now' <<<"$body"
+          grep -Fq 'Full release remains NO-GO outside this P0 exception.' <<<"$body"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact Cloudflare CLI
+        run: npm install --global wrangler@4.90.0
+
+      - name: Re-prove immutable target version before live traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl --http1.1 -sS -D /tmp/ph -o /tmp/pb -w '%{http_code}' "$TARGET_PREVIEW/?final=$GITHUB_RUN_ID")" = 200
+          test "$(curl --http1.1 -sS -D /tmp/pih -o /tmp/pib -w '%{http_code}' "$TARGET_PREVIEW/api/inventory?final=$GITHUB_RUN_ID")" = 200
+          grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/pih
+          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/pih
+          jq -e '.ok==true and .readOnly==true and .count==5 and (.items|length)==5 and .sourceEvidence=="2vfd-stable-public-five"' /tmp/pib >/dev/null
+          echo 'IMMUTABLE_TARGET=PASS'
+
+      - name: Capture rollback version
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/before.json
+          old="$(python - <<'PY'
+          import json
+          d=json.load(open('/tmp/before.json')); rows=[]
+          def walk(x):
+            if isinstance(x,dict):
+              v=x.get('version_id') or x.get('versionId'); p=x.get('percentage')
+              if v: rows.append((p,str(v)))
+              for y in x.values(): walk(y)
+            elif isinstance(x,list):
+              for y in x: walk(y)
+          walk(d)
+          print(next((v for p,v in rows if p in (100,100.0,'100','100.0',1,1.0,'1','1.0')), rows[0][1] if rows else ''))
+          PY
+          )"
+          test -n "$old"
+          echo "old=$old" >> "$GITHUB_OUTPUT"
+          echo "ROLLBACK_VERSION=$old"
+
+      - name: Promote exact existing version and verify externally or rollback
+        shell: bash
+        env:
+          OLD_VERSION: ${{ steps.rollback.outputs.old }}
+        run: |
+          set -Eeuo pipefail
+          promoted=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$promoted" = 1 ]; then
+              echo 'Live P0 proof failed; restoring captured version.' >&2
+              wrangler versions deploy "$OLD_VERSION@100%" --name "$LIVE_WORKER" -y --message "P0 FINAL AUTO-ROLLBACK $GITHUB_RUN_ID" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+          wrangler versions deploy "$TARGET_VERSION@100%" --name "$LIVE_WORKER" -y --message "Owner-approved P0 storefront FINAL $APPROVED_SHA"
+          promoted=1
+
+          wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/after.json
+          grep -Fq "$TARGET_VERSION" /tmp/after.json
+
+          ok=0
+          for i in $(seq 1 20); do
+            root_code="$(curl --http1.1 -sS -o /tmp/root -w '%{http_code}' "$PROD_ROOT/?p0final=$GITHUB_RUN_ID-$i" || true)"
+            api_code="$(curl --http1.1 -sS -D /tmp/aih -o /tmp/aib -w '%{http_code}' "$PROD_ROOT/api/inventory?p0final=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$root_code" = 200 ] && [ "$api_code" = 200 ] && grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/aih && grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/aih && jq -e '.ok==true and .readOnly==true and .count==5 and (.items|length)==5' /tmp/aib >/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+          grep -Fq 'BAD CREDIT' /tmp/root
+          grep -Fq "WE DON'T CARE" /tmp/root
+
+          test "$(curl --http1.1 -sS -o /tmp/inventory -w '%{http_code}' "$PROD_ROOT/inventory?p0final=$GITHUB_RUN_ID")" = 200
+          test "$(curl --http1.1 -sS -o /tmp/www -w '%{http_code}' "$PROD_WWW/?p0final=$GITHUB_RUN_ID")" = 200
+          grep -Fq 'BAD CREDIT' /tmp/www
+
+          first="$(jq -r '.items[0].id // empty' /tmp/aib)"
+          test -n "$first"
+          test "$(curl --http1.1 -sS -o /tmp/detail -w '%{http_code}' "$PROD_ROOT/api/inventory/$first?p0final=$GITHUB_RUN_ID")" = 200
+          jq -e '.ok==true and .item' /tmp/detail >/dev/null
+
+          curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-v2.webp?p0final=$GITHUB_RUN_ID" -o /tmp/hero
+          test -s /tmp/hero
+
+          trap - ERR INT TERM
+          {
+            echo '### WDCC P0 STOREFRONT FINAL — PASS'
+            echo "Approved SHA: $APPROVED_SHA"
+            echo "Live Worker version: $TARGET_VERSION"
+            echo 'Main page: PASS'
+            echo 'Inventory page + verified five-record recovery API: PASS'
+            echo 'WWW + detail route + hero asset: PASS'
+            echo 'DNS/routes/Vercel aliases: UNCHANGED'
+          } >> "$GITHUB_STEP_SUMMARY"
