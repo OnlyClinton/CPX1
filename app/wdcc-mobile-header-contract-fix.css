@@ -1,84 +1,49 @@
 /* WDCC final visual contract closeout.
    Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
 
-/* Public header wordmark: render the brand as real HTML text so proof-worker
-   image decoding/cascade behavior cannot blank the visible logo. Keep the canonical
-   image in the DOM at near-zero opacity for exact asset/integrity compatibility. */
+/* Public header wordmark: the actual 400x128 WDCC horizontal asset is the visible
+   authority. Do not recolor it, synthesize it with text, round it, or hide it. */
 html body [data-wdcc-public-chrome="header"] .rh-logo{
   background:none!important;
   filter:none!important;
   position:relative!important;
   overflow:visible!important;
 }
-html body [data-wdcc-public-chrome="header"] .rh-logo>img{
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
   content:normal!important;
   display:block!important;
   visibility:visible!important;
-  opacity:.001!important;
-  position:absolute!important;
-  inset:50% auto auto 50%!important;
-  transform:translate(-50%,-50%)!important;
-  width:148px!important;
-  height:auto!important;
-  max-height:58px!important;
-  background:none!important;
-  filter:none!important;
-  pointer-events:none!important;
-  z-index:0!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
-  grid-area:1/1!important;
-  display:flex!important;
-  visibility:visible!important;
   opacity:1!important;
   position:relative!important;
-  z-index:3!important;
-  box-sizing:border-box!important;
+  inset:auto!important;
+  transform:none!important;
   width:158px!important;
   min-width:158px!important;
   max-width:158px!important;
-  height:48px!important;
-  min-height:48px!important;
-  max-height:48px!important;
-  margin:0!important;
-  padding:4px 5px!important;
-  align-items:center!important;
-  justify-content:center!important;
-  gap:6px!important;
-  overflow:visible!important;
-  background:transparent!important;
-  color:#fff!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:58px!important;
+  object-fit:contain!important;
+  border-radius:0!important;
+  background:none!important;
   filter:none!important;
-  transform:none!important;
-  text-shadow:0 2px 8px rgba(0,0,0,.65)!important;
-  white-space:nowrap!important;
-  font-family:Arial,Helvetica,sans-serif!important;
-  line-height:1!important;
   pointer-events:none!important;
+  z-index:3!important;
 }
-html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>strong{
-  color:#fff!important;
-  font-size:25px!important;
-  line-height:.9!important;
-  font-weight:1000!important;
-  font-style:italic!important;
-  letter-spacing:-1.6px!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>i{
-  display:block!important;
-  width:3px!important;
-  height:28px!important;
-  flex:0 0 3px!important;
-  background:#ef1f2f!important;
-  transform:skew(-8deg)!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{
-  display:block!important;
-  color:#fff!important;
-  font-size:7.4px!important;
-  line-height:1.05!important;
-  font-weight:950!important;
+
+/* Owner-review historical fixture is explicit and never presented as live. */
+html body .wdccOwnerReviewBanner{
+  box-sizing:border-box!important;
+  width:min(1440px,calc(100% - 42px))!important;
+  margin:0 auto 14px!important;
+  padding:10px 14px!important;
+  border:1px solid #d59b00!important;
+  border-radius:7px!important;
+  background:#fff5cf!important;
+  color:#4a3500!important;
+  font:950 11px/1.35 Inter,ui-sans-serif,system-ui,sans-serif!important;
   letter-spacing:.035em!important;
+  text-align:center!important;
   text-transform:uppercase!important;
 }
 
@@ -95,7 +60,6 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{
   }
   html body main.reference-home.locked-storefront .rh-nav{gap:20px!important;min-width:0!important}
 
-  /* Keep the compact benefits bridge readable on the light board treatment. */
   html body main.reference-home.locked-storefront .rh-benefit-wrap,
   html body main.reference-home.locked-storefront .rh-benefits{background:#fff!important;color:#101820!important}
   html body main.reference-home.locked-storefront .rh-benefit{background:#fff!important;color:#101820!important;border-color:#d9e0e6!important}
@@ -126,18 +90,19 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{
     justify-self:center!important;
     overflow:visible!important;
   }
-  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
     width:142px!important;
     min-width:142px!important;
     max-width:142px!important;
-    height:44px!important;
-    min-height:44px!important;
-    max-height:44px!important;
-    gap:5px!important;
+    height:auto!important;
+    max-height:46px!important;
   }
-  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>strong{font-size:22px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>i{height:25px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{font-size:6.8px!important}
+  html body .wdccOwnerReviewBanner{
+    width:calc(100% - 20px)!important;
+    margin-bottom:10px!important;
+    padding:9px 10px!important;
+    font-size:9.5px!important;
+  }
   html body .approvalBoard .approvalFieldGrid label{font-size:11px!important}
 }
 
@@ -206,4 +171,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
   html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
 }
 
-/* Exact-head proof sync: guaranteed HTML public wordmark + full-width mobile dealer fields. */
+/* Exact-head proof sync: real horizontal logo + explicit owner-only historical inventory review mode. */
