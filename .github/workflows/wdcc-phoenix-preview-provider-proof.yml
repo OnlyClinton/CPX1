@@ -1,0 +1,104 @@
+name: WDCC Phoenix Preview Provider Proof
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+    paths:
+      - 'lib/store.ts'
+      - 'lib/wdccAuthority.ts'
+      - 'app/api/health/route.ts'
+      - 'app/api/inventory/**'
+      - '.github/workflows/wdcc-phoenix-preview-provider-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-phoenix-preview-provider-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+
+      - name: Link isolated Phoenix project
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Deploy PREVIEW only
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(npx --yes vercel@latest deploy --yes --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/wdcc-phoenix-preview-deploy.log | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          case "$url" in
+            *wdcc-cpx-launch.vercel.app) echo 'Refusing mutable production project domain' >&2; exit 1;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > phoenix-preview-url.txt
+
+      - name: Prove canonical state and public inventory READ ONLY
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$URL/api/health")"
+          inv_code="$(curl -sS -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory")"
+          cat /tmp/health.json | jq .
+          cat /tmp/inventory.json | jq '{ok,count,error,previewFallback,inventorySource}'
+          test "$health_code" = 200
+          test "$inv_code" = 200
+          jq -e '.ok==true and .state=="readable"' /tmp/health.json >/dev/null
+          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' /tmp/inventory.json >/dev/null
+          jq '{health:input,inventory:{ok:.ok,count:.count,previewFallback:.previewFallback,inventorySource:.inventorySource}}' /tmp/inventory.json /tmp/health.json >/dev/null 2>&1 || true
+          node - <<'NODE'
+          const fs=require('fs');
+          const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
+          const i=JSON.parse(fs.readFileSync('/tmp/inventory.json','utf8'));
+          const publicSummary=(Array.isArray(i.items)?i.items:[]).map(v=>({id:v.id,year:v.year,make:v.make,model:v.model,trim:v.trim||'',price:v.price??v.cashPrice,mileage:v.mileage,photo:Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)}));
+          fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.URL,health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},writeRequests:0},null,2)+'\n');
+          NODE
+
+      - name: Require current branch head
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test "$current" = "$GITHUB_SHA"
+
+      - name: Upload proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-phoenix-preview-provider-${{ github.sha }}
+          path: |
+            phoenix-preview-url.txt
+            phoenix-provider-proof.json
+          retention-days: 7
