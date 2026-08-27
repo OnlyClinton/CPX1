@@ -4,6 +4,11 @@ on:
   push:
     branches: [preview/wdcc-p0-hardening-20260827]
     paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'scripts/wdcc-preview-fixtures.mjs'
+      - 'scripts/wdcc-p0-preview-hardening-proof.mjs'
+      - 'scripts/wdcc-editor-wizard-proof.mjs'
       - '.github/workflows/wdcc-p0-preview-hardening-proof-v5.yml'
   workflow_dispatch:
 
