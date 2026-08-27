@@ -1,0 +1,295 @@
+name: WDCC Cloudflare R2 Emergency Recovery
+
+on:
+  push:
+    branches: [emergency/wdcc-cloudflare-r2-20260827]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-cloudflare-r2-emergency
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      R2_BUCKET: wdcc-state-primary
+      STATE_WORKER: wdcc-state-authority
+      APP_WORKER: wdcc-cloudflare-backend
+      DEALER_PATTERN: dealer.wedontcarecars.com/*
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Require provider credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VERCEL_TOKEN; do
+            test -n "${!v:-}" || { echo "missing $v"; exit 20; }
+          done
+
+      - name: Install adapters and CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Create or reuse private R2 bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx wrangler r2 bucket create "$R2_BUCKET" >/tmp/r2-create.log 2>&1; then
+            if ! grep -Eqi 'already exists|already been taken|jurisdiction.*exists' /tmp/r2-create.log; then
+              cat /tmp/r2-create.log
+              exit 1
+            fi
+          fi
+
+      - name: Select safest readable WDCC state copy
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-export-state.mjs <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import {get} from '@vercel/blob';
+          const path='private/state/platform-v3.json';
+          const stores=[
+            ['wdcc-v10-20260819-194257','store_cNUyQRVlXtyvZQ5N'],
+            ['wdcc-clean-20260819-173749','store_vVJ5kU6x76yZVkGs'],
+            ['wdcc-rescue-20260819-172412','store_KopvAQeMcatdS5DS'],
+            ['wdcc-private-20260801005157','store_LdMSV1550BRgc0SP'],
+            ['wdcc-live-20260824-013607','store_WtHRfeknoGWfBJaG'],
+            ['wdcc-live-20260824-012925','store_p3tfLnQ5WvnqNbOJ'],
+            ['wdcc-private-20260801-013053','store_A0xNekR2GnstDXyZ'],
+            ['wdcc-production-1785324309','store_Vlt7vqRfSvpRxwxQ']
+          ];
+          const oidcToken=process.env.VERCEL_OIDC_TOKEN||'';
+          const candidates=[];
+          for(const [name,storeId] of stores){
+            try{
+              const r=await get(path,{access:'private',useCache:false,oidcToken:oidcToken||undefined,storeId});
+              if(!r?.stream||r.statusCode!==200)throw new Error(`status_${r?.statusCode||'none'}`);
+              const chunks=[];for await(const c of r.stream)chunks.push(c);
+              const raw=Buffer.concat(chunks).toString('utf8');
+              const state=JSON.parse(raw);
+              const revision=Number(state?.revision);
+              if(!Number.isFinite(revision)||!Array.isArray(state?.users)||!Array.isArray(state?.vehicles)||!Array.isArray(state?.leads))throw new Error('invalid_state');
+              const hash=crypto.createHash('sha256').update(raw).digest('hex');
+              candidates.push({name,storeId,raw,revision,updatedAt:String(state?.updatedAt||''),hash});
+            }catch(e){
+              console.log(`SOURCE_UNAVAILABLE ${name}: ${String(e?.message||e).slice(0,180)}`);
+            }
+          }
+          if(!candidates.length)throw new Error('NO_READABLE_STATE_COPY');
+          candidates.sort((a,b)=>b.revision-a.revision||b.updatedAt.localeCompare(a.updatedAt)||a.name.localeCompare(b.name));
+          const selected=candidates[0];
+          fs.writeFileSync('/tmp/wdcc-state.json',selected.raw.endsWith('\n')?selected.raw:selected.raw+'\n');
+          fs.writeFileSync('/tmp/wdcc-state-source.json',JSON.stringify({name:selected.name,storeId:selected.storeId,revision:selected.revision,updatedAt:selected.updatedAt,sha256:selected.hash,readableCopies:candidates.map(x=>({name:x.name,storeId:x.storeId,revision:x.revision,updatedAt:x.updatedAt,sha256:x.hash}))},null,2)+'\n');
+          console.log(`SELECTED_SOURCE=${selected.name}`);
+          console.log(`SELECTED_REVISION=${selected.revision}`);
+          console.log(`SELECTED_SHA256=${selected.hash}`);
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- node .wdcc-export-state.mjs | tee /tmp/state-export.log
+          test -s /tmp/wdcc-state.json
+          test -s /tmp/wdcc-state-source.json
+          echo "revision=$(jq -r '.revision' /tmp/wdcc-state-source.json)" >> "$GITHUB_OUTPUT"
+          echo "name=$(jq -r '.name' /tmp/wdcc-state-source.json)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(jq -r '.sha256' /tmp/wdcc-state-source.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Seed and independently verify R2 primary
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler r2 object put "$R2_BUCKET/private/state/platform-v3.json" --file=/tmp/wdcc-state.json --content-type=application/json --remote
+          npx wrangler r2 object get "$R2_BUCKET/private/state/platform-v3.json" --file=/tmp/wdcc-state-r2.json --remote
+          test "$(sha256sum /tmp/wdcc-state.json|awk '{print $1}')" = "$(sha256sum /tmp/wdcc-state-r2.json|awk '{print $1}')"
+          test "$(jq -r '.revision' /tmp/wdcc-state-r2.json)" = "${{ steps.source.outputs.revision }}"
+
+      - name: Deploy private R2 state authority
+        id: state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.r2-state.jsonc <<EOF
+          {
+            "name":"$STATE_WORKER",
+            "main":"cloudflare/wdcc-state-worker.mjs",
+            "compatibility_date":"2026-08-27",
+            "workers_dev":true,
+            "preview_urls":true,
+            "observability":{"enabled":true},
+            "r2_buckets":[{"binding":"STATE_BUCKET","bucket_name":"$R2_BUCKET"}]
+          }
+          EOF
+          npx wrangler deploy --config wrangler.r2-state.jsonc 2>&1 | tee /tmp/state-deploy.log
+          STATE_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/state-deploy.log|tail -1)"
+          test -n "$STATE_URL"
+          TOKEN="$(openssl rand -hex 32)"
+          printf '::add-mask::%s\n' "$TOKEN"
+          printf '%s' "$TOKEN" >/tmp/state-token
+          printf '%s' "$TOKEN" | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.r2-state.jsonc >/dev/null
+          echo "url=$STATE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Prove R2 authority read and isolated write path
+        shell: bash
+        env:
+          STATE_URL: ${{ steps.state.outputs.url }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(cat /tmp/state-token)"
+          test "$(curl -sS -o /tmp/r2-health.json -w '%{http_code}' "$STATE_URL/health?run=$GITHUB_RUN_ID")" = 200
+          jq -e --argjson r '${{ steps.source.outputs.revision }}' '.ok==true and .provider=="cloudflare" and .storage=="r2" and .state=="readable" and .revision==$r' /tmp/r2-health.json >/dev/null
+          test "$(curl -sS -o /tmp/r2-self.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST "$STATE_URL/self-test")" = 200
+          jq -e '.ok==true and .write==true and .read==true and .delete==true' /tmp/r2-self.json >/dev/null
+          test "$(curl -sS -o /tmp/r2-state.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$STATE_URL/state")" = 200
+          test "$(jq -r '.revision' /tmp/r2-state.json)" = "${{ steps.source.outputs.revision }}"
+
+      - name: Build full WDCC app for Cloudflare
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+
+      - name: Deploy isolated Cloudflare backend preview
+        id: app
+        shell: bash
+        env:
+          STATE_URL: ${{ steps.state.outputs.url }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const source=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          source.name=process.env.APP_WORKER;
+          source.workers_dev=true;
+          source.preview_urls=true;
+          delete source.route;delete source.routes;
+          source.vars={...(source.vars||{}),WDCC_RUNTIME_ROLE:'backend',WDCC_PROVIDER:'cloudflare',WDCC_STATE_SERVICE_URL:process.env.STATE_URL};
+          delete source.vars.WDCC_DEALER_BACKEND_URL;
+          fs.writeFileSync('wrangler.r2-app.jsonc',JSON.stringify(source,null,2)+'\n');
+          NODE
+          npx wrangler deploy --config wrangler.r2-app.jsonc 2>&1 | tee /tmp/app-deploy.log
+          APP_URL="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/app-deploy.log|tail -1)"
+          test -n "$APP_URL"
+          TOKEN="$(cat /tmp/state-token)"
+          printf '%s' "$TOKEN" | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.r2-app.jsonc >/dev/null
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -lc 'test -n "${SESSION_SECRET:-}"; printf "%s" "$SESSION_SECRET" | npx wrangler secret put SESSION_SECRET --config wrangler.r2-app.jsonc >/dev/null'
+          echo "url=$APP_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Prove full Cloudflare backend before traffic movement
+        shell: bash
+        env:
+          APP_URL: ${{ steps.app.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 20); do
+            code="$(curl -sS -L -o /tmp/app-health.json -w '%{http_code}' "$APP_URL/api/health?r2proof=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+          jq -e --argjson r '${{ steps.source.outputs.revision }}' '.ok==true and .degraded==false and .backend=="local" and .storage=="cloudflare-r2" and .state=="readable" and .provider=="cloudflare" and .session=="configured" and .revision==$r' /tmp/app-health.json >/dev/null
+          test "$(curl -sS -L -o /tmp/app-inventory.json -w '%{http_code}' "$APP_URL/api/inventory?r2proof=$GITHUB_RUN_ID")" = 200
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/app-inventory.json >/dev/null
+          test "$(curl -sS -L -o /tmp/app-dealer.html -w '%{http_code}' "$APP_URL/dealer?r2proof=$GITHUB_RUN_ID")" = 200
+          grep -qi 'dealer' /tmp/app-dealer.html
+
+      - name: Capture current dealer route and cut only dealer subdomain
+        id: cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone_json="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50")"
+          ZONE="$(printf '%s' "$zone_json"|jq -r '.result[0].id')";test -n "$ZONE";test "$ZONE" != null;echo "$ZONE" >/tmp/zone
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE/workers/routes" -o /tmp/routes-before.json
+          jq -c --arg p "$DEALER_PATTERN" '[.result[]?|select(.pattern==$p)]|first//null' /tmp/routes-before.json >/tmp/route-before.json
+          node - <<'NODE'
+          const fs=require('fs'),p='wrangler.r2-app.jsonc',c=JSON.parse(fs.readFileSync(p));
+          c.routes=[{pattern:process.env.DEALER_PATTERN,zone_name:'wedontcarecars.com'}];
+          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx wrangler deploy --config wrangler.r2-app.jsonc >/tmp/live-deploy.log 2>&1
+          sleep 3
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE/workers/routes" -o /tmp/routes-after.json
+          RID="$(jq -r --arg p "$DEALER_PATTERN" --arg s "$APP_WORKER" '.result[]?|select(.pattern==$p and .script==$s)|.id' /tmp/routes-after.json|head -1)";test -n "$RID";echo "$RID" >/tmp/route-id
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Prove live dealer on Cloudflare R2 or roll route back
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback(){ rc=$?;trap - ERR INT TERM;ZONE="$(cat /tmp/zone 2>/dev/null||true)";RID="$(cat /tmp/route-id 2>/dev/null||true)";BEFORE="$(cat /tmp/route-before.json 2>/dev/null||echo null)";if [ -n "$ZONE" ];then if [ "$BEFORE" = null ];then [ -n "$RID" ]&&curl -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE/workers/routes/$RID" >/dev/null||true;else BID="$(jq -r '.id' /tmp/route-before.json)";BP="$(jq -r '.pattern' /tmp/route-before.json)";BS="$(jq -r '.script // empty' /tmp/route-before.json)";curl -fsS -X PUT -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" -H 'content-type: application/json' "https://api.cloudflare.com/client/v4/zones/$ZONE/workers/routes/$BID" --data "$(jq -nc --arg p "$BP" --arg s "$BS" '{pattern:$p,script:$s}')" >/dev/null||true;fi;fi;exit "$rc";};trap rollback ERR INT TERM
+          code=000
+          for i in $(seq 1 15);do code="$(curl -sS -o /tmp/live-health.json -w '%{http_code}' "https://dealer.wedontcarecars.com/api/health?r2live=$GITHUB_RUN_ID-$i"||true)";[ "$code" = 200 ]&&break;sleep 2;done
+          test "$code" = 200
+          jq -e --argjson r '${{ steps.source.outputs.revision }}' '.ok==true and .storage=="cloudflare-r2" and .state=="readable" and .provider=="cloudflare" and .revision==$r' /tmp/live-health.json >/dev/null
+          test "$(curl -sS -o /tmp/live-inventory.json -w '%{http_code}' "https://dealer.wedontcarecars.com/api/inventory?r2live=$GITHUB_RUN_ID")" = 200
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/live-inventory.json >/dev/null
+          test "$(curl -sS -L -o /tmp/live-dealer.html -w '%{http_code}' "https://dealer.wedontcarecars.com/dealer?r2live=$GITHUB_RUN_ID")" = 200
+          test "$(curl -sS -L -o /tmp/public-home.html -w '%{http_code}' "https://wedontcarecars.com/?r2dealer=$GITHUB_RUN_ID")" = 200
+          trap - ERR INT TERM
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Record emergency cutover proof
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_name='${{ steps.source.outputs.name }}'
+          revision='${{ steps.source.outputs.revision }}'
+          sha='${{ steps.source.outputs.sha }}'
+          body="Emergency provider recovery completed by owner authorization. Dealer-only route moved to Cloudflare Worker \`$APP_WORKER\` after isolated proof. State authority is private Cloudflare R2 bucket \`$R2_BUCKET\`, seeded from \`$source_name\` revision \`$revision\` SHA-256 \`$sha\`. Live dealer health=200, state=readable, storage=cloudflare-r2, provider=cloudflare; live inventory=200. Apex storefront route was not changed. Vercel remains rollback only."
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "$body" || true
+          printf '%s\n' "${{ steps.app.outputs.url }}" > cloudflare-backend-url.txt
+          printf '%s\n' "${{ steps.state.outputs.url }}" > cloudflare-state-url.txt
+          cp /tmp/wdcc-state-source.json state-source-summary.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-cloudflare-r2-recovery-proof
+          path: |
+            cloudflare-backend-url.txt
+            cloudflare-state-url.txt
+            state-source-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Report failure without touching storefront
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Cloudflare R2 emergency recovery run $GITHUB_RUN_ID failed before final acceptance. Dealer route rollback logic was armed for any post-bind failure. Apex storefront was not changed. Review the exact failed step before another production action." || true
