@@ -1,0 +1,210 @@
+name: WDCC Cloudflare R2 Isolated Proof
+
+on:
+  push:
+    branches:
+      - proof/wdcc-cloudflare-r2-0f71d6d9
+    paths:
+      - .github/workflows/wdcc-cloudflare-r2-proof.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-cloudflare-r2-isolated-proof
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      APP_SHA: 0f71d6d9485106d86b865fc79f567d08609d706c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Require workflow-only proof delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$APP_SHA"
+          changed="$(git diff --name-only "$APP_SHA"...HEAD)"
+          test "$changed" = '.github/workflows/wdcc-cloudflare-r2-proof.yml'
+          grep -q 'WDCC_STATE_PROVIDER.*r2' wrangler.jsonc
+          grep -q 'WDCC_DATA' wrangler.jsonc
+          grep -q 'STATE_R2_NOT_SEEDED' lib/store.ts
+
+      - name: Install build tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+
+      - name: Create disposable R2 bucket and QA seed
+        id: seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          short="${APP_SHA:0:12}"
+          bucket="wdcc-r2-proof-${short}-${GITHUB_RUN_ID}"
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
+          echo "BUCKET=$bucket" >> "$GITHUB_ENV"
+
+          npx wrangler r2 bucket create "$bucket"
+
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const run=process.env.GITHUB_RUN_ID;
+          const password=`R2Proof-${crypto.randomBytes(18).toString('base64url')}`;
+          const salt=crypto.randomBytes(24);
+          const digest=crypto.scryptSync(password,salt,64);
+          const passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+          const email=`r2-proof-${run}@invalid.example`;
+          const userId=`r2-proof-${crypto.randomUUID()}`;
+          const now=new Date().toISOString();
+          const state={
+            revision:700,
+            tenants:[{id:'wdcc',name:'WDCC',status:'active'}],
+            users:[{id:userId,email,username:email,displayName:`WDCC R2 Proof ${run}`,role:'platform_admin',tenantId:'wdcc',status:'active',disabled:false,passwordHash}],
+            vehicles:[],
+            leads:[],
+            audit:[],
+            updatedAt:now
+          };
+          fs.writeFileSync('/tmp/wdcc-r2-seed.json',JSON.stringify(state,null,2)+'\n');
+          fs.writeFileSync('/tmp/wdcc-r2-proof.env',`PROOF_EMAIL=${email}\nPROOF_PASSWORD=${password}\nPROOF_USER_ID=${userId}\n`);
+          console.log(JSON.stringify({seedRevision:state.revision,users:state.users.length,vehicles:0,leads:0,audit:0}));
+          NODE
+          set -a; . /tmp/wdcc-r2-proof.env; set +a
+          printf '::add-mask::%s\n' "$PROOF_PASSWORD"
+          echo "PROOF_EMAIL=$PROOF_EMAIL" >> "$GITHUB_ENV"
+          echo "PROOF_PASSWORD=$PROOF_PASSWORD" >> "$GITHUB_ENV"
+          echo "PROOF_USER_ID=$PROOF_USER_ID" >> "$GITHUB_ENV"
+
+          npx wrangler r2 object put "$bucket/private/state/platform-v3.json" --file /tmp/wdcc-r2-seed.json --remote
+          npx wrangler r2 object get "$bucket/private/state/platform-v3.json" --file /tmp/wdcc-r2-readback.json --remote
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const raw=fs.readFileSync('/tmp/wdcc-r2-readback.json');
+          const s=JSON.parse(raw);
+          if(Number(s.revision)!==700||s.users?.length!==1)throw Error('R2_SEED_READBACK_MISMATCH');
+          console.log(`R2_SEED_SHA256=${crypto.createHash('sha256').update(raw).digest('hex')}`);
+          NODE
+
+      - name: Deploy exact no-route R2 Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          session="$(node -e "process.stdout.write(require('crypto').randomBytes(48).toString('base64url'))")"
+          printf '::add-mask::%s\n' "$session"
+          export SESSION_PROOF="$session"
+          node <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name=`wdcc-r2-proof-${process.env.APP_SHA}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route; delete cfg.routes;
+          cfg.vars={...(cfg.vars||{}),WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_PROVIDER:'r2',WDCC_MEDIA_PROVIDER:'r2',WDCC_RELEASE_SHA:process.env.APP_SHA,SESSION_SECRET:process.env.SESSION_PROOF};
+          cfg.r2_buckets=[{binding:'WDCC_DATA',bucket_name:process.env.BUCKET}];
+          fs.writeFileSync('/tmp/wrangler-r2-proof.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          npx wrangler deploy --config /tmp/wrangler-r2-proof.jsonc 2>&1 | tee /tmp/wdcc-r2-deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-r2-deploy.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$APP_SHA"*) ;; *) echo "non-sha worker: $url" >&2; exit 1;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "BASE=$url" >> "$GITHUB_ENV"
+          printf '%s\n' "$url" > /tmp/wdcc-r2-preview-url.txt
+
+      - name: Prove R2 health, auth, write, upload, media, isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar=/tmp/wdcc-r2-cookie.jar
+          code=000
+          for i in $(seq 1 20); do
+            code="$(curl --http1.1 -sS -o /tmp/health.json -w '%{http_code}' "$BASE/api/health?proof=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+          jq -e --arg sha "$APP_SHA" '.ok==true and .degraded==false and .storage=="r2" and .stateProvider=="r2" and .state=="readable" and .revision==700 and .provider=="cloudflare" and .commit==$sha' /tmp/health.json >/dev/null
+
+          login_code="$(curl --http1.1 -sS -c "$jar" -o /tmp/login.json -w '%{http_code}' "$BASE/api/auth/login" -H 'content-type: application/json' --data-binary "$(jq -nc --arg email "$PROOF_EMAIL" --arg password "$PROOF_PASSWORD" '{email:$email,password:$password}')")"
+          test "$login_code" = 200
+          jq -e '.ok==true and .role=="platform_admin" and .tenantId=="wdcc"' /tmp/login.json >/dev/null
+
+          session_code="$(curl --http1.1 -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$BASE/api/auth/session")"
+          test "$session_code" = 200
+          jq -e '.authenticated==true' /tmp/session.json >/dev/null
+
+          stock="R2-PROOF-${GITHUB_RUN_ID}"
+          inv_code="$(curl --http1.1 -sS -b "$jar" -o /tmp/create.json -w '%{http_code}' "$BASE/api/inventory" -H 'content-type: application/json' -H "X-WDCC-Request-ID: r2-${GITHUB_RUN_ID}" --data-binary "$(jq -nc --arg stock "$stock" '{year:2020,make:"Toyota",model:"Corolla",trim:"Cloudflare R2 Proof",price:12345,downPayment:1500,mileage:54321,stock:$stock,description:"QA isolated Cloudflare R2 proof",internalOnly:true}')")"
+          test "$inv_code" = 201
+          vehicle_id="$(jq -r '.item.id' /tmp/create.json)"
+          test -n "$vehicle_id" && test "$vehicle_id" != null
+          test "$(jq -r '.revision' /tmp/create.json)" = 701
+          echo "VEHICLE_ID=$vehicle_id" >> "$GITHUB_ENV"
+
+          printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlV1GQAAAAASUVORK5CYII=' | base64 -d > /tmp/r2-proof.png
+          upload_code="$(curl --http1.1 -sS -b "$jar" -o /tmp/upload.json -w '%{http_code}' "$BASE/api/upload" -H "X-WDCC-Request-ID: r2-upload-${GITHUB_RUN_ID}" -F "vehicleId=$vehicle_id" -F "requestId=r2-upload-${GITHUB_RUN_ID}" -F 'file=@/tmp/r2-proof.png;type=image/png;filename=r2-proof.png')"
+          test "$upload_code" = 201
+          pathname="$(jq -r '.pathname' /tmp/upload.json)"
+          case "$pathname" in media/wdcc/*) ;; *) echo "bad pathname: $pathname" >&2; exit 1;; esac
+
+          media_code="$(curl --http1.1 -sS -o /tmp/media.png -w '%{http_code}' "$BASE/api/media?p=$(python -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["PATHNAME"],safe=""))' PATHNAME="$pathname")" || true)"
+          if [ "$media_code" != 200 ]; then
+            encoded="$(python - "$pathname" <<'PY'
+          import sys,urllib.parse
+          print(urllib.parse.quote(sys.argv[1],safe=''))
+          PY
+          )"
+            media_code="$(curl --http1.1 -sS -o /tmp/media.png -w '%{http_code}' "$BASE/api/media?p=$encoded")"
+          fi
+          test "$media_code" = 200
+          cmp -s /tmp/r2-proof.png /tmp/media.png
+
+          public_code="$(curl --http1.1 -sS -o /tmp/public.json -w '%{http_code}' "$BASE/api/inventory?public=${GITHUB_RUN_ID}")"
+          test "$public_code" = 200
+          jq -e --arg id "$vehicle_id" --arg stock "$stock" '.ok==true and all(.items[]; .id!=$id and .stock!=$stock)' /tmp/public.json >/dev/null
+
+          npx wrangler r2 object get "$BUCKET/private/state/platform-v3.json" --file /tmp/final-state.json --remote
+          jq -e --arg id "$vehicle_id" '.revision==701 and any(.vehicles[]; .id==$id and .internalOnly==true)' /tmp/final-state.json >/dev/null
+          npx wrangler r2 object get "$BUCKET/$pathname" --file /tmp/r2-media-readback.png --remote
+          cmp -s /tmp/r2-proof.png /tmp/r2-media-readback.png
+
+          node <<'NODE' > /tmp/wdcc-r2-proof-summary.json
+          const fs=require('fs'),crypto=require('crypto');
+          const s=JSON.parse(fs.readFileSync('/tmp/final-state.json','utf8'));
+          const raw=fs.readFileSync('/tmp/final-state.json');
+          console.log(JSON.stringify({ok:true,appSha:process.env.APP_SHA,base:process.env.BASE,bucket:process.env.BUCKET,revision:s.revision,users:s.users.length,vehicles:s.vehicles.length,leads:s.leads.length,audit:s.audit.length,stateSha256:crypto.createHash('sha256').update(raw).digest('hex')},null,2));
+          NODE
+          cat /tmp/wdcc-r2-proof-summary.json
+
+      - name: Upload sanitized proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-cloudflare-r2-proof-${{ env.APP_SHA }}
+          path: |
+            /tmp/wdcc-r2-preview-url.txt
+            /tmp/wdcc-r2-proof-summary.json
+            /tmp/health.json
+          retention-days: 7
