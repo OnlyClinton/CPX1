@@ -12,6 +12,8 @@ function canonicalRuntime(){
 }
 
 function provider(){
+  const declared=String(process.env.WDCC_PROVIDER||"").trim().toLowerCase();
+  if(declared)return declared;
   if(process.env.RAILWAY_DEPLOYMENT_ID||process.env.RAILWAY_GIT_COMMIT_SHA)return "railway";
   if(process.env.VERCEL_PROJECT_ID)return "vercel";
   return "portable";
@@ -25,7 +27,7 @@ function integrations(){
 }
 
 export async function GET(){
-  const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
+  const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||process.env.GITHUB_SHA||null;
 
   if(canonicalRuntime()){
     const storage=blobAuthority();
@@ -45,8 +47,6 @@ export async function GET(){
   try{
     const {response,json}=await backendHealth();
     const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    // Older immutable canonical backends do not expose integration readiness.
-    // In that case report the facade runtime's actual configuration instead of null.
     const notificationIntegrations=json?.integrations||integrations();
     return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
