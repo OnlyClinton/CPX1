@@ -29,7 +29,14 @@ export type State={
 
 const PATH="private/state/platform-v3.json";
 const BACKUP_PREFIX="private/state/backups/platform-v3-r";
+const READ_CACHE_MS=2500;
+const PROVIDER_BACKOFF_MS=60_000;
+const BACKUP_RECOVERY_LIMIT=6;
 const opt=()=>blobAuthority().options as any;
+
+let readCache:{state:State;expiresAt:number}|null=null;
+let readInFlight:Promise<State>|null=null;
+let providerBlockedUntil=0;
 
 function normalizeState(value:any):State{
   return {
@@ -41,6 +48,23 @@ function normalizeState(value:any):State{
     leads:Array.isArray(value?.leads)?value.leads:[],
     audit:Array.isArray(value?.audit)?value.audit:[]
   };
+}
+
+function cloneState(state:State):State{
+  return normalizeState(JSON.parse(JSON.stringify(state)));
+}
+
+function errorText(error:unknown){
+  return error instanceof Error?error.message:String(error||"unknown");
+}
+
+function providerAccessBlocked(error:unknown){
+  return /(403|forbidden|suspend|blocked|billing|quota|limit|unauthori[sz]ed|invalid\s+token|token\s+expired)/i.test(errorText(error));
+}
+
+function remember(state:State){
+  readCache={state:cloneState(state),expiresAt:Date.now()+READ_CACHE_MS};
+  providerBlockedUntil=0;
 }
 
 async function readBlobState(pathname:string):Promise<State>{
@@ -55,31 +79,60 @@ async function readBlobState(pathname:string):Promise<State>{
   return state;
 }
 
-export async function readState():Promise<State>{
+async function readStateFresh():Promise<State>{
   const authority=blobAuthority();
   if(authority.mode==="missing"){
-    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:false,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:Boolean((process.env.BLOB_READ_WRITE_TOKEN||"").trim()),hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
     throw Error("STATE_AUTHORITY_MISSING");
   }
+
   try{
-    return await readBlobState(PATH);
+    const state=await readBlobState(PATH);
+    remember(state);
+    return state;
   }catch(primaryError){
+    // Authorization, billing, quota and suspension failures affect the store itself.
+    // Scanning backups cannot repair those faults and would only multiply provider work.
+    if(providerAccessBlocked(primaryError)){
+      providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+      console.error("WDCC_STATE_PROVIDER_BLOCKED",JSON.stringify({path:PATH,authority:authority.mode,backoffMs:PROVIDER_BACKOFF_MS,error:errorText(primaryError)}));
+      throw Error("STATE_PROVIDER_BLOCKED");
+    }
+
     try{
       const result=await list({prefix:BACKUP_PREFIX,limit:1000,...opt()});
       const backups=[...result.blobs].sort((a:any,b:any)=>String(b.uploadedAt||"").localeCompare(String(a.uploadedAt||"")));
-      for(const blob of backups.slice(0,20)){
+      for(const blob of backups.slice(0,BACKUP_RECOVERY_LIMIT)){
         try{
           const recovered=await readBlobState(blob.pathname);
-          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,authority:authority.mode,primaryError:primaryError instanceof Error?primaryError.message:"unknown"}));
+          remember(recovered);
+          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,authority:authority.mode,primaryError:errorText(primaryError)}));
           return recovered;
-        }catch{}
+        }catch(backupReadError){
+          if(providerAccessBlocked(backupReadError)){
+            providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+            break;
+          }
+        }
       }
     }catch(backupError){
-      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({authority:authority.mode,error:backupError instanceof Error?backupError.message:"unknown"}));
+      if(providerAccessBlocked(backupError))providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({authority:authority.mode,error:errorText(backupError)}));
     }
-    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,authority:authority.mode,error:primaryError instanceof Error?primaryError.message:"unknown"}));
+    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,authority:authority.mode,error:errorText(primaryError)}));
     throw Error("STATE_READ_FAILED");
   }
+}
+
+export async function readState():Promise<State>{
+  const now=Date.now();
+  if(readCache&&readCache.expiresAt>now)return cloneState(readCache.state);
+  if(providerBlockedUntil>now)throw Error("STATE_PROVIDER_BACKOFF");
+
+  if(!readInFlight){
+    readInFlight=readStateFresh().finally(()=>{readInFlight=null});
+  }
+  return cloneState(await readInFlight);
 }
 
 export async function writeState(input:State){
@@ -105,7 +158,8 @@ export async function writeState(input:State){
     contentType:"application/json",
     ...opt()
   });
-  return state;
+  remember(state);
+  return cloneState(state);
 }
 
 export function isQaVehicleRecord(vehicle:any){
