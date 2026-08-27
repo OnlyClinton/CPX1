@@ -1,0 +1,45 @@
+name: WDCC Neon Recovery Build
+
+on:
+  push:
+    branches:
+      - fix/wdcc-preview-provider-recovery-20260827
+    paths:
+      - 'lib/wdccNeonRecovery.ts'
+      - 'lib/auth.ts'
+      - 'lib/store.ts'
+      - 'app/api/auth/**'
+      - 'app/api/crm/dashboard/route.ts'
+      - 'app/api/admin/users/route.ts'
+      - '.github/workflows/wdcc-neon-recovery-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_ENV: preview
+      WDCC_PREVIEW_RECOVERY_STATE: drive-r6-20260822
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build recovery source without deployment
+        run: npm run build
+      - name: Verify recovery boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'previewRecoveryEnabled' lib/wdccNeonRecovery.ts
+          grep -q 'wdcc_recovery_dashboard' app/api/crm/dashboard/route.ts
+          grep -q 'RECOVERY_READ_ONLY' app/api/admin/users/route.ts
+          grep -q 'PREVIEW_RECOVERY_READ_ONLY' lib/store.ts
+          grep -q 'VERCEL_ENV==="preview"' lib/wdccPreviewRecoveryState.ts
+          ! grep -R --line-number -E 'postgres(ql)?://[^ ]+:[^ ]+@|NEON_AUTH_COOKIE_SECRET=' lib app .github/workflows/wdcc-neon-recovery-build.yml
