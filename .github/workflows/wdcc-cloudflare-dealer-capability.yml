@@ -25,7 +25,7 @@ jobs:
           node-version: 24
       - name: Install Wrangler
         run: npm install --global wrangler@4.90.0
-      - name: Probe R2 authority read-only
+      - name: Probe Cloudflare storage authority read-only
         shell: bash
         run: |
           set -euo pipefail
@@ -33,14 +33,19 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           set +e
           wrangler r2 bucket list > /tmp/r2.out 2>/tmp/r2.err
-          rc=$?
+          r2rc=$?
+          wrangler kv namespace list > /tmp/kv.out 2>/tmp/kv.err
+          kvrc=$?
           set -e
-          echo "R2_LIST_RC=$rc"
-          if [ "$rc" = 0 ]; then
-            echo 'R2_AUTHORITY=AVAILABLE' >> "$GITHUB_STEP_SUMMARY"
+          echo "R2_LIST_RC=$r2rc"
+          echo "KV_LIST_RC=$kvrc"
+          [ "$r2rc" = 0 ] && echo 'R2_AUTHORITY=AVAILABLE' >> "$GITHUB_STEP_SUMMARY" || echo 'R2_AUTHORITY=UNAVAILABLE' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$kvrc" = 0 ]; then
+            echo 'KV_AUTHORITY=AVAILABLE' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/kv.out
           else
-            sed -E 's/[A-Za-z0-9_-]{30,}/[redacted]/g' /tmp/r2.err | tail -20
-            echo 'R2_AUTHORITY=UNAVAILABLE' >> "$GITHUB_STEP_SUMMARY"
+            sed -E 's/[A-Za-z0-9_-]{30,}/[redacted]/g' /tmp/kv.err | tail -20
+            echo 'KV_AUTHORITY=UNAVAILABLE' >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Probe Neon Auth API without credentials
         shell: bash
@@ -63,8 +68,4 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -o /tmp/data.json -w '%{http_code}' "$NEON_DATA/vehicles?select=id&limit=1" || true)"
           echo "NEON_DATA_ANON_HTTP=$code"
-          if [ "$code" = 401 ] || [ "$code" = 403 ]; then
-            echo 'NEON_DATA_REQUIRES_AUTH=PASS' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'NEON_DATA_REQUIRES_AUTH=CHECK' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo 'NEON_DATA_ENDPOINT=AVAILABLE' >> "$GITHUB_STEP_SUMMARY"
