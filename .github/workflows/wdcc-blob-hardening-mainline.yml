@@ -10,6 +10,7 @@ on:
       - lib/wdccAuthority.ts
       - app/api/health/route.ts
       - scripts/wdcc-import-state-postgres.mjs
+      - db/wdcc-platform-state-v2.sql
       - package.json
       - package-lock.json
       - .github/workflows/wdcc-blob-hardening-mainline.yml
@@ -72,6 +73,8 @@ jobs:
           grep -q 'wdcc_platform_state_history' lib/postgresState.ts
           grep -q 'WDCC_IMPORT_CONFIRM' scripts/wdcc-import-state-postgres.mjs
           grep -q 'WDCC_IMPORT_EXPECTED_REVISION' scripts/wdcc-import-state-postgres.mjs
+          grep -q 'CREATE TABLE IF NOT EXISTS public.wdcc_platform_state' db/wdcc-platform-state-v2.sql
+          grep -q 'wdcc_platform_state_imports' db/wdcc-platform-state-v2.sql
           grep -q 'WDCC_CANONICAL_BLOB_STORE_ID' lib/wdccAuthority.ts
           grep -q 'store_cNUyQRVlXtyvZQ5N' lib/wdccAuthority.ts
           grep -q 'if(oidcToken&&canonicalStoreId)' lib/wdccAuthority.ts
