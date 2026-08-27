@@ -1,0 +1,82 @@
+name: WDCC Owner Visual Acceptance Gate
+
+on:
+  # Intentionally unfiltered so the check always reports and can be required
+  # by main branch protection. Non-visual changes pass without approval.
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APPROVED_SHA: ${{ vars.WDCC_OWNER_VISUAL_APPROVED_SHA }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether owner-visible WDCC output changed
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          visual=false
+          if [ -n "${BASE_SHA:-}" ]; then
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" > /tmp/changed.txt
+          else
+            git show --pretty='' --name-only "$HEAD_SHA" > /tmp/changed.txt
+          fi
+          cat /tmp/changed.txt
+          # Only application/rendering code and shipped assets require owner
+          # visual approval. Control-plane workflow changes are governed by
+          # the separate production-control audit and PR review policy.
+          if grep -Eq '^(app/|public/|styles/|next\.config\.|package(-lock)?\.json$)' /tmp/changed.txt; then
+            visual=true
+          fi
+          echo "visual=$visual" >> "$GITHUB_OUTPUT"
+
+      - name: Require exact-head owner visual approval
+        if: steps.scope.outputs.visual == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${APPROVED_SHA:-}" ]; then
+            echo "OWNER VISUAL ACCEPTANCE REQUIRED: repository variable WDCC_OWNER_VISUAL_APPROVED_SHA is unset." >&2
+            echo "Review the exact-head screenshots/video first, then set the variable to: $HEAD_SHA" >&2
+            exit 1
+          fi
+          if [ "$APPROVED_SHA" != "$HEAD_SHA" ]; then
+            echo "OWNER VISUAL ACCEPTANCE REQUIRED: approved SHA does not match this PR head." >&2
+            echo "approved=$APPROVED_SHA" >&2
+            echo "current=$HEAD_SHA" >&2
+            exit 1
+          fi
+          echo "WDCC_OWNER_VISUAL_ACCEPTANCE=PASS exact_sha=$HEAD_SHA"
+
+      - name: Record no-op for non-visual changes
+        if: steps.scope.outputs.visual != 'true'
+        shell: bash
+        run: echo 'WDCC_OWNER_VISUAL_ACCEPTANCE=NOT_REQUIRED non-visual change set'
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### WDCC owner visual acceptance gate'
+            echo "Head SHA: $HEAD_SHA"
+            echo "Visual-sensitive change: ${{ steps.scope.outputs.visual }}"
+            if [ "${{ steps.scope.outputs.visual }}" = true ]; then
+              echo 'Machine/E2E success is not visual approval. This gate stays fail-closed until the owner approves the exact head after reviewing its captured photography and animation.'
+            else
+              echo 'No owner-visible WDCC application/asset change detected; visual approval is not required for this PR.'
+            fi
+            echo 'This workflow has read-only repository permissions and performs no deployment, alias, DNS, provider, database, schema, or application-state mutation.'
+          } >> "$GITHUB_STEP_SUMMARY"
