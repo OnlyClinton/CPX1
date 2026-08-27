@@ -1,0 +1,88 @@
+name: WDCC Owner Target Screenshot
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+    paths:
+      - '.github/workflows/wdcc-owner-target-screenshot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-target-screenshot
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      URL: https://wdcc-locked-preview.clico-global.workers.dev
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Wait for preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-target=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Install Chromium
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Capture owner review packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-owner-target
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          const base=process.env.URL;
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const result={base,sha:process.env.GITHUB_SHA,pages:{},errors:[]};
+            async function shot(name,path,viewport,isMobile=false,skipIntro=false){
+              const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile});
+              const p=await ctx.newPage();
+              p.on('pageerror',e=>result.errors.push(`${name}: ${String(e)}`));
+              const r=await p.goto(`${base}${path}${path.includes('?')?'&':'?'}owner-target=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              await p.waitForTimeout(900);
+              if(skipIntro){
+                const b=p.getByRole('button',{name:/skip intro/i});
+                if(await b.count()) await b.click().catch(()=>{});
+                await p.waitForTimeout(500);
+              }
+              result.pages[name]={http:r?.status()||0,url:p.url(),title:await p.title(),text:(await p.locator('body').innerText().catch(()=>'' )).slice(0,1200)};
+              await p.screenshot({path:`/tmp/wdcc-owner-target/${name}.png`,fullPage:true});
+              await ctx.close();
+            }
+            await shot('desktop-home','/',{width:1440,height:1000},false,true);
+            await shot('mobile-home','/',{width:390,height:844},true,true);
+            await shot('desktop-inventory','/inventory',{width:1440,height:1000});
+            await shot('mobile-inventory','/inventory',{width:390,height:844},true);
+            await shot('desktop-dealer','/dealer',{width:1440,height:1000});
+            await shot('mobile-dealer','/dealer',{width:390,height:844},true);
+            await shot('desktop-dealer-inventory','/dealer/inventory',{width:1440,height:1000});
+            await shot('desktop-dealer-import','/dealer/inventory/import',{width:1440,height:1000});
+            await shot('desktop-dealer-add','/dealer/inventory/new',{width:1440,height:1000});
+            await browser.close();
+            fs.writeFileSync('/tmp/wdcc-owner-target/result.json',JSON.stringify(result,null,2));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-target-${{ github.sha }}
+          path: /tmp/wdcc-owner-target/
+          retention-days: 7
