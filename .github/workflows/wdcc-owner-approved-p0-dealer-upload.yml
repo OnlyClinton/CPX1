@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: 3e189ee26f55bf7c7eb76a85210e29ddea045c95
+  P0_SHA: e3332fea49587f41cfd15cb041ebba6eb6db68d4
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-p0-state
   MEDIA_WORKER: wdcc-p0-media
@@ -23,22 +23,19 @@ env:
   MEDIA_URL: https://wdcc-p0-media.clico-global.workers.dev
   APP_URL: https://wdcc-p0-dealer-app.clico-global.workers.dev
   DEALER_ROOT: https://dealer.wedontcarecars.com
-  VERCEL_SCOPE: cpxagency
-  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-  PHOENIX_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
 
 jobs:
   recover:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-3E189EE2'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-NEON-E3332FEA'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
     steps:
       - name: Fail-closed P0 owner and release-control gate
         shell: bash
@@ -47,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
-          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VERCEL_TOKEN; do
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WDCC_DEALER_E2E_PASSWORD; do
             test -n "${!v:-}" || { echo "missing $v" >&2; exit 20; }
           done
           curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
@@ -79,44 +76,28 @@ jobs:
           test "$(git rev-parse HEAD)" = "$P0_SHA"
           git merge-base --is-ancestor "$APPROVED_VISUAL_SHA" HEAD || { git fetch --depth=20 origin "$APPROVED_VISUAL_SHA"; git merge-base --is-ancestor "$APPROVED_VISUAL_SHA" HEAD; }
           grep -Fq 'ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth' app/api/auth/login/route.ts
-          grep -Fq 'sessionCookieHeader' app/api/auth/login/route.ts
+          grep -Fq 'return neonCurrentUser();' lib/auth.ts
+          grep -Fq 'sessionAuthority()' app/api/health/route.ts
+          ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
           grep -Fq 'WDCC_STATE_SERVICE_URL' lib/wdccAuthority.ts
           grep -Fq 'WDCC_MEDIA_SERVICE_URL' lib/wdccAuthority.ts
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
-          npm install --global vercel@59.3.0 >/dev/null
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
           test -d .open-next/assets
 
-      - name: Pull existing stable WDCC session authority without exposing it
+      - name: Generate run-scoped internal state and media authority
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/wdcc-phoenix/.vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$PHOENIX_PROJECT_ID" > /tmp/wdcc-phoenix/.vercel/project.json
-          (cd /tmp/wdcc-phoenix && VERCEL_PROJECT_ID="$PHOENIX_PROJECT_ID" vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
-          read_value(){
-            local key="$1" line value
-            line="$(grep -m1 "^${key}=" /tmp/phoenix.env || true)"
-            value="${line#*=}"; value="${value#\"}"; value="${value%\"}"
-            printf '%s' "$value"
-          }
-          session="$(read_value SESSION_SECRET)"
-          test "${#session}" -ge 32 || { echo 'existing SESSION_SECRET missing/short' >&2; exit 78; }
-          printf '%s' "$session" > /tmp/session.secret
-          chmod 600 /tmp/session.secret
-          node - <<'NODE'
-          const fs=require('fs'),crypto=require('crypto');
-          const s=fs.readFileSync('/tmp/session.secret');
-          const token=ctx=>crypto.createHmac('sha256',s).update(ctx).digest('base64url');
-          fs.writeFileSync('/tmp/state.token',token('wdcc-p0-state-v1'));
-          fs.writeFileSync('/tmp/media.token',token('wdcc-p0-media-v1'));
-          fs.chmodSync('/tmp/state.token',0o600); fs.chmodSync('/tmp/media.token',0o600);
-          NODE
-          rm -f /tmp/phoenix.env
-          echo 'STABLE_SESSION_AUTHORITY=PULLED'
+          umask 077
+          openssl rand -hex 32 > /tmp/state.token
+          openssl rand -hex 32 > /tmp/media.token
+          test "$(wc -c < /tmp/state.token)" -ge 64
+          test "$(wc -c < /tmp/media.token)" -ge 64
+          echo 'P0_INTERNAL_SERVICE_AUTHORITY=GENERATED'
 
       - name: Generate workers.dev-only Durable Object configs
         shell: bash
@@ -216,13 +197,12 @@ jobs:
           jq -e '.ok==true' /tmp/media-del >/dev/null
           echo 'P0_MEDIA_AUTHORITY=PASS'
 
-      - name: Deploy isolated exact dealer application and inject stable secrets
+      - name: Deploy isolated exact dealer application and inject internal service secrets
         shell: bash
         run: |
           set -euo pipefail
           npx wrangler deploy --config wrangler.p0-app.jsonc 2>&1 | tee /tmp/app-deploy.log
           grep -Fq "$APP_URL" /tmp/app-deploy.log
-          cat /tmp/session.secret | npx wrangler secret put SESSION_SECRET --name "$APP_WORKER" >/dev/null
           cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
           cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
           ok=0
@@ -260,29 +240,29 @@ jobs:
           }
           trap cleanup EXIT INT TERM ERR
 
-          SESSION_FILE=/tmp/session.secret node - <<'NODE'
-          const fs=require('fs'),crypto=require('crypto');const s=fs.readFileSync(process.env.SESSION_FILE);
-          const raw=Buffer.from(JSON.stringify({id:'wdcc-dealer-neon-bridge',role:'dealer_agent',exp:Date.now()+3600000})).toString('base64url');
-          const sig=crypto.createHmac('sha256',s).update(raw).digest('base64url');fs.writeFileSync('/tmp/dealer.cookie',`__Host-wdcc_session=${raw}.${sig}`);
-          NODE
-          cookie="$(cat /tmp/dealer.cookie)"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/stage-login-body.json
+          test "$(curl --http1.1 -sS -c /tmp/dealer.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/stage-login-body.json -o /tmp/stage-login.json -w '%{http_code}' "$APP_URL/api/auth/login")" = 200
+          jq -e '.ok==true and (.role=="dealer_agent" or .role=="dealer")' /tmp/stage-login.json >/dev/null
+          test "$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/stage-session.json -w '%{http_code}' "$APP_URL/api/auth/session")" = 200
+          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/stage-session.json >/dev/null
           stock="WDCC-QA-P0-$GITHUB_RUN_ID"
-          create="$(curl --http1.1 -sS -X POST -H "Cookie: $cookie" -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":100,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/create.json -w '%{http_code}' "$APP_URL/api/inventory")"
+          create="$(curl --http1.1 -sS -X POST -b /tmp/dealer.jar -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":100,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/create.json -w '%{http_code}' "$APP_URL/api/inventory")"
           test "$create" = 201
           qa_id="$(jq -r '.item.id // empty' /tmp/create.json)"; test -n "$qa_id"
 
-          upload="$(curl --http1.1 -sS -X POST -H "Cookie: $cookie" -F "vehicleId=$qa_id" -F "requestId=p0-$GITHUB_RUN_ID" -F 'file=@public/wdcc-logo-transparent.webp;type=image/webp' -o /tmp/upload.json -w '%{http_code}' "$APP_URL/api/upload")"
+          upload="$(curl --http1.1 -sS -X POST -b /tmp/dealer.jar -F "vehicleId=$qa_id" -F "requestId=p0-$GITHUB_RUN_ID" -F 'file=@public/wdcc-logo-transparent.webp;type=image/webp' -o /tmp/upload.json -w '%{http_code}' "$APP_URL/api/upload")"
           test "$upload" = 200
           media_path="$(jq -r '.pathname // empty' /tmp/upload.json)"; test -n "$media_path"
           jq -e '.ok==true and .provider=="cloudflare" and .sha256' /tmp/upload.json >/dev/null
 
           patch_payload="$(jq -nc --arg p "$media_path" '{photoPathnames:[$p],primaryPhotoPathname:$p}')"
-          test "$(curl --http1.1 -sS -X PATCH -H "Cookie: $cookie" -H 'Content-Type: application/json' --data "$patch_payload" -o /tmp/checkpoint.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -X PATCH -b /tmp/dealer.jar -H 'Content-Type: application/json' --data "$patch_payload" -o /tmp/checkpoint.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
           jq -e --arg p "$media_path" '.ok==true and .item.primaryPhotoPathname==$p and (.item.photoPathnames|index($p)!=null)' /tmp/checkpoint.json >/dev/null
 
-          test "$(curl --http1.1 -sS -X PATCH -H "Cookie: $cookie" -H 'Content-Type: application/json' --data '{"status":"published"}' -o /tmp/publish.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -X PATCH -b /tmp/dealer.jar -H 'Content-Type: application/json' --data '{"status":"published"}' -o /tmp/publish.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
           jq -e '.ok==true and .item.status=="published"' /tmp/publish.json >/dev/null
-          test "$(curl --http1.1 -sS -H "Cookie: $cookie" -o /tmp/readback.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/readback.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
           jq -e --arg id "$qa_id" '.ok==true and .item.id==$id and .item.status=="published"' /tmp/readback.json >/dev/null
 
           test "$(curl --http1.1 -sS -o /tmp/public.json -w '%{http_code}' "$APP_URL/api/inventory?public=$GITHUB_RUN_ID")" = 200
@@ -332,7 +312,7 @@ jobs:
           set -euo pipefail
           cat > wdcc-p0-dealer-frontdoor.mjs <<'JS'
           const TARGET="https://wdcc-p0-dealer-app.clico-global.workers.dev";
-          export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","3e189ee26f55bf7c7eb76a85210e29ddea045c95");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
+          export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","e3332fea49587f41cfd15cb041ebba6eb6db68d4");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
           JS
           cat > wrangler.p0-frontdoor.jsonc <<'JSON'
           {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
@@ -377,19 +357,22 @@ jobs:
           test "$(curl --http1.1 -sS -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")" = 200
           test "$(curl --http1.1 -sS -o /tmp/live-new-page -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
 
-          SESSION_FILE=/tmp/session.secret node - <<'NODE'
-          const fs=require('fs'),crypto=require('crypto');const s=fs.readFileSync(process.env.SESSION_FILE);const raw=Buffer.from(JSON.stringify({id:'wdcc-dealer-neon-bridge',role:'dealer_agent',exp:Date.now()+3600000})).toString('base64url');const sig=crypto.createHmac('sha256',s).update(raw).digest('base64url');fs.writeFileSync('/tmp/live.cookie',`__Host-wdcc_session=${raw}.${sig}`);
-          NODE
-          cookie="$(cat /tmp/live.cookie)"; stock="WDCC-QA-P0-LIVE-$GITHUB_RUN_ID"
-          test "$(curl --http1.1 -sS -X POST -H "Cookie: $cookie" -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"Live P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":101,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/live-create.json -w '%{http_code}' "$DEALER_ROOT/api/inventory")" = 201
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/live-login-body.json
+          test "$(curl --http1.1 -sS -c /tmp/live.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/live-login-body.json -o /tmp/live-login.json -w '%{http_code}' "$DEALER_ROOT/api/auth/login")" = 200
+          jq -e '.ok==true and (.role=="dealer_agent" or .role=="dealer")' /tmp/live-login.json >/dev/null
+          test "$(curl --http1.1 -sS -b /tmp/live.jar -o /tmp/live-session.json -w '%{http_code}' "$DEALER_ROOT/api/auth/session")" = 200
+          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/live-session.json >/dev/null
+          stock="WDCC-QA-P0-LIVE-$GITHUB_RUN_ID"
+          test "$(curl --http1.1 -sS -X POST -b /tmp/live.jar -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"Live P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":101,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/live-create.json -w '%{http_code}' "$DEALER_ROOT/api/inventory")" = 201
           qa_id="$(jq -r '.item.id // empty' /tmp/live-create.json)"; test -n "$qa_id"
-          test "$(curl --http1.1 -sS -X POST -H "Cookie: $cookie" -F "vehicleId=$qa_id" -F "requestId=p0-live-$GITHUB_RUN_ID" -F 'file=@public/wdcc-logo-transparent.webp;type=image/webp' -o /tmp/live-upload.json -w '%{http_code}' "$DEALER_ROOT/api/upload")" = 200
+          test "$(curl --http1.1 -sS -X POST -b /tmp/live.jar -F "vehicleId=$qa_id" -F "requestId=p0-live-$GITHUB_RUN_ID" -F 'file=@public/wdcc-logo-transparent.webp;type=image/webp' -o /tmp/live-upload.json -w '%{http_code}' "$DEALER_ROOT/api/upload")" = 200
           media_path="$(jq -r '.pathname // empty' /tmp/live-upload.json)"; test -n "$media_path"
           payload="$(jq -nc --arg p "$media_path" '{photoPathnames:[$p],primaryPhotoPathname:$p}')"
-          test "$(curl --http1.1 -sS -X PATCH -H "Cookie: $cookie" -H 'Content-Type: application/json' --data "$payload" -o /tmp/live-checkpoint.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
-          test "$(curl --http1.1 -sS -X PATCH -H "Cookie: $cookie" -H 'Content-Type: application/json' --data '{"status":"published"}' -o /tmp/live-publish.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -X PATCH -b /tmp/live.jar -H 'Content-Type: application/json' --data "$payload" -o /tmp/live-checkpoint.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -X PATCH -b /tmp/live.jar -H 'Content-Type: application/json' --data '{"status":"published"}' -o /tmp/live-publish.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
           jq -e '.ok==true and .item.status=="published"' /tmp/live-publish.json >/dev/null
-          test "$(curl --http1.1 -sS -H "Cookie: $cookie" -o /tmp/live-readback.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
+          test "$(curl --http1.1 -sS -b /tmp/live.jar -o /tmp/live-readback.json -w '%{http_code}' "$DEALER_ROOT/api/inventory/$qa_id")" = 200
           jq -e --arg id "$qa_id" '.ok==true and .item.id==$id' /tmp/live-readback.json >/dev/null
           test "$(curl --http1.1 -sS -o /tmp/live-public.json -w '%{http_code}' "$DEALER_ROOT/api/inventory?public=$GITHUB_RUN_ID")" = 200
           jq -e --arg id "$qa_id" '[.items[]?.id]|index($id)==null' /tmp/live-public.json >/dev/null
@@ -412,4 +395,4 @@ jobs:
             echo 'Exact QA cleanup: PASS'
             echo 'DNS/routes/Vercel aliases: UNCHANGED'
           } >> "$GITHUB_STEP_SUMMARY"
-          rm -f /tmp/session.secret /tmp/state.token /tmp/media.token /tmp/dealer.cookie /tmp/live.cookie
+          rm -f /tmp/state.token /tmp/media.token /tmp/dealer.jar /tmp/live.jar /tmp/stage-login-body.json /tmp/live-login-body.json
