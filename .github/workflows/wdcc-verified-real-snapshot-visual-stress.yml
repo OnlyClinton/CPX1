@@ -1,0 +1,106 @@
+name: WDCC Verified Real Snapshot Visual Stress
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+    paths:
+      - 'app/**'
+      - 'scripts/wdcc-verified-real-snapshot-visual-stress.mjs'
+      - '.github/workflows/wdcc-verified-real-snapshot-visual-stress.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-verified-real-snapshot-visual-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  verified-real-visual-stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npm run build
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Start exact SHA server
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx next start -H 127.0.0.1 -p 4176 >/tmp/wdcc-real-visual-server.log 2>&1 &
+          echo $! >/tmp/wdcc-real-visual-server.pid
+          code=000
+          for i in $(seq 1 35); do
+            code="$(curl -sS -o /tmp/wdcc-real-visual-root.html -w '%{http_code}' 'http://127.0.0.1:4176/?stress-warm=1' || true)"
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          if [ "$code" != 200 ]; then
+            cat /tmp/wdcc-real-visual-server.log >&2 || true
+            exit 1
+          fi
+
+      - name: Stress populated storefront, VDP and dealer surfaces
+        env:
+          URL: http://127.0.0.1:4176
+          OUT: verified-real-visual-stress
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-verified-real-snapshot-visual-stress.mjs
+
+      - name: Require current branch head
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$GITHUB_SHA"
+
+      - name: Publish stress summary
+        if: always()
+        shell: bash
+        run: |
+          echo '### WDCC verified historical real-record visual stress' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Purpose: visual-only population stress using previously verified WDCC vehicle records/media. This does not claim the snapshot is live and does not replace canonical provider acceptance.' >> "$GITHUB_STEP_SUMMARY"
+          if [ -s verified-real-visual-stress/result.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const r=require('./verified-real-visual-stress/result.json');
+          console.log(`Pass: ${r.pass===true}`);
+          console.log(`Captured populated surfaces: ${Object.keys(r.pages||{}).length}`);
+          console.log(`Verified media checks: ${(r.media||[]).length}`);
+          console.log(`Write requests: ${(r.writes||[]).length}`);
+          NODE
+          else
+            echo 'Stress result did not complete; inspect job log.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-verified-real-visual-${{ github.sha }}
+          path: verified-real-visual-stress/
+          if-no-files-found: warn
+          retention-days: 7
