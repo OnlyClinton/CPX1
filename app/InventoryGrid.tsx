@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useEffect,useState} from "react";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
+import {isWdccVisualReviewFixture,WDCC_VISUAL_REVIEW_INVENTORY,WDCC_VISUAL_REVIEW_LABEL} from "./wdccVisualReviewInventory";
 
 type InventoryState="loading"|"ready"|"empty"|"error"|"fallback";
 type Vehicle=WdccVehicle&{status?:string;stock?:string;stock_id?:string;badges?:string[];visibility?:string;internalOnly?:boolean};
@@ -19,9 +20,16 @@ function customerVisible(v:Vehicle){
 export default function InventoryGrid(){
   const[items,setItems]=useState<Vehicle[]>([]);
   const[state,setState]=useState<InventoryState>("loading");
+  const[fixtureMode,setFixtureMode]=useState(false);
 
   useEffect(()=>{
     let live=true;
+    if(isWdccVisualReviewFixture()){
+      setFixtureMode(true);
+      setItems(WDCC_VISUAL_REVIEW_INVENTORY as Vehicle[]);
+      setState("ready");
+      return()=>{live=false};
+    }
     fetch("/api/inventory",{cache:"no-store"})
       .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body?.error||`Inventory ${r.status}`);return body})
       .then(body=>{
@@ -39,5 +47,5 @@ export default function InventoryGrid(){
   if(state==="error")return <div className="inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Live inventory is temporarily unavailable.</h3><p>We are not substituting demo vehicles. Call Sean at <a href="tel:+18135164752">813-516-4752</a> for current availability.</p><div className="actions"><Link className="cta red" href="/get-approved?source=inventory-provider-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN</a></div></div></div>;
   if(state==="empty")return <div className="inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Inventory is being updated.</h3><p>There are no customer-visible published vehicles to show right now. Call or text Sean for vehicles being prepared.</p><a className="cta red" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></div>;
 
-  return <div className="inventoryGrid wdccVehicleGrid">{items.map(v=><WdccVehicleCard key={String(v.id||v.slug)} vehicle={v}/>)}</div>;
+  return <>{fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}<div className="inventoryGrid wdccVehicleGrid">{items.map(v=><WdccVehicleCard key={String(v.id||v.slug)} vehicle={v}/>)}</div></>;
 }
