@@ -1,0 +1,69 @@
+name: WDCC Cloudflare Worker Capacity Diagnostic
+
+on:
+  push:
+    branches: [diagnostic/wdcc-cloudflare-worker-capacity-20260827]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-worker-capacity-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Read-only worker and route inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/scripts.json
+          jq -e '.success==true' /tmp/scripts.json >/dev/null
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          jq -e '.success==true' /tmp/zones.json >/dev/null
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          jq -e '.success==true' /tmp/routes.json >/dev/null
+          set +e
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
+          domain_rc=$?
+          set -e
+          if [ "$domain_rc" -ne 0 ] || ! jq -e '.success==true' /tmp/domains.json >/dev/null 2>&1; then printf '{"success":true,"result":[]}\n' > /tmp/domains.json; fi
+          node <<'NODE'
+          const fs=require('fs');
+          const scripts=JSON.parse(fs.readFileSync('/tmp/scripts.json')).result||[];
+          const routes=JSON.parse(fs.readFileSync('/tmp/routes.json')).result||[];
+          const domains=JSON.parse(fs.readFileSync('/tmp/domains.json')).result||[];
+          const routeMap=new Map();
+          for(const r of routes){const s=r.script||r.script_name||'';if(!s)continue;const a=routeMap.get(s)||[];a.push(r.pattern||'route');routeMap.set(s,a);}
+          const domainMap=new Map();
+          for(const d of domains){const s=d.service||d.script||d.script_name||'';if(!s)continue;const a=domainMap.get(s)||[];a.push(d.hostname||d.name||'custom-domain');domainMap.set(s,a);}
+          const rows=scripts.map(x=>({name:x.id||x.name||x.script||'',modified:x.modified_on||x.modifiedOn||x.created_on||'',routes:routeMap.get(x.id||x.name||x.script||'')||[],domains:domainMap.get(x.id||x.name||x.script||'')||[]})).filter(x=>x.name).sort((a,b)=>a.name.localeCompare(b.name));
+          const candidates=rows.filter(x=>x.routes.length===0&&x.domains.length===0&&/wdcc/i.test(x.name)&&/(proof|preview|staging|probe|diag|test|tmp|isolated|recovery)/i.test(x.name));
+          console.log(`WORKER_COUNT=${rows.length}`);
+          console.log('ROUTED_WDCC');
+          for(const r of rows.filter(x=>/wdcc/i.test(x.name)&&(x.routes.length||x.domains.length)))console.log(JSON.stringify(r));
+          console.log('UNROUTED_WDCC_CANDIDATES');
+          for(const r of candidates)console.log(JSON.stringify(r));
+          fs.writeFileSync('/tmp/worker-summary.json',JSON.stringify({count:rows.length,routedWdcc:rows.filter(x=>/wdcc/i.test(x.name)&&(x.routes.length||x.domains.length)),candidates},null,2));
+          NODE
+          {
+            echo '## WDCC Cloudflare worker capacity — read only'
+            echo
+            echo "- Worker count: $(jq -r '.count' /tmp/worker-summary.json)"
+            echo '- Production route/custom-domain mutations: NONE'
+            echo '- Candidate list contains only WDCC-named un-routed proof/preview/staging/probe/test workers.'
+            echo
+            echo '```json'
+            jq '{routedWdcc,candidates}' /tmp/worker-summary.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
