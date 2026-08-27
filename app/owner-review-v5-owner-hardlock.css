@@ -1,27 +1,36 @@
 /* Owner V5 cascade hard-lock. Intentionally outranks all legacy visual selectors. */
 
 @keyframes wdccV5BadgePopOwnerHardMobile{
-  0%{opacity:0;transform:translate(-50%,-50%) scale(.46) rotate(-7deg);filter:blur(6px)}
-  24%{opacity:1;transform:translate(-50%,-50%) scale(1.15) rotate(2deg);filter:blur(0)}
-  48%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-.5deg)}
-  78%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
-  88%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
-  100%{opacity:1;transform:translate(-50%,calc(-50% - 34vh)) scale(.36) rotate(0)}
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.48) rotate(-6deg);filter:blur(6px)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.12) rotate(1.5deg);filter:blur(0)}
+  32%{opacity:1;transform:translate(-50%,-50%) scale(.985) rotate(-.4deg)}
+  46%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  64%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  76%{opacity:1;transform:translate(-50%,calc(-50% - 8vh)) scale(.83) rotate(0)}
+  88%{opacity:1;transform:translate(-50%,calc(-50% - 21vh)) scale(.56) rotate(0)}
+  100%{opacity:1;transform:translate(-50%,calc(-50% - 32.5vh)) scale(.35) rotate(0)}
 }
 @keyframes wdccV5BadgePopOwnerHardDesktop{
-  0%{opacity:0;transform:translate(-50%,-50%) scale(.44) rotate(-7deg);filter:blur(7px)}
-  24%{opacity:1;transform:translate(-50%,-50%) scale(1.14) rotate(2deg);filter:blur(0)}
-  48%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-.5deg)}
-  78%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
-  88%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
-  100%{opacity:1;transform:translate(calc(-50% - 43vw),calc(-50% - 32vh)) scale(.36) rotate(0)}
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.46) rotate(-6deg);filter:blur(7px)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.11) rotate(1.5deg);filter:blur(0)}
+  32%{opacity:1;transform:translate(-50%,-50%) scale(.985) rotate(-.4deg)}
+  46%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  64%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  76%{opacity:1;transform:translate(calc(-50% - 11vw),calc(-50% - 7vh)) scale(.82) rotate(0)}
+  88%{opacity:1;transform:translate(calc(-50% - 28vw),calc(-50% - 19vh)) scale(.55) rotate(0)}
+  100%{opacity:1;transform:translate(calc(-50% - 43vw),calc(-50% - 31vh)) scale(.35) rotate(0)}
+}
+@keyframes wdccV5TagOwnerHard{
+  0%,15%{opacity:0;transform:translate(-50%,10px)}
+  30%,60%{opacity:1;transform:translate(-50%,0)}
+  78%,100%{opacity:0;transform:translate(-50%,-5px)}
 }
 html body .li.li-show.li-show .li-badge.li-badge{
   width:min(66vw,258px)!important;top:39.5%!important;
-  animation:wdccV5BadgePopOwnerHardMobile 1.66s cubic-bezier(.16,.84,.18,1) both!important;
+  animation:wdccV5BadgePopOwnerHardMobile 1.72s cubic-bezier(.18,.76,.2,1) both!important;
   box-shadow:0 24px 62px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.95),0 0 46px rgba(255,255,255,.2)!important;
 }
-html body .li.li-show.li-show .li-tag.li-tag{top:62%!important;font-size:12px!important;letter-spacing:.09em!important}
+html body .li.li-show.li-show .li-tag.li-tag{top:62%!important;font-size:12px!important;letter-spacing:.09em!important;animation:wdccV5TagOwnerHard 1.52s ease both!important}
 @media(min-width:761px){
   html body .li.li-show.li-show .li-badge.li-badge{width:min(24vw,310px)!important;top:40%!important;animation-name:wdccV5BadgePopOwnerHardDesktop!important}
   html body .li.li-show.li-show .li-tag.li-tag{top:62%!important;font-size:13px!important}
