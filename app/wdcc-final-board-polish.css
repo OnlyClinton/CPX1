@@ -1,0 +1,57 @@
+/* WDCC FINAL OWNER-BOARD POLISH
+   Narrow visual-only closeout for the 2026-08-27 owner boards.
+   No auth, data, provider, routing, schema, DNS, alias, or production behavior changes. */
+
+/* 10668 desktop dashboard: Inventory Overview + Recent Vehicles + Recent Activity
+   share the primary operating row, followed by the four action modules. */
+@media (min-width: 1100px){
+  html body main.dealerDashboardLocked .dashboardContent{
+    display:grid!important;
+    grid-template-columns:minmax(250px,.82fr) minmax(430px,1.28fr) minmax(230px,.68fr)!important;
+    grid-template-areas:
+      "title title title"
+      "error error error"
+      "metrics metrics metrics"
+      "inventory vehicles activity"
+      "ops ops ops"!important;
+    gap:12px!important;
+    align-content:start!important;
+  }
+  html body main.dealerDashboardLocked .dashboardContent>.dcTitle{grid-area:title!important;margin-bottom:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dcError{grid-area:error!important;margin:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashMetrics{grid-area:metrics!important;margin-bottom:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashboardGridLocked{display:contents!important}
+  html body main.dealerDashboardLocked .inventoryOverview{grid-area:inventory!important;min-height:278px!important;padding:16px!important}
+  html body main.dealerDashboardLocked .recentVehicles{grid-area:vehicles!important;min-height:278px!important;padding:16px!important}
+  html body main.dealerDashboardLocked .activityLocked{grid-area:activity!important;min-height:278px!important;margin-top:0!important;padding:16px!important;overflow:hidden!important}
+  html body main.dealerDashboardLocked .opsCards{grid-area:ops!important;margin-top:0!important}
+  html body main.dealerDashboardLocked .activityLocked>a{min-height:42px!important;grid-template-columns:20px minmax(0,1fr) auto!important;gap:6px!important}
+  html body main.dealerDashboardLocked .activityLocked span b{font-size:9px!important}
+  html body main.dealerDashboardLocked .activityLocked span small{font-size:7px!important}
+}
+
+/* Add/Edit top bar: keep the same owner emblem and brand hierarchy as the rest
+   of the dealer portal instead of a text-only header. */
+@media (min-width: 768px){
+  html body .editVehicleApp .editTop .topBrand{
+    display:flex!important;
+    align-items:center!important;
+    gap:9px!important;
+    margin-right:auto!important;
+    min-width:230px!important;
+  }
+  html body .editVehicleApp .editTop .topBrand>img{
+    display:block!important;
+    width:52px!important;
+    min-width:52px!important;
+    max-width:52px!important;
+    height:52px!important;
+    min-height:52px!important;
+    max-height:52px!important;
+    object-fit:contain!important;
+    border-radius:50%!important;
+    clip-path:circle(48% at 50% 50%)!important;
+  }
+  html body .editVehicleApp .editTop .topBrand b{font-size:12px!important;line-height:1.1!important}
+  html body .editVehicleApp .editTop .topBrand span{font-size:8.5px!important;margin-top:3px!important;color:#aebbc5!important}
+}
