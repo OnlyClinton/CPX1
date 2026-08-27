@@ -1,18 +1,32 @@
 name: Emergency Vercel alias pin exact 2vfD
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/emergency-vercel-alias-pin-2vfd.yml'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Operation to run'
+        required: true
+        default: 'verify-only'
+        type: choice
+        options:
+          - verify-only
+          - pin-2vfd
+      owner_approval:
+        description: 'For pin-2vfd only, type OWNER-APPROVED-2VFD'
+        required: false
+        type: string
+      release_control_issue:
+        description: 'Controlling WDCC release-control issue number'
+        required: true
+        default: '205'
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: wdcc-emergency-vercel-alias-pin-2vfd
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -26,6 +40,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Require explicit release-control context
+        shell: bash
+        env:
+          OPERATION: ${{ inputs.operation }}
+          OWNER_APPROVAL: ${{ inputs.owner_approval }}
+          RELEASE_CONTROL_ISSUE: ${{ inputs.release_control_issue }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$RELEASE_CONTROL_ISSUE" = "205"
+          case "$OPERATION" in
+            verify-only)
+              ;;
+            pin-2vfd)
+              test "$OWNER_APPROVAL" = "OWNER-APPROVED-2VFD"
+              ;;
+            *)
+              echo "Unsupported operation: $OPERATION" >&2
+              exit 2
+              ;;
+          esac
+          echo "OPERATION=$OPERATION" >> "$GITHUB_STEP_SUMMARY"
+          echo "RELEASE_CONTROL_ISSUE=#$RELEASE_CONTROL_ISSUE" >> "$GITHUB_STEP_SUMMARY"
+          echo "Successful execution is not release approval." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require Vercel authority
         shell: bash
         run: |
@@ -53,12 +92,21 @@ jobs:
           test -s /tmp/donor-hero.webp
           file /tmp/donor-logo.webp /tmp/donor-hero.webp
 
+      - name: Verify-only mode leaves production unchanged
+        if: ${{ inputs.operation == 'verify-only' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'PRODUCTION_WRITE=SKIPPED' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Pin apex and www aliases to exact 2vfD
+        if: ${{ inputs.operation == 'pin-2vfd' }}
         shell: bash
         run: |
           set -euo pipefail
           vercel alias set "$DONOR_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
           vercel alias set "$DONOR_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          echo 'PRODUCTION_WRITE=EXECUTED' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify live domains match exact donor media
         shell: bash
@@ -85,6 +133,8 @@ jobs:
             test "$live_logo" = "$donor_logo"
             test "$live_hero" = "$donor_hero"
           done
+          echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'CUSTOMER_MEDIA_HASH_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Confirm dealer stays isolated
         shell: bash
@@ -92,6 +142,4 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -L --max-time 20 -o /tmp/dealer.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer || true)"
           echo "$code" | grep -Eq '^(200|302|307|308)$'
-          echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo 'CUSTOMER_MEDIA_HASH_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
           echo 'DEALER_DOMAIN_UNCHANGED=PASS' >> "$GITHUB_STEP_SUMMARY"
