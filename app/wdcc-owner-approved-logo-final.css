@@ -55,6 +55,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo{
   height:78px!important;
   display:grid!important;
   place-items:center!important;
+  justify-content:center!important;
   overflow:visible!important;
   background:none!important;
   filter:none!important;
@@ -154,6 +155,44 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     border-radius:0!important;
     clip-path:none!important;
     filter:drop-shadow(0 4px 10px rgba(0,0,0,.48))!important;
+    transform:none!important;
+  }
+
+  /* Specificity bridge: wdcc-system-v2 has a more-specific !important mobile
+     .rh-logo flex rule (116px wide). A 96px emblem inside that flex box sits 10px
+     left of center. These selectors outrank that legacy rule on every public page. */
+  html body header[data-wdcc-public-chrome="header"].rh-header.wdcc-public-header .rh-header-inner{
+    position:static!important;
+  }
+  html body header[data-wdcc-public-chrome="header"].rh-header.wdcc-public-header .rh-logo{
+    position:absolute!important;
+    left:50%!important;
+    top:50%!important;
+    transform:translate(-50%,-50%)!important;
+    display:grid!important;
+    place-items:center!important;
+    justify-content:center!important;
+    align-content:center!important;
+    width:104px!important;
+    min-width:104px!important;
+    max-width:104px!important;
+    height:78px!important;
+    margin:0!important;
+  }
+  html body header[data-wdcc-public-chrome="header"].rh-header.wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    content:normal!important;
+    position:static!important;
+    display:block!important;
+    width:96px!important;
+    min-width:96px!important;
+    max-width:96px!important;
+    height:96px!important;
+    min-height:96px!important;
+    max-height:96px!important;
+    margin:0!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    clip-path:none!important;
     transform:none!important;
   }
 }
