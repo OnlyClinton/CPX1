@@ -1,15 +1,60 @@
-/* Owner WebGPU intro refinement: keep wheel motion inside the actual visible rim. */
-@media (max-width:600px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+/* Owner WebGPU visual correction — V9 mobile composition, exact hero handoff.
+   Preview lane only. Keeps the car as one composition; only the wheel rim rotates. */
+html,body{background:#050d14}
+
+@media (max-width:767px) and (orientation:portrait),
+       (max-width:1180px) and (hover:none) and (pointer:coarse) and (orientation:portrait){
+  html body main.reference-home.locked-storefront .rh-hero{
+    margin-top:-78px!important;
+    padding-top:78px!important;
+    min-height:100dvh!important;
+    height:100dvh!important;
+    background:#050d14 url('/wdcc-hero-v9-mobile.webp') center top/auto 100% no-repeat!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{opacity:0!important;visibility:hidden!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{box-sizing:border-box!important;padding-top:78px!important}
+
+  html body .li{background:#050d14!important}
+  html body .li .li-scene{background:#050d14 url('/wdcc-hero-v9-mobile.webp') center top/auto 100% no-repeat!important}
+  html body .li .li-scene>img{opacity:0!important;visibility:hidden!important}
+  html body .li .li-scene:after{background:linear-gradient(180deg,rgba(2,7,12,.04) 0%,rgba(2,7,12,0) 58%,rgba(2,7,12,.10) 82%,rgba(2,7,12,.28) 100%)!important}
+
+  html body .li .li-gpu{opacity:.42!important;mix-blend-mode:screen!important}
+  html body .li .li-smoke{
+    inset:-4%!important;
+    background:radial-gradient(ellipse at 50% 42%,rgba(226,237,244,.16),rgba(150,170,184,.07) 34%,transparent 68%)!important;
+    -webkit-backdrop-filter:blur(8px) saturate(.94)!important;
+    backdrop-filter:blur(8px) saturate(.94)!important;
+    animation:wdccV9SmokeClear 1.02s cubic-bezier(.16,.80,.24,1) .04s forwards!important;
+  }
+  html body .li .li-smoke:before,html body .li .li-smoke:after{display:none!important}
+  @keyframes wdccV9SmokeClear{
+    0%{opacity:.58;-webkit-backdrop-filter:blur(8px) saturate(.94);backdrop-filter:blur(8px) saturate(.94)}
+    45%{opacity:.28;-webkit-backdrop-filter:blur(4px) saturate(.98);backdrop-filter:blur(4px) saturate(.98)}
+    78%{opacity:.08;-webkit-backdrop-filter:blur(1px);backdrop-filter:blur(1px)}
+    100%{opacity:0;-webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}
+  }
+
+  html body .li .li-badge{
+    left:50%!important;top:20.5dvh!important;width:min(41vw,160px)!important;min-width:0!important;max-width:160px!important;height:auto!important;aspect-ratio:1!important;transform:translate(-50%,-50%)!important;box-shadow:none!important
+  }
+  html body .li .li-badge:before{inset:-5px!important;opacity:.25!important;box-shadow:0 0 18px rgba(65,157,236,.18)!important}
+  html body .li .li-badge>img[data-wdcc-intro-badge-art='owner-approved']{filter:drop-shadow(0 9px 18px rgba(0,0,0,.48))!important}
+  html body .li .li-tag{display:none!important}
+
   html body .li .li-wheel-front{
-    clip-path:circle(9.8vw at 89.5% 67.1%)!important;
-    transform-origin:89.5% 67.1%!important;
+    position:absolute!important;inset:auto!important;left:calc(50vw + 15.23dvh)!important;top:70.31dvh!important;width:8.75dvh!important;height:8.75dvh!important;min-width:0!important;min-height:0!important;border-radius:50%!important;clip-path:none!important;background-image:url('/wdcc-wheel-v9-mobile.png')!important;background-size:100% 100%!important;background-repeat:no-repeat!important;background-position:center!important;transform-origin:50% 50%!important;transform:translate(-50%,-50%) rotate(var(--li-spin))!important;filter:blur(var(--li-wheel-blur)) saturate(1.04)!important;opacity:calc(.88 + var(--li-rpm)*.10)!important;will-change:transform,filter!important
   }
   html body .li .li-wheel-rear{display:none!important}
-  html body .li .li-tag{display:none!important}
+
+  html body .li .li-controls{left:auto!important;right:max(14px,env(safe-area-inset-right))!important;bottom:max(16px,calc(env(safe-area-inset-bottom) + 10px))!important;width:auto!important;justify-content:flex-end!important}
+  html body .li .li-skip{display:none!important}
+  html body .li .li-sound{width:78px!important;min-width:78px!important;min-height:34px!important;height:34px!important;padding:0!important;font-size:0!important;opacity:.82!important;background:rgba(2,8,13,.58)!important;border-color:rgba(255,255,255,.42)!important}
+  html body .li .li-sound:before{content:'SOUND';font:850 10px/1 system-ui,sans-serif;letter-spacing:.06em;color:#fff}
+  html body .li .li-sound[aria-pressed='true']:before{content:'SOUND ON'}
 }
 
-@media (max-width:430px){
-  html body .li .li-wheel-front{
-    clip-path:circle(9.6vw at 89.5% 67.1%)!important;
-  }
+@media (max-width:380px) and (orientation:portrait){
+  html body .li .li-badge{width:min(40vw,148px)!important;max-width:148px!important}
+  html body .li .li-sound{width:70px!important;min-width:70px!important}
 }
