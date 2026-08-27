@@ -126,7 +126,8 @@ jobs:
           curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/reuse-scripts.json
           curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/reuse-zones.json
           zone="$(jq -r '.result[0].id // empty' /tmp/reuse-zones.json)"; test -n "$zone"
-          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/reuse-routes.json
+          routes_api="https://api.cloudflare.com/client/v4/zones/$zone/workers"
+          curl -fsS "$routes_api/routes" "${auth[@]}" > /tmp/reuse-routes.json
           curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/reuse-domains.json
           jq -e '.success==true' /tmp/reuse-domains.json >/dev/null
           for name in "${targets[@]}"; do
