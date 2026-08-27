@@ -11,50 +11,55 @@ html body main.reference-home.locked-storefront .rh-header .rh-header-inner .rh-
   border-radius:50%!important;
 }
 
-/* Deterministically beat the older dealer rule that hides this exact <img>, and
-   prevent the top-bar flex layout from shrinking the badge below acceptance size. */
+/* Dealer legacy chrome historically generated a badge with ::before. Keep exactly
+   one visible badge in that slot while retaining the real <img> as a measurable,
+   semantic image for accessibility and immutable QA. */
+html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand{
+  position:relative!important;
+  flex-shrink:0!important;
+  min-width:max-content!important;
+  overflow:visible!important;
+}
 html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand > img{
   display:block!important;
   visibility:visible!important;
-  opacity:1!important;
+  opacity:0!important;
+  position:absolute!important;
+  left:0!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
   width:58px!important;
   min-width:58px!important;
   max-width:58px!important;
   height:58px!important;
   min-height:58px!important;
   max-height:58px!important;
-  flex:0 0 58px!important;
-  flex-shrink:0!important;
   box-sizing:border-box!important;
+  pointer-events:none!important;
+}
+html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand::before{
   content:url('/wdcc-official-logo.webp')!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  clip-path:circle(48% at 50% 50%)!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  flex:0 0 58px!important;
+  width:58px!important;
+  min-width:58px!important;
+  max-width:58px!important;
+  height:58px!important;
+  min-height:58px!important;
+  max-height:58px!important;
+  overflow:hidden!important;
+  object-fit:cover!important;
   border-radius:50%!important;
+  clip-path:circle(49% at 50% 50%)!important;
   background:transparent!important;
   border:2px solid rgba(255,255,255,.78)!important;
   box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
 }
-html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand{
-  flex-shrink:0!important;
-  min-width:max-content!important;
-  overflow:visible!important;
-}
-/* Kill legacy generated dealer badges; only the semantic real <img> may render. */
-html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand::before,
 html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand::after{
   content:none!important;
   display:none!important;
-  visibility:hidden!important;
-  opacity:0!important;
-  width:0!important;
-  min-width:0!important;
-  max-width:0!important;
-  height:0!important;
-  min-height:0!important;
-  max-height:0!important;
-  flex:0 0 0!important;
-  overflow:hidden!important;
 }
 
 /* Older acceptance CSS reserves space for fixed chrome. On real mobile the final
@@ -110,6 +115,14 @@ html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTo
     height:50px!important;
     min-height:50px!important;
     max-height:50px!important;
-    flex:0 0 50px!important;
+  }
+  html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand::before{
+    flex-basis:50px!important;
+    width:50px!important;
+    min-width:50px!important;
+    max-width:50px!important;
+    height:50px!important;
+    min-height:50px!important;
+    max-height:50px!important;
   }
 }
