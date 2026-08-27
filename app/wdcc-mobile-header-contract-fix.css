@@ -10,4 +10,7 @@
   html body main.reference-home.locked-storefront .rh-header{
     top:0!important;
   }
+  html body .approvalBoard .approvalFieldGrid label{
+    font-size:10.5px!important;
+  }
 }
