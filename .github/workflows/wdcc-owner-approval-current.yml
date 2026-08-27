@@ -2,7 +2,9 @@ name: WDCC Current Board Owner Approval Proof
 
 on:
   push:
-    branches: [fix/wdcc-locked-contract-20260826]
+    branches:
+      - fix/wdcc-locked-contract-20260826
+      - fix/wdcc-owner-board-final-lock-20260827
     paths:
       - 'app/**'
       - 'public/**'
@@ -43,15 +45,16 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
-          test -s app/wdcc-acceptance-closeout.css
+          test -s app/wdcc-owner-board-final.css
           test -s app/WdccPublicChrome.tsx
           test -s app/ReferenceCloneHome.tsx
           test -s .github/support/wdcc-current-owner-proof.mjs
-          grep -Fq 'height:64px!important' app/wdcc-acceptance-closeout.css
-          grep -Fq 'width:62px!important' app/wdcc-acceptance-closeout.css
-          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-acceptance-closeout.css
-          grep -Fq '29.5vw!important' app/wdcc-acceptance-closeout.css
-          grep -Fq '/wdcc-owner-logo' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
+          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
+          grep -Fq 'height:64px!important' app/WdccPublicChrome.tsx
+          grep -Fq 'width:62px!important' app/WdccPublicChrome.tsx
+          grep -Fq 'owner-board-finance-grid' app/ReferenceCloneHome.tsx
+          grep -Fq 'owner-board-trust-grid' app/ReferenceCloneHome.tsx
 
       - name: Build exact Cloudflare candidate
         shell: bash
