@@ -56,7 +56,10 @@ jobs:
           grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"' app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"|src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
+          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|/wdcc-owner-logo|src="/wdcc-official-logo.webp"|src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
+          grep -q '/wdcc-owner-logo' app/WdccPublicChrome.tsx
+          grep -q 'WDCC_CORRECT_LOGO_DATA_URI' app/wdcc-owner-logo/route.ts
+          grep -q 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
           grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -q 'FINAL LOGO RELIABILITY' app/wdcc-mobile-header-contract-fix.css
           test -s app/wdcc-system-v2.css
@@ -168,15 +171,16 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="(owner-approved|horizontal-owner-approved)"|wdcc-official-logo.webp|wdcc-logo-transparent.webp' /tmp/home.html
+          grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="(owner-approved|horizontal-owner-approved)"|wdcc-owner-logo|wdcc-official-logo.webp|wdcc-logo-transparent.webp' /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
 
           test "$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
 
-          test "$(curl --http1.1 -sS -L -o /tmp/intro-logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
-          test -s /tmp/intro-logo.webp
+          test "$(curl --http1.1 -sS -D /tmp/owner-logo.headers -L -o /tmp/owner-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?asset=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/owner-logo.webp
+          grep -qi '^x-wdcc-logo: owner-approved' /tmp/owner-logo.headers
 
           test "$(curl --http1.1 -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
           grep -qi 'items\|inventory' /tmp/inventory.json
@@ -190,7 +194,7 @@ jobs:
             echo "Preview: $URL"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Canonical hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Approved public/header/intro logo source: PASS.'
+            echo 'Approved owner logo immutable route: PASS.'
             echo 'Recovered verified inventory response: PASS.'
             echo 'Five-column wide Featured Inventory contract: PASS.'
             echo 'SHA-specific preview alias: PASS.'
