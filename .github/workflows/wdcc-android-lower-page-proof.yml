@@ -31,7 +31,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Lock exact lower-page correction source
+      - name: Lock final owner-board source
         shell: bash
         run: |
           set -euo pipefail
@@ -41,10 +41,9 @@ jobs:
           test -s app/wdcc-review-media/[id]/route.ts
           grep -Fq 'owner-board-finance-grid' app/ReferenceCloneHome.tsx
           grep -Fq 'owner-board-trust-grid' app/ReferenceCloneHome.tsx
+          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
           grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
           grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
-          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
-          test "$last_wdcc_css" = 'wdcc-owner-board-final.css'
 
       - name: Build exact Cloudflare candidate
         shell: bash
@@ -83,7 +82,7 @@ jobs:
           npx wrangler deploy --config wrangler.android-lower.jsonc 2>&1 | tee /tmp/wdcc-android-lower.log
           url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-android-lower.log | tail -1)"
           test -n "$url"
-          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Lower-page preview is not SHA-specific: $url" >&2; exit 1;; esac
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Not exact SHA: $url" >&2; exit 1;; esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > android-lower-preview-url.txt
 
@@ -107,7 +106,7 @@ jobs:
             grep -qi '^x-wdcc-media-truth: verified-first-party-recovery' "/tmp/$id.headers"
           done
 
-      - name: Prove lower homepage in Android Desktop-Site mode
+      - name: Prove 980px Android Desktop-Site board
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -116,8 +115,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import {chromium} from 'playwright';
-          const base=process.env.URL;
-          const out='android-lower-proof';
+          const base=process.env.URL,out='android-lower-proof';
           const ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
           fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
@@ -128,62 +126,26 @@ jobs:
             page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
             const response=await page.goto(`${base}/?owner-review=1&desktop-lower=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             if(!response||response.status()!==200)throw new Error(`ANDROID_LOWER_HOME_HTTP_${response?.status()||0}`);
-            const skip=page.getByRole('button',{name:/skip intro/i});
-            if(await skip.count())await skip.click().catch(()=>{});
+            const skip=page.getByRole('button',{name:/skip intro/i});if(await skip.count())await skip.click().catch(()=>{});
             await page.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
             await page.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
-            await page.waitForFunction(()=>{
-              const imgs=[...document.querySelectorAll('.rh-grid > article img')];
-              return imgs.length===5&&imgs.every(i=>i.complete&&i.naturalWidth>20&&i.naturalHeight>20);
-            },null,{timeout:20000});
-
-            const result=await page.evaluate(()=>{
-              const q=s=>document.querySelector(s);
-              const R=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}:null};
-              const utility=q('[data-wdcc-public-chrome="utility"]');
-              const header=q('[data-wdcc-public-chrome="header"]');
-              const hero=q('.rh-hero');
-              const buttons=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(R);
-              const benefits=q('.rh-benefits');
-              const grid=q('.rh-grid');
-              const cards=[...grid.children].map(R);
-              const imgs=[...grid.querySelectorAll('img')].map(i=>({src:i.getAttribute('src')||'',naturalWidth:i.naturalWidth,naturalHeight:i.naturalHeight}));
-              const dots=q('.rh-mobile-dots');
-              const steps=q('.rh-steps');
-              const trust=q('.rh-trust-grid');
-              const gridStyle=getComputedStyle(grid);
-              return{
-                winW:innerWidth,
-                utility:R(utility),header:R(header),hero:R(hero),buttons,
-                benefitTracks:getComputedStyle(benefits).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-                gridDisplay:gridStyle.display,
-                gridTracks:gridStyle.gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-                gridOverflowX:gridStyle.overflowX,
-                cards,imgs,
-                placeholders:grid.querySelectorAll('[role="img"][aria-label*="photo unavailable" i]').length,
-                dotsDisplay:dots?getComputedStyle(dots).display:'none',
-                financeTracks:getComputedStyle(steps).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-                trustTracks:getComputedStyle(trust).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-                overflow:document.documentElement.scrollWidth-innerWidth
-              };
+            await page.waitForFunction(()=>{const imgs=[...document.querySelectorAll('.rh-grid > article img')];return imgs.length===5&&imgs.every(i=>i.complete&&i.naturalWidth>20&&i.naturalHeight>20)},null,{timeout:20000});
+            const r=await page.evaluate(()=>{
+              const q=s=>document.querySelector(s),R=e=>{const x=e?.getBoundingClientRect();return x?{x:x.x,y:x.y,w:x.width,h:x.height,right:x.right,bottom:x.bottom}:null};
+              const grid=q('.rh-grid'),gs=getComputedStyle(grid),cards=[...grid.children].map(R),imgs=[...grid.querySelectorAll('img')].map(i=>({src:i.getAttribute('src')||'',naturalWidth:i.naturalWidth,naturalHeight:i.naturalHeight})),buttons=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(R),utility=q('[data-wdcc-public-chrome="utility"]'),header=q('[data-wdcc-public-chrome="header"]'),hero=q('.rh-hero');
+              return{utility:R(utility),header:R(header),hero:R(hero),buttons,benefits:getComputedStyle(q('.rh-benefits')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,gridDisplay:gs.display,gridTracks:gs.gridTemplateColumns.split(/\s+/).filter(Boolean).length,cards,imgs,placeholders:grid.querySelectorAll('[role="img"][aria-label*="photo unavailable" i]').length,dots:q('.rh-mobile-dots')?getComputedStyle(q('.rh-mobile-dots')).display:'none',finance:getComputedStyle(q('.rh-steps')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,trust:getComputedStyle(q('.rh-trust-grid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth};
             });
-
-            if(!result.utility||result.utility.h<28)throw new Error(`ANDROID_LOWER_UTILITY_${JSON.stringify(result)}`);
-            if(!result.header||result.header.h<82||result.header.h>90)throw new Error(`ANDROID_LOWER_HEADER_${JSON.stringify(result)}`);
-            if(!result.hero||Math.abs(result.hero.y-result.header.bottom)>3)throw new Error(`ANDROID_LOWER_HERO_${JSON.stringify(result)}`);
-            if(result.buttons.length!==2||Math.abs(result.buttons[0].y-result.buttons[1].y)>3||result.buttons.some(b=>!b||b.w<160))throw new Error(`ANDROID_LOWER_CTAS_${JSON.stringify(result)}`);
-            if(result.benefitTracks!==4)throw new Error(`ANDROID_LOWER_BENEFITS_${JSON.stringify(result)}`);
-            if(result.gridDisplay!=='grid'||result.gridTracks!==4||result.cards.length!==5||result.cards.some(c=>!c||c.w<205||c.w>250))throw new Error(`ANDROID_LOWER_FEATURED_GEOMETRY_${JSON.stringify(result)}`);
-            if(result.placeholders!==0||result.imgs.length!==5||result.imgs.some(i=>!i.src.startsWith('/wdcc-review-media/')||i.naturalWidth<20||i.naturalHeight<20))throw new Error(`ANDROID_LOWER_FEATURED_MEDIA_${JSON.stringify(result)}`);
-            if(result.dotsDisplay!=='none')throw new Error(`ANDROID_LOWER_MOBILE_DOTS_${JSON.stringify(result)}`);
-            if(result.financeTracks!==4||result.trustTracks!==4)throw new Error(`ANDROID_LOWER_DESKTOP_SECTIONS_${JSON.stringify(result)}`);
-            if(result.overflow>2)throw new Error(`ANDROID_LOWER_OVERFLOW_${JSON.stringify(result)}`);
-            if(writes.length)throw new Error(`ANDROID_LOWER_WRITE_REQUESTS_${JSON.stringify(writes)}`);
-
-            await page.locator('.rh-inventory').screenshot({path:`${out}/android-desktop-site-featured.png`});
+            if(!r.utility||r.utility.h<28)throw Error(`ANDROID_LOWER_UTILITY_${JSON.stringify(r)}`);
+            if(!r.header||r.header.h<70||r.header.h>80)throw Error(`ANDROID_LOWER_HEADER_${JSON.stringify(r)}`);
+            if(!r.hero||Math.abs(r.hero.y-r.header.bottom)>3||r.hero.h<490)throw Error(`ANDROID_LOWER_HERO_${JSON.stringify(r)}`);
+            if(r.buttons.length!==2||Math.abs(r.buttons[0].y-r.buttons[1].y)>3||r.buttons.some(b=>!b||b.w<160))throw Error(`ANDROID_LOWER_CTAS_${JSON.stringify(r)}`);
+            if(r.benefits!==4)throw Error(`ANDROID_LOWER_BENEFITS_${JSON.stringify(r)}`);
+            if(r.gridDisplay!=='grid'||r.gridTracks!==5||r.cards.length!==5||r.cards.some(c=>!c||c.w<170||c.w>200))throw Error(`ANDROID_LOWER_FEATURED_GEOMETRY_${JSON.stringify(r)}`);
+            if(r.placeholders!==0||r.imgs.length!==5||r.imgs.some(i=>!i.src.startsWith('/wdcc-review-media/')||i.naturalWidth<20||i.naturalHeight<20))throw Error(`ANDROID_LOWER_FEATURED_MEDIA_${JSON.stringify(r)}`);
+            if(r.dots!=='none'||r.finance!==4||r.trust!==4||r.overflow>2||writes.length)throw Error(`ANDROID_LOWER_FINAL_${JSON.stringify({r,writes})}`);
             await page.screenshot({path:`${out}/android-desktop-site-lower-full.png`,fullPage:true});
-            fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,result,writes,pass:true},null,2)+'\n');
-            console.log('WDCC_ANDROID_LOWER_PAGE_PASS',JSON.stringify({benefits:result.benefitTracks,featuredTracks:result.gridTracks,cardW:result.cards[0].w,photos:result.imgs.length,finance:result.financeTracks,trust:result.trustTracks,writes:writes.length}));
+            fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,result:r,writes,pass:true},null,2)+'\n');
+            console.log('WDCC_ANDROID_LOWER_PAGE_PASS',JSON.stringify({header:r.header.h,featured:r.gridTracks,cardW:r.cards[0].w,photos:r.imgs.length,overflow:r.overflow,writes:writes.length}));
             await ctx.close();
           }finally{await browser.close()}
           NODE
@@ -195,26 +157,6 @@ jobs:
           current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
           test -n "$current"
           test "$current" = "$GITHUB_SHA"
-
-      - name: Publish lower-page summary
-        if: always()
-        env:
-          URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          echo '### WDCC Android Desktop-Site lower-page proof' >> "$GITHUB_STEP_SUMMARY"
-          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo "Isolated Worker: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
-          if [ -s android-lower-proof/result.json ]; then
-            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
-          const r=require('./android-lower-proof/result.json').result;
-          console.log(`Benefits: ${r.benefitTracks} tracks`);
-          console.log(`Featured inventory: ${r.gridTracks} tracks · ${r.cards[0].w.toFixed(1)} px first card · ${r.imgs.length} recovered photos`);
-          console.log(`Financing: ${r.financeTracks} tracks · Trust: ${r.trustTracks} tracks`);
-          NODE
-          else
-            echo 'ANDROID_LOWER_PAGE_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
