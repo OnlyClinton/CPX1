@@ -18,41 +18,21 @@ html body main.targetLeadShell .targetLeadMobile a span{font-size:9.5px!importan
 html body [data-wdcc-public-chrome="utility"].rh-utility{display:block!important;visibility:visible!important;opacity:1!important}
 html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{display:flex!important;visibility:visible!important;opacity:1!important}
 
-/* Newest owner override: horizontal public wordmark. Intro and dealer keep the round badge. */
+/* Earlier wordmark rules are deliberately superseded by wdcc-owner-contract-final.css. */
 html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:164px minmax(0,1fr) auto!important}
 html body [data-wdcc-public-chrome="header"] .rh-logo{display:grid!important;place-items:center!important;width:160px!important;height:78px!important;overflow:visible!important;background:none!important}
 html body [data-wdcc-public-chrome="header"] .rh-logo::before,
 html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo img{
-  content:url('/wdcc-logo-transparent.webp')!important;
-  display:block!important;
-  width:148px!important;
-  min-width:0!important;
-  max-width:148px!important;
-  height:auto!important;
-  min-height:0!important;
-  max-height:50px!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  border:0!important;
-  border-radius:0!important;
-  clip-path:none!important;
-  background:transparent!important;
-  box-shadow:none!important;
-  filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
-}
+html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;width:148px!important;min-width:0!important;max-width:148px!important;height:auto!important;min-height:0!important;max-height:50px!important;object-fit:contain!important;object-position:center!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))!important}
 
-/* Benefit/security rail. */
 html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;border-radius:50%!important;display:grid!important;place-items:center!important;font-size:22px!important;line-height:1!important}
 html body main.reference-home.locked-storefront .rh-benefit strong{font-size:13px!important;line-height:1.2!important}
 html body main.reference-home.locked-storefront .rh-benefit small{font-size:11.5px!important;line-height:1.42!important}
 
-/* Dealer dashboard: one real logo only. */
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{content:url('/wdcc-official-logo.webp')!important;display:block!important;width:58px!important;min-width:58px!important;height:58px!important;min-height:58px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(49% at 50% 50%)!important;background:transparent!important;border:2px solid rgba(255,255,255,.78)!important;box-shadow:0 9px 20px rgba(0,0,0,.42)!important}
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before,
 html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{content:none!important;display:none!important}
 
-/* Desktop editor: top bar owns branding; sidebar begins with navigation. */
 @media(min-width:768px){
   html body .editVehicleApp .editSide>.editBrand{display:none!important}
   html body .editVehicleApp .editSide>nav{padding-top:4px!important}
@@ -74,46 +54,24 @@ html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{content:no
   html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{display:flex!important;visibility:visible!important;opacity:1!important;height:28px!important;min-height:28px!important;font-size:9px!important;line-height:1!important}
   html body [data-wdcc-public-chrome="header"].rh-header{top:28px!important}
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:50px minmax(0,1fr) 50px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo{width:150px!important;height:78px!important;justify-self:center!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo img{
-    content:url('/wdcc-logo-transparent.webp')!important;
-    width:142px!important;
-    min-width:0!important;
-    max-width:142px!important;
-    height:auto!important;
-    min-height:0!important;
-    max-height:48px!important;
-    object-fit:contain!important;
-    border:0!important;
-    border-radius:0!important;
-    clip-path:none!important;
-    box-shadow:none!important;
-    filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
-  }
 
   html body main.reference-home.locked-storefront .rh-benefit{grid-template-columns:40px minmax(0,1fr)!important;gap:11px!important}
   html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;font-size:19px!important}
   html body main.reference-home.locked-storefront .rh-benefit strong{font-size:12.5px!important;line-height:1.2!important}
   html body main.reference-home.locked-storefront .rh-benefit small{font-size:11px!important;line-height:1.42!important}
-
   html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{width:50px!important;min-width:50px!important;height:50px!important;min-height:50px!important}
 
-  /* Mobile editor reflow: pair short fields without squeezing long descriptions. */
-  html body .editVehicleApp .fieldGrid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;align-items:start!important}
-  html body .editVehicleApp .fieldGrid>label{min-width:0!important;width:auto!important}
+  /* Phone editor contract: one readable work column; no duplicate sidebar identity. */
+  html body .editVehicleApp .editSide>.editBrand{display:none!important}
+  html body .editVehicleApp form.editLayout{display:block!important;grid-template-columns:1fr!important;width:100%!important;min-width:0!important}
+  html body .editVehicleApp .editMain,
+  html body .editVehicleApp .editAside{width:100%!important;min-width:0!important;max-width:none!important}
+  html body .editVehicleApp .fieldGrid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px!important;align-items:start!important}
+  html body .editVehicleApp .fieldGrid>label{grid-column:1!important;min-width:0!important;width:100%!important}
   html body .editVehicleApp .fieldGrid input,
   html body .editVehicleApp .fieldGrid select,
-  html body .editVehicleApp .fieldGrid textarea{width:100%!important;min-width:0!important}
-  html body .editVehicleApp .fieldGrid .description{grid-column:1/-1!important}
-  html body .editVehicleApp .editSide>.editBrand{display:flex!important}
-}
-
-@media(min-width:430px) and (max-width:767px){
-  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
-  html body .editVehicleApp .fieldGrid .description{grid-column:1/-1!important}
-}
-
-@media(max-width:420px){
-  html body [data-wdcc-public-chrome="header"] .rh-logo{width:138px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo img{width:132px!important;max-width:132px!important;max-height:44px!important}
+  html body .editVehicleApp .fieldGrid textarea{width:100%!important;min-width:0!important;min-height:50px!important;font-size:16px!important}
+  html body .editVehicleApp .fieldGrid .description{grid-column:1!important}
+  html body .editVehicleApp .photoTools{grid-template-columns:1!important}
+  html body .editVehicleApp .editAside{display:grid!important;grid-template-columns:1fr!important;gap:12px!important;margin-top:14px!important}
 }
