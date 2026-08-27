@@ -7,6 +7,7 @@ on:
       - '.github/workflows/wdcc-dealer-isolated-e2e.yml'
       - '.github/scripts/wdcc-dealer-isolated-e2e.mjs'
       - '.github/workflows/wdcc-webgpu-full-owner-review.yml'
+      - '.github/workflows/wdcc-owner-visual-acceptance.yml'
   workflow_dispatch:
 
 permissions:
@@ -78,6 +79,7 @@ jobs:
           echo '### WDCC dealer isolated exact-head E2E' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           [ ! -s dealer-isolated-e2e/metrics.json ] || cat dealer-isolated-e2e/metrics.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'This is a dealer/media pipeline proof only; successful synthetic photo upload is not owner acceptance of real inventory photography.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Disposable localhost state/media authority; production storefront verification redirected locally; no production write, provider, route, alias, DNS, database, or schema mutation.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
