@@ -55,10 +55,16 @@ export default function WdccThreeRuntime() {
         try {
           const THREE_GPU: any = await import("three/webgpu");
           localRenderer = new THREE_GPU.WebGPURenderer({ alpha: true, antialias: true });
-          if (localRenderer.init) await localRenderer.init();
+          if (localRenderer.init) {
+            await Promise.race([
+              localRenderer.init(),
+              new Promise((_, reject) => window.setTimeout(() => reject(new Error("webgpu-init-timeout")), 500))
+            ]);
+          }
           THREE = THREE_GPU;
           mode = "webgpu";
         } catch {
+          try { localRenderer?.dispose?.(); } catch {}
           localRenderer = null;
           THREE = THREE_GL;
           mode = "webgl";
