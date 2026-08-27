@@ -59,7 +59,7 @@ try{
   const desktop=await desktopContext.newPage();watch(desktop);
   await goto200(desktop,'/?owner-review=1','DESKTOP_HOME');
   await skipIntro(desktop);
-  await desktop.locator('.wdcc-wordmark').waitFor({state:'visible',timeout:10000});
+  await desktop.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').waitFor({state:'visible',timeout:10000});
   await desktop.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:10000});
   await waitFiveRecovered(desktop,'.rh-grid>article img');
   const home=await desktop.evaluate(()=>{
@@ -69,9 +69,10 @@ try{
     const cards=[...grid.children].map(rect);
     const headline=[...document.querySelectorAll('.rh-copy h1 span')].map(e=>(e.textContent||'').trim());
     const colors=[...document.querySelectorAll('.rh-copy h1 span')].map(e=>getComputedStyle(e).color);
+    const headerLogo=q('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
     return{
-      wordmark:(q('.wdcc-wordmark')?.textContent||'').replace(/\s+/g,' ').trim(),
-      roundHeaderLogo:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art]').length,
+      roundHeaderLogo:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').length,
+      headerLogo:rect(headerLogo),
       utility:rect(q('[data-wdcc-public-chrome="utility"]')),
       header:rect(q('[data-wdcc-public-chrome="header"]')),
       hero:rect(q('.rh-hero')),
@@ -89,7 +90,7 @@ try{
   });
   const expectedHeadline=['BAD CREDIT?','NO CREDIT?',"WE DON'T CARE."];
   const expectedColors=['rgb(255, 255, 255)','rgb(22, 138, 244)','rgb(242, 31, 50)'];
-  if(!/WDCC.*WE DON'T CARE CARS/i.test(home.wordmark)||home.roundHeaderLogo!==0||!home.utility||home.utility.h<28||!home.header||home.header.h<70||!home.hero||home.hero.h<520||!home.heroLoaded||JSON.stringify(home.headline)!==JSON.stringify(expectedHeadline)||JSON.stringify(home.colors)!==JSON.stringify(expectedColors)||home.benefits!==4||home.gridDisplay!=='grid'||home.gridTracks!==5||home.cards.length!==5||home.placeholders!==0||home.finance!==4||home.trust!==4||home.overflow>2)fail('DESKTOP_50869',home);
+  if(home.roundHeaderLogo!==1||!home.headerLogo||home.headerLogo.w<80||home.headerLogo.h<80||!home.utility||home.utility.h<28||!home.header||home.header.h<82||!home.hero||home.hero.h<520||!home.heroLoaded||JSON.stringify(home.headline)!==JSON.stringify(expectedHeadline)||JSON.stringify(home.colors)!==JSON.stringify(expectedColors)||home.benefits!==4||home.gridDisplay!=='grid'||home.gridTracks!==5||home.cards.length!==5||home.placeholders!==0||home.finance!==4||home.trust!==4||home.overflow>2)fail('DESKTOP_50869',home);
   result.desktop.home=home;
   await desktop.screenshot({path:`${out}/50869-desktop-home.png`,fullPage:true});
 
@@ -135,7 +136,7 @@ try{
   const mobile=await mobileContext.newPage();watch(mobile);
   await goto200(mobile,'/?owner-review=1','MOBILE_HOME');
   await skipIntro(mobile);
-  await mobile.locator('.wdcc-wordmark').waitFor({state:'visible',timeout:10000});
+  await mobile.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').waitFor({state:'visible',timeout:10000});
   await mobile.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:10000});
   await waitFiveRecovered(mobile,'.rh-grid>article img');
   const mobileHome=await mobile.evaluate(()=>{
@@ -144,11 +145,11 @@ try{
     const grid=q('.rh-grid');
     const cards=[...grid.children].map(rect);
     const ctas=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(rect);
-    const wordmark=rect(q('.wdcc-wordmark'));
+    const headerLogo=rect(q('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]'));
     const utility=q('[data-wdcc-public-chrome="utility"]');
-    return{wordmarkText:(q('.wdcc-wordmark')?.textContent||'').replace(/\s+/g,' ').trim(),wordmark,roundHeaderLogo:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art]').length,utilityDisplay:utility?getComputedStyle(utility).display:'none',header:rect(q('[data-wdcc-public-chrome="header"]')),menu:rect(q('.rh-menu')),call:rect(q('.rh-call')),benefits:getComputedStyle(q('.rh-benefits')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,gridDisplay:getComputedStyle(grid).display,cards,ctas,placeholders:grid.querySelectorAll('[role="img"][aria-label*="photo unavailable" i]').length,finance:getComputedStyle(q('.rh-steps')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,trust:getComputedStyle(q('.rh-trust-grid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth};
+    return{headerLogo,roundHeaderLogo:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').length,utilityDisplay:utility?getComputedStyle(utility).display:'none',header:rect(q('[data-wdcc-public-chrome="header"]')),menu:rect(q('.rh-menu')),call:rect(q('.rh-call')),benefits:getComputedStyle(q('.rh-benefits')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,gridDisplay:getComputedStyle(grid).display,cards,ctas,placeholders:grid.querySelectorAll('[role="img"][aria-label*="photo unavailable" i]').length,finance:getComputedStyle(q('.rh-steps')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,trust:getComputedStyle(q('.rh-trust-grid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth};
   });
-  if(!/WDCC.*WE DON'T CARE CARS/i.test(mobileHome.wordmarkText)||!mobileHome.wordmark||Math.abs(mobileHome.wordmark.cx-195)>5||mobileHome.roundHeaderLogo!==0||mobileHome.utilityDisplay!=='none'||!mobileHome.header||mobileHome.header.h<64||mobileHome.header.h>72||!mobileHome.menu||mobileHome.menu.w<38||!mobileHome.call||mobileHome.call.w<38||mobileHome.benefits!==4||mobileHome.gridDisplay!=='flex'||mobileHome.cards.length!==5||!mobileHome.cards[2]||mobileHome.cards[2].right>390||mobileHome.ctas.length!==2||mobileHome.ctas[1].y<=mobileHome.ctas[0].bottom||mobileHome.placeholders!==0||mobileHome.finance!==1||mobileHome.trust!==2||mobileHome.overflow>2)fail('MOBILE_50869',mobileHome);
+  if(mobileHome.roundHeaderLogo!==1||!mobileHome.headerLogo||Math.abs(mobileHome.headerLogo.cx-195)>5||mobileHome.headerLogo.w<60||mobileHome.headerLogo.h<60||mobileHome.utilityDisplay!=='none'||!mobileHome.header||mobileHome.header.h<64||mobileHome.header.h>72||!mobileHome.menu||mobileHome.menu.w<38||!mobileHome.call||mobileHome.call.w<38||mobileHome.benefits!==4||mobileHome.gridDisplay!=='flex'||mobileHome.cards.length!==5||!mobileHome.cards[2]||mobileHome.cards[2].right>390||mobileHome.ctas.length!==2||mobileHome.ctas[1].y<=mobileHome.ctas[0].bottom||mobileHome.placeholders!==0||mobileHome.finance!==1||mobileHome.trust!==2||mobileHome.overflow>2)fail('MOBILE_50869',mobileHome);
   result.mobile.home=mobileHome;
   await mobile.screenshot({path:`${out}/50869-mobile-home.png`,fullPage:true});
 
@@ -186,7 +187,7 @@ try{
   if(writes.length)fail('OWNER_BOARD_WRITE_REQUESTS',writes);
   result.pass=true;
   fs.writeFileSync(`${out}/result.json`,JSON.stringify(result,null,2)+'\n');
-  console.log('WDCC_CANONICAL_OWNER_BOARD_PASS',JSON.stringify({desktopFeatured:home.gridTracks,mobileThirdRight:mobileHome.cards[2].right,desktopInventory:desktopInventory.tracks,mobileInventory:mobileInventory.tracks,dealerDesktop:dashboardView.metricTracks,dealerMobile:mobileDashboard.metricTracks,writes:writes.length}));
+  console.log('WDCC_CANONICAL_OWNER_BOARD_PASS',JSON.stringify({desktopRoundLogo:home.headerLogo,mobileRoundLogo:mobileHome.headerLogo,desktopFeatured:home.gridTracks,mobileThirdRight:mobileHome.cards[2].right,desktopInventory:desktopInventory.tracks,mobileInventory:mobileInventory.tracks,dealerDesktop:dashboardView.metricTracks,dealerMobile:mobileDashboard.metricTracks,writes:writes.length}));
 }finally{
   await browser.close();
 }
