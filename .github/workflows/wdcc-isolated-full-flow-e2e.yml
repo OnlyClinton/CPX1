@@ -1,0 +1,95 @@
+name: WDCC Isolated Full Flow E2E
+
+on:
+  push:
+    branches:
+      - qa/wdcc-full-flow-e2e-20260827-1637833
+    paths:
+      - '.github/workflows/wdcc-isolated-full-flow-e2e.yml'
+      - 'scripts/wdcc-isolated-full-flow-e2e.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-isolated-full-flow-e2e-1637833
+  cancel-in-progress: true
+
+jobs:
+  full-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: 1637833a1ec7b7a4942faad240d02c1706a8bf04
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove application source is exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          test "$(git merge-base HEAD "$SOURCE_SHA")" = "$SOURCE_SHA"
+          git diff --name-only "$SOURCE_SHA..HEAD" | tee /tmp/qa-delta.txt
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            case "$path" in
+              scripts/wdcc-isolated-full-flow-e2e.mjs|.github/workflows/wdcc-isolated-full-flow-e2e.yml) ;;
+              *) echo "Unexpected application delta: $path" >&2; exit 30 ;;
+            esac
+          done </tmp/qa-delta.txt
+          test -z "$(git diff --name-only "$SOURCE_SHA..HEAD" -- app lib public package.json package-lock.json next.config.ts tsconfig.json)"
+          echo "Application code under test is byte-identical to PR #494 head $SOURCE_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install application and browser runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Build exact application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Run isolated lead dealer inventory dashboard transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${WDCC_DEALER_E2E_PASSWORD:-}" ]; then printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"; fi
+          node scripts/wdcc-isolated-full-flow-e2e.mjs
+
+      - name: Publish concise result
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/wdcc-full-flow-e2e/result.json ]; then
+            cat /tmp/wdcc-full-flow-e2e/result.json
+            {
+              echo '## WDCC isolated full-flow E2E'
+              echo '```json'
+              jq '{ok,sourceSha,credentialSource,leads,routing,vehicle,dashboard,pages,error}' /tmp/wdcc-full-flow-e2e/result.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload full-flow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-isolated-full-flow-${{ github.run_id }}
+          path: /tmp/wdcc-full-flow-e2e
+          if-no-files-found: warn
+          retention-days: 7
