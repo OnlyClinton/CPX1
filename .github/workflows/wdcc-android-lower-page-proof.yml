@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/wdcc-locked-contract-20260826
+      - fix/wdcc-owner-board-final-lock-20260827
   workflow_dispatch:
 
 permissions:
@@ -36,15 +37,14 @@ jobs:
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          test -s app/wdcc-public-owner-render-fix.css
+          test -s app/wdcc-owner-board-final.css
           test -s app/wdcc-review-media/[id]/route.ts
-          grep -Fq '@media(min-width:768px) and (max-width:1180px) and (hover:none) and (pointer:coarse)' app/wdcc-public-owner-render-fix.css
-          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-public-owner-render-fix.css
-          grep -Fq 'scroll-snap-type:none!important' app/wdcc-public-owner-render-fix.css
+          grep -Fq 'owner-board-finance-grid' app/ReferenceCloneHome.tsx
+          grep -Fq 'owner-board-trust-grid' app/ReferenceCloneHome.tsx
           grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
           grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
-          test "$last_wdcc_css" = 'wdcc-public-owner-render-fix.css'
+          test "$last_wdcc_css" = 'wdcc-owner-board-final.css'
 
       - name: Build exact Cloudflare candidate
         shell: bash
