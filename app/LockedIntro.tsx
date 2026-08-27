@@ -54,18 +54,18 @@ export default function LockedIntro(){
       @keyframes liMistSheen{0%{opacity:.72}50%{opacity:.34}78%{opacity:.12}100%{opacity:0}}
       .li-badge{position:absolute;z-index:4;left:50%;top:39%;width:clamp(220px,28vw,280px);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;background:#fff;box-shadow:0 16px 46px rgba(0,0,0,.42),0 0 0 3px rgba(255,255,255,.92);transform:translate(-50%,-50%)!important;animation:none!important;transition:none!important}
       .li-badge img{display:block;width:96%;height:96%;object-fit:contain;border-radius:50%;clip-path:circle(48% at 50% 50%);filter:none!important;transform:none!important;animation:none!important;transition:none!important}
-      .li-tag{position:absolute;z-index:5;left:50%;top:58%;transform:translateX(-50%);margin:0;padding:7px 11px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(2,9,15,.54);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#fff;white-space:nowrap;font:900 clamp(13px,1.35vw,16px)/1 system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.82);opacity:0;animation:liTagResolve .86s ease-out .34s forwards}
+      .li-tag{position:absolute;z-index:5;left:50%;top:58%;transform:translateX(-50%);margin:0;padding:9px 14px;border:1px solid rgba(255,255,255,.52);border-radius:999px;background:rgba(2,9,15,.78);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);color:#fff!important;white-space:nowrap;font:950 clamp(13px,1.35vw,16px)/1 system-ui,sans-serif;letter-spacing:.085em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,.98),0 0 12px rgba(255,255,255,.18);opacity:0;animation:liTagResolve .62s ease-out .18s forwards}
       @keyframes liTagResolve{from{opacity:0}to{opacity:1}}
       .li-skip{position:absolute;z-index:6;right:max(18px,env(safe-area-inset-right));bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px));min-height:44px;border:1px solid rgba(255,255,255,.46);border-radius:999px;background:rgba(3,9,14,.74);color:#fff;padding:0 18px;font:850 12px/1 system-ui,sans-serif;letter-spacing:.03em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
       @media(max-width:600px){
         .li-scene img{object-position:61% 45%;filter:saturate(1.25) contrast(1.02) brightness(1.30)}
         html body .li .li-badge{top:38.5%!important;width:min(68vw,260px)!important}
-        html body .li .li-tag{top:57%!important;font-size:13px!important;letter-spacing:.065em!important;padding:8px 11px!important}
+        html body .li .li-tag{top:57.5%!important;font-size:13px!important;letter-spacing:.06em!important;padding:9px 13px!important}
         .li-smoke{inset:-9%;backdrop-filter:blur(16px) saturate(.84);-webkit-backdrop-filter:blur(16px) saturate(.84)}
       }
       @media(max-width:430px){
         html body .li .li-badge{width:min(66vw,252px)!important}
-        html body .li .li-tag{font-size:12px!important;letter-spacing:.055em!important}
+        html body .li .li-tag{font-size:12px!important;letter-spacing:.05em!important}
       }
       @media(prefers-reduced-motion:reduce){html:not(.wdcc-visual-proof) .li{display:none!important}.li-smoke,.li-smoke:before,.li-smoke:after,.li-tag{animation:none!important;opacity:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}}
     `}</style>
