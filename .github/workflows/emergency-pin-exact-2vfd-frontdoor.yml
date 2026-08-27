@@ -1,0 +1,155 @@
+name: Emergency pin exact 2vfD public front door
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emergency-pin-exact-2vfd-frontdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-emergency-exact-2vfd-frontdoor
+  cancel-in-progress: true
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  DONOR: https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
+  APEX: https://wedontcarecars.com
+  WWW: https://www.wedontcarecars.com
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Require Cloudflare authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}"
+          test -n "${CF_ACCOUNT:-}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4.90.0
+
+      - name: Snapshot and remove customer-only legacy routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/routes-before.json
+          jq -e '.success == true' /tmp/routes-before.json >/dev/null
+          jq -r '.result[] | [.id,.pattern,(.script//"-")] | @tsv' /tmp/routes-before.json | sort
+
+          mapfile -t LEGACY_IDS < <(jq -r '.result[] | select(
+            (.pattern=="wedontcarecars.com/" and .script=="wdcc-reference-root") or
+            (.pattern=="www.wedontcarecars.com/" and .script=="wdcc-reference-root") or
+            (.pattern=="wedontcarecars.com/*" and (.script=="wdcc-home-sleek-edge" or .script=="wdcc-reference-clone-frontdoor")) or
+            (.pattern=="www.wedontcarecars.com/*" and .script=="wdcc-reference-clone-frontdoor")
+          ) | .id' /tmp/routes-before.json)
+
+          for id in "${LEGACY_IDS[@]}"; do
+            [ -n "$id" ] || continue
+            curl -fsS -X DELETE "$CF_API/zones/$ZONE_ID/workers/routes/$id" \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              -H 'Content-Type: application/json' > /tmp/delete.json
+            jq -e '.success == true' /tmp/delete.json >/dev/null
+          done
+
+      - name: Deploy immutable 2vfD front door
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-2vfd-frontdoor
+          cat > /tmp/wdcc-2vfd-frontdoor/worker.js <<'EOF'
+          const ORIGIN='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app';
+          export default {async fetch(request){
+            const incoming=new URL(request.url);
+            const target=new URL(ORIGIN);
+            target.pathname=incoming.pathname;
+            target.search=incoming.search;
+            const headers=new Headers(request.headers);
+            headers.delete('host');
+            const upstream=await fetch(new Request(target,{
+              method:request.method,
+              headers,
+              body:['GET','HEAD'].includes(request.method)?undefined:request.body,
+              redirect:'manual'
+            }));
+            const outHeaders=new Headers(upstream.headers);
+            outHeaders.set('x-wdcc-exact-2vfd','1');
+            if((outHeaders.get('content-type')||'').includes('text/html')){
+              outHeaders.set('cache-control','no-store, max-age=0');
+            }
+            return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:outHeaders});
+          }};
+          EOF
+          cat > /tmp/wdcc-2vfd-frontdoor/wrangler.jsonc <<'EOF'
+          {
+            "name":"wdcc-exact-2vfd-frontdoor",
+            "main":"worker.js",
+            "compatibility_date":"2026-08-27",
+            "routes":[
+              {"pattern":"wedontcarecars.com/*","zone_name":"wedontcarecars.com"},
+              {"pattern":"www.wedontcarecars.com/*","zone_name":"wedontcarecars.com"}
+            ]
+          }
+          EOF
+          cd /tmp/wdcc-2vfd-frontdoor
+          wrangler deploy
+
+      - name: Prove customer routes and dealer isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/routes-after.json
+          jq -e '.success == true' /tmp/routes-after.json >/dev/null
+          jq -e '.result[] | select(.pattern=="wedontcarecars.com/*" and .script=="wdcc-exact-2vfd-frontdoor")' /tmp/routes-after.json >/dev/null
+          jq -e '.result[] | select(.pattern=="www.wedontcarecars.com/*" and .script=="wdcc-exact-2vfd-frontdoor")' /tmp/routes-after.json >/dev/null
+          jq -e '.result[] | select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-after.json >/dev/null
+          test "$(jq '[.result[] | select(.pattern=="wedontcarecars.com/" or .pattern=="www.wedontcarecars.com/")] | length' /tmp/routes-after.json)" -eq 0
+
+      - name: Verify immutable donor parity on live domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          curl -fsS "$DONOR/wdcc-logo-transparent.webp?proof=$stamp" -o /tmp/donor-logo.webp
+          curl -fsS "$DONOR/wdcc-hero-v2.webp?proof=$stamp" -o /tmp/donor-hero.webp
+          donor_logo="$(sha256sum /tmp/donor-logo.webp | awk '{print $1}')"
+          donor_hero="$(sha256sum /tmp/donor-hero.webp | awk '{print $1}')"
+
+          for host in "$APEX" "$WWW"; do
+            curl -fsS -D /tmp/live.h "$host/?proof=$stamp" -o /tmp/live.html
+            grep -qi '^x-wdcc-exact-2vfd: 1' /tmp/live.h
+            grep -q 'wdcc-logo-transparent.webp' /tmp/live.html
+            grep -q 'wdcc-hero-v2.webp' /tmp/live.html
+            grep -qi 'we don.t care' /tmp/live.html
+
+            curl -fsS "$host/wdcc-logo-transparent.webp?proof=$stamp" -o /tmp/live-logo.webp
+            curl -fsS "$host/wdcc-hero-v2.webp?proof=$stamp" -o /tmp/live-hero.webp
+            test "$(sha256sum /tmp/live-logo.webp | awk '{print $1}')" = "$donor_logo"
+            test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$donor_hero"
+          done
+
+          dealer_code="$(curl -sS -L -o /dev/null -w '%{http_code}' https://dealer.wedontcarecars.com/dealer)"
+          echo "$dealer_code" | grep -Eq '^(200|302|307|308)$'
+          echo 'PUBLIC_EXACT_2VFD_FRONTDOOR=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PUBLIC_HERO_LOGO_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DEALER_ROUTE_ISOLATED=PASS' >> "$GITHUB_STEP_SUMMARY"
