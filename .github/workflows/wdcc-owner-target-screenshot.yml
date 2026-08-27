@@ -174,7 +174,7 @@ jobs:
             }
 
             async function assertDealerEditor(p,name){
-              const x=await p.evaluate(()=>({steps:[...document.querySelectorAll('.stepper>div')].length,info:document.querySelectorAll('[data-wizard-stage="info"]').length,pricing:document.querySelectorAll('[data-wizard-stage="pricing"]').length,photos:document.querySelectorAll('[data-wizard-stage="photos"]').length,details:document.querySelectorAll('[data-wizard-stage="details"]').length,review:document.querySelectorAll('[data-wizard-stage="review"]').length}));
+              const x=await p.evaluate(()=>({steps:[...document.querySelectorAll('.stepper>button')].length,info:document.querySelectorAll('[data-wizard-stage="info"]').length,pricing:document.querySelectorAll('[data-wizard-stage="pricing"]').length,photos:document.querySelectorAll('[data-wizard-stage="photos"]').length,details:document.querySelectorAll('[data-wizard-stage="details"]').length,review:document.querySelectorAll('[data-wizard-stage="review"]').length}));
               if(x.steps!==5||x.info!==1||x.pricing||x.photos||x.details||x.review)fail(name,'DEALER_WIZARD_INITIAL_STAGE',x);
               return x;
             }
