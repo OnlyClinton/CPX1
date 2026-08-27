@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {useState} from "react";
 import TrackedCallLink from "./TrackedCallLink";
+import {WDCC_CORRECT_LOGO_DATA_URI} from "./wdccCorrectLogoData";
 import styles from "./WdccPublicChrome.module.css";
 
 export function WdccPublicHeader(){
@@ -20,7 +21,7 @@ export function WdccPublicHeader(){
       <div className={`rh-header-inner ${styles.inner}`}>
         <button className={`rh-menu ${styles.menu}`} type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}>☰</button>
         <Link className={`rh-logo logoBrand ${styles.logo}`} href="/" aria-label="We Don't Care Cars home" onClick={close}>
-          <img className="rh-logo-art" data-wdcc-logo-art="official" src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/>
+          <img className="rh-logo-art" data-wdcc-logo-art="owner-approved" src={WDCC_CORRECT_LOGO_DATA_URI} alt="We Don't Care Cars" width="128" height="128"/>
         </Link>
         <nav id="wdcc-public-nav" className={`rh-nav ${styles.nav}${open?` open ${styles.navOpen}`:""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
