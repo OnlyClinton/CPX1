@@ -6,6 +6,9 @@ on:
       - feat/wdcc-webgpu-intro-owner-override-20260827
     paths:
       - 'app/LockedIntro.tsx'
+      - 'app/WdccThreeRuntime.tsx'
+      - 'app/three-shim.d.ts'
+      - 'app/layout.tsx'
       - 'app/ReferenceCloneHome.tsx'
       - 'public/wdcc-hero-v2.webp'
       - 'OWNER_WEBGPU_THREE_INTRO_OVERRIDE_20260827.md'
@@ -44,10 +47,13 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s OWNER_WEBGPU_THREE_INTRO_OVERRIDE_20260827.md
           test -s app/LockedIntro.tsx
+          test -s app/WdccThreeRuntime.tsx
+          test -s app/three-shim.d.ts
           test -s public/wdcc-hero-v2.webp
-          grep -q 'three.webgpu.min.js' app/LockedIntro.tsx
-          grep -q 'WebGPURenderer' app/LockedIntro.tsx
-          grep -q 'WebGLRenderer' app/LockedIntro.tsx
+          grep -q 'import("three/webgpu")' app/WdccThreeRuntime.tsx
+          grep -q 'WebGPURenderer' app/WdccThreeRuntime.tsx
+          grep -q 'WebGLRenderer' app/WdccThreeRuntime.tsx
+          grep -q 'data-three-runtime-mode' app/WdccThreeRuntime.tsx
           grep -q 'li-wheel-front' app/LockedIntro.tsx
           grep -q 'TAP FOR DEEP SOUND' app/LockedIntro.tsx
           grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
@@ -59,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npm install --no-save --package-lock=false three@0.185.1 @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
           npx opennextjs-cloudflare build
           test -s .open-next/worker.js
           test -d .open-next/assets
@@ -96,7 +102,6 @@ jobs:
           printf '%s\n' "$url" > webgpu-owner-preview-url.txt
 
       - name: Prove remote integrity
-        id: integrity
         shell: bash
         env:
           REMOTE_URL: ${{ steps.deploy.outputs.url }}
@@ -127,22 +132,22 @@ jobs:
           const out='webgpu-owner-proof';
           fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
+          const metrics={sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,consoleErrors:[]};
           try{
             const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
             const page=await ctx.newPage();
-            const consoleErrors=[];
-            page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
-            page.on('pageerror',e=>consoleErrors.push(String(e)));
+            page.on('console',m=>{if(m.type()==='error')metrics.consoleErrors.push(m.text())});
+            page.on('pageerror',e=>metrics.consoleErrors.push(String(e)));
             const start=Date.now();
             const response=await page.goto(`${process.env.REMOTE_URL}/?owner-webgpu=1&owner-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:20000});
             if(!response||response.status()!==200)throw new Error(`OWNER_PREVIEW_HTTP_${response?.status()||0}`);
             await page.locator('.li').waitFor({state:'attached',timeout:10000});
             await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
             await page.waitForFunction(()=>{const x=document.querySelector('.li-scene img');return x&&x.complete&&x.naturalWidth>0},null,{timeout:5000});
-            const root=page.locator('.li');
-            const wheel=page.locator('.li-wheel-front');
-            const sound=page.locator('.li-sound');
-            await page.waitForTimeout(120);
+            const root=page.locator('.li'),wheel=page.locator('.li-wheel-front'),sound=page.locator('.li-sound');
+            await page.waitForFunction(()=>{const x=document.querySelector('.li');const m=x?.getAttribute('data-three-runtime-mode');return m==='webgpu'||m==='webgl'},null,{timeout:1200});
+            const renderMode=await root.getAttribute('data-three-runtime-mode');
+            await page.waitForTimeout(90);
             await page.screenshot({path:`${out}/mobile-01-opening.png`});
             const transformA=await wheel.evaluate(el=>getComputedStyle(el).transform);
             await sound.click();
@@ -150,26 +155,25 @@ jobs:
             await page.waitForTimeout(290);
             const transformB=await wheel.evaluate(el=>getComputedStyle(el).transform);
             if(transformA===transformB)throw new Error(`WHEEL_SPIN_NOT_ADVANCING_${transformA}`);
-            await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
-            await page.waitForTimeout(300);
-            const renderMode=await root.getAttribute('data-render-mode');
-            if(renderMode!=='webgpu'&&renderMode!=='webgl')throw new Error(`THREE_RENDERER_FALLBACK_${renderMode}`);
             const wheelBlur=await wheel.evaluate(el=>getComputedStyle(el).filter);
+            await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
+            await page.waitForTimeout(280);
             await page.screenshot({path:`${out}/mobile-03-gpu-settle.png`});
-            await page.waitForTimeout(370);
+            await page.waitForTimeout(300);
             await page.screenshot({path:`${out}/mobile-04-logo-clear.png`});
-            await page.waitForTimeout(360);
+            await page.waitForTimeout(300);
             const handoff=await page.evaluate(()=>({rootOpacity:Number(getComputedStyle(document.querySelector('.li')).opacity),uiOpacity:Number(getComputedStyle(document.querySelector('.rh-hero-inner')).opacity),docHandoff:document.documentElement.classList.contains('wdcc-intro-handoff')}));
             await page.screenshot({path:`${out}/mobile-05-handoff.png`});
-            await page.waitForTimeout(420);
+            await page.waitForTimeout(540);
             const introCount=await page.locator('.li').count();
             const finalUi=await page.locator('.rh-hero-inner').evaluate(el=>Number(getComputedStyle(el).opacity));
             await page.screenshot({path:`${out}/mobile-06-site.png`});
             if(introCount!==0)throw new Error(`INTRO_NOT_DISPOSED_${introCount}`);
             if(finalUi<.95)throw new Error(`SITE_UI_NOT_VISIBLE_${finalUi}`);
-            fs.writeFileSync(`${out}/metrics.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,elapsedMs:Date.now()-start,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi,consoleErrors},null,2)+'\n');
+            Object.assign(metrics,{elapsedMs:Date.now()-start,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi});
+            fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');
             await ctx.close();
-          }finally{await browser.close()}
+          }catch(e){metrics.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');throw e}finally{await browser.close()}
           NODE
 
       - name: Publish owner preview summary
@@ -184,11 +188,12 @@ jobs:
           if [ -s webgpu-owner-proof/metrics.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./webgpu-owner-proof/metrics.json');
-          console.log(`Renderer: ${p.renderMode}`);
-          console.log(`Wheel transform advanced: ${p.transformA!==p.transformB?'YES':'NO'}`);
-          console.log(`Sound control activated: ${p.soundPressed}`);
-          console.log(`Intro disposed after handoff: ${p.introCount===0?'YES':'NO'}`);
-          console.log(`Final site UI opacity: ${p.finalUi}`);
+          console.log(`Renderer: ${p.renderMode||'not-proven'}`);
+          console.log(`Wheel transform advanced: ${p.transformA&&p.transformA!==p.transformB?'YES':'not-proven'}`);
+          console.log(`Sound control activated: ${p.soundPressed||'not-proven'}`);
+          console.log(`Intro disposed after handoff: ${p.introCount===0?'YES':'not-proven'}`);
+          console.log(`Final site UI opacity: ${p.finalUi??'not-proven'}`);
+          if(p.failure)console.log(`Failure: ${p.failure}`);
           NODE
           fi
           echo 'Preview only. No production route or alias was changed.' >> "$GITHUB_STEP_SUMMARY"
