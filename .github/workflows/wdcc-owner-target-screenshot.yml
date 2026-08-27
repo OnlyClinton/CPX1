@@ -1,46 +1,52 @@
-name: WDCC Owner Target Screenshot
+name: WDCC Owner Exact Page Matrix
 
 on:
   push:
     branches: [fix/wdcc-locked-contract-20260826]
-    paths:
-      - '.github/workflows/wdcc-owner-target-screenshot.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: wdcc-owner-target-screenshot
-  cancel-in-progress: true
+  group: wdcc-owner-exact-page-matrix-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
-      URL: https://wdcc-locked-preview.clico-global.workers.dev
+      URL: https://wdcc-proof-${{ github.sha }}.clico-global.workers.dev
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Wait for preview
+
+      - name: Wait for exact immutable preview
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
-            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-target=$GITHUB_RUN_ID-$i" || true)"
-            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then exit 0; fi
+          echo "Waiting for exact SHA preview: $URL"
+          for i in $(seq 1 120); do
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-matrix=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then
+              printf '%s\n' "$URL" > /tmp/exact-preview-url.txt
+              exit 0
+            fi
             sleep 2
           done
+          echo "Exact preview did not become ready: $URL" >&2
           exit 1
+
       - name: Install Chromium
         shell: bash
         run: |
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
-      - name: Capture owner review packet
+
+      - name: Capture exact owner review matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -49,40 +55,87 @@ jobs:
           const fs=require('fs');
           const {chromium}=require('playwright');
           const base=process.env.URL;
+          const sha=process.env.GITHUB_SHA;
+          if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA_PREVIEW ${base} ${sha}`);
+
           (async()=>{
             const browser=await chromium.launch({headless:true});
-            const result={base,sha:process.env.GITHUB_SHA,pages:{},errors:[]};
-            async function shot(name,path,viewport,isMobile=false,skipIntro=false){
-              const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile});
+            const result={base,sha,pages:{},errors:[],writeRequests:[]};
+            const matrix=[
+              ['home','/','body',true],
+              ['inventory','/inventory','.inventoryTop',false],
+              ['approval','/get-approved','.leadPage',false],
+              ['test-drive','/schedule-test-drive','.leadPage',false],
+              ['contact','/contact','.leadPage',false],
+              ['login','/login','.loginShell',false],
+              ['app','/app','main',false],
+              ['dealer-login','/dealer','main',false],
+            ];
+
+            async function shot(label,path,viewport,isMobile,skipIntro){
+              const name=`${isMobile?'mobile':'desktop'}-${label}`;
+              const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
               const p=await ctx.newPage();
               p.on('pageerror',e=>result.errors.push(`${name}: ${String(e)}`));
-              const r=await p.goto(`${base}${path}${path.includes('?')?'&':'?'}owner-target=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              await p.waitForTimeout(900);
+              p.on('request',r=>{
+                if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writeRequests.push({page:name,method:r.method(),url:r.url()});
+              });
+              const join=path.includes('?')?'&':'?';
+              const r=await p.goto(`${base}${path}${join}owner-matrix=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              const http=r?.status()||0;
+              if(http!==200)throw new Error(`${name.toUpperCase().replaceAll('-','_')}_HTTP_${http}`);
+              await p.waitForTimeout(850);
               if(skipIntro){
                 const b=p.getByRole('button',{name:/skip intro/i});
-                if(await b.count()) await b.click().catch(()=>{});
-                await p.waitForTimeout(500);
+                if(await b.count())await b.click().catch(()=>{});
+                await p.waitForTimeout(450);
               }
-              result.pages[name]={http:r?.status()||0,url:p.url(),title:await p.title(),text:(await p.locator('body').innerText().catch(()=>'' )).slice(0,1200)};
+              const selector=matrix.find(x=>x[0]===label)?.[2]||'body';
+              await p.locator(selector).first().waitFor({state:'visible',timeout:8000});
+              const geom=await p.evaluate(()=>({docW:document.documentElement.scrollWidth,winW:innerWidth,docH:document.documentElement.scrollHeight,winH:innerHeight}));
+              if(geom.docW>geom.winW+1)throw new Error(`${name.toUpperCase().replaceAll('-','_')}_HORIZONTAL_OVERFLOW ${JSON.stringify(geom)}`);
+              const text=(await p.locator('body').innerText().catch(()=>'' )).replace(/\s+/g,' ').trim();
+              if(/application error|internal server error|this page could not be found/i.test(text))throw new Error(`${name.toUpperCase().replaceAll('-','_')}_VISIBLE_ERROR`);
+              result.pages[name]={http,url:p.url(),title:await p.title(),geometry:geom,text:text.slice(0,1400)};
               await p.screenshot({path:`/tmp/wdcc-owner-target/${name}.png`,fullPage:true});
               await ctx.close();
             }
-            await shot('desktop-home','/',{width:1440,height:1000},false,true);
-            await shot('mobile-home','/',{width:390,height:844},true,true);
-            await shot('desktop-inventory','/inventory',{width:1440,height:1000});
-            await shot('mobile-inventory','/inventory',{width:390,height:844},true);
-            await shot('desktop-dealer','/dealer',{width:1440,height:1000});
-            await shot('mobile-dealer','/dealer',{width:390,height:844},true);
-            await shot('desktop-dealer-inventory','/dealer/inventory',{width:1440,height:1000});
-            await shot('desktop-dealer-import','/dealer/inventory/import',{width:1440,height:1000});
-            await shot('desktop-dealer-add','/dealer/inventory/new',{width:1440,height:1000});
+
+            for(const [label,path,,skipIntro] of matrix){
+              await shot(label,path,{width:1440,height:1000},false,skipIntro);
+              await shot(label,path,{width:390,height:844},true,skipIntro);
+            }
+
             await browser.close();
+            if(result.writeRequests.length)throw new Error(`OWNER_MATRIX_WRITE_REQUESTS ${JSON.stringify(result.writeRequests)}`);
             fs.writeFileSync('/tmp/wdcc-owner-target/result.json',JSON.stringify(result,null,2));
-          })().catch(e=>{console.error(e);process.exit(1)});
+          })().catch(e=>{
+            fs.writeFileSync('/tmp/wdcc-owner-target/failure.txt',String(e?.stack||e));
+            console.error(e);
+            process.exit(1);
+          });
           NODE
+
+      - name: Publish owner matrix summary
+        if: always()
+        shell: bash
+        run: |
+          echo '### WDCC exact-SHA owner page matrix' >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $URL" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s /tmp/wdcc-owner-target/result.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const r=require('/tmp/wdcc-owner-target/result.json');
+          for(const [name,p] of Object.entries(r.pages))console.log(`- ${name}: HTTP ${p.http} · ${p.geometry.winW}px · no horizontal overflow`);
+          console.log(`- write requests during visual review: ${r.writeRequests.length}`);
+          NODE
+          else
+            echo 'Matrix failed before result.json was produced.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wdcc-owner-target-${{ github.sha }}
+          name: wdcc-owner-exact-page-matrix-${{ github.sha }}
           path: /tmp/wdcc-owner-target/
           retention-days: 7
