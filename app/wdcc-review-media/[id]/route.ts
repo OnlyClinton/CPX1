@@ -9,18 +9,52 @@ const SOURCES:Record<string,string>={
   toyotaRav4:"toyotaRav4",
 };
 
+function decodeBase64Text(value:string){
+  const binary=atob(value.replace(/\s+/g,""));
+  const bytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function recoveredSourceText(file:string){
+  const raw=`https://raw.githubusercontent.com/OnlyClinton/CPX1/${RECOVERED_MEDIA_COMMIT}/app/recoveredVisualMedia/${file}.ts`;
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const response=await fetch(`${raw}?wdcc-recovery-attempt=${attempt}`,{cache:"no-store"});
+      if(response.ok){
+        const text=await response.text();
+        if(text.includes("data:image/webp;base64,"))return{text,source:"raw"};
+      }
+    }catch{}
+  }
+
+  const api=`https://api.github.com/repos/OnlyClinton/CPX1/contents/app/recoveredVisualMedia/${file}.ts?ref=${RECOVERED_MEDIA_COMMIT}`;
+  try{
+    const response=await fetch(api,{cache:"no-store",headers:{Accept:"application/vnd.github+json","User-Agent":"wdcc-preview-recovery"}});
+    if(response.ok){
+      const payload:any=await response.json();
+      if(payload?.encoding==="base64"&&typeof payload?.content==="string"&&payload.content.trim()){
+        const text=decodeBase64Text(payload.content);
+        if(text.includes("data:image/webp;base64,"))return{text,source:"contents-api"};
+      }
+    }
+  }catch{}
+
+  return null;
+}
+
 export async function GET(_request:Request,{params}:{params:Promise<{id:string}>}){
   const {id}=await params;
   const file=SOURCES[id];
   if(!file)return new NextResponse(null,{status:404});
 
-  const source=`https://raw.githubusercontent.com/OnlyClinton/CPX1/${RECOVERED_MEDIA_COMMIT}/app/recoveredVisualMedia/${file}.ts`;
+  const recovered=await recoveredSourceText(file);
+  if(!recovered)return NextResponse.json({ok:false,error:"recovered_media_source_unavailable",id},{status:502,headers:{"Cache-Control":"no-store"}});
+
+  const match=recovered.text.match(/const image=\"data:image\/webp;base64,([^\"]+)\"/);
+  if(!match)return NextResponse.json({ok:false,error:"recovered_media_parse_failed",id},{status:502,headers:{"Cache-Control":"no-store"}});
+
   try{
-    const upstream=await fetch(source,{cache:"force-cache"});
-    if(!upstream.ok)return NextResponse.json({ok:false,error:"recovered_media_source_unavailable",id},{status:502,headers:{"Cache-Control":"no-store"}});
-    const text=await upstream.text();
-    const match=text.match(/const image=\"data:image\/webp;base64,([^\"]+)\"/);
-    if(!match)return NextResponse.json({ok:false,error:"recovered_media_parse_failed",id},{status:502,headers:{"Cache-Control":"no-store"}});
     const binary=atob(match[1]);
     const bytes=new Uint8Array(binary.length);
     for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
@@ -29,8 +63,9 @@ export async function GET(_request:Request,{params}:{params:Promise<{id:string}>
       "Cache-Control":"public, max-age=604800, immutable",
       "X-WDCC-Media-Truth":"verified-first-party-recovery",
       "X-WDCC-Media-Source-SHA":RECOVERED_MEDIA_COMMIT,
+      "X-WDCC-Media-Fetch":recovered.source,
     }});
   }catch{
-    return NextResponse.json({ok:false,error:"recovered_media_fetch_failed",id},{status:502,headers:{"Cache-Control":"no-store"}});
+    return NextResponse.json({ok:false,error:"recovered_media_decode_failed",id},{status:502,headers:{"Cache-Control":"no-store"}});
   }
 }
