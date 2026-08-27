@@ -1,0 +1,65 @@
+/* WDCC RESPONSIVE AUDIT CLOSEOUT
+   Final sizing-only authority for the exact audit findings.
+   No routing, auth, provider, persistence, schema, DNS, or production behavior changes. */
+
+/* Public lead forms: consent copy must remain readable at every audited width. */
+html body .leadPage .leadGrid .consent,
+html body main.wdcc-public-page .leadGrid .consent{
+  font-size:11.5px!important;
+  line-height:1.45!important;
+}
+
+/* Unified portal login labels. */
+html body main.loginShell .formPanel form>label{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+
+/* Add/Edit vehicle labels, including select/textarea and internal-only consent rows. */
+html body .editVehicleApp label,
+html body .editVehicleApp .fieldGrid label,
+html body .editVehicleApp .sectionBlock label{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+}
+
+/* Dealer Leads desktop navigation. */
+html body main.targetLeadShell .targetLeadSide nav a{
+  font-size:12px!important;
+  line-height:1.2!important;
+  min-height:40px!important;
+  display:flex!important;
+  align-items:center!important;
+}
+
+/* CRM / Vehicle Logs desktop navigation. */
+html body main.crmShell .crmSidebar nav a{
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+
+/* All dealer/admin mobile bottom navigation labels. */
+html body main.dealerDashboardLocked .dashMobileNav a span,
+html body main.inventoryContract .inventoryMobileNav a span,
+html body main.targetLeadShell .targetLeadMobile a span{
+  font-size:9.5px!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+}
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html body .leadPage .leadGrid .consent,
+  html body main.wdcc-public-page .leadGrid .consent,
+  html body main.loginShell .formPanel form>label,
+  html body .editVehicleApp label,
+  html body .editVehicleApp .fieldGrid label,
+  html body .editVehicleApp .sectionBlock label{
+    font-size:11.5px!important;
+  }
+
+  html body main.dealerDashboardLocked .dashMobileNav a span,
+  html body main.inventoryContract .inventoryMobileNav a span,
+  html body main.targetLeadShell .targetLeadMobile a span{
+    font-size:9.5px!important;
+  }
+}
