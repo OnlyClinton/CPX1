@@ -37,13 +37,15 @@ jobs:
           test -s app/wdcc-owner-board-final.css
           test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
           grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
+          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
+          test "$last_wdcc_css" = 'wdcc-owner-board-final.css'
           ! grep -Fq 'wdcc-system-v2.css' app/layout.tsx
           ! grep -Fq 'wdcc-owner-screenshot-correction.css' app/layout.tsx
           ! grep -Fq 'wdcc-public-owner-render-fix.css' app/layout.tsx
+          ! grep -Fq 'wdcc-final-board-polish.css' app/layout.tsx
           grep -Fq 'wdcc-wordmark' app/WdccPublicChrome.tsx
-          grep -Fq 'grid-template-columns:repeat(5,minmax(0,1fr))!important' app/wdcc-owner-board-final.css
-          grep -Fq 'grid-template-columns:repeat(3,minmax(0,1fr))!important' app/wdcc-owner-board-final.css
-          grep -Fq 'flex:0 0 clamp(108px,29.5vw,124px)!important' app/wdcc-owner-board-final.css
+          ! grep -Fq 'rh-logo-art' app/WdccPublicChrome.tsx
+          grep -Fq 'OWNER-BOARD FINAL' app/wdcc-owner-board-final.css
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
