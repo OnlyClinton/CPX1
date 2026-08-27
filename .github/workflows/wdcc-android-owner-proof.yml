@@ -46,7 +46,7 @@ jobs:
           grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq 'wdcc-owner-approved-logo-final.css' app/layout.tsx
           grep -Fq 'wdcc-acceptance-closeout.css' app/layout.tsx
-          last_wdcc_css="$(grep -o 'wdcc-[^"]*\.css' app/layout.tsx | tail -1)"
+          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
           test "$last_wdcc_css" = 'wdcc-acceptance-closeout.css'
           grep -Fq 'position:static!important' app/wdcc-acceptance-closeout.css
           grep -Fq 'grid-column:2!important' app/wdcc-acceptance-closeout.css
