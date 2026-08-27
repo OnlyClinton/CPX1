@@ -6,7 +6,7 @@ html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-colu
 html body [data-wdcc-public-chrome="header"] .rh-logo{display:grid!important;place-items:center!important;width:160px!important;height:78px!important;overflow:visible!important;background:none!important}
 html body [data-wdcc-public-chrome="header"] .rh-logo::before,
 html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;width:148px!important;min-width:148px!important;max-width:148px!important;height:auto!important;min-height:0!important;max-height:50px!important;object-fit:contain!important;object-position:center!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;width:148px!important;min-width:148px!important;max-width:148px!important;height:auto!important;min-height:0!important;max-height:50px!important;object-fit:contain!important;object-position:center!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important}
 
 /* Desktop section rhythm: 2vfD impact with newest-board density. */
 @media(min-width:1200px){
@@ -51,7 +51,7 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdc
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:50px minmax(0,1fr) 50px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo{width:150px!important;height:78px!important;justify-self:center!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;width:136px!important;min-width:136px!important;max-width:136px!important;height:auto!important;min-height:0!important;max-height:46px!important;object-fit:contain!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;width:136px!important;min-width:136px!important;max-width:136px!important;height:auto!important;min-height:0!important;max-height:46px!important;object-fit:contain!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 5px 12px rgba(0,0,0,.48))!important}
   html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{width:50px!important;min-width:50px!important;max-width:50px!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-basis:50px!important}
 
   /* Mobile section rhythm follows the supplied phone board, not desktop proportions scaled down. */
