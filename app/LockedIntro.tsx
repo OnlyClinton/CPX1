@@ -1,61 +1,88 @@
 "use client";
 
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {WDCC_CORRECT_LOGO_DATA_URI} from "./wdccCorrectLogoData";
 
-type Phase="show"|"exit"|"done";
+type Phase="show"|"handoff"|"exit"|"done";
+const INTRO_KEY="wdcc-owner-cinematic-intro-v3";
 
 export default function LockedIntro(){
   const[phase,setPhase]=useState<Phase>("show");
+  const rootRef=useRef<HTMLDivElement|null>(null);
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const proofHold=params.has("visual-mobile")||params.has("visual-desktop")||navigator.webdriver===true;
+    const forceReplay=params.has("intro")||params.has("owner-webgpu")||params.has("owner-cinematic");
     if(proofHold){
       document.documentElement.classList.add("wdcc-visual-proof","wdcc-intro-active");
-      return()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active")};
+      return()=>document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active","wdcc-intro-handoff");
     }
     if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setPhase("done");return}
+    if(!forceReplay){try{if(sessionStorage.getItem(INTRO_KEY)==="seen"){setPhase("done");return}}catch{}}
+    try{sessionStorage.setItem(INTRO_KEY,"seen")}catch{}
     document.documentElement.classList.add("wdcc-intro-active");
-    const exit=window.setTimeout(()=>setPhase("exit"),2380);
-    const done=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2840);
-    return()=>{window.clearTimeout(exit);window.clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active")};
+    const handoff=window.setTimeout(()=>{document.documentElement.classList.add("wdcc-intro-handoff");setPhase("handoff")},1320);
+    const exit=window.setTimeout(()=>setPhase("exit"),1440);
+    const done=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active","wdcc-intro-handoff");setPhase("done")},1910);
+    return()=>{window.clearTimeout(handoff);window.clearTimeout(exit);window.clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active","wdcc-intro-handoff")};
   },[]);
 
-  const finish=()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active");setPhase("done")};
+  const finish=()=>{document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active","wdcc-intro-handoff");setPhase("done")};
   if(phase==="done")return null;
 
-  return <div className={`li li-${phase}`} aria-label="WDCC opening intro">
+  return <div ref={rootRef} className={`li li-${phase} li-owner-cinematic`} aria-label="WDCC opening intro" data-wdcc-cinematic-intro="owner-v3">
     <style>{`
       .wdcc-intro-active{overflow:hidden!important}
-      .li{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:#050d14;isolation:isolate;opacity:1;transition:opacity .46s cubic-bezier(.22,.72,.18,1)}
+      html.wdcc-intro-active body main.reference-home.locked-storefront .rh-utility,
+      html.wdcc-intro-active body main.reference-home.locked-storefront .rh-header,
+      html.wdcc-intro-active body main.reference-home.locked-storefront .rh-hero-inner,
+      html.wdcc-intro-active body main.reference-home.locked-storefront .rh-hero-shade{opacity:0!important;transition:opacity .34s cubic-bezier(.2,.8,.2,1)!important}
+      html.wdcc-intro-handoff body main.reference-home.locked-storefront .rh-utility,
+      html.wdcc-intro-handoff body main.reference-home.locked-storefront .rh-header,
+      html.wdcc-intro-handoff body main.reference-home.locked-storefront .rh-hero-inner,
+      html.wdcc-intro-handoff body main.reference-home.locked-storefront .rh-hero-shade{opacity:1!important}
+      html.wdcc-intro-active body main.reference-home.locked-storefront .rh-hero-art{object-position:59% 48%!important;filter:saturate(1.18) contrast(1.04) brightness(1.14)!important;transition:filter .42s ease-out!important}
+      html.wdcc-intro-handoff body main.reference-home.locked-storefront .rh-hero-art{filter:saturate(1.07) contrast(1.04) brightness(1.02)!important}
+      .li{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:#020810;isolation:isolate;opacity:1;transition:opacity .46s cubic-bezier(.2,.78,.2,1)}
       .li-exit{opacity:0;pointer-events:none}
-      .li-scene{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;background:#050d14}
-      .li-scene img{display:block;width:100%;height:100%;object-fit:cover;object-position:64% 45%;filter:saturate(1.24) contrast(1.03) brightness(1.27);transform:none!important;animation:none!important;transition:none!important}
-      .li-scene:before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at 52% 43%,rgba(120,184,236,.10),transparent 42%),linear-gradient(180deg,rgba(255,255,255,.025),transparent 48%);opacity:.9;animation:liBloomResolve 1.72s ease-out .08s forwards}
-      .li-scene:after{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,rgba(2,7,12,.01) 0%,rgba(2,7,12,0) 56%,rgba(2,7,12,.08) 80%,rgba(2,7,12,.26) 100%)}
-      @keyframes liBloomResolve{0%{opacity:.9}62%{opacity:.42}100%{opacity:0}}
-      .li-smoke{position:absolute;inset:-8%;z-index:3;overflow:hidden;pointer-events:none;opacity:1;background:radial-gradient(ellipse at 18% 40%,rgba(236,242,247,.26) 0%,rgba(181,196,207,.12) 25%,transparent 54%),radial-gradient(ellipse at 80% 55%,rgba(225,234,241,.20) 0%,rgba(148,168,182,.10) 31%,transparent 59%),linear-gradient(180deg,rgba(15,31,43,.09),rgba(5,13,20,.22));backdrop-filter:blur(15px) saturate(.86) contrast(.96);-webkit-backdrop-filter:blur(15px) saturate(.86) contrast(.96);will-change:opacity,backdrop-filter;animation:liSmokeClear 1.08s cubic-bezier(.16,.80,.24,1) .10s forwards}
-      .li-smoke:before,.li-smoke:after{content:"";position:absolute;inset:-10%;pointer-events:none;border-radius:50%;opacity:1;will-change:opacity,transform,filter}
-      .li-smoke:before{background:radial-gradient(ellipse at 32% 52%,rgba(245,248,250,.24) 0%,rgba(184,199,210,.12) 31%,transparent 61%),radial-gradient(ellipse at 68% 36%,rgba(226,235,241,.20) 0%,rgba(170,188,201,.10) 29%,transparent 58%);filter:blur(19px);animation:liFogDrift 1.72s cubic-bezier(.18,.72,.20,1) .06s forwards}
-      .li-smoke:after{background:linear-gradient(112deg,transparent 16%,rgba(255,255,255,.10) 42%,rgba(221,233,241,.06) 52%,transparent 74%);filter:blur(12px);animation:liMistDrift 1.58s ease-out .14s forwards}
-      @keyframes liSmokeClear{0%{opacity:1;backdrop-filter:blur(15px) saturate(.86) contrast(.96);-webkit-backdrop-filter:blur(15px) saturate(.86) contrast(.96)}42%{opacity:.82;backdrop-filter:blur(10px) saturate(.92) contrast(.98);-webkit-backdrop-filter:blur(10px) saturate(.92) contrast(.98)}76%{opacity:.28;backdrop-filter:blur(3px) saturate(.99) contrast(1);-webkit-backdrop-filter:blur(3px) saturate(.99) contrast(1)}100%{opacity:0;backdrop-filter:blur(0) saturate(1) contrast(1);-webkit-backdrop-filter:blur(0) saturate(1) contrast(1)}}
-      @keyframes liFogDrift{0%{opacity:.96;filter:blur(19px);transform:translate3d(-2%,1%,0)}46%{opacity:.60;filter:blur(15px);transform:translate3d(.3%,-.2%,0)}80%{opacity:.18;filter:blur(10px);transform:translate3d(1.5%,-.8%,0)}100%{opacity:0;filter:blur(8px);transform:translate3d(2%,-1%,0)}}
-      @keyframes liMistDrift{0%{opacity:.74;transform:translate3d(1.5%,0,0)}50%{opacity:.34;transform:translate3d(0,-.4%,0)}82%{opacity:.10;transform:translate3d(-1%,-.7%,0)}100%{opacity:0;transform:translate3d(-1.5%,-1%,0)}}
-      .li-badge{position:absolute;z-index:4;left:50%;top:39%;width:clamp(236px,29vw,292px);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;background:transparent;box-shadow:0 18px 52px rgba(0,0,0,.46);transform:translate(-50%,-50%)!important;animation:none!important;transition:none!important;overflow:visible}
-      .li-badge:before{content:"";position:absolute;inset:-12px;border-radius:50%;border:1px solid rgba(255,255,255,.52);box-shadow:0 0 0 1px rgba(74,154,230,.18),0 0 34px rgba(74,154,230,.26);opacity:0;animation:liBadgeHalo 1.36s ease-out .22s both;pointer-events:none}
-      @keyframes liBadgeHalo{0%{opacity:0;box-shadow:0 0 0 1px rgba(74,154,230,.08),0 0 10px rgba(74,154,230,.08)}42%{opacity:.82;box-shadow:0 0 0 1px rgba(255,255,255,.34),0 0 34px rgba(74,154,230,.28)}100%{opacity:.18;box-shadow:0 0 0 1px rgba(255,255,255,.12),0 0 18px rgba(74,154,230,.10)}}
-      .li-badge img{position:absolute;inset:0;z-index:2;display:block;width:100%;height:100%;object-fit:contain;border-radius:0!important;clip-path:none!important;opacity:1!important;filter:drop-shadow(0 12px 28px rgba(0,0,0,.48))!important;transform:none!important;animation:none!important;transition:none!important}
-      .li-tag{position:absolute;z-index:5;left:50%;top:59%;transform:translateX(-50%);margin:0;padding:9px 14px;border:1px solid rgba(255,255,255,.52);border-radius:999px;background:rgba(2,9,15,.78);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);color:#fff!important;white-space:nowrap;font:950 clamp(13px,1.35vw,16px)/1 system-ui,sans-serif;letter-spacing:.085em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,.98),0 0 12px rgba(255,255,255,.18);opacity:0;animation:liTagResolve .74s cubic-bezier(.2,.8,.2,1) .30s forwards}
-      @keyframes liTagResolve{from{opacity:0}to{opacity:1}}
-      .li-skip{position:absolute;z-index:6;right:max(18px,env(safe-area-inset-right));bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px));min-height:44px;border:1px solid rgba(255,255,255,.46);border-radius:999px;background:rgba(3,9,14,.74);color:#fff;padding:0 18px;font:850 12px/1 system-ui,sans-serif;letter-spacing:.03em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-      @media(max-width:600px),(max-width:1180px) and (hover:none) and (pointer:coarse){.li-scene img{object-position:61% 45%;filter:saturate(1.25) contrast(1.02) brightness(1.30)}html body .li .li-badge{top:38.5%!important;width:min(70vw,276px)!important;min-width:238px!important}html body .li .li-tag{top:59%!important;font-size:13px!important;letter-spacing:.06em!important;padding:9px 13px!important}.li-smoke{inset:-10%;backdrop-filter:blur(16px) saturate(.84);-webkit-backdrop-filter:blur(16px) saturate(.84)}}
-      @media(max-width:430px){html body .li .li-badge{width:min(69vw,270px)!important;min-width:236px!important}html body .li .li-tag{font-size:12px!important;letter-spacing:.05em!important}}
-      @media(prefers-reduced-motion:reduce){html:not(.wdcc-visual-proof) .li{display:none!important}.li-smoke,.li-smoke:before,.li-smoke:after,.li-tag,.li-badge:before,.li-scene:before{animation:none!important;opacity:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}}
+      .li-scene{position:absolute;inset:-1.5%;z-index:1;overflow:hidden;background:#020810;transform:scale(1.024);animation:liSceneResolve 1.58s cubic-bezier(.16,.82,.2,1) forwards}
+      .li-scene img{display:block;width:100%;height:100%;object-fit:cover;object-position:59% 48%;filter:saturate(1.18) contrast(1.04) brightness(1.14)}
+      @keyframes liSceneResolve{0%{transform:scale(1.024);filter:blur(1.8px)}42%{filter:blur(.45px)}100%{transform:scale(1);filter:blur(0)}}
+      .li-vignette{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at 59% 50%,transparent 0 32%,rgba(1,7,12,.04) 54%,rgba(1,7,12,.52) 100%),linear-gradient(180deg,rgba(1,7,12,.10),transparent 52%,rgba(1,7,12,.32));animation:liVignette 1.48s ease-out forwards}
+      @keyframes liVignette{0%{opacity:.96}100%{opacity:.58}}
+      .li-smoke{position:absolute;inset:-12%;z-index:3;pointer-events:none;overflow:hidden;opacity:1;background:radial-gradient(ellipse at 18% 56%,rgba(245,249,252,.40),rgba(164,186,202,.18) 25%,transparent 58%),radial-gradient(ellipse at 75% 38%,rgba(236,244,249,.30),rgba(148,174,193,.14) 28%,transparent 59%);backdrop-filter:blur(13px) saturate(.88);-webkit-backdrop-filter:blur(13px) saturate(.88);animation:liSmokeClear 1.08s cubic-bezier(.14,.78,.2,1) .05s forwards}
+      .li-smoke:before,.li-smoke:after{content:"";position:absolute;inset:-10%;border-radius:50%;pointer-events:none}
+      .li-smoke:before{background:radial-gradient(ellipse at 34% 52%,rgba(255,255,255,.28),rgba(201,216,227,.10) 35%,transparent 62%);filter:blur(22px);animation:liFogDrift 1.32s ease-out forwards}
+      .li-smoke:after{background:linear-gradient(108deg,transparent 22%,rgba(255,255,255,.13) 44%,rgba(157,206,246,.08) 52%,transparent 72%);filter:blur(10px);animation:liMistSweep 1.12s ease-out .08s forwards}
+      @keyframes liSmokeClear{0%{opacity:1;backdrop-filter:blur(13px) saturate(.88);-webkit-backdrop-filter:blur(13px) saturate(.88)}50%{opacity:.62;backdrop-filter:blur(8px) saturate(.94);-webkit-backdrop-filter:blur(8px) saturate(.94)}100%{opacity:0;backdrop-filter:blur(0) saturate(1);-webkit-backdrop-filter:blur(0) saturate(1)}}
+      @keyframes liFogDrift{0%{opacity:.92;transform:translate3d(-3%,2%,0) scale(1.03)}100%{opacity:0;transform:translate3d(3%,-2%,0) scale(.98)}}
+      @keyframes liMistSweep{0%{opacity:.78;transform:translate3d(-6%,0,0)}100%{opacity:0;transform:translate3d(7%,-1%,0)}}
+      .li-light{position:absolute;z-index:4;left:-25%;top:14%;width:58%;height:120%;pointer-events:none;opacity:0;background:linear-gradient(112deg,transparent 35%,rgba(255,255,255,.10) 47%,rgba(82,170,255,.12) 51%,transparent 64%);filter:blur(9px);transform:skewX(-12deg);animation:liLightPass .78s cubic-bezier(.2,.7,.2,1) .28s forwards}
+      @keyframes liLightPass{0%{opacity:0;transform:translateX(-8%) skewX(-12deg)}25%{opacity:.78}100%{opacity:0;transform:translateX(170%) skewX(-12deg)}}
+      .li-badge{position:absolute;z-index:6;left:50%;top:39%;width:clamp(232px,28vw,300px);aspect-ratio:1;transform:translate(-50%,-50%) scale(.88);display:grid;place-items:center;opacity:0;animation:liBadgeResolve .64s cubic-bezier(.12,.86,.22,1) .16s forwards,liBadgeSettle .40s ease-out 1.03s forwards}
+      .li-badge:before,.li-badge:after{content:"";position:absolute;border-radius:50%;pointer-events:none}
+      .li-badge:before{inset:-15px;border:1px solid rgba(255,255,255,.48);box-shadow:0 0 0 1px rgba(58,154,238,.20),0 0 42px rgba(58,154,238,.28);opacity:0;animation:liHalo .72s ease-out .24s forwards}
+      .li-badge:after{inset:-34px;border:1px solid rgba(239,31,47,.22);opacity:0;animation:liImpactRing .68s cubic-bezier(.12,.78,.2,1) .44s forwards}
+      @keyframes liBadgeResolve{0%{opacity:0;transform:translate(-50%,-50%) scale(.88)}68%{opacity:1;transform:translate(-50%,-50%) scale(1.025)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+      @keyframes liBadgeSettle{from{opacity:1}to{opacity:.94}}
+      @keyframes liHalo{0%{opacity:0;transform:scale(.82)}45%{opacity:.88}100%{opacity:.20;transform:scale(1.08)}}
+      @keyframes liImpactRing{0%{opacity:0;transform:scale(.70)}34%{opacity:.75}100%{opacity:0;transform:scale(1.30)}}
+      .li-badge img{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 17px 34px rgba(0,0,0,.52));transform:none!important}
+      .li-tag{position:absolute;z-index:7;left:50%;top:59%;transform:translateX(-50%);margin:0;padding:9px 15px;border:1px solid rgba(255,255,255,.44);border-radius:999px;background:rgba(2,9,15,.70);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;white-space:nowrap;font:950 clamp(12px,1.2vw,15px)/1 system-ui,sans-serif;letter-spacing:.075em;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.9);opacity:0;animation:liTagIn .42s ease-out .48s forwards,liTagOut .30s ease-in 1.18s forwards}
+      @keyframes liTagIn{from{opacity:0;transform:translate(-50%,5px)}to{opacity:1;transform:translate(-50%,0)}}
+      @keyframes liTagOut{from{opacity:1}to{opacity:0}}
+      .li-skip{position:absolute;z-index:9;right:max(16px,env(safe-area-inset-right));bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px));min-height:42px;border:1px solid rgba(255,255,255,.40);border-radius:999px;background:rgba(3,9,14,.68);color:#fff;padding:0 16px;font:850 11px/1 system-ui,sans-serif;letter-spacing:.035em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+      .wdcc-visual-proof .li-scene,.wdcc-visual-proof .li-smoke,.wdcc-visual-proof .li-light,.wdcc-visual-proof .li-badge,.wdcc-visual-proof .li-tag{animation-play-state:paused!important;animation-delay:-.62s!important}.wdcc-visual-proof .li-badge,.wdcc-visual-proof .li-tag{opacity:1!important}
+      @media(max-width:600px),(max-width:1180px) and (hover:none) and (pointer:coarse){.li-scene img{object-position:62% 46%;filter:saturate(1.20) contrast(1.03) brightness(1.17)}.li-badge{top:38%;width:min(68vw,272px);min-width:226px}.li-tag{top:59%;font-size:12px;letter-spacing:.055em;padding:8px 12px}.li-smoke{inset:-14%}}
+      @media(max-width:430px){.li-badge{width:min(66vw,260px);min-width:220px}.li-tag{font-size:11px}.li-skip{min-height:40px;padding:0 13px;font-size:10px}}
+      @media(prefers-reduced-motion:reduce){html:not(.wdcc-visual-proof) .li{display:none!important}.li-scene,.li-smoke,.li-smoke:before,.li-smoke:after,.li-light,.li-badge,.li-badge:before,.li-badge:after,.li-tag{animation:none!important}}
     `}</style>
     <div className="li-scene" aria-hidden="true"><img src="/wdcc-hero-v2.webp" alt="" width="1672" height="941" fetchPriority="high"/></div>
+    <div className="li-vignette" aria-hidden="true"/>
     <div className="li-smoke" aria-hidden="true"/>
-    <div className="li-badge"><img data-wdcc-intro-badge-art="owner-approved" src={WDCC_CORRECT_LOGO_DATA_URI} alt="We Don't Care Cars" width="128" height="128"/></div>
+    <div className="li-light" aria-hidden="true"/>
+    <div className="li-badge"><img data-wdcc-intro-badge-art="owner-approved" src={WDCC_CORRECT_LOGO_DATA_URI} alt="We Don't Care Cars" width="512" height="512"/></div>
     <p className="li-tag">We Don&apos;t Care Cars · Tampa Bay</p>
     <button className="li-skip" type="button" onClick={finish}>Skip intro</button>
   </div>
