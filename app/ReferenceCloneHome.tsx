@@ -29,7 +29,7 @@ export default function ReferenceCloneHome(){
      <div className="rh-hero-shade" aria-hidden="true"/>
      <div className="rh-hero-inner"><div className="rh-copy">
        <p className="rh-kicker">TAMPA BAY · DRIVE TODAY</p>
-       <h1 aria-label="Bad credit? No credit? We don't care."><span className="red">BAD CREDIT?</span><span className="blue">NO CREDIT?</span><span className="white">WE DON&apos;T CARE.</span></h1>
+       <h1 aria-label="Bad credit? No credit? We don't care."><span className="white">BAD CREDIT?</span><span className="blue">NO CREDIT?</span><span className="red">WE DON&apos;T CARE.</span></h1>
        <ul className="rh-proof-list"><li>In-house financing</li><li>Low down payments</li><li>Fast approvals</li><li>Drive today with confidence</li></ul>
        <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved">GET PRE-APPROVED <span>→</span></Link><Link className="rh-btn dark" href="/inventory">BROWSE INVENTORY <span>→</span></Link></div>
        <TrackedCallLink className="rh-phone" source="home-hero-phone" label="Call Sean"><span>CALL SEAN</span><b>813-516-4752</b></TrackedCallLink>
