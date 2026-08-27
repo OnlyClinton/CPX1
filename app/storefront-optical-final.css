@@ -1,5 +1,5 @@
 /* WDCC storefront optical authority.
-   Calibrates 51077 proportions without changing routing, inventory, auth or production behavior. */
+   Calibrates 3294 proportions without changing routing, inventory, auth or production behavior. */
 
 /* Desktop mockup is materially denser than the old oversized marketing layout. */
 @media(min-width:768px){
@@ -28,12 +28,12 @@
   html body main.reference-home.locked-storefront .rh-step>b{margin-bottom:13px!important}
 }
 
-/* Controlling owner contract: wide desktop inventory is three columns. */
+/* 3294 storefront contract: five Featured Inventory cards across wide desktop. */
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-grid{
-    grid-template-columns:repeat(3,minmax(0,1fr))!important;
-    gap:18px!important;
-    max-width:1120px!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:14px!important;
+    max-width:var(--wdcc-shell)!important;
   }
 }
 
@@ -85,7 +85,6 @@
     border-radius:6px!important;
     font-size:11.5px!important;
   }
-  /* The circular header phone already owns this conversion action on mobile. */
   html body main.reference-home.locked-storefront .rh-phone{display:none!important}
 
   /* 2x2 benefit panel: compact, but never microtype. */
@@ -110,7 +109,7 @@
     line-height:1.34!important;
   }
 
-  /* Featured inventory should arrive immediately below the benefits. */
+  /* Featured inventory should arrive immediately below the benefits and show multiple cards in the phone viewport. */
   html body main.reference-home.locked-storefront .rh-inventory{padding:24px 0 30px!important}
   html body main.reference-home.locked-storefront .rh-section-head{
     width:calc(100% - 28px)!important;
@@ -121,11 +120,7 @@
   html body main.reference-home.locked-storefront .rh-section-head h2{font-size:27px!important;line-height:1.03!important;margin:4px 0 6px!important}
   html body main.reference-home.locked-storefront .rh-section-head p{font-size:12px!important;line-height:1.42!important}
   html body main.reference-home.locked-storefront .rh-view-all{font-size:10px!important}
-  html body main.reference-home.locked-storefront .rh-card{flex-basis:86vw!important;min-width:86vw!important;max-width:86vw!important}
-  html body main.reference-home.locked-storefront .rh-card-body{padding:14px 15px 16px!important}
-  html body main.reference-home.locked-storefront .rh-title{font-size:19px!important;line-height:1.14!important}
-  html body main.reference-home.locked-storefront .rh-price{font-size:28px!important;margin-top:10px!important}
-  html body main.reference-home.locked-storefront .rh-payment{font-size:11.5px!important}
+  html body main.reference-home.locked-storefront .rh-grid{padding-left:14px!important;padding-right:14px!important;scroll-padding-inline:14px!important;gap:8px!important}
   html body main.reference-home.locked-storefront .rh-inventory-state{
     width:calc(100% - 28px)!important;
     min-height:98px!important;
@@ -134,12 +129,6 @@
     line-height:1.42!important;
   }
   html body main.reference-home.locked-storefront .rh-inventory-state strong{font-size:14.5px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_body__"]{padding:14px 15px 16px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_eyebrow__"]{font-size:10.5px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_title__"]{font-size:19px!important;line-height:1.14!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_price__"]{font-size:28px!important;margin-top:10px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_down__"]{font-size:11.5px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_actions__"] a{min-height:48px!important;font-size:10.75px!important}
 
   /* Financing steps stay short, while supporting copy remains readable. */
   html body main.reference-home.locked-storefront .rh-finance{padding:25px 14px 30px!important}
@@ -165,5 +154,4 @@
 @media(max-width:430px){
   html body main.reference-home.locked-storefront .rh-copy{padding-top:182px!important}
   html body main.reference-home.locked-storefront .rh-copy h1{font-size:36px!important}
-  html body main.reference-home.locked-storefront .rh-card{flex-basis:88vw!important;min-width:88vw!important;max-width:88vw!important}
 }
