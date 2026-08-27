@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import styles from "./WdccVehicleCard.module.css";
 
 export type WdccVehicle={
   id?:string;
@@ -35,18 +36,18 @@ export default function WdccVehicleCard({vehicle,featured=false}:{vehicle:WdccVe
   const tags=[Number(v.mileage||0)>0?`${Number(v.mileage).toLocaleString()} MILES`:null,v.transmission,v.drivetrain||v.bodyStyle||v.body_style].filter(Boolean).slice(0,3);
   const title=`${v.year||""} ${v.make||""} ${v.model||""}`.trim();
 
-  return <article className={`wdccVehicleCard${featured?" isFeatured":""}`}>
-    <Link className="wdccVehiclePhoto" href={href} aria-label={`View ${title}`}>
-      {src?<img src={src} alt={title}/>:<span className="wdccVehiclePlaceholder" role="img" aria-label={`${title} photo coming soon`}><small>PHOTO COMING SOON</small><strong>{v.make||"WDCC"} {v.model||"VEHICLE"}</strong></span>}
-      {featured&&<span className="wdccVehicleBadge">AVAILABLE</span>}
+  return <article className={`${styles.card}${featured?` ${styles.featured}`:""}`}>
+    <Link className={styles.photo} href={href} aria-label={`View ${title}`}>
+      {src?<img src={src} alt={title}/>:<span className={styles.placeholder} role="img" aria-label={`${title} photo coming soon`}><small>PHOTO COMING SOON</small><strong>{v.make||"WDCC"} {v.model||"VEHICLE"}</strong></span>}
+      {featured&&<span className={styles.badge}>AVAILABLE</span>}
     </Link>
-    <div className="wdccVehicleBody">
-      <p className="wdccVehicleEyebrow">{v.year||"—"} {v.make||"Vehicle"}</p>
-      <Link className="wdccVehicleTitle" href={href}>{v.model||"Vehicle"}{v.trim?` ${v.trim}`:""}</Link>
-      <strong className="wdccVehiclePrice">${price.toLocaleString()}</strong>
-      <p className="wdccVehicleDown">{down!=null&&Number(down)>0?`$${Number(down).toLocaleString()} DOWN`:"CALL FOR DOWN PAYMENT"}</p>
-      <div className="wdccVehiclePills">{tags.map((tag,i)=><span key={`${String(tag)}-${i}`}>{String(tag)}</span>)}</div>
-      {!featured&&<div className="wdccVehicleActions"><Link href={href}>VIEW VEHICLE</Link><Link className="primary" href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(String(v.id||v.slug||""))}`}>GET PRE-APPROVED</Link></div>}
+    <div className={styles.body}>
+      <p className={styles.eyebrow}>{v.year||"—"} {v.make||"Vehicle"}</p>
+      <Link className={styles.title} href={href}>{v.model||"Vehicle"}{v.trim?` ${v.trim}`:""}</Link>
+      <strong className={styles.price}>${price.toLocaleString()}</strong>
+      <p className={styles.down}>{down!=null&&Number(down)>0?`$${Number(down).toLocaleString()} DOWN`:"CALL FOR DOWN PAYMENT"}</p>
+      <div className={styles.pills}>{tags.map((tag,i)=><span key={`${String(tag)}-${i}`}>{String(tag)}</span>)}</div>
+      {!featured&&<div className={styles.actions}><Link href={href}>VIEW VEHICLE</Link><Link className={styles.primary} href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(String(v.id||v.slug||""))}`}>GET PRE-APPROVED</Link></div>}
     </div>
   </article>;
 }
