@@ -10,6 +10,7 @@ import"./dealer-dashboard-final.css";
 import"./interior-pages-final.css";
 import"./responsive-modules-final.css";
 import"./responsive-public-detail-final.css";
+import"./approval-board-final.css";
 import"./wdcc-system-v2.css";
 import"./wdcc-contract-closeout.css";
 
