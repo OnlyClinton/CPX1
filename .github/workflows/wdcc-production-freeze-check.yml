@@ -1,0 +1,48 @@
+name: WDCC Production Freeze Check
+
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: Production-write lane being verified
+        required: true
+        type: string
+      release_control_issue:
+        description: Controlling WDCC release-control issue
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Enforce issue 205 NO-GO freeze
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LANE: ${{ inputs.lane }}
+          RELEASE_CONTROL_ISSUE: ${{ inputs.release_control_issue }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_CONTROL_ISSUE" = "205"
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$RELEASE_CONTROL_ISSUE"
+          curl -fsS "$api" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/release-control.json
+          jq -e '.number == 205 and .state == "open"' /tmp/release-control.json >/dev/null
+          body="$(jq -r '.body // ""' /tmp/release-control.json)"
+          grep -Fq 'NO-GO FOR PRODUCTION PROMOTION' <<<"$body"
+          grep -Fq 'NO PRODUCTION MOVE ON EITHER PROVIDER' <<<"$body"
+          {
+            echo "LANE=$LANE"
+            echo "RELEASE_CONTROL_ISSUE=#$RELEASE_CONTROL_ISSUE"
+            echo 'PRODUCTION_WRITE=DISABLED'
+            echo 'CONTROL_POSTURE=NO-GO'
+            echo 'Historical production procedure is recoverable from Git history at 5d5b2ea1b8995ccd274cf318bd32856e947e4edb.'
+          } >> "$GITHUB_STEP_SUMMARY"
