@@ -37,7 +37,8 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
-          test -s public/wdcc-official-logo.webp
+          test -s app/wdccCorrectLogoData.ts
+          test -s app/wdcc-owner-logo/route.ts
           test -s app/LockedIntro.tsx
           test -s app/ReferenceCloneHome.tsx
           test -s app/WdccPublicChrome.tsx
@@ -46,6 +47,7 @@ jobs:
           test -s app/wdcc-system-v2.css
           test -s scripts/wdcc-immutable-visual-proof.mjs
           test -s scripts/wdcc-immutable-owner-board-runner.mjs
+          grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
           grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
           grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
@@ -118,6 +120,7 @@ jobs:
           root_bytes="$(wc -c < /tmp/wdcc-remote-root.html | tr -d ' ')"
           [ "$root_bytes" -gt 5000 ] || fail "REMOTE_ROOT_TOO_SMALL_$root_bytes"
           grep -Fq -- "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
+          grep -Fq '/wdcc-owner-logo' /tmp/wdcc-remote-root.html || fail REMOTE_OWNER_LOGO_REFERENCE_MISSING
 
           dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA" || true)"
           [ "$dealer_code" = 200 ] || fail "REMOTE_DEALER_HTTP_$dealer_code"
@@ -125,13 +128,19 @@ jobs:
           [ "$dealer_bytes" -gt 1000 ] || fail "REMOTE_DEALER_TOO_SMALL_$dealer_bytes"
           grep -Fq -- "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
 
-          for asset in wdcc-hero-v2.webp wdcc-official-logo.webp; do
-            curl --http1.1 -fsSL "$REMOTE_URL/$asset" -o "/tmp/remote-$asset" || fail "REMOTE_ASSET_FETCH_$asset"
-            remote_sha="$(sha256sum "/tmp/remote-$asset" | awk '{print $1}')"
-            local_sha="$(sha256sum "public/$asset" | awk '{print $1}')"
-            [ "$remote_sha" = "$local_sha" ] || fail "REMOTE_ASSET_HASH_MISMATCH_$asset"
-          done
-          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" > immutable-remote-integrity.txt
+          curl --http1.1 -fsSL "$REMOTE_URL/wdcc-hero-v2.webp" -o /tmp/remote-wdcc-hero-v2.webp || fail REMOTE_ASSET_FETCH_wdcc-hero-v2.webp
+          remote_hero_sha="$(sha256sum /tmp/remote-wdcc-hero-v2.webp | awk '{print $1}')"
+          local_hero_sha="$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
+          [ "$remote_hero_sha" = "$local_hero_sha" ] || fail REMOTE_ASSET_HASH_MISMATCH_wdcc-hero-v2.webp
+
+          owner_code="$(curl --http1.1 -sS -D /tmp/remote-owner-logo.headers -L -o /tmp/remote-owner-logo.webp -w '%{http_code}' "$REMOTE_URL/wdcc-owner-logo?integrity=$GITHUB_SHA" || true)"
+          [ "$owner_code" = 200 ] || fail "REMOTE_OWNER_LOGO_HTTP_$owner_code"
+          [ -s /tmp/remote-owner-logo.webp ] || fail REMOTE_OWNER_LOGO_EMPTY
+          owner_bytes="$(wc -c < /tmp/remote-owner-logo.webp | tr -d ' ')"
+          [ "$owner_bytes" -gt 500 ] || fail "REMOTE_OWNER_LOGO_TOO_SMALL_$owner_bytes"
+          grep -qi '^x-wdcc-logo: owner-approved' /tmp/remote-owner-logo.headers || fail REMOTE_OWNER_LOGO_MARKER_MISSING
+
+          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" "owner_logo_http=$owner_code" "owner_logo_bytes=$owner_bytes" > immutable-remote-integrity.txt
           echo "build_id=$local_build" >> "$GITHUB_OUTPUT"
 
       - name: Start exact-build browser harness
