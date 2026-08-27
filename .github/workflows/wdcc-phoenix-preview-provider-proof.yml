@@ -54,10 +54,26 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
+      - name: Mint project-scoped OIDC token
+        id: oidc
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          raw="$(npx --yes vercel@latest project token --token="$VERCEL_TOKEN" --scope=cpxagency --format=json)"
+          token="$(printf '%s' "$raw" | jq -r 'if type=="string" then . else (.token // .oidcToken // .value // empty) end' 2>/dev/null || true)"
+          if [ -z "$token" ] || [ "$token" = null ]; then
+            token="$(printf '%s' "$raw" | tr -d '\r\n')"
+            case "$token" in ''|'{'*|'['*) echo 'Unable to parse project OIDC token' >&2; exit 1;; esac
+          fi
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
       - name: Deploy PREVIEW only
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PROJECT_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -uo pipefail
           log="$PWD/phoenix-preview-deploy.log"
@@ -67,8 +83,10 @@ jobs:
             --scope=cpxagency \
             --env "BLOB_READ_WRITE_TOKEN=" \
             --env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
             --build-env "BLOB_READ_WRITE_TOKEN=" \
             --build-env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --build-env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
             2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
           clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
