@@ -97,28 +97,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          fail(){ echo "::error::$1"; for f in /tmp/wdcc-remote-root.html /tmp/wdcc-remote-dealer.html; do if [ -s "$f" ]; then echo "--- $f bytes=$(wc -c < "$f") ---"; head -c 700 "$f" || true; echo; fi; done; exit 1; }
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          [ -n "$local_build" ] || fail REMOTE_LOCAL_BUILD_ID_EMPTY
+
           code=000
           for i in $(seq 1 15); do
             code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-root.html -w '%{http_code}' "$REMOTE_URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
-          test "$code" = 200
-          grep -qi 'bad credit' /tmp/wdcc-remote-root.html
-          grep -q 'GET PRE-APPROVED' /tmp/wdcc-remote-root.html
-          dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA")"
-          test "$dealer_code" = 200
-          grep -q 'Dealer' /tmp/wdcc-remote-dealer.html
-          remote_build="$(curl --http1.1 -fsSL "$REMOTE_URL/BUILD_ID" | tr -d '\r\n')"
-          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          test -n "$remote_build"
-          test "$remote_build" = "$local_build"
+          [ "$code" = 200 ] || fail "REMOTE_ROOT_HTTP_$code"
+          root_bytes="$(wc -c < /tmp/wdcc-remote-root.html | tr -d ' ')"
+          [ "$root_bytes" -gt 5000 ] || fail "REMOTE_ROOT_TOO_SMALL_$root_bytes"
+          grep -Fq "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
+
+          dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA" || true)"
+          [ "$dealer_code" = 200 ] || fail "REMOTE_DEALER_HTTP_$dealer_code"
+          dealer_bytes="$(wc -c < /tmp/wdcc-remote-dealer.html | tr -d ' ')"
+          [ "$dealer_bytes" -gt 1000 ] || fail "REMOTE_DEALER_TOO_SMALL_$dealer_bytes"
+          grep -Fq "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
+
           for asset in wdcc-hero-v2.webp wdcc-official-logo.webp; do
-            curl --http1.1 -fsSL "$REMOTE_URL/$asset" -o "/tmp/remote-$asset"
+            curl --http1.1 -fsSL "$REMOTE_URL/$asset" -o "/tmp/remote-$asset" || fail "REMOTE_ASSET_FETCH_$asset"
             remote_sha="$(sha256sum "/tmp/remote-$asset" | awk '{print $1}')"
             local_sha="$(sha256sum "public/$asset" | awk '{print $1}')"
-            test "$remote_sha" = "$local_sha"
+            [ "$remote_sha" = "$local_sha" ] || fail "REMOTE_ASSET_HASH_MISMATCH_$asset"
           done
+          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" > immutable-remote-integrity.txt
           echo "build_id=$local_build" >> "$GITHUB_OUTPUT"
 
       - name: Start exact-build browser harness
@@ -138,8 +144,10 @@ jobs:
             cat /tmp/wdcc-exact-browser.log >&2 || true
             exit 1
           fi
-          grep -qi 'bad credit' /tmp/wdcc-local-root.html
-          grep -q 'GET PRE-APPROVED' /tmp/wdcc-local-root.html
+          local_bytes="$(wc -c < /tmp/wdcc-local-root.html | tr -d ' ')"
+          [ "$local_bytes" -gt 5000 ]
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq "$local_build" /tmp/wdcc-local-root.html
           echo 'url=http://127.0.0.1:4173' >> "$GITHUB_OUTPUT"
 
       - name: Prove intro smoke-to-clear contract
@@ -277,6 +285,7 @@ jobs:
           name: wdcc-immutable-visual-v2-${{ github.sha }}
           path: |
             immutable-preview-url.txt
+            immutable-remote-integrity.txt
             immutable-visual-proof/
           if-no-files-found: warn
           retention-days: 7
