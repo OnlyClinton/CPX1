@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useEffect,useState} from "react";
 
-type InventoryState="loading"|"ready"|"empty"|"error";
+type InventoryState="loading"|"ready"|"empty"|"error"|"fallback";
 
 type Vehicle={
   id?:string;
@@ -54,6 +54,11 @@ export default function InventoryGrid(){
       })
       .then(body=>{
         if(!live)return;
+        if(body?.previewFallback===true||body?.inventorySource==="last-known-good-real-proof"){
+          setItems([]);
+          setState("fallback");
+          return;
+        }
         const vehicles=(Array.isArray(body?.items)?body.items:Array.isArray(body?.inventory)?body.inventory:[]).filter(customerVisible);
         setItems(vehicles);
         setState(vehicles.length?"ready":"empty");
@@ -63,6 +68,8 @@ export default function InventoryGrid(){
   },[]);
 
   if(state==="loading")return <div className="grid inventoryGrid" aria-label="Loading current inventory">{[1,2,3].map(i=><div className="card" key={i}><div className="photo">LOADING VEHICLE…</div><div className="cardBody"><div className="carTitle">Inventory loading</div></div></div>)}</div>;
+
+  if(state==="fallback")return <div className="grid inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Live inventory and uploaded photos are temporarily unavailable.</h3><p>This isolated preview can reach only the last verified inventory snapshot because the canonical media/state provider is currently blocked. We are not presenting stale records as live listings or substituting fake vehicle photos.</p><div className="actions"><Link className="cta red" href="/get-approved?source=inventory-provider-fallback">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></div></div>;
 
   if(state==="error")return <div className="grid inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Live inventory is temporarily unavailable.</h3><p>We are not substituting demo vehicles. Call Sean at <a href="tel:+18135164752">813-516-4752</a> for current availability.</p><div className="actions"><Link className="cta red" href="/get-approved?source=inventory-provider-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN</a></div></div></div>;
 
