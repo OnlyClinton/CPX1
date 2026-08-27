@@ -4,29 +4,22 @@ import Link from "next/link";
 import {useEffect,useMemo,useRef,useState} from "react";
 import LockedIntro from "./LockedIntro";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
+import {WdccPublicFooter,WdccPublicHeader} from "./WdccPublicChrome";
 
 type Vehicle=WdccVehicle&{status?:string;stock?:string;stock_id?:string;badges?:string[];visibility?:string;internalOnly?:boolean};
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase(),stock=String(v?.stock||v?.stock_id||"").trim().toUpperCase(),visibility=String(v?.visibility||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x||"").toUpperCase());const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!qa&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"}
 
 export default function ReferenceCloneHome(){
- const [open,setOpen]=useState(false);
  const [items,setItems]=useState<Vehicle[]>([]);
  const [inventoryState,setInventoryState]=useState<"loading"|"ready"|"empty"|"error">("loading");
  const [active,setActive]=useState(0);
  const gridRef=useRef<HTMLDivElement|null>(null);
- useEffect(()=>{let live=true;fetch("/api/inventory",{cache:"no-store"}).then(r=>{if(!r.ok)throw new Error(`inventory ${r.status}`);return r.json()}).then(j=>{if(!live)return;const vehicles=(j.items||j.inventory||[]).filter(customerVisible).slice(0,8);setItems(vehicles);setInventoryState(vehicles.length?"ready":"empty")}).catch(()=>{if(live)setInventoryState("error")});return()=>{live=false}},[]);
+ useEffect(()=>{let live=true;fetch("/api/inventory",{cache:"no-store"}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok||j?.previewFallback||j?.inventorySource==="last-known-good-real-proof")throw new Error(`inventory ${r.status}`);return j}).then(j=>{if(!live)return;const vehicles=(j.items||j.inventory||[]).filter(customerVisible).slice(0,8);setItems(vehicles);setInventoryState(vehicles.length?"ready":"empty")}).catch(()=>{if(live){setItems([]);setInventoryState("error")}});return()=>{live=false}},[]);
  const vehicles=useMemo(()=>items,[items]);
  const goTo=(i:number)=>{setActive(i);const node=gridRef.current?.children?.[i] as HTMLElement|undefined;node?.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"})};
  return <main className="reference-home locked-storefront owner-target-home">
    <LockedIntro/>
-   <div className="rh-utility"><div className="rh-utility-inner"><span>⌖ TAMPA BAY</span><span>IN-HOUSE FINANCING</span><a href="tel:+18135164752">SEAN · <b>813-516-4752</b></a></div></div>
-   <header className="rh-header"><div className="rh-header-inner">
-     <button className="rh-menu" aria-label="Open navigation" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>☰</button>
-     <Link className="rh-logo logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="WDCC We Don't Care Cars" width="560" height="210"/></Link>
-     <nav className={`rh-nav${open?" open":""}`} aria-label="Main navigation"><Link href="/inventory" onClick={()=>setOpen(false)}>Inventory</Link><Link href="/get-approved?source=nav-financing" onClick={()=>setOpen(false)}>Financing</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>How It Works</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>Reviews</Link><Link href="/#about" onClick={()=>setOpen(false)}>About Us</Link><Link href="/contact?source=nav-contact" onClick={()=>setOpen(false)}>Contact</Link></nav>
-     <div className="rh-header-actions"><Link className="rh-header-primary" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link></div>
-     <a className="rh-call" href="tel:+18135164752" aria-label="Call Sean"><span>Call Sean</span></a>
-   </div></header>
+   <WdccPublicHeader/>
    <section className="rh-hero">
      <img className="rh-hero-art" src="/wdcc-hero-v2.webp" alt="American flag Challenger with Tampa Bay skyline" width="1672" height="941" fetchPriority="high"/>
      <div className="rh-hero-shade" aria-hidden="true"/>
@@ -53,6 +46,6 @@ export default function ReferenceCloneHome(){
      <article className="rh-step"><b>1</b><strong>APPLY ONLINE</strong><small>Send basic details securely.</small></article><article className="rh-step"><b>2</b><strong>TALK TO SEAN</strong><small>Confirm down payment and vehicle fit.</small></article><article className="rh-step"><b>3</b><strong>CHOOSE YOUR CAR</strong><small>Shop our inventory online or in person.</small></article><article className="rh-step"><b>4</b><strong>DRIVE TODAY</strong><small>Schedule pickup or a test drive.</small></article>
    </div></div></section>
    <section className="rh-trust" id="reviews"><div className="rh-trust-grid"><article><span className="trust-symbol">☆</span><div><b>TAMPA BAY PROUD</b><span>Local dealer. Local community.</span></div></article><article><span className="trust-symbol">•••</span><div><b>STRAIGHT ANSWERS</b><span>No runaround. No hidden fees.</span></div></article><article><span className="trust-avatar">SE</span><div><b>REAL PEOPLE</b><span>Talk to Sean. Not a call center.</span></div></article><article><span className="trust-symbol">✓</span><div><b>CONFIDENCE DRIVEN</b><span>We make it happen when others can&apos;t.</span></div></article></div></section>
-   <footer className="rh-footer" id="about"><div className="rh-footer-inner"><span><b>WDCC</b> · WE DON&apos;T CARE CARS</span><span>Serving Tampa Bay · Confirm availability before visiting</span><a href="tel:+18135164752">813-516-4752</a></div></footer>
+   <WdccPublicFooter/>
  </main>
 }
