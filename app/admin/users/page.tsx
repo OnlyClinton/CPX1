@@ -34,7 +34,7 @@ export default function AdminUsers(){
     });
     load();
   }
-  return <main style={{minHeight:"100vh",background:"#07090c",color:"#fff",
+  return <main className="adminUsersPage" style={{minHeight:"100vh",background:"#07090c",color:"#fff",
     padding:24,fontFamily:"Arial"}}>
     <div style={{maxWidth:1100,margin:"auto"}}>
       <h1>WDCC USER MANAGEMENT</h1>
@@ -45,11 +45,11 @@ export default function AdminUsers(){
           <input key={k} type={k==="password"?"password":"text"}
             required={["email","username","password"].includes(k)}
             placeholder={k} value={(form as any)[k]}
-            onChange={e=>setForm({...form,[k]:e.target.value})}
+            onChange={e=>setForm({...form,[k]:e.target.value})
             style={{padding:12,borderRadius:8}}/>
         )}
         <select value={form.role}
-          onChange={e=>setForm({...form,role:e.target.value})}
+          onChange={e=>setForm({...form,role:e.target.value})
           style={{padding:12,borderRadius:8}}>
           <option value="dealer_agent">Dealer Agent</option>
           <option value="tenant_admin">Dealer Admin</option>
@@ -74,4 +74,3 @@ export default function AdminUsers(){
     </div>
   </main>;
 }
-
