@@ -3,7 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
-import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
+import {isInternalVehicleRecord,isQaVehicleRecord,mutateState,publicVehicles,readState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 import {isIsolatedWorkersDevRequest,visualProofInventoryFallback} from "../../../lib/visualProofInventory";
 import {recoveryInventoryPayload} from "../../../lib/recoveryInventory";
@@ -93,6 +93,7 @@ export async function POST(request:Request){
     await recordVehicleAudit({action:"vehicle.create_draft",outcome:"denied",requestId:rid,actorId:user?.id||null,actorRole:user?.role||null,detail:"auth_required"});
     return response({ok:false,error:"Unauthorized"},401,rid);
   }
+  let auditContext:any={};
   try{
     const body=await request.json();
     const year=Math.trunc(Number(body?.year));
@@ -114,6 +115,7 @@ export async function POST(request:Request){
     const description=text(body?.description,3000);
     const internalOnly=body?.internalOnly===true||String(body?.visibility||"").toLowerCase()==="internal";
     const maxYear=new Date().getUTCFullYear()+1;
+    auditContext={year,make,model,mileage,stock};
     const fail=async(error:string,status=400)=>{
       await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,detail:error});
       return response({ok:false,error},status,rid);
@@ -126,17 +128,20 @@ export async function POST(request:Request){
 
     const now=new Date().toISOString();
     const tenantId=String(user.tenantId||"wdcc");
-    const state=await readState();
-    if(stock&&state.vehicles.some(vehicle=>String(vehicle.tenantId||"wdcc")===tenantId&&String(vehicle.stock||"").toLowerCase()===stock.toLowerCase()&&String(vehicle.status||"").toLowerCase()!=="archived"))return fail("stock_number_already_exists",409);
-
-    const item={id:crypto.randomUUID(),tenantId,year,make,model,trim,price,downPayment,mileage,stock,vin,bodyStyle,condition,transmission,exteriorColor,interiorColor,drivetrain,fuelType,description,internalOnly,visibility:internalOnly?"internal":"public",status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now,createdBy:user.id,uploadSource:"dealer-ui"};
-    state.vehicles.push(item);
-    state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,actorRole:user.role,vehicleId:item.id,requestId:rid,year,make,model,mileage,stock});
-    const saved=await writeState(state);
-    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"ok",requestId:rid,vehicleId:item.id,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,status:"draft",photoCount:0,detail:`revision:${saved.revision}`});
-    return response({ok:true,item,revision:saved.revision,requestId:rid},201,rid);
+    const itemId=crypto.randomUUID();
+    const mutation=await mutateState(state=>{
+      if(stock&&state.vehicles.some(vehicle=>String(vehicle.tenantId||"wdcc")===tenantId&&String(vehicle.stock||"").toLowerCase()===stock.toLowerCase()&&String(vehicle.status||"").toLowerCase()!=="archived"))throw Error("stock_number_already_exists");
+      const item={id:itemId,tenantId,year,make,model,trim,price,downPayment,mileage,stock,vin,bodyStyle,condition,transmission,exteriorColor,interiorColor,drivetrain,fuelType,description,internalOnly,visibility:internalOnly?"internal":"public",status:"draft",photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now,createdBy:user.id,uploadSource:"dealer-ui"};
+      state.vehicles.push(item);
+      state.audit.push({id:crypto.randomUUID(),at:now,action:"vehicle.create_draft",actor:user.id,actorRole:user.role,vehicleId:item.id,requestId:rid,year,make,model,mileage,stock});
+      return item;
+    });
+    const item=mutation.result;
+    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"ok",requestId:rid,vehicleId:item.id,actorId:user.id,actorRole:user.role,year,make,model,mileage,stock,status:"draft",photoCount:0,detail:`revision:${mutation.state.revision};attempt:${mutation.attempt}`});
+    return response({ok:true,item,revision:mutation.state.revision,requestId:rid,mutationAttempt:mutation.attempt},201,rid);
   }catch(error){
-    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,detail:error instanceof Error?error.message:"create_failed"});
-    return response({ok:false,error:error instanceof Error?error.message:"create_failed"},500,rid);
+    const detail=error instanceof Error?error.message:"create_failed";
+    await recordVehicleAudit({action:"vehicle.create_draft",outcome:"failed",requestId:rid,actorId:user.id,actorRole:user.role,...auditContext,detail});
+    return response({ok:false,error:detail},detail==="stock_number_already_exists"?409:500,rid);
   }
 }
