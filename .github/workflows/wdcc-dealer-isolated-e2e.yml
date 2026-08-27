@@ -5,6 +5,7 @@ on:
     branches: [feat/wdcc-webgpu-intro-owner-override-20260827]
     paths:
       - '.github/workflows/wdcc-dealer-isolated-e2e.yml'
+      - '.github/scripts/wdcc-dealer-isolated-e2e.mjs'
       - '.github/workflows/wdcc-webgpu-full-owner-review.yml'
   workflow_dispatch:
 
@@ -22,12 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Build exact application
         shell: bash
         run: |
@@ -36,212 +35,27 @@ jobs:
           npm install --no-save --package-lock=false three@0.185.1 playwright@1.55.0
           npm run build
           npx playwright install --with-deps chromium >/dev/null
-
       - name: Prove login vehicle create edit photo upload and public listing
         shell: bash
+        env:
+          QA_EMAIL: wdcc-local-${{ github.run_id }}-${{ github.run_attempt }}@invalid.example
+          QA_PASSWORD: WdccLocal-${{ github.run_id }}-${{ github.run_attempt }}-A9!x
+          STATE_TOKEN: wdcc-local-state-${{ github.run_id }}-${{ github.run_attempt }}
+          SESSION_SECRET: wdcc-isolated-session-${{ github.run_id }}-${{ github.run_attempt }}-20260827
+          LOCAL_STOCK: LOCAL514-${{ github.run_id }}-${{ github.run_attempt }}
+          WDCC_RUNTIME_ROLE: backend
+          WDCC_STATE_SERVICE_URL: http://127.0.0.1:4311
+          WDCC_STATE_SERVICE_TOKEN: wdcc-local-state-${{ github.run_id }}-${{ github.run_attempt }}
+          WDCC_MEDIA_SERVICE_URL: http://127.0.0.1:4311
+          WDCC_MEDIA_SERVICE_TOKEN: wdcc-local-state-${{ github.run_id }}-${{ github.run_attempt }}
+          WDCC_DEALER_BACKEND_URL: http://127.0.0.1:65535
         run: |
           set -euo pipefail
-          mkdir -p dealer-isolated-e2e
-
-          export QA_EMAIL="wdcc-local-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@invalid.example"
-          export QA_PASSWORD="WdccLocal-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-A9!x"
-          export STATE_TOKEN="wdcc-local-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          export SESSION_SECRET="wdcc-isolated-session-secret-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-20260827"
-          export LOCAL_STOCK="LOCAL514-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "::add-mask::$QA_PASSWORD"
-          echo "::add-mask::$STATE_TOKEN"
-          echo "::add-mask::$SESSION_SECRET"
-
-          cat >/tmp/wdcc-isolated-authority.mjs <<'NODE'
-          import http from 'node:http';
-          import crypto from 'node:crypto';
-          import fs from 'node:fs';
-          const token=process.env.STATE_TOKEN,password=process.env.QA_PASSWORD,email=process.env.QA_EMAIL;
-          const salt=crypto.randomBytes(24),digest=crypto.scryptSync(password,salt,64);
-          const passwordHash=`scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
-          let state={revision:1,tenants:[{id:'wdcc',name:'WDCC'}],users:[{id:'local-dealer',email,username:email,displayName:'WDCC Isolated Dealer',role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash}],vehicles:[],leads:[],audit:[],updatedAt:new Date().toISOString()};
-          const media=new Map();
-          const readBody=async req=>{const parts=[];for await(const part of req)parts.push(part);return Buffer.concat(parts)};
-          const save=()=>fs.writeFileSync('/tmp/wdcc-isolated-state.json',JSON.stringify(state,null,2)+'\n');
-          save();
-          const server=http.createServer(async(req,res)=>{
-            try{
-              if(req.headers.authorization!==`Bearer ${token}`){res.writeHead(401,{'content-type':'application/json'});res.end('{"ok":false,"error":"unauthorized"}');return}
-              const u=new URL(req.url,'http://127.0.0.1:4311');
-              if(u.pathname==='/state'&&req.method==='GET'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(state));return}
-              if(u.pathname==='/state'&&req.method==='PUT'){
-                const raw=await readBody(req);state=JSON.parse(raw.toString('utf8'));save();
-                res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({ok:true,revision:state.revision}));return
-              }
-              if(u.pathname==='/media'&&req.method==='PUT'){
-                const pathname=u.searchParams.get('p')||'';if(!pathname.startsWith('media/wdcc/')){res.writeHead(400);res.end();return}
-                const body=await readBody(req),contentType=String(req.headers['content-type']||'application/octet-stream'),sha256=crypto.createHash('sha256').update(body).digest('hex');
-                media.set(pathname,{body,contentType,sha256});
-                fs.writeFileSync('/tmp/wdcc-isolated-media.json',JSON.stringify({count:media.size,paths:[...media.keys()],sha256},null,2)+'\n');
-                res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({ok:true,sha256}));return
-              }
-              if(u.pathname==='/media'&&req.method==='GET'){
-                const pathname=u.searchParams.get('p')||'',item=media.get(pathname);if(!item){res.writeHead(404);res.end('Not found');return}
-                res.writeHead(200,{'content-type':item.contentType,'content-length':String(item.body.length),'etag':`"${item.sha256}"`,'cache-control':'no-store'});res.end(item.body);return
-              }
-              if(u.pathname==='/inspect'&&req.method==='GET'){
-                res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({state,media:[...media.entries()].map(([pathname,v])=>({pathname,size:v.body.length,contentType:v.contentType,sha256:v.sha256}))}));return
-              }
-              res.writeHead(404);res.end('Not found');
-            }catch(error){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({ok:false,error:String(error)}))}
-          });
-          server.listen(4311,'127.0.0.1',()=>console.log('isolated authority ready'));
-          NODE
-
-          node /tmp/wdcc-isolated-authority.mjs >/tmp/wdcc-isolated-authority.log 2>&1 &
-          AUTH_PID=$!
-          cleanup(){
-            cp /tmp/wdcc-isolated-app.log dealer-isolated-e2e/app.log 2>/dev/null || true
-            cp /tmp/wdcc-isolated-authority.log dealer-isolated-e2e/authority.log 2>/dev/null || true
-            cp /tmp/wdcc-isolated-state.json dealer-isolated-e2e/final-isolated-state.json 2>/dev/null || true
-            cp /tmp/wdcc-isolated-media.json dealer-isolated-e2e/final-isolated-media.json 2>/dev/null || true
-            kill ${APP_PID:-} ${AUTH_PID:-} 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          for i in $(seq 1 30); do curl -sS -H "Authorization: Bearer $STATE_TOKEN" http://127.0.0.1:4311/state >/dev/null 2>&1 && break; sleep 1; done
-          curl -fsS -H "Authorization: Bearer $STATE_TOKEN" http://127.0.0.1:4311/state >/dev/null
-
-          export WDCC_RUNTIME_ROLE=backend
-          export WDCC_STATE_SERVICE_URL=http://127.0.0.1:4311
-          export WDCC_STATE_SERVICE_TOKEN="$STATE_TOKEN"
-          export WDCC_MEDIA_SERVICE_URL=http://127.0.0.1:4311
-          export WDCC_MEDIA_SERVICE_TOKEN="$STATE_TOKEN"
-          export WDCC_DEALER_BACKEND_URL=http://127.0.0.1:65535
           unset BLOB_READ_WRITE_TOKEN VERCEL_OIDC_TOKEN BLOB_STORE_ID || true
-          npm run start -- -p 3100 >/tmp/wdcc-isolated-app.log 2>&1 &
-          APP_PID=$!
-          ready=false
-          for i in $(seq 1 60); do code="$(curl -sS -o /tmp/login.html -w '%{http_code}' http://localhost:3100/login || true)"; if [ "$code" = 200 ];then ready=true;break;fi;sleep 1;done
-          test "$ready" = true
-
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import {chromium} from 'playwright';
-          const base='http://localhost:3100',stock=process.env.LOCAL_STOCK;
-          const metrics={sha:process.env.GITHUB_SHA,base,stock,login:false,session:false,create:false,upload:false,checkpoint:false,publish:false,edit:false,publicInventory:false,publicListing:false,externalWrites:[],serverErrors:[],consoleErrors:[]};
-          const browser=await chromium.launch({headless:true});
-          const guard=page=>{
-            page.on('request',r=>{const u=new URL(r.url());if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&!['localhost','127.0.0.1'].includes(u.hostname))metrics.externalWrites.push({method:r.method(),url:r.url()})});
-            page.on('response',r=>{if(r.status()>=500)metrics.serverErrors.push({status:r.status(),url:r.url()})});
-            page.on('console',m=>{if(m.type()==='error')metrics.consoleErrors.push(m.text())});
-            page.on('pageerror',e=>metrics.consoleErrors.push(String(e)));
-          };
-          const clickVisiblePublish=async page=>{
-            const buttons=page.locator('form button[type="submit"]').filter({hasText:/publish/i});
-            const count=await buttons.count();
-            for(let i=0;i<count;i++){
-              const button=buttons.nth(i);
-              if(await button.isVisible()){await button.click();return}
-            }
-            throw Error(`VISIBLE_PUBLISH_MISSING_${count}`);
-          };
-          try{
-            const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
-            const page=await ctx.newPage();guard(page);
-            let r=await page.goto(`${base}/login`,{waitUntil:'domcontentloaded',timeout:20000});
-            if(!r||r.status()!==200)throw Error(`LOGIN_PAGE_HTTP_${r?.status()||0}`);
-            await page.locator('input[autocomplete="username"]').fill(process.env.QA_EMAIL);
-            await page.locator('input[autocomplete="current-password"]').fill(process.env.QA_PASSWORD);
-            await page.screenshot({path:'dealer-isolated-e2e/01-login.png',fullPage:true});
-            await page.getByRole('button',{name:/sign in/i}).click({force:true});
-            await page.waitForURL(/\/dealer(?:\/|\?|$)/,{timeout:12000});
-            metrics.login=true;
-            const session=await page.evaluate(async()=>{const x=await fetch('/api/auth/session',{credentials:'include',cache:'no-store'});return {status:x.status,body:await x.json()}});
-            if(session.status!==200||session.body?.authenticated!==true||session.body?.user?.role!=='dealer_agent')throw Error(`SESSION_FAILED_${JSON.stringify(session)}`);
-            metrics.session=true;metrics.role=session.body.user.role;
-
-            r=await page.goto(`${base}/dealer/inventory/new`,{waitUntil:'domcontentloaded',timeout:20000});
-            if(!r||r.status()!==200)throw Error(`EDITOR_HTTP_${r?.status()||0}`);
-            await page.locator('input[name="year"]').waitFor({state:'visible',timeout:10000});
-            await page.locator('input[name="year"]').fill('2022');
-            await page.locator('input[name="make"]').fill('Dodge');
-            await page.locator('input[name="model"]').fill('Challenger');
-            await page.locator('input[name="trim"]').fill('R/T');
-            await page.locator('input[name="vin"]').fill('1LOCAL514E2E000001');
-            await page.locator('.stepper > button').nth(1).click();
-            await page.locator('input[name="price"]').fill('28995');
-            await page.locator('input[name="downPayment"]').fill('2500');
-            await page.locator('input[name="mileage"]').fill('42110');
-            await page.locator('input[name="stock"]').fill(stock);
-            await page.locator('.stepper > button').nth(2).click();
-            const upload=page.locator('input[type="file"][multiple]');
-            if(await upload.count()!==1)throw Error(`UPLOAD_INPUT_COUNT_${await upload.count()}`);
-            await upload.setInputFiles('public/wdcc-hero-v2.webp');
-            await page.waitForFunction(()=>document.querySelectorAll('.thumb img').length>0,null,{timeout:5000});
-            await page.screenshot({path:'dealer-isolated-e2e/02-editor-photo.png',fullPage:true});
-            await page.locator('.stepper > button').nth(3).click();
-            await page.locator('textarea').fill('Owner exact-head dealer upload proof. Local isolated state only.');
-            await page.locator('.stepper > button').nth(4).click();
-            await page.screenshot({path:'dealer-isolated-e2e/03-editor-review.png',fullPage:true});
-            await clickVisiblePublish(page);
-            await page.waitForURL(/\/dealer\/inventory(?:\?|$)/,{timeout:20000});
-
-            const dealerInventory=await page.evaluate(async()=>{const x=await fetch('/api/inventory',{credentials:'include',cache:'no-store'});return {status:x.status,body:await x.json()}});
-            const item=(dealerInventory.body?.items||[]).find(v=>v.stock===stock);
-            if(dealerInventory.status!==200||!item)throw Error(`CREATED_ITEM_MISSING_${JSON.stringify(dealerInventory)}`);
-            metrics.create=true;metrics.vehicleId=item.id;
-            if(item.status!=='published')throw Error(`NOT_PUBLISHED_${item.status}`);metrics.publish=true;
-            if(!Array.isArray(item.photoPathnames)||item.photoPathnames.length!==1||!item.primaryPhotoPathname)throw Error(`PHOTO_CHECKPOINT_MISSING_${JSON.stringify(item.photoPathnames)}`);
-            metrics.checkpoint=true;metrics.mediaPath=item.primaryPhotoPathname;
-            const mediaCheck=await page.evaluate(async p=>{const x=await fetch(`/api/media?p=${encodeURIComponent(p)}`,{cache:'no-store'});const b=await x.arrayBuffer();return {status:x.status,size:b.byteLength,type:x.headers.get('content-type'),provider:x.headers.get('x-wdcc-media-provider')}},item.primaryPhotoPathname);
-            if(mediaCheck.status!==200||mediaCheck.size<1000||mediaCheck.provider!=='cloudflare')throw Error(`MEDIA_READBACK_FAILED_${JSON.stringify(mediaCheck)}`);
-            metrics.upload=true;metrics.media=mediaCheck;
-            await page.screenshot({path:'dealer-isolated-e2e/04-dealer-inventory.png',fullPage:true});
-
-            r=await page.goto(`${base}/dealer/inventory/new?edit=${encodeURIComponent(item.id)}`,{waitUntil:'domcontentloaded',timeout:20000});
-            if(!r||r.status()!==200)throw Error(`EDIT_HTTP_${r?.status()||0}`);
-            await page.locator('input[name="trim"]').waitFor({state:'visible',timeout:10000});
-            await page.locator('input[name="trim"]').fill('R/T Plus');
-            await page.locator('.stepper > button').nth(4).click();
-            await clickVisiblePublish(page);
-            await page.waitForURL(/\/dealer\/inventory(?:\?|$)/,{timeout:20000});
-            const edited=await page.evaluate(async id=>{const x=await fetch(`/api/inventory/${encodeURIComponent(id)}`,{credentials:'include',cache:'no-store'});return {status:x.status,body:await x.json()}},item.id);
-            if(edited.status!==200||edited.body?.item?.trim!=='R/T Plus'||edited.body?.item?.status!=='published')throw Error(`EDIT_NOT_PERSISTED_${JSON.stringify(edited)}`);
-            metrics.edit=true;
-
-            const pubCtx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
-            const pub=await pubCtx.newPage();guard(pub);
-            r=await pub.goto(`${base}/inventory`,{waitUntil:'domcontentloaded',timeout:20000});
-            if(!r||r.status()!==200)throw Error(`PUBLIC_INVENTORY_HTTP_${r?.status()||0}`);
-            await pub.locator('.inventoryGrid').waitFor({state:'visible',timeout:10000});
-            await pub.waitForTimeout(500);
-            const body=await pub.locator('body').innerText();
-            if(!body.includes('Dodge')||!body.includes('Challenger'))throw Error('PUBLIC_INVENTORY_ITEM_MISSING');
-            metrics.publicInventory=true;
-            await pub.screenshot({path:'dealer-isolated-e2e/05-public-inventory.png',fullPage:true});
-            const vehicleHref=await pub.locator(`a[href="/vehicle/${item.id}"]`).first().getAttribute('href').catch(()=>null);
-            const target=vehicleHref||`/vehicle/${item.id}`;
-            r=await pub.goto(`${base}${target}`,{waitUntil:'domcontentloaded',timeout:20000});
-            if(!r||r.status()!==200)throw Error(`PUBLIC_LISTING_HTTP_${r?.status()||0}`);
-            await pub.waitForTimeout(500);
-            const listingText=await pub.locator('body').innerText();
-            if(!listingText.includes('Dodge')||!listingText.includes('Challenger')||!listingText.includes('R/T Plus'))throw Error('PUBLIC_LISTING_CONTENT_MISSING');
-            const visibleMedia=await pub.locator('img[src*="/api/media?"]').evaluateAll(imgs=>imgs.some(img=>img.complete&&img.naturalWidth>0)).catch(()=>false);
-            if(!visibleMedia)throw Error('PUBLIC_LISTING_MEDIA_NOT_RENDERED');
-            metrics.publicListing=true;
-            await pub.screenshot({path:'dealer-isolated-e2e/06-public-listing.png',fullPage:true});
-            await pubCtx.close();await ctx.close();
-
-            const inspect=await fetch('http://127.0.0.1:4311/inspect',{headers:{Authorization:`Bearer ${process.env.STATE_TOKEN}`}}).then(r=>r.json());
-            if(inspect.media?.length!==1||inspect.media[0]?.pathname!==metrics.mediaPath)throw Error(`ISOLATED_MEDIA_RECEIPT_${JSON.stringify(inspect.media)}`);
-            metrics.isolatedStateRevision=inspect.state?.revision;metrics.isolatedMediaCount=inspect.media.length;
-            if(metrics.externalWrites.length)throw Error(`EXTERNAL_WRITE_REQUESTS_${JSON.stringify(metrics.externalWrites)}`);
-            fs.writeFileSync('dealer-isolated-e2e/metrics.json',JSON.stringify(metrics,null,2)+'\n');
-            console.log(`WDCC ISOLATED DEALER E2E PASS vehicle=${item.id} media=${metrics.mediaPath}`);
-          }catch(error){metrics.failure=String(error);fs.writeFileSync('dealer-isolated-e2e/metrics.json',JSON.stringify(metrics,null,2)+'\n');throw error}finally{await browser.close()}
-          NODE
-
-          if grep -Eqi 'https://(dealer\.)?wedontcarecars\.com|wdcc-cpx-launch.*vercel\.app' /tmp/wdcc-isolated-app.log; then
-            echo 'Unexpected production-origin reference in isolated app runtime log' >&2
-            tail -100 /tmp/wdcc-isolated-app.log >&2
-            exit 1
-          fi
-
+          echo '::add-mask::${{ env.QA_PASSWORD }}'
+          echo '::add-mask::${{ env.STATE_TOKEN }}'
+          echo '::add-mask::${{ env.SESSION_SECRET }}'
+          node .github/scripts/wdcc-dealer-isolated-e2e.mjs
       - name: Summary
         if: always()
         shell: bash
@@ -249,8 +63,7 @@ jobs:
           echo '### WDCC dealer isolated exact-head E2E' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           [ ! -s dealer-isolated-e2e/metrics.json ] || cat dealer-isolated-e2e/metrics.json >> "$GITHUB_STEP_SUMMARY"
-          echo 'Local disposable state/media authority only; no production route, provider, database, alias, DNS, or schema mutation.' >> "$GITHUB_STEP_SUMMARY"
-
+          echo 'Disposable localhost state/media authority; production storefront verification redirected locally; no production write, provider, route, alias, DNS, database, or schema mutation.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
