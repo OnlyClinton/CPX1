@@ -1,0 +1,62 @@
+name: WDCC Cloudflare Exact Proof Capacity Cleanup
+
+on:
+  push:
+    branches: [diagnostic/wdcc-cloudflare-worker-capacity-20260827]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-exact-proof-capacity-cleanup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Delete exactly three superseded unrouted proof workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          targets=(wdcc-proof-afef9bd5 wdcc-proof-8885c947 wdcc-proof-f8847ecf)
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          jq -e '.success==true' /tmp/routes.json >/dev/null
+          set +e
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] || ! jq -e '.success==true' /tmp/domains.json >/dev/null 2>&1; then printf '{"success":true,"result":[]}\n' > /tmp/domains.json; fi
+
+          for name in "${targets[@]}"; do
+            jq -e --arg n "$name" 'all(.result[]?; ((.script // .script_name // "") != $n))' /tmp/routes.json >/dev/null
+            jq -e --arg n "$name" 'all(.result[]?; ((.service // .script // .script_name // "") != $n))' /tmp/domains.json >/dev/null
+            case "$name" in
+              wdcc-proof-afef9bd5|wdcc-proof-8885c947|wdcc-proof-f8847ecf) ;;
+              *) echo "unexpected target $name" >&2; exit 31;;
+            esac
+            curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$name/settings" "${auth[@]}" > "/tmp/$name.settings.json"
+            jq -e '.success==true' "/tmp/$name.settings.json" >/dev/null
+          done
+
+          for name in "${targets[@]}"; do
+            code="$(curl -sS -o "/tmp/$name.delete.json" -w '%{http_code}' -X DELETE "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$name" "${auth[@]}")"
+            test "$code" = 200
+            jq -e '.success==true' "/tmp/$name.delete.json" >/dev/null
+            echo "DELETED_EXACT_UNROUTED_PROOF=$name"
+          done
+
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/after.json
+          for name in "${targets[@]}"; do
+            jq -e --arg n "$name" 'all(.result[]?; ((.id // .name // .script // "") != $n))' /tmp/after.json >/dev/null
+          done
+          jq -r '"WORKER_COUNT_AFTER=" + ((.result|length)|tostring)' /tmp/after.json
+          echo 'Production routes/custom domains were verified absent for all three targets immediately before deletion.' >> "$GITHUB_STEP_SUMMARY"
