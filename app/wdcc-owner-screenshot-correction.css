@@ -18,7 +18,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo{
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo::before,
 html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
   content:normal!important;
   display:block!important;
   visibility:visible!important;
@@ -93,7 +93,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
     height:78px!important;
     justify-self:center!important;
   }
-  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     width:100px!important;
     min-width:100px!important;
     max-width:100px!important;
@@ -152,7 +152,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
 
 @media(max-width:420px){
   html body [data-wdcc-public-chrome="header"] .rh-logo{width:108px!important;min-width:108px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     width:96px!important;
     min-width:96px!important;
     max-width:96px!important;
