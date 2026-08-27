@@ -3,13 +3,19 @@
 
 /* Render the canonical horizontal asset from the img src directly. Legacy layers
    used CSS content replacement on the image element, which can leave a blank
-   replaced element in Chromium. */
+   replaced element in Chromium. The same canonical asset is also painted as the
+   element background so the visible mark survives replaced-content edge cases. */
 html body [data-wdcc-public-chrome="header"] .rh-logo>img{
   content:normal!important;
   display:block!important;
   visibility:visible!important;
   opacity:1!important;
   position:static!important;
+  background-image:url('/wdcc-logo-transparent.webp')!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:contain!important;
+  background-color:transparent!important;
 }
 
 /* Home desktop: reserve enough real space for the complete horizontal wordmark. */
@@ -118,3 +124,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
 
 /* Exact-head proof sync: canonical single-wordmark render revision. */
 /* Exact-head sync after diagnostics cleanup: render unchanged. */
+/* Resilient background render prevents blank replaced-image output. */
