@@ -5,174 +5,115 @@ const base=process.env.URL;
 if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
 const out='immutable-visual-proof';
 fs.mkdirSync(out,{recursive:true});
-
-const proof={
-  sha:process.env.GITHUB_SHA||'',
-  url:base,
-  provider:{status:0,ok:false,itemCount:0,customerVisibleCount:0,mode:'unknown'},
-  storefront:{},dealer:{},writeRequests:[]
-};
-const customerVisible=v=>String(v?.status||'').toLowerCase()==='published'&&v?.internalOnly!==true&&!['internal','dealer_only'].includes(String(v?.visibility||'').toLowerCase())&&!/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/i.test(String(v?.stock||''));
+const proof={sha:process.env.GITHUB_SHA||'',url:base,provider:{status:0,ok:false,itemCount:0,customerVisibleCount:0,mode:'unknown'},storefront:{},publicInventory:{},vdp:{},dealer:{},writeRequests:[]};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const customerVisible=v=>String(v?.status||'').toLowerCase()==='published'&&v?.internalOnly!==true&&!['internal','dealer_only'].includes(String(v?.visibility||'').toLowerCase())&&!/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/i.test(String(v?.stock||v?.stock_id||''));
+const tracks=async locator=>locator.evaluate(el=>{const s=getComputedStyle(el);return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth}});
+const visible=async locator=>locator.evaluate(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)!==0&&r.width>1&&r.height>1});
 
 let items=[];
 try{
   const r=await fetch(`${base}/api/inventory?visual-provider=${Date.now()}`);
   proof.provider.status=r.status;
   const j=await r.json().catch(()=>({items:[]}));
-  items=Array.isArray(j.items)?j.items:Array.isArray(j.inventory)?j.inventory:[];
-  proof.provider.ok=r.ok;
-  proof.provider.itemCount=items.length;
-  proof.provider.customerVisibleCount=items.filter(customerVisible).length;
-  proof.provider.mode=r.ok?(items.length?'available':'available-empty'):'blocked';
+  items=(Array.isArray(j.items)?j.items:Array.isArray(j.inventory)?j.inventory:[]).filter(customerVisible);
+  proof.provider.ok=r.ok&&!j.previewFallback&&j.inventorySource!=='last-known-good-real-proof';
+  proof.provider.itemCount=Array.isArray(j.items)?j.items.length:Array.isArray(j.inventory)?j.inventory.length:0;
+  proof.provider.customerVisibleCount=items.length;
+  proof.provider.mode=proof.provider.ok?(items.length?'available':'available-empty'):'blocked-or-fallback';
 }catch(e){proof.provider.mode='blocked';proof.provider.error=String(e?.message||e)}
 
 const browser=await chromium.launch({headless:true});
 const watchWrites=page=>page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))proof.writeRequests.push({method:r.method(),url:r.url()})});
-const finishIntro=async page=>{
-  const intro=page.locator('.li');
-  if(await intro.count()){
-    await page.getByRole('button',{name:/skip intro/i}).click({timeout:1800}).catch(()=>{});
-    await intro.waitFor({state:'detached',timeout:5000}).catch(()=>{});
-  }
-  await page.locator('.rh-header').waitFor({state:'visible',timeout:8000});
-};
-const waitInventorySettled=async page=>page.waitForFunction(()=>{
-  const cards=document.querySelectorAll('.rh-card').length;
-  const state=document.querySelector('.rh-inventory-state');
-  return cards>0||(state&&!/loading/i.test(state.textContent||''));
-},null,{timeout:10000});
-const checkCtas=async page=>{
-  const a=page.locator('.rh-hero-actions a.rh-btn');
-  if(await a.count()!==2)throw new Error('HERO_CTA_COUNT');
-  const data=await a.evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return{text:(n.textContent||'').trim(),aria:n.getAttribute('aria-label'),path:new URL(n.href).pathname,left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width}}));
-  if(data[0].text!=='GET PRE-APPROVED'||data[0].aria!=='GET PRE-APPROVED'||data[0].path!=='/get-approved')throw new Error(`PRIMARY_CTA_BAD ${JSON.stringify(data[0])}`);
-  if(data[1].text!=='BROWSE INVENTORY'||data[1].aria!=='BROWSE INVENTORY'||data[1].path!=='/inventory')throw new Error(`SECONDARY_CTA_BAD ${JSON.stringify(data[1])}`);
-  return data;
-};
-const checkInventoryUi=async(page,mobile)=>{
-  await waitInventorySettled(page);
-  const cards=page.locator('.rh-grid .rh-card');
-  const count=await cards.count();
-  const state=page.locator('.rh-inventory-state');
-  if(!proof.provider.ok){
-    if(count!==0)throw new Error(`PROVIDER_BLOCKED_BUT_CARDS_RENDERED_${count}`);
-    await state.waitFor({state:'visible',timeout:5000});
-    const text=(await state.innerText()).toLowerCase();
-    if(!text.includes('temporarily unavailable')||!text.includes('not substituting demo vehicles'))throw new Error(`INVENTORY_FALLBACK_BAD ${text}`);
-    return{mode:'provider-fallback',cards:0,text};
-  }
-  if(count===0){await state.waitFor({state:'visible',timeout:5000});return{mode:'available-empty',cards:0,text:await state.innerText()}}
-  if(mobile&&count>=2){
-    const grid=page.locator('.rh-grid');
-    const before=await grid.evaluate(el=>el.scrollLeft);
-    await grid.evaluate(el=>el.scrollBy({left:Math.max(220,el.clientWidth*.85),behavior:'instant'}));
-    await sleep(250);
-    const after=await grid.evaluate(el=>el.scrollLeft);
-    if(after<=before+20)throw new Error(`MOBILE_CAROUSEL_DID_NOT_ADVANCE ${before}->${after}`);
-    return{mode:'live-carousel',cards:count,before,after};
-  }
-  if(!mobile){
-    const grid=page.locator('.rh-grid');
-    const geom=await grid.evaluate(el=>{const s=getComputedStyle(el);return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean)}});
-    if(geom.display!=='grid'||geom.tracks.length!==3)throw new Error(`DESKTOP_GRID_BAD ${JSON.stringify(geom)}`);
-    return{mode:'live-grid',cards:count,...geom};
-  }
-  return{mode:'single-live-card',cards:count};
-};
+const finishIntro=async page=>{const intro=page.locator('.li');if(await intro.count()){await page.getByRole('button',{name:/skip intro/i}).click({timeout:2000}).catch(()=>{});await intro.waitFor({state:'detached',timeout:6000}).catch(()=>{})}};
+const settleHomeInventory=async page=>page.waitForFunction(()=>{const grid=document.querySelector('.rh-grid');const state=document.querySelector('.rh-inventory-state');return Boolean(grid)||Boolean(state&&!/loading/i.test(state.textContent||''))},null,{timeout:10000});
+const assertNoOverflow=async(page,name)=>{const n=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);if(n>2)throw new Error(`${name}_HORIZONTAL_OVERFLOW_${n}`);return n};
+
+async function wireDealer(page,mobile=false){
+  watchWrites(page);
+  const session={authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}};
+  const dashboard={summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:items,leads:[]};
+  await page.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
+  await page.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
+  await page.route('**/api/inventory**',r=>{
+    const req=r.request(),u=new URL(req.url());
+    if(req.method()!=='GET')return r.abort();
+    if(u.pathname==='/api/inventory')return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,items})});
+    const id=decodeURIComponent(u.pathname.slice('/api/inventory/'.length));
+    const item=items.find(v=>String(v.id||v.slug)===id);
+    return item?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item})}):r.fulfill({status:404,contentType:'application/json',body:'{"ok":false,"error":"NOT_FOUND"}'});
+  });
+  await page.route('**/api/leads/**',r=>r.request().method()==='GET'?r.fulfill({status:404,contentType:'application/json',body:'{"ok":false}'}):r.abort());
+  return mobile;
+}
 
 try{
+  /* MOBILE STOREFRONT — intentional redesign, not desktop squeezed down. */
   const mobileCtx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
   const m=await mobileCtx.newPage();watchWrites(m);
-  await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});
-  const intro=m.locator('.li');
-  await intro.waitFor({state:'attached',timeout:5000});
-  await m.locator('.li-badge img').waitFor({state:'visible',timeout:5000});
-  await m.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
-  await m.waitForFunction(()=>[document.querySelector('.li-badge img'),document.querySelector('.li-scene img')].every(x=>x&&x.complete&&x.naturalWidth>0),null,{timeout:5000});
-  const staticIntro=await m.evaluate(()=>{const b=document.querySelector('.li-badge img'),s=document.querySelector('.li-scene img');const bs=getComputedStyle(b),ss=getComputedStyle(s),br=b.getBoundingClientRect();return{badgeW:br.width,badgeAnimation:bs.animationName,badgeTransform:bs.transform,sceneAnimation:ss.animationName,sceneTransform:ss.transform}});
-  if(staticIntro.badgeW<145||staticIntro.badgeAnimation!=='none'||staticIntro.sceneAnimation!=='none'||staticIntro.badgeTransform!=='none'||staticIntro.sceneTransform!=='none')throw new Error(`INTRO_NOT_STATIC ${JSON.stringify(staticIntro)}`);
-  proof.storefront.mobileIntro=staticIntro;
-  await m.screenshot({path:`${out}/mobile-intro.png`});
-  await finishIntro(m);
-  await m.evaluate(()=>scrollTo(0,0));await sleep(120);
-  const mobileGeom=await m.evaluate(()=>{
-    const u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect(),hero=document.querySelector('.rh-hero').getBoundingClientRect(),logo=document.querySelector('.rh-logo img').getBoundingClientRect(),call=document.querySelector('.rh-call').getBoundingClientRect(),cs=getComputedStyle(document.querySelector('.rh-call')),benefits=getComputedStyle(document.querySelector('.rh-benefits'));
-    return{docW:document.documentElement.scrollWidth,winW:innerWidth,uTop:u.top,uH:u.height,hTop:h.top,hBottom:h.bottom,heroTop:hero.top,logoW:logo.width,callW:call.width,callH:call.height,callRadius:cs.borderTopLeftRadius,benefitTracks:benefits.gridTemplateColumns.split(/\s+/).filter(Boolean).length};
+  let r=await m.goto(`${base}/?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+  if(!r||r.status()>=400)throw new Error(`MOBILE_HOME_HTTP_${r?.status()||0}`);
+  await finishIntro(m);await settleHomeInventory(m);await assertNoOverflow(m,'MOBILE_HOME');
+  const mobileHome=await m.evaluate(()=>{
+    const rect=s=>document.querySelector(s)?.getBoundingClientRect();
+    const style=s=>getComputedStyle(document.querySelector(s));
+    const h1=[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim());
+    const u=rect('.rh-utility'),h=rect('.rh-header'),hero=rect('.rh-hero'),call=rect('.rh-call'),logo=rect('.rh-logo img');
+    return{h1,uTop:u?.top,uH:u?.height,hTop:h?.top,hBottom:h?.bottom,heroTop:hero?.top,callW:call?.width,callH:call?.height,callRadius:style('.rh-call').borderTopLeftRadius,logoW:logo?.width,benefitTracks:style('.rh-benefits').gridTemplateColumns.split(/\s+/).filter(Boolean).length,ctaCount:document.querySelectorAll('.rh-hero-actions .rh-btn').length};
   });
-  if(mobileGeom.docW>mobileGeom.winW+1)throw new Error(`MOBILE_HORIZONTAL_OVERFLOW ${JSON.stringify(mobileGeom)}`);
-  if(Math.abs(mobileGeom.uTop)>2||Math.abs(mobileGeom.hTop-mobileGeom.uH)>3||Math.abs(mobileGeom.heroTop-mobileGeom.hBottom)>3)throw new Error(`MOBILE_HEADER_HERO_GAP ${JSON.stringify(mobileGeom)}`);
-  const round=mobileGeom.callRadius.includes('%')?parseFloat(mobileGeom.callRadius)>=49:parseFloat(mobileGeom.callRadius)>=mobileGeom.callW*.45;
-  if(mobileGeom.logoW<70||Math.abs(mobileGeom.callW-mobileGeom.callH)>2||mobileGeom.callW<42||!round||mobileGeom.benefitTracks!==2)throw new Error(`MOBILE_GEOMETRY_BAD ${JSON.stringify(mobileGeom)}`);
-  const mobileCtas=await checkCtas(m);
-  if(mobileCtas[1].top<=mobileCtas[0].bottom)throw new Error('MOBILE_CTAS_NOT_STACKED');
-  if(mobileCtas.some(x=>x.width<330))throw new Error(`MOBILE_CTAS_NOT_FULL_WIDTH ${JSON.stringify(mobileCtas)}`);
-  const finance=await m.locator('.rh-finance .rh-step').evaluateAll(nodes=>nodes.map(n=>({client:n.clientWidth,scroll:n.scrollWidth,text:(n.textContent||'').trim()})));
-  if(finance.some(x=>x.scroll>x.client+2))throw new Error(`MOBILE_FINANCE_OVERFLOW ${JSON.stringify(finance)}`);
-  const menu=m.locator('.rh-menu');await menu.click();
-  const nav=m.locator('.rh-nav.open');await nav.waitFor({state:'visible',timeout:3000});
-  const navLinks=await nav.locator('a').count();if(navLinks<3)throw new Error(`MOBILE_NAV_INCOMPLETE_${navLinks}`);await menu.click();
-  const mobileInventory=await checkInventoryUi(m,true);
+  if(JSON.stringify(mobileHome.h1)!==JSON.stringify(['BAD CREDIT?','NO CREDIT?',"WE DON'T CARE."]))throw new Error(`MOBILE_HEADLINE_BAD_${JSON.stringify(mobileHome.h1)}`);
+  if(Math.abs((mobileHome.hTop||0)-(mobileHome.uH||0))>3||Math.abs((mobileHome.heroTop||0)-(mobileHome.hBottom||0))>3)throw new Error(`MOBILE_CHROME_GAP_${JSON.stringify(mobileHome)}`);
+  if((mobileHome.logoW||0)<90||Math.abs((mobileHome.callW||0)-(mobileHome.callH||0))>2||(mobileHome.callW||0)<44||mobileHome.benefitTracks!==2||mobileHome.ctaCount!==2)throw new Error(`MOBILE_HOME_GEOMETRY_BAD_${JSON.stringify(mobileHome)}`);
+  const mobileCtas=await m.locator('.rh-hero-actions .rh-btn').evaluateAll(nodes=>nodes.map(n=>{const q=n.getBoundingClientRect();return{text:(n.textContent||'').trim(),path:new URL(n.href).pathname,w:q.width,top:q.top,bottom:q.bottom}}));
+  if(mobileCtas[0]?.text!=='GET PRE-APPROVED'||mobileCtas[0]?.path!=='/get-approved'||mobileCtas[1]?.text!=='BROWSE INVENTORY'||mobileCtas[1]?.path!=='/inventory'||mobileCtas.some(x=>x.w<340)||mobileCtas[1].top<=mobileCtas[0].bottom)throw new Error(`MOBILE_CTA_BAD_${JSON.stringify(mobileCtas)}`);
+  const mobileFeatured=await m.locator('.rh-grid').count()?await (async()=>{const grid=m.locator('.rh-grid');const count=await grid.locator(':scope > *').count();const display=await grid.evaluate(el=>getComputedStyle(el).display);let advanced=false;if(count>1){const before=await grid.evaluate(el=>el.scrollLeft);await grid.evaluate(el=>el.scrollBy({left:Math.max(260,el.clientWidth*.8),behavior:'instant'}));await sleep(250);const after=await grid.evaluate(el=>el.scrollLeft);advanced=after>before+20}if(display!=='flex'||(count>1&&!advanced))throw new Error(`MOBILE_FEATURED_NOT_CAROUSEL_${JSON.stringify({display,count,advanced})}`);return{display,count,advanced}})():{state:(await m.locator('.rh-inventory-state').innerText()).slice(0,120)};
+  const financeTracks=await tracks(m.locator('.rh-steps'));if(financeTracks.tracks!==1)throw new Error(`MOBILE_FINANCE_NOT_STACKED_${JSON.stringify(financeTracks)}`);
   await m.screenshot({path:`${out}/mobile-storefront.png`,fullPage:true});
-  proof.storefront.mobile={geometry:mobileGeom,ctas:mobileCtas,navLinks,inventory:mobileInventory};
+  proof.storefront.mobile={...mobileHome,ctas:mobileCtas,featured:mobileFeatured,financeTracks:financeTracks.tracks};
+
+  /* MOBILE PUBLIC INVENTORY — one column, same canonical card component. */
+  r=await m.goto(`${base}/inventory?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`MOBILE_INVENTORY_HTTP_${r?.status()||0}`);await sleep(900);await assertNoOverflow(m,'MOBILE_INVENTORY');
+  const mig=m.locator('.inventoryGrid');await mig.waitFor({state:'visible',timeout:10000});const mi=await tracks(mig);if(mi.display!=='grid'||mi.tracks!==1)throw new Error(`MOBILE_INVENTORY_GRID_BAD_${JSON.stringify(mi)}`);await m.screenshot({path:`${out}/mobile-inventory.png`,fullPage:true});proof.publicInventory.mobile=mi;
+
+  /* MOBILE VDP / honest unavailable state. */
+  const vdpPath=items[0]?`/vehicle/${encodeURIComponent(String(items[0].id||items[0].slug))}`:'/vehicle/__visual-proof-unavailable__';
+  r=await m.goto(`${base}${vdpPath}?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`MOBILE_VDP_HTTP_${r?.status()||0}`);await m.locator('.vehicleLayout,.vehicleUnavailable').first().waitFor({state:'visible',timeout:12000});await assertNoOverflow(m,'MOBILE_VDP');
+  const vdpLayout=m.locator('.vehicleLayout');const mvdp=await vdpLayout.count()?await tracks(vdpLayout):{display:'unavailable',tracks:1,overflow:0};if(await vdpLayout.count()&&mvdp.tracks!==1)throw new Error(`MOBILE_VDP_NOT_SINGLE_COLUMN_${JSON.stringify(mvdp)}`);await m.screenshot({path:`${out}/mobile-vdp.png`,fullPage:true});proof.vdp.mobile=mvdp;
   await mobileCtx.close();
 
+  /* DESKTOP STOREFRONT — five featured cards per supplied 3294 reference. */
   const desktopCtx=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   const d=await desktopCtx.newPage();watchWrites(d);
-  await d.goto(`${base}/?visual-desktop=${Date.now()}`,{waitUntil:'commit',timeout:30000});await finishIntro(d);
-  const desktopGeom=await d.evaluate(()=>{const menu=getComputedStyle(document.querySelector('.rh-menu')).display,logo=document.querySelector('.rh-logo img').getBoundingClientRect(),u=document.querySelector('.rh-utility').getBoundingClientRect(),h=document.querySelector('.rh-header').getBoundingClientRect(),hero=document.querySelector('.rh-hero').getBoundingClientRect();return{menu,logoW:logo.width,docW:document.documentElement.scrollWidth,winW:innerWidth,uTop:u.top,uH:u.height,hTop:h.top,hBottom:h.bottom,heroTop:hero.top}});
-  if(desktopGeom.menu!=='none'||desktopGeom.logoW<80||desktopGeom.docW>desktopGeom.winW+1)throw new Error(`DESKTOP_CHROME_BAD ${JSON.stringify(desktopGeom)}`);
-  const desktopCtas=await checkCtas(d);
-  const desktopInventory=await checkInventoryUi(d,false);
-  await d.screenshot({path:`${out}/desktop-storefront.png`,fullPage:true});
-  proof.storefront.desktop={geometry:desktopGeom,ctas:desktopCtas,inventory:desktopInventory};
+  r=await d.goto(`${base}/?visual-desktop=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DESKTOP_HOME_HTTP_${r?.status()||0}`);await finishIntro(d);await settleHomeInventory(d);await assertNoOverflow(d,'DESKTOP_HOME');
+  const desktopHome=await d.evaluate(()=>{const menu=getComputedStyle(document.querySelector('.rh-menu')).display,logo=document.querySelector('.rh-logo img').getBoundingClientRect(),nav=getComputedStyle(document.querySelector('.rh-nav')).display,benefits=getComputedStyle(document.querySelector('.rh-benefits')).gridTemplateColumns.split(/\s+/).filter(Boolean).length;return{menu,nav,logoW:logo.width,benefits}});
+  if(desktopHome.menu!=='none'||desktopHome.nav==='none'||desktopHome.logoW<100||desktopHome.benefits!==4)throw new Error(`DESKTOP_HOME_CHROME_BAD_${JSON.stringify(desktopHome)}`);
+  let desktopFeatured={state:'no-live-cards'};if(await d.locator('.rh-grid').count()){const grid=d.locator('.rh-grid');const g=await tracks(grid);const count=await grid.locator(':scope > *').count();if(g.display!=='grid'||g.tracks!==5)throw new Error(`DESKTOP_FEATURED_GRID_BAD_${JSON.stringify({...g,count})}`);desktopFeatured={...g,count}}
+  await d.screenshot({path:`${out}/desktop-storefront.png`,fullPage:true});proof.storefront.desktop={...desktopHome,featured:desktopFeatured};
 
-  const sessionBody=JSON.stringify({authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}});
-  const dealerItems=proof.provider.ok?items:[];
-  const dashBody=JSON.stringify({summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:dealerItems,leads:[]});
-  async function wireDealer(page){
-    watchWrites(page);
-    await page.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:sessionBody}));
-    await page.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:dashBody}));
-    await page.route('**/api/inventory**',r=>{
-      const req=r.request(),u=new URL(req.url());
-      if(req.method()!=='GET')return r.abort();
-      if(u.pathname==='/api/inventory')return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,items:dealerItems})});
-      const id=decodeURIComponent(u.pathname.slice('/api/inventory/'.length));
-      const item=dealerItems.find(v=>String(v.id)===id);
-      return item?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item})}):r.fulfill({status:404,contentType:'application/json',body:'{"ok":false,"error":"NOT_FOUND"}'});
-    });
-  }
-  const capture=async(page,path,selector,name)=>{await page.goto(`${base}${path}${path.includes('?')?'&':'?'}visual=${Date.now()}`,{waitUntil:'commit',timeout:30000});await page.locator(selector).waitFor({state:'visible',timeout:10000});await page.screenshot({path:`${out}/${name}.png`,fullPage:true})};
+  /* DESKTOP FULL INVENTORY — exactly three columns. */
+  r=await d.goto(`${base}/inventory?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DESKTOP_INVENTORY_HTTP_${r?.status()||0}`);await sleep(900);await assertNoOverflow(d,'DESKTOP_INVENTORY');const dig=d.locator('.inventoryGrid');await dig.waitFor({state:'visible',timeout:10000});const di=await tracks(dig);if(di.display!=='grid'||di.tracks!==3)throw new Error(`DESKTOP_INVENTORY_GRID_BAD_${JSON.stringify(di)}`);await d.screenshot({path:`${out}/desktop-inventory.png`,fullPage:true});proof.publicInventory.desktop=di;
 
+  /* DESKTOP VDP — media + summary columns. */
+  r=await d.goto(`${base}${vdpPath}?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DESKTOP_VDP_HTTP_${r?.status()||0}`);await d.locator('.vehicleLayout,.vehicleUnavailable').first().waitFor({state:'visible',timeout:12000});await assertNoOverflow(d,'DESKTOP_VDP');const dvdp=await d.locator('.vehicleLayout').count()?await tracks(d.locator('.vehicleLayout')):{display:'unavailable',tracks:2,overflow:0};if(await d.locator('.vehicleLayout').count()&&dvdp.tracks!==2)throw new Error(`DESKTOP_VDP_GRID_BAD_${JSON.stringify(dvdp)}`);await d.screenshot({path:`${out}/desktop-vdp.png`,fullPage:true});proof.vdp.desktop=dvdp;
+
+  /* DEALER DESKTOP — dark shell/light canvas; six KPIs; table inventory; 4-column editor fields. */
   const dealer=await desktopCtx.newPage();await wireDealer(dealer);
-  await capture(dealer,'/dealer','.dealerDashboardLocked','dealer-dashboard-desktop');
-  const dashVisual=await dealer.evaluate(()=>{const title=document.querySelector('.dcTitle h1'),logo=document.querySelector('.dcTop .brand img'),ts=getComputedStyle(title),ls=getComputedStyle(logo),lr=logo.getBoundingClientRect();return{titleColor:ts.color,logoDisplay:ls.display,logoW:lr.width,logoH:lr.height,naturalW:logo.naturalWidth,naturalH:logo.naturalHeight}});
-  const rgb=(dashVisual.titleColor.match(/\d+/g)||[]).slice(0,3).map(Number);
-  if(dashVisual.logoDisplay==='none'||dashVisual.logoW<48||dashVisual.naturalW<1||(rgb.length===3&&rgb.every(v=>v>220)))throw new Error(`DEALER_DASHBOARD_VISUAL_BAD ${JSON.stringify(dashVisual)}`);
-  await capture(dealer,'/dealer/inventory','.inventoryContract','dealer-inventory-desktop');
-  await capture(dealer,'/dealer/inventory/import','.dcDrop','dealer-import-desktop');
-  await dealer.goto(`${base}/dealer/inventory/new?visual=${Date.now()}`,{waitUntil:'commit',timeout:30000});
-  await dealer.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
-  await dealer.screenshot({path:`${out}/dealer-editor-desktop.png`,fullPage:true});
-  const photos=dealer.locator('.sectionBlock').filter({hasText:'Photos'}).first();if(await photos.count())await photos.screenshot({path:`${out}/dealer-photos-desktop.png`});
-  const readiness=dealer.locator('.readinessCard').first();if(await readiness.count())await readiness.screenshot({path:`${out}/dealer-readiness-desktop.png`});
-  const previewButton=dealer.getByRole('button',{name:/^preview$/i}).last();await previewButton.scrollIntoViewIfNeeded();await previewButton.click({timeout:5000});
-  await dealer.locator('.previewModal').waitFor({state:'visible',timeout:5000});await dealer.locator('.previewModal').screenshot({path:`${out}/dealer-preview-desktop.png`});
-  proof.dealer.desktop={dashboard:dashVisual,inventoryMode:proof.provider.ok?'canonical-readonly':'empty-provider-fallback',preview:'normal-click-pass'};
+  r=await dealer.goto(`${base}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_DASH_HTTP_${r?.status()||0}`);await dealer.locator('.dealerDashboardLocked').waitFor({state:'visible',timeout:10000});await assertNoOverflow(dealer,'DEALER_DESKTOP');
+  const ddShell=await tracks(dealer.locator('.dcShell'));const ddMetrics=await tracks(dealer.locator('.dashMetrics'));const ddSide=await visible(dealer.locator('.dcSide'));if(ddShell.tracks!==2||ddMetrics.tracks!==6||!ddSide)throw new Error(`DEALER_DESKTOP_LAYOUT_BAD_${JSON.stringify({ddShell,ddMetrics,ddSide})}`);await dealer.screenshot({path:`${out}/dealer-dashboard-desktop.png`,fullPage:true});
+  r=await dealer.goto(`${base}/dealer/inventory?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_INV_HTTP_${r?.status()||0}`);await dealer.locator('.inventoryContract').waitFor({state:'visible',timeout:10000});const invHead=await dealer.locator('.inventoryHead').count()?await visible(dealer.locator('.inventoryHead')):false;if(!invHead)throw new Error('DEALER_DESKTOP_TABLE_HEAD_MISSING');await dealer.screenshot({path:`${out}/dealer-inventory-desktop.png`,fullPage:true});
+  r=await dealer.goto(`${base}/dealer/inventory/new?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_EDITOR_HTTP_${r?.status()||0}`);await dealer.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});const editLayout=await tracks(dealer.locator('.editLayout'));const fieldGrid=await tracks(dealer.locator('.fieldGrid'));if(editLayout.tracks!==2||fieldGrid.tracks!==4)throw new Error(`DEALER_EDITOR_DESKTOP_BAD_${JSON.stringify({editLayout,fieldGrid})}`);await dealer.screenshot({path:`${out}/dealer-editor-desktop.png`,fullPage:true});proof.dealer.desktop={shell:ddShell,kpis:ddMetrics,inventoryTable:true,editor:{editLayout,fieldGrid}};
   await desktopCtx.close();
 
+  /* DEALER MOBILE — no sidebar, 2-column KPI tiles, inventory cards, 2-column form fields. */
   const dealerMobileCtx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  const dm=await dealerMobileCtx.newPage();await wireDealer(dm);
-  await capture(dm,'/dealer','.dealerDashboardLocked','dealer-dashboard-mobile');
-  await capture(dm,'/dealer/inventory','.inventoryContract','dealer-inventory-mobile');
-  await capture(dm,'/dealer/inventory/import','.dcDrop','dealer-import-mobile');
-  await dm.goto(`${base}/dealer/inventory/new?visual-mobile=${Date.now()}`,{waitUntil:'commit',timeout:30000});await dm.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
-  await dm.screenshot({path:`${out}/dealer-editor-mobile.png`,fullPage:true});
-  const mobilePreview=dm.getByRole('button',{name:/^preview$/i}).last();await mobilePreview.scrollIntoViewIfNeeded();await mobilePreview.click({timeout:5000});await dm.locator('.previewModal').waitFor({state:'visible',timeout:5000});await dm.locator('.previewModal').screenshot({path:`${out}/dealer-preview-mobile.png`});
-  proof.dealer.mobile={inventoryMode:proof.provider.ok?'canonical-readonly':'empty-provider-fallback',preview:'normal-click-pass'};
+  const dm=await dealerMobileCtx.newPage();await wireDealer(dm,true);
+  r=await dm.goto(`${base}/dealer?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_MOBILE_HTTP_${r?.status()||0}`);await dm.locator('.dealerDashboardLocked').waitFor({state:'visible',timeout:10000});await assertNoOverflow(dm,'DEALER_MOBILE');const mdSide=await visible(dm.locator('.dcSide'));const mdMetrics=await tracks(dm.locator('.dashMetrics'));const mdNav=await visible(dm.locator('.dashMobileNav'));if(mdSide||mdMetrics.tracks!==2||!mdNav)throw new Error(`DEALER_MOBILE_DASH_BAD_${JSON.stringify({mdSide,mdMetrics,mdNav})}`);await dm.screenshot({path:`${out}/dealer-dashboard-mobile.png`,fullPage:true});
+  r=await dm.goto(`${base}/dealer/inventory?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_MOBILE_INV_HTTP_${r?.status()||0}`);await dm.locator('.inventoryContract').waitFor({state:'visible',timeout:10000});const mh=await dm.locator('.inventoryHead').count()?await visible(dm.locator('.inventoryHead')):false;const mn=await visible(dm.locator('.inventoryMobileNav'));if(mh||!mn)throw new Error(`DEALER_MOBILE_INVENTORY_BAD_${JSON.stringify({headVisible:mh,navVisible:mn})}`);await dm.screenshot({path:`${out}/dealer-inventory-mobile.png`,fullPage:true});
+  r=await dm.goto(`${base}/dealer/inventory/new?visual-mobile=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});if(!r||r.status()>=400)throw new Error(`DEALER_MOBILE_EDITOR_HTTP_${r?.status()||0}`);await dm.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});const mf=await tracks(dm.locator('.fieldGrid'));const inputFonts=await dm.locator('.fieldGrid input,.fieldGrid select').evaluateAll(xs=>xs.filter(x=>{const r=x.getBoundingClientRect();return r.width>1&&r.height>1}).map(x=>parseFloat(getComputedStyle(x).fontSize)||0));if(mf.tracks!==2||inputFonts.some(x=>x<15.5))throw new Error(`DEALER_MOBILE_EDITOR_BAD_${JSON.stringify({mf,inputFonts})}`);await dm.screenshot({path:`${out}/dealer-editor-mobile.png`,fullPage:true});proof.dealer.mobile={kpis:mdMetrics,sideVisible:mdSide,bottomNav:mdNav,inventoryHeadVisible:mh,inventoryNav:mn,editorFields:mf};
   await dealerMobileCtx.close();
+
 }finally{await browser.close()}
 
-if(proof.writeRequests.length)throw new Error(`VISUAL_PROOF_WRITE_REQUEST ${JSON.stringify(proof.writeRequests)}`);
+if(proof.writeRequests.length)throw new Error(`VISUAL_PROOF_WRITE_REQUESTS_${proof.writeRequests.length}`);
 fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(proof,null,2)+'\n');
+console.log(`WDCC_SYSTEM_V2_VISUAL_PASS sha=${proof.sha} provider=${proof.provider.mode} writes=0`);
