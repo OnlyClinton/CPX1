@@ -1,6 +1,33 @@
-/* WDCC mobile chrome contract correction.
-   Mobile uses one header only; there is no separate utility strip above it.
-   Preview branch visual-only correction. */
+/* WDCC final visual contract closeout.
+   Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
+
+/* Home desktop: reserve enough real space for the complete horizontal wordmark. */
+@media (min-width:768px){
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:180px minmax(0,1fr) auto!important;
+    gap:20px!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo{
+    width:172px!important;
+    min-width:172px!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-wordmark="visible"]{
+    width:158px!important;
+    max-width:158px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav{gap:20px!important;min-width:0!important}
+
+  /* Keep the compact benefits bridge readable on the light board treatment. */
+  html body main.reference-home.locked-storefront .rh-benefit-wrap,
+  html body main.reference-home.locked-storefront .rh-benefits{background:#fff!important;color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit{background:#fff!important;color:#101820!important;border-color:#d9e0e6!important}
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{color:#ef1f2f!important;border-color:#c8d1d8!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{color:#5d6872!important}
+}
+
+/* Mobile public chrome: one header only, flush to the top. */
 @media (max-width:767px){
   html body [data-wdcc-public-chrome="utility"],
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="utility"].rh-utility{
@@ -15,10 +42,71 @@
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
     top:0!important;
   }
-  html body .approvalBoard .approvalFieldGrid label{
-    font-size:11px!important;
-  }
+  html body .approvalBoard .approvalFieldGrid label{font-size:11px!important}
 }
 
-/* Exact-head synchronization marker for FINAL VISUAL AUTHORITY 51077/51075/51073 — cascade root fixed. */
-/* Exact-head proof sync: all current visual gates aligned to the real five-step wizard. */
+/* Dealer five-step wizard: production-grade controls instead of browser defaults. */
+html body .editVehicleApp .wizardNav{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:wrap!important;
+  gap:10px!important;
+  margin-top:16px!important;
+  padding-top:16px!important;
+  border-top:1px solid #d8e0e6!important;
+}
+html body .editVehicleApp .wizardNav button{
+  appearance:none!important;
+  min-height:44px!important;
+  min-width:112px!important;
+  padding:0 18px!important;
+  border:1px solid #cbd5dc!important;
+  border-radius:7px!important;
+  background:#fff!important;
+  color:#0a1722!important;
+  font:900 12px/1 Inter,ui-sans-serif,system-ui,sans-serif!important;
+  cursor:pointer!important;
+}
+html body .editVehicleApp .wizardNav .next,
+html body .editVehicleApp .wizardNav .publish{
+  border-color:#ef1f2f!important;
+  background:#ef1f2f!important;
+  color:#fff!important;
+}
+html body .editVehicleApp .wizardNav .back{background:#0a1722!important;border-color:#0a1722!important;color:#fff!important}
+html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;cursor:not-allowed!important}
+
+@media (max-width:767px){
+  html body .editVehicleApp .fieldGrid{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:10px!important;
+    width:100%!important;
+  }
+  html body .editVehicleApp .fieldGrid>label{
+    display:grid!important;
+    width:auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  html body .editVehicleApp .fieldGrid>label.description{grid-column:1/-1!important}
+  html body .editVehicleApp .fieldGrid input:not([type="checkbox"]),
+  html body .editVehicleApp .fieldGrid select,
+  html body .editVehicleApp .fieldGrid textarea{
+    box-sizing:border-box!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    min-height:50px!important;
+    font-size:15.5px!important;
+  }
+  html body .editVehicleApp .fieldGrid textarea{min-height:120px!important}
+  html body .editVehicleApp .fieldGrid label>span{font-size:10.5px!important;line-height:1.2!important}
+  html body .editVehicleApp .wizardNav{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%!important}
+  html body .editVehicleApp .wizardNav button{width:100%!important;min-width:0!important;min-height:48px!important;font-size:12px!important}
+  html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
+}
+
+/* Exact-head proof sync: human-QA polish revision. */
