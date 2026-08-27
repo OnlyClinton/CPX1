@@ -2,6 +2,39 @@
    Narrow visual-only closeout for the 2026-08-27 owner boards.
    No auth, data, provider, routing, schema, DNS, alias, or production behavior changes. */
 
+/* PUBLIC LOCK: the owner board is explicit about brand and headline color order. */
+html body main.reference-home.locked-storefront .rh-copy h1 .red{color:var(--wdcc-red)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:var(--wdcc-blue)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
+html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  height:92px!important;
+  min-height:92px!important;
+  max-height:92px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  transform:none!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.44))!important;
+}
+
+@media (max-width:767px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body .wdcc-public-header .rh-header-inner{height:64px!important;min-height:64px!important;grid-template-rows:64px!important;grid-template-columns:44px minmax(0,1fr) 44px!important}
+  html body .wdcc-public-header .rh-logo{width:66px!important;min-width:66px!important;max-width:66px!important;height:64px!important;min-height:64px!important;max-height:64px!important;justify-content:center!important}
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important}
+  html body .wdcc-public-header .rh-menu,html body .wdcc-public-header .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important}
+  html body .wdcc-public-header .rh-nav{top:64px!important}
+}
+
 /* 10668 desktop dashboard: Inventory Overview + Recent Vehicles + Recent Activity
    share the primary operating row, followed by the four action modules. */
 @media (min-width: 1100px){
