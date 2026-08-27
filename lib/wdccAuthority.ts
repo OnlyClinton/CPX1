@@ -11,7 +11,7 @@ export function canonicalDealerBackend(){
 export function blobAuthority(){
   const stateServiceUrl=(process.env.WDCC_STATE_SERVICE_URL||"").trim().replace(/\/$/,"");
   const stateServiceToken=(process.env.WDCC_STATE_SERVICE_TOKEN||"").trim();
-  if(stateServiceUrl&&stateServiceToken)return {mode:"cloudflare-r2" as const,options:{stateServiceUrl,stateServiceToken}};
+  if(stateServiceUrl&&stateServiceToken)return {mode:"cloudflare-do" as const,options:{stateServiceUrl,stateServiceToken}};
 
   const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
   if(token)return {mode:"token" as const,options:{token}};
