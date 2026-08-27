@@ -1,0 +1,46 @@
+name: WDCC Cloudflare Reuse Candidate Diagnostic
+
+on:
+  push:
+    branches: [diagnostic/wdcc-cloudflare-worker-capacity-20260827]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-reuse-candidate-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: List only unrouted WDCC staging/state/media/recovery candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/scripts.json
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          set +e
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] || ! jq -e '.success==true' /tmp/domains.json >/dev/null 2>&1; then echo '{"success":true,"result":[]}' >/tmp/domains.json; fi
+          node <<'NODE'
+          const fs=require('fs');
+          const scripts=JSON.parse(fs.readFileSync('/tmp/scripts.json')).result||[];
+          const routes=JSON.parse(fs.readFileSync('/tmp/routes.json')).result||[];
+          const domains=JSON.parse(fs.readFileSync('/tmp/domains.json')).result||[];
+          const attached=new Set();
+          for(const r of routes){const n=r.script||r.script_name||'';if(n)attached.add(n)}
+          for(const d of domains){const n=d.service||d.script||d.script_name||'';if(n)attached.add(n)}
+          const rx=/^wdcc.*(staging|state|media|recovery|probe|diag|test|isolated)/i;
+          const out=scripts.map(x=>({name:x.id||x.name||x.script||'',modified:x.modified_on||x.modifiedOn||x.created_on||''})).filter(x=>x.name&&rx.test(x.name)&&!attached.has(x.name)).sort((a,b)=>String(a.modified).localeCompare(String(b.modified)));
+          console.log(JSON.stringify(out.slice(0,80),null,2));
+          console.log(`CANDIDATE_COUNT=${out.length}`);
+          NODE
