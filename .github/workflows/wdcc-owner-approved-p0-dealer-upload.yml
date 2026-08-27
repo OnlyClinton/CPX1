@@ -96,7 +96,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/wdcc-phoenix/.vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$PHOENIX_PROJECT_ID" > /tmp/wdcc-phoenix/.vercel/project.json
-          (cd /tmp/wdcc-phoenix && vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
+          (cd /tmp/wdcc-phoenix && VERCEL_PROJECT_ID="$PHOENIX_PROJECT_ID" vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
           read_value(){
             local key="$1" line value
             line="$(grep -m1 "^${key}=" /tmp/phoenix.env || true)"
