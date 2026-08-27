@@ -94,8 +94,9 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     transform:translate(-50%,-50%)!important;
   }
 
-  /* Mobile owner chrome: a full-width symmetric three-column grid makes the
-     emblem center independent of wrapper gutters and absolute-position math. */
+  /* Mobile owner chrome: preserve the 10px visual gutters but center the
+     symmetric grid itself in the viewport. This removes the historical 10px
+     left drift without moving either control or changing emblem scale. */
   html body [data-wdcc-public-chrome="header"]{
     position:sticky!important;
     top:0!important;
@@ -107,12 +108,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{
     box-sizing:border-box!important;
-    width:100%!important;
+    width:calc(100% - 20px)!important;
     max-width:none!important;
     height:78px!important;
     min-height:78px!important;
-    margin:0!important;
-    padding:0 10px!important;
+    margin:0 auto!important;
+    padding:0!important;
     display:grid!important;
     grid-template-columns:50px minmax(0,1fr) 50px!important;
     grid-template-rows:78px!important;
