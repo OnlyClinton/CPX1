@@ -40,6 +40,7 @@ jobs:
           done
           test "$code" = 200
           echo "SSR_BYTES=$(wc -c < /tmp/intro-ssr.html)"
+          echo "SSR_INTRO=$(grep -o 'aria-label=\"WDCC opening intro\"' /tmp/intro-ssr.html | wc -l || true)"
           echo "SSR_LI=$(grep -o 'class=\"li ' /tmp/intro-ssr.html | wc -l || true)"
           echo "SSR_SMOKE=$(grep -o 'li-smoke' /tmp/intro-ssr.html | wc -l || true)"
           echo "SSR_BADGE=$(grep -o 'li-badge' /tmp/intro-ssr.html | wc -l || true)"
@@ -59,27 +60,32 @@ jobs:
             page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
             page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
             const r=await page.goto(`http://127.0.0.1:4174/?visual-mobile=diag-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:15000});
-            await page.waitForTimeout(1200);
+            await page.waitForTimeout(500);
             const data=await page.evaluate(()=>{
               const q=s=>document.querySelectorAll(s).length;
-              const li=document.querySelector('.li');
+              const intro=document.querySelector('[aria-label="WDCC opening intro"]');
               return {
-                http: location.href,
+                href: location.href,
+                intro:q('[aria-label="WDCC opening intro"]'),
                 li:q('.li'), smoke:q('.li-smoke'), badge:q('.li-badge'), scene:q('.li-scene'), tag:q('.li-tag'),
+                scopedSmoke:intro?.querySelectorAll('.li-smoke').length||0,
+                scopedBadge:intro?.querySelectorAll('.li-badge').length||0,
+                scopedScene:intro?.querySelectorAll('.li-scene').length||0,
                 visualProof:document.documentElement.classList.contains('wdcc-visual-proof'),
                 introActive:document.documentElement.classList.contains('wdcc-intro-active'),
-                outer:li?.outerHTML||null
+                outer:intro?.outerHTML||null
               };
             });
             data.responseStatus=r?.status()||0;
             data.errors=errors;
             fs.mkdirSync('intro-dom-diagnostic',{recursive:true});
             fs.writeFileSync('intro-dom-diagnostic/dom.json',JSON.stringify(data,null,2)+'\n');
-            fs.writeFileSync('intro-dom-diagnostic/page.html',await page.content());
-            await page.screenshot({path:'intro-dom-diagnostic/page.png',fullPage:true});
-            console.log(JSON.stringify({...data,outer:data.outer?.slice(0,2400)},null,2));
-            if(!data.li||!data.badge||!data.scene)throw new Error('INTRO_BASE_DOM_MISSING');
-            if(!data.smoke)throw new Error('INTRO_SMOKE_DOM_MISSING');
+            fs.writeFileSync('intro-dom-diagnostic/intro-outer.html',data.outer||'');
+            console.log(JSON.stringify({...data,outer:data.outer?.slice(0,3000)},null,2));
+            if(data.responseStatus!==200)throw new Error(`INTRO_DIAG_HTTP_${data.responseStatus}`);
+            if(data.intro!==1)throw new Error(`INTRO_ROOT_COUNT_${data.intro}`);
+            if(data.scopedBadge!==1||data.scopedScene!==1)throw new Error(`INTRO_BASE_DOM_BAD_${JSON.stringify({badge:data.scopedBadge,scene:data.scopedScene})}`);
+            if(data.scopedSmoke!==1)throw new Error(`INTRO_SMOKE_DOM_COUNT_${data.scopedSmoke}`);
             await ctx.close();
           }finally{await browser.close()}
           NODE
