@@ -30,16 +30,16 @@ export default function ReferenceCloneHome(){
      <div className="rh-hero-inner"><div className="rh-copy">
        <p className="rh-kicker">TAMPA BAY · DRIVE TODAY</p>
        <h1 aria-label="Bad credit? No credit? We don't care."><span className="red">BAD CREDIT?</span><span className="blue">NO CREDIT?</span><span className="white">WE DON&apos;T CARE.</span></h1>
-       <p className="rh-proof-copy">In-house financing. Low down payments.<br/>Fast approvals. Straight answers.<br/>Get on the road without the runaround.</p>
-       <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link><Link className="rh-btn dark" href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY</Link></div>
+       <ul className="rh-proof-list"><li>In-house financing</li><li>Low down payments</li><li>Fast approvals</li><li>Drive today with confidence</li></ul>
+       <div className="rh-hero-actions"><Link className="rh-btn red" href="/get-approved">GET PRE-APPROVED <span>→</span></Link><Link className="rh-btn dark" href="/inventory">BROWSE INVENTORY <span>→</span></Link></div>
        <TrackedCallLink className="rh-phone" source="home-hero-phone" label="Call Sean"><span>CALL SEAN</span><b>813-516-4752</b></TrackedCallLink>
      </div></div>
    </section>
    <section className="rh-benefit-wrap"><div className="rh-benefits">
-     <article className="rh-benefit"><span className="rh-icon">✓</span><div><strong>FAST APPROVALS</strong><small>Quick, straightforward decisions.</small></div></article>
-     <article className="rh-benefit"><span className="rh-icon">$</span><div><strong>LOW DOWN PAYMENTS</strong><small>Options designed around real buyers.</small></div></article>
-     <article className="rh-benefit"><span className="rh-icon">▣</span><div><strong>DRIVE TODAY</strong><small>Move from interest to the road.</small></div></article>
-     <article className="rh-benefit"><span className="rh-icon">◇</span><div><strong>BUILD YOUR CREDIT</strong><small>Ask what programs may apply.</small></div></article>
+     <article className="rh-benefit"><span className="rh-icon">✓</span><div><strong>FAST APPROVALS</strong><small>Get approved in minutes.</small></div></article>
+     <article className="rh-benefit"><span className="rh-icon">$</span><div><strong>LOW DOWN PAYMENTS</strong><small>Options for every budget.</small></div></article>
+     <article className="rh-benefit"><span className="rh-icon">▣</span><div><strong>DRIVE TODAY</strong><small>Leave in a car you love.</small></div></article>
+     <article className="rh-benefit"><span className="rh-icon">◇</span><div><strong>SAFE &amp; SECURE</strong><small>Your data is always protected.</small></div></article>
    </div></section>
    <section className="rh-inventory"><div className="rh-section-head"><div><small>FEATURED INVENTORY</small><h2>Vehicles ready now.</h2><p>{recoveryMode?"Last verified vehicles shown. Confirm current availability with Sean.":"Cash price and down payment shown clearly."}</p></div><Link className="rh-view-all" href="/inventory">VIEW ALL INVENTORY →</Link></div>
      {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
@@ -50,9 +50,9 @@ export default function ReferenceCloneHome(){
      {inventoryState==="ready"&&<><div className="rh-grid" ref={gridRef} onScroll={()=>{const g=gridRef.current;if(!g||!g.children.length)return;const center=g.scrollLeft+g.clientWidth/2;let best=0,dist=Infinity;Array.from(g.children).forEach((el,i)=>{const n=el as HTMLElement,d=Math.abs(n.offsetLeft+n.offsetWidth/2-center);if(d<dist){dist=d;best=i}});if(best!==active)setActive(best)}}>{vehicles.slice(0,5).map((v,i)=><WdccVehicleCard key={String(v.id||v.slug||i)} vehicle={v} featured/>)}</div><div className="rh-mobile-dots" aria-label="Featured inventory position">{vehicles.slice(0,5).map((v,i)=><button key={String(v.id||i)} className={i===active?"active":""} onClick={()=>goTo(i)} aria-label={`Vehicle ${i+1}`}/>)}</div></>}
    </section>
    <section className="rh-finance" id="how-it-works"><div className="rh-finance-inner"><div className="finance-heading"><h2>IN-HOUSE FINANCING <span>MADE EASY</span></h2><p>One simple process. No hoops. No hassle.</p></div><div className="rh-steps">
-     <article className="rh-step"><b>1</b><strong>APPLY ONLINE</strong><small>Send basic details securely.</small></article><article className="rh-step"><b>2</b><strong>TALK TO SEAN</strong><small>Confirm down payment and vehicle fit.</small></article><article className="rh-step"><b>3</b><strong>CHOOSE YOUR CAR</strong><small>Shop our inventory online or in person.</small></article><article className="rh-step"><b>4</b><strong>DRIVE TODAY</strong><small>Schedule pickup or a test drive.</small></article>
+     <article className="rh-step"><b>1</b><div><strong>APPLY ONLINE</strong><small>Send basic details securely.</small></div></article><article className="rh-step"><b>2</b><div><strong>TALK TO SEAN</strong><small>Confirm down payment and vehicle fit.</small></div></article><article className="rh-step"><b>3</b><div><strong>CHOOSE YOUR CAR</strong><small>Shop our inventory online or in person.</small></div></article><article className="rh-step"><b>4</b><div><strong>DRIVE TODAY</strong><small>Schedule pickup or a test drive.</small></div></article>
    </div></div></section>
-   <section className="rh-trust" id="reviews"><div className="rh-trust-grid"><article><div className="trust-symbol" aria-hidden="true">★</div><div><b>TAMPA BAY PROUD</b><span>Local dealer. Local community.</span></div></article><article><div className="trust-symbol" aria-hidden="true">•••</div><div><b>STRAIGHT ANSWERS</b><span>No runaround. No hidden fees.</span></div></article><article><div className="trust-avatar" aria-hidden="true">SE</div><div><b>REAL PEOPLE</b><span>Talk to Sean. Not a call center.</span></div></article><article><div className="trust-symbol" aria-hidden="true">✓</div><div><b>IN-HOUSE FINANCING</b><span>We make it happen when others can&apos;t.</span></div></article></div></section>
+   <section className="rh-trust" id="reviews"><div className="rh-trust-grid"><article><div className="trust-symbol">★</div><div><b>TAMPA BAY PROUD</b><span>Local dealer. Local community.</span></div></article><article><div className="trust-symbol">•••</div><div><b>STRAIGHT ANSWERS</b><span>No runaround. No hidden fees.</span></div></article><article><div className="trust-avatar">SE</div><div><b>REAL PEOPLE</b><span>Talk to Sean. Not a call center.</span></div></article><article><div className="trust-symbol">✓</div><div><b>CONFIDENCE DRIVEN</b><span>We make it happen when others can&apos;t.</span></div></article></div></section>
    <WdccPublicFooter/>
  </main>
 }
