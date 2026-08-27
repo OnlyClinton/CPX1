@@ -11,26 +11,29 @@ export function WdccPublicHeader(){
     <div className="rh-utility wdcc-public-utility" data-wdcc-public-chrome="utility">
       <div className="rh-utility-inner">
         <span>⌖ TAMPA BAY</span>
-        <span>⚡ IN-HOUSE FINANCING</span>
-        <span>⚡ DRIVE TODAY</span>
-        <TrackedCallLink source="public-utility-phone" label="Call Sean">SEAN · <b>813-516-4752</b></TrackedCallLink>
+        <span>★ IN-HOUSE FINANCING</span>
+        <span>★ LOW PAYMENTS</span>
+        <span>★ DRIVE TODAY</span>
+        <TrackedCallLink source="public-utility-phone" label="Call Sean">SALES: <b>(813) 516-4752</b></TrackedCallLink>
+        <span className="rh-espanol">Se Habla Español</span>
       </div>
     </div>
     <header className="rh-header wdcc-public-header" data-wdcc-public-chrome="header">
       <div className="rh-header-inner">
         <button className="rh-menu" type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}><span/><span/><span/></button>
         <Link className="rh-logo" href="/" aria-label="We Don't Care Cars home" onClick={close}>
-          <img className="rh-logo-art" data-wdcc-logo-art="owner-approved" src="/wdcc-owner-logo" alt="We Don't Care Cars" width="84" height="84" fetchPriority="high"/>
+          <img className="rh-logo-art" data-wdcc-logo-art="owner-wordmark" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="142" height="58" fetchPriority="high"/>
         </Link>
         <nav id="wdcc-public-nav" className={`rh-nav${open?" open":""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
           <Link href="/get-approved?source=nav-financing" onClick={close}>Financing</Link>
           <Link href="/#how-it-works" onClick={close}>How It Works</Link>
           <Link href="/#reviews" onClick={close}>Reviews</Link>
-          <Link href="/about" onClick={close}>About Us</Link>
+          <Link href="/contact" onClick={close}>About Us</Link>
+          <Link href="/contact" onClick={close}>Contact</Link>
         </nav>
         <div className="rh-header-actions">
-          <TrackedCallLink className="rh-header-phone" source="public-header-desktop-phone" label="Call Sean">☎ <b>813-516-4752</b></TrackedCallLink>
+          <TrackedCallLink className="rh-header-phone" source="public-header-desktop-phone" label="Call Sean">☎ <b>(813) 516-4752</b></TrackedCallLink>
           <Link className="rh-header-primary" href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link>
         </div>
         <TrackedCallLink className="rh-call" source="public-header-phone" label="Call Sean"><span>☎</span></TrackedCallLink>
