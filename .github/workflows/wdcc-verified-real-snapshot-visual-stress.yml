@@ -9,6 +9,7 @@ on:
       - 'scripts/wdcc-verified-real-snapshot-visual-stress.mjs'
       - 'scripts/wdcc-verified-real-snapshot-owner-contract.mjs'
       - '.github/workflows/wdcc-verified-real-snapshot-visual-stress.yml'
+      - '.github/workflows/wdcc-full-responsive-audit.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'next.config.ts'
