@@ -38,6 +38,7 @@ jobs:
           test -s app/owner-contract-lock.css
           test -s .github/support/wdcc-owner-final-lock-proof.mjs
           test -s .github/support/wdcc-owner-final-dashboard-diagnostic.mjs
+          test -s .github/support/wdcc-owner-final-mobile-diagnostic.mjs
           grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
           grep -Fq 'owner-contract-lock.css' app/layout.tsx
           grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
@@ -114,8 +115,6 @@ jobs:
           test "$logo" = 200
           test -s /tmp/logo.bin
 
-          # Recovered review media can propagate a few seconds after the Worker.
-          # Warm it best-effort; the browser proof below is the authoritative media gate.
           for id in nissan350z fordF150 hondaPilot kiaSportage toyotaRav4; do
             for i in $(seq 1 12); do
               code="$(curl --http1.1 -sS -L -o "/tmp/$id.webp" -w '%{http_code}' "$URL/wdcc-review-media/$id?warm=$GITHUB_RUN_ID-$i" || true)"
@@ -131,6 +130,14 @@ jobs:
         run: |
           set -euo pipefail
           node .github/support/wdcc-owner-final-dashboard-diagnostic.mjs
+
+      - name: Capture mobile diagnostic
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/support/wdcc-owner-final-mobile-diagnostic.mjs
 
       - name: Prove owner final lock
         env:
