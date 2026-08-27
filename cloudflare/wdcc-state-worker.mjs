@@ -1,4 +1,5 @@
 const STATE_KEY="state";
+const BOOTSTRAP_KEY="bootstrap_consumed";
 const BACKUP_PREFIX="backup:";
 const SELFTEST_PREFIX="selftest:";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-robots-tag":"noindex, nofollow"};
@@ -20,10 +21,25 @@ function validState(value){
   return Number.isFinite(state.revision)&&state.revision>=0&&Array.isArray(state.users)&&Array.isArray(state.vehicles)&&Array.isArray(state.leads);
 }
 
-function authorized(request,env){
+function serviceAuthorized(request,env){
   const expected=String(env.WDCC_STATE_SERVICE_TOKEN||"");
   const supplied=String(request.headers.get("authorization")||"");
   return Boolean(expected)&&supplied===`Bearer ${expected}`;
+}
+
+async function sha256Hex(value){
+  const bytes=new TextEncoder().encode(value);
+  const digest=await crypto.subtle.digest("SHA-256",bytes);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+
+async function bootstrapAuthorized(request,env,storage){
+  const expected=String(env.WDCC_BOOTSTRAP_SHA256||"").trim().toLowerCase();
+  const supplied=String(request.headers.get("x-wdcc-bootstrap-token")||"").trim();
+  if(!expected||!supplied)return false;
+  if(await storage.get(BOOTSTRAP_KEY))return false;
+  if(await storage.get(STATE_KEY))return false;
+  return (await sha256Hex(supplied))===expected;
 }
 
 function semanticState(value){return JSON.stringify(normalizeState(value));}
@@ -68,9 +84,8 @@ export class WDCCState {
     }
 
     if(url.pathname==="/state"){
-      if(!authorized(request,this.env))return Response.json({ok:false,error:"unauthorized"},{status:401,headers:JSON_HEADERS});
-
       if(request.method==="GET"){
+        if(!serviceAuthorized(request,this.env))return Response.json({ok:false,error:"unauthorized"},{status:401,headers:JSON_HEADERS});
         try{
           const current=await this.readState();
           return new Response(current.raw,{status:200,headers:{...JSON_HEADERS,"x-wdcc-state-revision":String(current.state.revision)}});
@@ -80,6 +95,10 @@ export class WDCCState {
       }
 
       if(request.method==="PUT"){
+        const serviceAuth=serviceAuthorized(request,this.env);
+        const bootstrapAuth=serviceAuth?false:await bootstrapAuthorized(request,this.env,this.ctx.storage);
+        if(!serviceAuth&&!bootstrapAuth)return Response.json({ok:false,error:"unauthorized"},{status:401,headers:JSON_HEADERS});
+
         let parsed;
         try{parsed=await request.json();}catch{return Response.json({ok:false,error:"invalid_json"},{status:400,headers:JSON_HEADERS});}
         if(!validState(parsed))return Response.json({ok:false,error:"invalid_state"},{status:400,headers:JSON_HEADERS});
@@ -97,9 +116,11 @@ export class WDCCState {
               return Response.json({ok:false,error:"revision_conflict",currentRevision:current.revision},{status:409,headers:JSON_HEADERS});
             }
           }
-          await this.ctx.storage.put({[backupKey(next.revision)]:body,[STATE_KEY]:body});
+          const entries={[backupKey(next.revision)]:body,[STATE_KEY]:body};
+          if(bootstrapAuth)entries[BOOTSTRAP_KEY]=new Date().toISOString();
+          await this.ctx.storage.put(entries);
           await this.pruneBackups();
-          return Response.json({ok:true,idempotent:false,revision:next.revision},{status:200,headers:JSON_HEADERS});
+          return Response.json({ok:true,idempotent:false,revision:next.revision,bootstrap:bootstrapAuth},{status:200,headers:JSON_HEADERS});
         }catch(error){
           return Response.json({ok:false,error:error instanceof Error?error.message:"STATE_WRITE_FAILED"},{status:503,headers:JSON_HEADERS});
         }
@@ -109,7 +130,7 @@ export class WDCCState {
     }
 
     if(request.method==="POST"&&url.pathname==="/self-test"){
-      if(!authorized(request,this.env))return Response.json({ok:false,error:"unauthorized"},{status:401,headers:JSON_HEADERS});
+      if(!serviceAuthorized(request,this.env))return Response.json({ok:false,error:"unauthorized"},{status:401,headers:JSON_HEADERS});
       const key=`${SELFTEST_PREFIX}${crypto.randomUUID()}`;
       const marker=JSON.stringify({ok:true,at:new Date().toISOString(),nonce:crypto.randomUUID()});
       try{
