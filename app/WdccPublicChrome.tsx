@@ -5,7 +5,6 @@ import {useState} from "react";
 import TrackedCallLink from "./TrackedCallLink";
 import styles from "./WdccPublicChrome.module.css";
 
-// Shared public chrome is the single storefront header/footer source for exact-head acceptance proof; this comment intentionally triggers the complete exact-SHA audit matrix without changing rendering.
 export function WdccPublicHeader(){
   const[open,setOpen]=useState(false);
   const close=()=>setOpen(false);
@@ -21,7 +20,7 @@ export function WdccPublicHeader(){
       <div className={`rh-header-inner ${styles.inner}`}>
         <button className={`rh-menu ${styles.menu}`} type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}>☰</button>
         <Link className={`rh-logo logoBrand ${styles.logo}`} href="/" aria-label="We Don't Care Cars home" onClick={close}>
-          <img src="/wdcc-logo-transparent.webp" alt="WDCC We Don't Care Cars" width="400" height="128"/>
+          <img src="/wdcc-official-logo.webp" alt="WDCC We Don't Care Cars" width="512" height="512"/>
         </Link>
         <nav id="wdcc-public-nav" className={`rh-nav ${styles.nav}${open?` open ${styles.navOpen}`:""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
