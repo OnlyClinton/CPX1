@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import {pathToFileURL} from 'node:url';
 import {chromium} from 'playwright';
 
@@ -7,13 +8,15 @@ if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
 const sourcePath=new URL('./wdcc-immutable-visual-proof-base.mjs',import.meta.url);
 const alignedPath=new URL('./.wdcc-immutable-visual-proof-aligned.mjs',import.meta.url);
 let source=fs.readFileSync(sourcePath,'utf8');
-// Align the legacy base proof with FINAL VISUAL AUTHORITY 51077: mobile has
-// one public header only (no utility strip above it), while desktop retains
-// the utility strip + header stack.
+// Align legacy proof assertions with FINAL VISUAL AUTHORITY 51077.
 const oldMobileChrome="if(Math.abs((mobileHome.hTop||0)-(mobileHome.uH||0))>3||Math.abs((mobileHome.heroTop||0)-(mobileHome.hBottom||0))>3)throw new Error(`MOBILE_CHROME_GAP_${JSON.stringify(mobileHome)}`);";
 const newMobileChrome="if((mobileHome.uH||0)>1||Math.abs(mobileHome.hTop||0)>3||Math.abs((mobileHome.heroTop||0)-(mobileHome.hBottom||0))>3)throw new Error(`MOBILE_CHROME_GAP_${JSON.stringify(mobileHome)}`);";
 if(!source.includes(oldMobileChrome))throw new Error(`IMMUTABLE_OWNER_CONTRACT_SOURCE_DRIFT: ${oldMobileChrome}`);
 source=source.replace(oldMobileChrome,newMobileChrome);
+const oldMobileEditor="if(mf.tracks!==2||inputFonts.some(x=>x<15.5))throw new Error(`DEALER_MOBILE_EDITOR_BAD_${JSON.stringify({mf,inputFonts})}`);";
+const newMobileEditor="if(mf.tracks!==1||mf.overflow>0||inputFonts.some(x=>x<15.5))throw new Error(`DEALER_MOBILE_EDITOR_BAD_${JSON.stringify({mf,inputFonts})}`);";
+if(!source.includes(oldMobileEditor))throw new Error(`IMMUTABLE_OWNER_CONTRACT_SOURCE_DRIFT: ${oldMobileEditor}`);
+source=source.replace(oldMobileEditor,newMobileEditor);
 fs.writeFileSync(alignedPath,source);
 try{await import(`${pathToFileURL(alignedPath.pathname).href}?aligned=${Date.now()}`)}finally{fs.rmSync(alignedPath,{force:true})}
 
@@ -46,53 +49,50 @@ const assertSurface=async(page,name,selector,minWidth=1,minHeight=1)=>{
   if(!pass)throw new Error(`${name}_SURFACE_BAD_${JSON.stringify(geom)}`);
   return el;
 };
-const assertBrandPaint=async(page,name,{selector,source,background,filter='none',minWidth=1,minHeight=1,minInkFraction=.012,minLumaStd=4,centerTolerance=null,expectedAsset=''})=>{
-  const el=page.locator(selector).first();
-  await el.waitFor({state:'visible',timeout:10000});
-  const result=await el.evaluate(async(node,cfg)=>{
-    const r=node.getBoundingClientRect(),s=getComputedStyle(node);
-    const img=new Image();
-    img.decoding='sync';
-    img.src=cfg.source;
-    await img.decode();
-    const square=r.height>r.width*.72;
-    const w=160,h=square?160:64;
-    const canvas=document.createElement('canvas');
-    canvas.width=w;canvas.height=h;
-    const ctx=canvas.getContext('2d',{willReadFrequently:true});
-    if(!ctx)return{error:'CANVAS_CONTEXT_MISSING'};
-    ctx.fillStyle=cfg.background;
-    ctx.fillRect(0,0,w,h);
-    ctx.filter=cfg.filter;
-    const scale=Math.min((w*.92)/img.naturalWidth,(h*.92)/img.naturalHeight);
-    const dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
-    ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);
-    ctx.filter='none';
-    const data=ctx.getImageData(0,0,w,h).data;
-    const bg=cfg.background.toLowerCase()==='#ffffff'?[255,255,255]:[2,8,13];
-    let ink=0,sum=0,sum2=0;
-    const n=w*h;
-    for(let i=0;i<data.length;i+=4){
-      const rr=data[i],gg=data[i+1],bb=data[i+2];
-      const dist=Math.hypot(rr-bg[0],gg-bg[1],bb-bg[2]);
-      if(dist>42)ink++;
-      const l=.2126*rr+.7152*gg+.0722*bb;
-      sum+=l;sum2+=l*l;
+const paeth=(a,b,c)=>{const p=a+b-c,pa=Math.abs(p-a),pb=Math.abs(p-b),pc=Math.abs(p-c);return pa<=pb&&pa<=pc?a:pb<=pc?b:c};
+const decodePng=buf=>{
+  const sig=Buffer.from([137,80,78,71,13,10,26,10]);
+  if(buf.length<33||!buf.subarray(0,8).equals(sig))throw new Error('BRAND_SCREENSHOT_NOT_PNG');
+  let off=8,width=0,height=0,bitDepth=0,colorType=-1,interlace=-1;const idat=[];
+  while(off+12<=buf.length){
+    const len=buf.readUInt32BE(off);const type=buf.toString('ascii',off+4,off+8);const data=buf.subarray(off+8,off+8+len);off+=12+len;
+    if(type==='IHDR'){width=data.readUInt32BE(0);height=data.readUInt32BE(4);bitDepth=data[8];colorType=data[9];interlace=data[12]}
+    else if(type==='IDAT')idat.push(data);
+    else if(type==='IEND')break;
+  }
+  if(bitDepth!==8||interlace!==0||![2,6].includes(colorType))throw new Error(`BRAND_SCREENSHOT_PNG_UNSUPPORTED_${JSON.stringify({width,height,bitDepth,colorType,interlace})}`);
+  const bpp=colorType===6?4:3,stride=width*bpp,raw=zlib.inflateSync(Buffer.concat(idat));
+  if(raw.length<(stride+1)*height)throw new Error('BRAND_SCREENSHOT_PNG_TRUNCATED');
+  const pixels=Buffer.alloc(stride*height);let pos=0;
+  for(let y=0;y<height;y++){
+    const filter=raw[pos++],row=y*stride,prev=(y-1)*stride;
+    for(let x=0;x<stride;x++){
+      const v=raw[pos++],a=x>=bpp?pixels[row+x-bpp]:0,b=y>0?pixels[prev+x]:0,c=y>0&&x>=bpp?pixels[prev+x-bpp]:0;
+      pixels[row+x]=filter===0?v:filter===1?(v+a)&255:filter===2?(v+b)&255:filter===3?(v+Math.floor((a+b)/2))&255:filter===4?(v+paeth(a,b,c))&255:(()=>{throw new Error(`BRAND_SCREENSHOT_PNG_FILTER_${filter}`)})();
     }
-    const mean=sum/n;
-    const lumaStd=Math.sqrt(Math.max(0,sum2/n-mean*mean));
-    return{
-      w:r.width,h:r.height,cx:r.left+r.width/2,centerDelta:Math.abs(r.left+r.width/2-innerWidth/2),
-      display:s.display,visibility:s.visibility,opacity:Number(s.opacity),backgroundImage:s.backgroundImage,computedFilter:s.filter,
-      source:img.currentSrc||img.src,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight,
-      inkFraction:ink/n,lumaStd
-    };
-  },{source,background,filter});
-  const pass=!result.error&&result.w>=minWidth&&result.h>=minHeight&&result.display!=='none'&&result.visibility!=='hidden'&&result.opacity>0&&result.naturalWidth>0&&result.naturalHeight>0&&result.inkFraction>=minInkFraction&&result.lumaStd>=minLumaStd&&(centerTolerance==null||result.centerDelta<=centerTolerance)&&(!expectedAsset||String(result.backgroundImage||'').includes(expectedAsset));
-  brandChecks.push({name,selector,source,background,filter,minWidth,minHeight,minInkFraction,minLumaStd,centerTolerance,expectedAsset,...result,pass});
-  if(!pass)throw new Error(`${name}_BRAND_PIXEL_CONTRAST_FAILED_${JSON.stringify(result)}`);
-  await el.screenshot({path:`immutable-visual-proof/${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`});
-  return el;
+  }
+  return{width,height,bpp,pixels};
+};
+const rgb=hex=>{const h=hex.replace('#','');return h.length===3?[...h].map(c=>parseInt(c+c,16)):[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]};
+const analyzePng=(buf,background)=>{
+  const {width,height,bpp,pixels}=decodePng(buf),bg=rgb(background);let ink=0,sum=0,sum2=0,minL=255,maxL=0;const n=width*height;
+  for(let p=0;p<pixels.length;p+=bpp){
+    const r=pixels[p],g=pixels[p+1],b=pixels[p+2],dist=Math.hypot(r-bg[0],g-bg[1],b-bg[2]);if(dist>42)ink++;
+    const l=.2126*r+.7152*g+.0722*b;sum+=l;sum2+=l*l;if(l<minL)minL=l;if(l>maxL)maxL=l;
+  }
+  const mean=sum/n,lumaStd=Math.sqrt(Math.max(0,sum2/n-mean*mean));
+  return{pixelWidth:width,pixelHeight:height,inkFraction:ink/n,lumaStd,lumaRange:maxL-minL,minLuma:minL,maxLuma:maxL};
+};
+const assertBrandPixels=async(page,name,{selector,background,minWidth=1,minHeight=1,minInkFraction=.012,minLumaStd=4,minLumaRange=28,centerTolerance=null,expectedText='',expectedAsset=''})=>{
+  const el=page.locator(selector).first();await el.waitFor({state:'visible',timeout:10000});
+  const geom=await el.evaluate(node=>{const r=node.getBoundingClientRect(),s=getComputedStyle(node);return{w:r.width,h:r.height,cx:r.left+r.width/2,centerDelta:Math.abs(r.left+r.width/2-innerWidth/2),display:s.display,visibility:s.visibility,opacity:Number(s.opacity),backgroundImage:s.backgroundImage,text:(node.textContent||'').replace(/\s+/g,' ').trim()}});
+  const path=`immutable-visual-proof/${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}.png`,shot=await el.screenshot({path});
+  const pixels=analyzePng(shot,background);
+  const textPass=!expectedText||geom.text.toUpperCase().includes(expectedText.toUpperCase());
+  const assetPass=!expectedAsset||String(geom.backgroundImage||'').includes(expectedAsset);
+  const pass=geom.w>=minWidth&&geom.h>=minHeight&&geom.display!=='none'&&geom.visibility!=='hidden'&&geom.opacity>0&&(centerTolerance==null||geom.centerDelta<=centerTolerance)&&textPass&&assetPass&&pixels.inkFraction>=minInkFraction&&pixels.lumaStd>=minLumaStd&&pixels.lumaRange>=minLumaRange;
+  const result={name,selector,background,minWidth,minHeight,minInkFraction,minLumaStd,minLumaRange,centerTolerance,expectedText,expectedAsset,...geom,...pixels,textPass,assetPass,pass};brandChecks.push(result);
+  if(!pass)throw new Error(`${name}_BRAND_PIXEL_CONTRAST_FAILED_${JSON.stringify(result)}`);return el;
 };
 const wireDealer=async page=>{
   const session={authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}};
@@ -115,11 +115,12 @@ try{
   await m.goto(`${base}/?pointer-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
   const intro=m.locator('.li');
   if(await intro.count()){
-    await assertBrandPaint(m,'MOBILE_INTRO_BADGE',{selector:'.li-badge-art',source:'/wdcc-official-logo.webp',background:'#ffffff',filter:'none',minWidth:220,minHeight:220,minInkFraction:.012,minLumaStd:4,centerTolerance:4,expectedAsset:'wdcc-official-logo.webp'});
+    await assertBrandPixels(m,'MOBILE_INTRO_BADGE',{selector:'.li-badge-art',background:'#ffffff',minWidth:220,minHeight:220,minInkFraction:.012,minLumaStd:4,minLumaRange:32,centerTolerance:4,expectedAsset:'wdcc-official-logo.webp'});
     await m.getByRole('button',{name:/skip intro/i}).click({timeout:2500}).catch(()=>{});
     await intro.waitFor({state:'detached',timeout:7000}).catch(()=>{});
   }else throw new Error('MOBILE_INTRO_MISSING_FOR_BRAND_PROOF');
-  await assertBrandPaint(m,'MOBILE_HEADER_WORDMARK',{selector:'.rh-logo-art',source:'/wdcc-logo-transparent.webp',background:'#02080d',filter:'brightness(0) invert(1)',minWidth:120,minHeight:40,minInkFraction:.015,minLumaStd:8,centerTolerance:4,expectedAsset:'wdcc-logo-transparent.webp'});
+  await assertBrandPixels(m,'MOBILE_HEADER_WORDMARK',{selector:'.rh-logo-art',background:'#02080d',minWidth:120,minHeight:40,minInkFraction:.015,minLumaStd:8,minLumaRange:80,centerTolerance:4,expectedText:'WDCC'});
+  const headerText=(await m.locator('.rh-logo-art').innerText()).replace(/\s+/g,' ').toUpperCase();if(!headerText.includes("WE DON'T CARE CARS"))throw new Error(`MOBILE_HEADER_WORDMARK_COPY_BAD_${headerText}`);
   await assertHits(m,'MOBILE_STOREFRONT',['.rh-menu','.rh-call','.rh-hero-actions .rh-btn']);
   await m.locator('.rh-menu').click();await m.waitForTimeout(120);await assertHits(m,'MOBILE_NAV',['.rh-nav a']);
   await mobile.close();
