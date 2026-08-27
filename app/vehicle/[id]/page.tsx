@@ -4,6 +4,7 @@ import Link from"next/link";
 import{useEffect,useState}from"react";
 import{WdccPublicFooter,WdccPublicHeader}from"../../WdccPublicChrome";
 import{isWdccVisualReviewFixture,wdccVisualReviewVehicle,WDCC_VISUAL_REVIEW_LABEL}from"../../wdccVisualReviewInventory";
+import{WDCC_RECOVERY_INVENTORY}from"../../../lib/recoveryInventory";
 
 type LoadState="loading"|"ready"|"error";
 type VehicleRecord=Record<string,any>;
@@ -22,19 +23,22 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const[vehicle,setVehicle]=useState<VehicleRecord|null>(null);
   const[state,setState]=useState<LoadState>("loading");
   const[fixtureMode,setFixtureMode]=useState(false);
+  const[recoveryMode,setRecoveryMode]=useState(false);
 
   useEffect(()=>{let live=true;params.then(x=>{if(live)setId(String(x?.id||""))}).catch(()=>{if(live)setState("error")});return()=>{live=false}},[params]);
   useEffect(()=>{
     if(!id)return;
     if(isWdccVisualReviewFixture()){
-      setFixtureMode(true);
+      setFixtureMode(true);setRecoveryMode(false);
       const item=wdccVisualReviewVehicle(id);
       if(item){setVehicle(item);setState("ready")}else{setVehicle(null);setState("error")}
       return;
     }
+    const recovery=WDCC_RECOVERY_INVENTORY.find(item=>String(item.id)===id||String(item.slug)===id);
+    if(recovery){setFixtureMode(false);setRecoveryMode(true);setVehicle({...recovery});setState("ready");return;}
     const controller=new AbortController();
     let live=true;
-    setState("loading");
+    setFixtureMode(false);setRecoveryMode(false);setState("loading");
     fetch(`/api/inventory/${encodeURIComponent(id)}`,{cache:"no-store",signal:controller.signal})
       .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok||body?.previewFallback||body?.inventorySource==="last-known-good-real-proof")throw new Error(body?.error||`Vehicle ${r.status}`);const item=body?.item||body?.vehicle;if(!item||!customerVisible(item))throw new Error("VEHICLE_NOT_PUBLIC");return item})
       .then(item=>{if(live){setVehicle(item);setState("ready")}})
@@ -51,14 +55,15 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   return <>
     <WdccPublicHeader/>
     <main className="vehiclePage wdcc-public-page">
-      <section className="inventoryTop vehicleTop"><div className="wrap"><div className="eyebrow">CURRENT VEHICLE DETAILS</div><h1>{title}</h1><p className="lede">Real published inventory only. Clear pricing, direct answers, and no demo vehicle substitutions.</p></div></section>
+      <section className="inventoryTop vehicleTop"><div className="wrap"><div className="eyebrow">{recoveryMode?"VERIFIED RECOVERY VEHICLE":"CURRENT VEHICLE DETAILS"}</div><h1>{title}</h1><p className="lede">{recoveryMode?"Last verified public record. Confirm current availability with Sean before visiting.":"Real published inventory only. Clear pricing, direct answers, and no demo vehicle substitutions."}</p></div></section>
       <section className="section light vehicleSection"><div className="wrap">
         {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
-        {state==="loading"&&<div className="vehicleStatus" role="status"><span className="vehicleStatusBadge">WDCC</span><div><h2>Loading current vehicle details…</h2><p>Checking the live published inventory record.</p></div></div>}
-        {state==="error"&&<section className="vehicleUnavailable" role="status"><div className="eyebrow muted">LIVE INVENTORY STATUS</div><h2>Vehicle details are temporarily unavailable.</h2><p>We are not substituting a demo vehicle or made-up listing. Call Sean for current availability, or return to the published inventory page.</p><div className="vehicleActions"><Link className="cta red" href="/inventory">BROWSE INVENTORY</Link><Link className="cta" href="/get-approved?source=vehicle-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>}
+        {recoveryMode&&<div className="wdccRecoveryInventoryBanner" role="status"><strong>VERIFIED RECOVERY RECORD</strong><span>Provider sync is temporarily unavailable. Confirm availability with Sean · 813-516-4752.</span></div>}
+        {state==="loading"&&<div className="vehicleStatus" role="status"><span className="vehicleStatusBadge">WDCC</span><div><h2>Loading current vehicle details…</h2><p>Checking the published inventory record.</p></div></div>}
+        {state==="error"&&<section className="vehicleUnavailable" role="status"><div className="eyebrow muted">INVENTORY STATUS</div><h2>Vehicle details are temporarily unavailable.</h2><p>We are not substituting a demo vehicle or made-up listing. Call Sean for current availability, or return to inventory.</p><div className="vehicleActions"><Link className="cta red" href="/inventory">BROWSE INVENTORY</Link><Link className="cta" href="/get-approved?source=vehicle-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>}
         {state==="ready"&&v&&<div className="vehicleLayout">
-          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing" role="img" aria-label={`${title} photo coming soon`}><span>PHOTO COMING SOON</span></div>}</div><p>{fixtureMode?"Historical record photo is not being substituted while media storage is blocked.":"Photos shown are attached to this published vehicle record."}</p></section>
-          <section className="vehicleSummary"><div className="eyebrow muted">{fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><Link className="cta" href={`/get-approved${q}`}>GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>
+          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing" role="img" aria-label={`${title} photo temporarily unavailable`}><span>PHOTO TEMPORARILY UNAVAILABLE</span></div>}</div><p>{recoveryMode?"The vehicle record is verified; media is not being substituted while storage is unavailable.":fixtureMode?"Historical record photo is not being substituted while media storage is blocked.":"Photos shown are attached to this published vehicle record."}</p></section>
+          <section className="vehicleSummary"><div className="eyebrow muted">{recoveryMode?"CONFIRM AVAILABILITY":fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><Link className="cta" href={`/get-approved${q}`}>GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>
         </div>}
       </div></section>
     </main>
