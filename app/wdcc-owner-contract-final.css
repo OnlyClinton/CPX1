@@ -1,14 +1,14 @@
 /* OWNER LOCKED CONTRACT — loaded last. This file is the final visual authority. */
 
-/* Public persistent header: the supplied mockups use one large ROUND official WDCC badge.
-   This intentionally overrides any legacy wordmark rule from earlier audit layers. */
+/* Newest owner override: public storefront/conversion chrome uses the large horizontal WDCC wordmark.
+   Intro and dealer/admin surfaces retain the round official WDCC badge. */
 html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-  grid-template-columns:104px minmax(0,1fr) auto!important;
+  grid-template-columns:164px minmax(0,1fr) auto!important;
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo{
   display:grid!important;
   place-items:center!important;
-  width:96px!important;
+  width:160px!important;
   height:78px!important;
   overflow:visible!important;
   background:none!important;
@@ -19,30 +19,31 @@ html body [data-wdcc-public-chrome="header"] .rh-logo::after{
   display:none!important;
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo img{
-  content:url('/wdcc-official-logo.webp')!important;
+  content:url('/wdcc-logo-transparent.webp')!important;
   display:block!important;
-  width:76px!important;
-  min-width:76px!important;
-  max-width:76px!important;
-  height:76px!important;
-  min-height:76px!important;
-  max-height:76px!important;
+  width:148px!important;
+  min-width:148px!important;
+  max-width:148px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:50px!important;
   object-fit:contain!important;
   object-position:center!important;
+  transform:none!important;
   border:0!important;
-  border-radius:50%!important;
-  clip-path:circle(48% at 50% 50%)!important;
+  border-radius:0!important;
+  clip-path:none!important;
   background:transparent!important;
   box-shadow:none!important;
   filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
 }
 
-/* Owner-locked wide storefront contract: exactly three Featured Inventory columns. */
+/* Newest owner wide storefront contract: five compact Featured Inventory cards. */
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-grid{
     display:grid!important;
-    grid-template-columns:repeat(3,minmax(0,1fr))!important;
-    gap:18px!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:12px!important;
   }
 }
 
@@ -95,17 +96,25 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{
     grid-template-columns:50px minmax(0,1fr) 50px!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
-    width:104px!important;
+    width:150px!important;
     height:78px!important;
     justify-self:center!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo img{
-    width:90px!important;
-    min-width:90px!important;
-    max-width:90px!important;
-    height:90px!important;
-    min-height:90px!important;
-    max-height:90px!important;
+    content:url('/wdcc-logo-transparent.webp')!important;
+    width:136px!important;
+    min-width:136px!important;
+    max-width:136px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:46px!important;
+    object-fit:contain!important;
+    transform:none!important;
+    border:0!important;
+    border-radius:0!important;
+    clip-path:none!important;
+    background:transparent!important;
+    box-shadow:none!important;
   }
   html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{
     width:50px!important;
@@ -118,14 +127,15 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{
   }
 }
 
+/* Keep the public wordmark materially large on narrow phones; do not collapse it back to a badge-sized asset. */
 @media(max-width:420px){
-  html body [data-wdcc-public-chrome="header"] .rh-logo{width:96px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:146px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo img{
-    width:84px!important;
-    min-width:84px!important;
-    max-width:84px!important;
-    height:84px!important;
-    min-height:84px!important;
-    max-height:84px!important;
+    width:132px!important;
+    min-width:132px!important;
+    max-width:132px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:44px!important;
   }
 }

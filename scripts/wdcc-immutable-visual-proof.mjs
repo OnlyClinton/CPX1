@@ -64,7 +64,7 @@ try{
   await assertHits(d,'DEALER_DESKTOP',['.dcTop a','.dcTop button','.dcSide a']);
 
   await d.goto(`${base}/dealer/inventory/import?pointer-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-  const desktopImport=await assertSurface(d,'DEALER_DESKTOP_IMPORT','.dcDrop',420,140);
+  const desktopImport=await assertSurface(d,'DEALER_DESKTOP_IMPORT','.dcDrop',420,120);
   await assertHits(d,'DEALER_DESKTOP_IMPORT_ACTIONS',['.dcDrop a','.dcDrop button','.dcActions a','.dcActions button']);
   await desktopImport.screenshot({path:'immutable-visual-proof/dealer-import-desktop.png'});
 

@@ -3,21 +3,17 @@ import {pathToFileURL} from 'node:url';
 
 /*
   Owner-contract wrapper for the verified historical real-record visual stress lane.
-  The historical real-record/media fixture is useful; legacy density assertions are not.
-  This wrapper binds populated-state QA to the current owner contract:
-    - desktop featured inventory: exactly 3 columns (up to 5 populated records)
+  The historical real-record/media fixture is useful; legacy phone density assertions are not.
+  This wrapper binds populated-state QA to the newest owner contract:
+    - desktop featured inventory: five compact columns with up to 5 populated records
     - phone featured inventory: one dominant horizontal snap card with a controlled peek
-    - phone Add/Edit: one readable field column, stacked work layout, top brand only
+    - phone Add/Edit: one readable field column, stacked work layout, top brand only while the sidebar is closed
 */
 const source='scripts/wdcc-verified-real-snapshot-visual-stress.mjs';
 const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
 let code=fs.readFileSync(source,'utf8');
 
 const rewrites=[
-  [
-    "g.display!=='grid'||g.tracks!==5||count!==5",
-    "g.display!=='grid'||g.tracks!==3||count!==5"
-  ],
   [
     "return{display:s.display,count:cards.length,cardW:cards[0]?.width||0,secondX:cards[1]?.x||9999,viewport:innerWidth,uH:u?.height,hTop:h?.top,hBottom:h?.bottom,heroTop:hero?.top}",
     "return{display:s.display,snap:s.scrollSnapType,count:cards.length,cardW:cards[0]?.width||0,secondX:cards[1]?.x||9999,viewport:innerWidth,uH:u?.height,hTop:h?.top,hBottom:h?.bottom,heroTop:hero?.top}"

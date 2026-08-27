@@ -47,11 +47,11 @@ jobs:
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
           grep -q 'import LockedIntro from "./LockedIntro"' app/ReferenceCloneHome.tsx
           test -s public/wdcc-official-logo.webp
+          test -s public/wdcc-logo-transparent.webp
           grep -Eq 'wdcc-(official-logo|logo-transparent)\.webp' app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -q 'src="/wdcc-official-logo.webp"' app/WdccPublicChrome.tsx
-          ! grep -q 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
+          grep -q 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           test -s app/wdcc-system-v2.css
           grep -q 'wdcc-system-v2.css' app/layout.tsx
@@ -66,8 +66,9 @@ jobs:
           done
           grep -q 'previewFallback===true' app/InventoryGrid.tsx
           grep -q 'inventorySource==="last-known-good-real-proof"' app/InventoryGrid.tsx
-          ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css app/wdcc-owner-contract-final.css
-          grep -q 'grid-template-columns:repeat(3,minmax(0,1fr))' app/wdcc-owner-contract-final.css
+          ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css
+          grep -q 'grid-template-columns:repeat(5,minmax(0,1fr))' app/wdcc-owner-contract-final.css
+          grep -q "content:url('/wdcc-logo-transparent.webp')" app/wdcc-owner-contract-final.css
           grep -q "content:url('/wdcc-official-logo.webp')" app/wdcc-owner-contract-final.css
           grep -q 'clip-path:circle(48% at 50% 50%)' app/wdcc-owner-contract-final.css
           echo 'WDCC_ARCHITECTURE_CONTRACT=PASS'
@@ -164,15 +165,17 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -q "wdcc-official-logo.webp" /tmp/home.html
+          grep -q "wdcc-logo-transparent.webp" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
 
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
 
-          test "$(curl -sS -L -o /tmp/logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
-          test -s /tmp/logo.webp
+          test "$(curl -sS -L -o /tmp/intro-logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/intro-logo.webp
+          test "$(curl -sS -L -o /tmp/public-wordmark.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/public-wordmark.webp
 
           test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
           grep -qi 'items\|inventory' /tmp/inventory.json
@@ -186,8 +189,9 @@ jobs:
             echo "Preview: $URL"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Canonical hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Official round public badge source: PASS.'
-            echo 'Three-column wide inventory contract: PASS.'
+            echo 'Public horizontal wordmark asset: PASS.'
+            echo 'Five-column wide Featured Inventory contract: PASS.'
+            echo 'Round intro/dealer badge asset: PASS.'
             echo 'SHA-specific preview alias: PASS.'
             echo 'Shared public chrome + VehicleCard architecture: PASS.'
             echo 'Single late-stage visual contract entrypoint: PASS.'
