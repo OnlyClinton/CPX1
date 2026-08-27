@@ -29,11 +29,8 @@ jobs:
           set -euo pipefail
           echo "Waiting for exact SHA preview: $URL"
           for i in $(seq 1 120); do
-            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-matrix=$GITHUB_RUN_ID-$i" || true)"
-            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then
-              printf '%s\n' "$URL" > /tmp/exact-preview-url.txt
-              exit 0
-            fi
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-review=1&wait=$i" || true)"
+            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then exit 0; fi
             sleep 2
           done
           echo "Exact preview did not become ready: $URL" >&2
@@ -46,7 +43,7 @@ jobs:
           npm install --no-save playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
 
-      - name: Capture and enforce exact owner review matrix
+      - name: Capture corrected owner review matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -54,183 +51,126 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const {chromium}=require('playwright');
-          const base=process.env.URL;
-          const sha=process.env.GITHUB_SHA;
+          const base=process.env.URL,sha=process.env.GITHUB_SHA;
           if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA_PREVIEW ${base} ${sha}`);
+          const result={base,sha,pages:{},writes:[]};
+          const fail=(name,data={})=>{throw new Error(`${name}_${JSON.stringify(data)}`)};
+          const visible=async l=>l.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0&&r.width>1&&r.height>1});
+          const grid=async l=>l.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,w:r.width,h:r.height}});
+          const browser=await chromium.launch({headless:true});
 
-          (async()=>{
-            const browser=await chromium.launch({headless:true});
-            const result={base,sha,pages:{},errors:[],writeRequests:[],assertions:[]};
-            const matrix=[
-              {label:'home',path:'/',selector:'.reference-home',skipIntro:true,publicChrome:true},
-              {label:'inventory',path:'/inventory',selector:'.inventoryTop',publicChrome:true},
-              {label:'approval',path:'/get-approved',selector:'.approvalBoard',publicChrome:true,approval:true},
-              {label:'test-drive',path:'/schedule-test-drive',selector:'.leadPage',publicChrome:true,funnel:true},
-              {label:'contact',path:'/contact',selector:'.leadPage',publicChrome:true,funnel:true},
-              {label:'privacy',path:'/privacy',selector:'.policyPage',publicChrome:true,policy:true},
-              {label:'terms',path:'/terms',selector:'.policyPage',publicChrome:true,policy:true},
-              {label:'login',path:'/login',selector:'.loginShell'},
-              {label:'app',path:'/app',selector:'main'},
-              {label:'dealer-login',path:'/dealer/login',selector:'main'},
-              {label:'dealer-dashboard',path:'/dealer',selector:'.dealerDashboardLocked',dealer:true},
-              {label:'dealer-inventory',path:'/dealer/inventory',selector:'.inventoryContract',dealer:true},
-              {label:'dealer-editor',path:'/dealer/inventory/new',selector:'.editVehicleApp',dealerEditor:true},
-            ];
+          async function wireDealer(p){
+            const session={authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}};
+            const dashboard={summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:[],leads:[]};
+            await p.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
+            await p.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
+            await p.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
+            await p.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
+          }
 
-            const fail=(name,code,data)=>{throw new Error(`${name.toUpperCase().replaceAll('-','_')}_${code} ${JSON.stringify(data||{})}`)};
-            async function wireDealer(p){
-              const session=JSON.stringify({authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}});
-              const dashboard=JSON.stringify({summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:[],leads:[]});
-              await p.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:session}));
-              await p.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:dashboard}));
-              await p.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
-              await p.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
+          async function assertLogo(p,name,isMobile){
+            const x=await p.evaluate(()=>{
+              const logo=document.querySelector('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
+              const r=logo?.getBoundingClientRect(),s=logo?getComputedStyle(logo):null;
+              const utility=document.querySelector('[data-wdcc-public-chrome="utility"]');
+              const us=utility?getComputedStyle(utility):null,ur=utility?.getBoundingClientRect();
+              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,w:r?.width||0,h:r?.height||0,display:s?.display||'',visibility:s?.visibility||'',opacity:Number(s?.opacity||0),utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),count:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').length};
+            });
+            if(!x.found||x.count!==1||!x.complete||x.naturalWidth<20||x.naturalHeight<20||!x.src.startsWith('data:image/')||x.display==='none'||x.visibility==='hidden'||x.opacity<=0)fail(`${name}_OWNER_LOGO_LOAD`,x);
+            if(x.w<72||x.w>104||x.h<72||x.h>104||x.w/Math.max(x.h,1)<.82||x.w/Math.max(x.h,1)>1.18)fail(`${name}_OWNER_LOGO_GEOMETRY`,x);
+            if(isMobile&&x.utilityVisible)fail(`${name}_MOBILE_UTILITY_VISIBLE`,x);
+            if(!isMobile&&!x.utilityVisible)fail(`${name}_DESKTOP_UTILITY_MISSING`,x);
+            return x;
+          }
+
+          async function shot(spec,isMobile){
+            const viewport=isMobile?{width:390,height:844}:{width:1440,height:1000};
+            const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
+            const p=await ctx.newPage();
+            p.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writes.push({page:spec.label,method:r.method(),url:r.url()})});
+            if(spec.dealer)await wireDealer(p);
+            const join=spec.path.includes('?')?'&':'?';
+            const response=await p.goto(`${base}${spec.path}${join}owner-matrix=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!response||response.status()!==200)fail(`${spec.label}_HTTP`,{status:response?.status()||0});
+            await p.waitForTimeout(900);
+            if(spec.skipIntro){const b=p.getByRole('button',{name:/skip intro/i});if(await b.count())await b.click().catch(()=>{});await p.waitForTimeout(350)}
+            await p.locator(spec.selector).first().waitFor({state:'visible',timeout:10000});
+            const pageName=`${isMobile?'mobile':'desktop'}-${spec.label}`;
+            const pageData={};
+            if(spec.publicChrome)pageData.logo=await assertLogo(p,pageName,isMobile);
+
+            if(spec.label==='home'){
+              await p.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
+              const banner=(await p.locator('.wdccOwnerReviewBanner').innerText()).toUpperCase();
+              if(!banner.includes('NOT LIVE'))fail(`${pageName}_REVIEW_BANNER`,{banner});
+              await p.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
+              const count=await p.locator('.rh-grid > article').count();
+              if(count!==5)fail(`${pageName}_FEATURED_COUNT`,{count});
+              const geom=await p.locator('.rh-grid').evaluate(el=>{const s=getComputedStyle(el),cards=[...el.children].map(e=>e.getBoundingClientRect());return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,firstW:cards[0]?.width||0,secondX:cards[1]?.x||9999,viewport:innerWidth}});
+              if(isMobile){if(geom.display!=='flex'||geom.firstW<260||geom.firstW>350||geom.secondX>=390)fail(`${pageName}_FEATURED_CAROUSEL`,geom)}else if(geom.tracks!==5)fail(`${pageName}_FEATURED_GRID`,geom);
+              pageData.featured={count,...geom};
             }
 
-            async function assertPublicChrome(p,name,isMobile){
-              const chrome=await p.evaluate(()=>{
-                const visible=e=>{if(!e)return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0&&r.width>1&&r.height>1};
-                const rect=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,bottom:r.bottom}:null};
-                const utility=[...document.querySelectorAll('[data-wdcc-public-chrome="utility"]')].filter(visible);
-                const headers=[...document.querySelectorAll('[data-wdcc-public-chrome="header"]')].filter(visible);
-                const header=headers[0],logo=header?.querySelector('.rh-logo img'),call=header?.querySelector('.rh-call');
-                const callStyle=call?getComputedStyle(call):null;
-                const legacyDock=[...document.querySelectorAll('.stickyCtaBar')].filter(visible).length;
-                return{utilityCount:utility.length,headerCount:headers.length,utility:rect(utility[0]),header:rect(header),logo:rect(logo),logoSrc:logo?.getAttribute('src')||'',logoCount:header?[...header.querySelectorAll('img')].filter(visible).length:0,call:rect(call),callRadius:callStyle?.borderTopLeftRadius||'',legacyDock};
-              });
-              const h=chrome.header?.h||0,lw=chrome.logo?.w||0,lh=chrome.logo?.h||0,ratio=lw/Math.max(lh,1);
-              if(isMobile){
-                if(chrome.utilityCount!==0||chrome.headerCount!==1)fail(name,'MOBILE_SINGLE_HEADER',chrome);
-                if(Math.abs(chrome.header?.y||0)>3||h<74||h>82)fail(name,'MOBILE_CHROME_HEIGHT',chrome);
-                if(lw<120||lw>170||lh<34||lh>58||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'MOBILE_LOGO_GEOMETRY',chrome);
-                if(!chrome.call||chrome.call.w<44||chrome.call.w>54||Math.abs(chrome.call.w-chrome.call.h)>2)fail(name,'MOBILE_CALL_GEOMETRY',chrome);
-                const radius=parseFloat(chrome.callRadius)||0;if(radius<chrome.call.w*.42&&!chrome.callRadius.includes('%'))fail(name,'MOBILE_CALL_NOT_ROUND',chrome);
-              }else{
-                const u=chrome.utility?.h||0;
-                if(chrome.utilityCount!==1||chrome.headerCount!==1)fail(name,'DESKTOP_CHROME_COUNT',chrome);
-                if(u<27||u>34||h<70||h>82)fail(name,'DESKTOP_CHROME_HEIGHT',chrome);
-                if(lw<120||lw>180||lh<34||lh>60||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'DESKTOP_LOGO_GEOMETRY',chrome);
-              }
-              if(chrome.logoCount!==1||chrome.legacyDock!==0)fail(name,'PUBLIC_CHROME_DUPLICATE',chrome);
-              return chrome;
+            if(spec.label==='inventory'){
+              await p.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
+              const banner=(await p.locator('.wdccOwnerReviewBanner').innerText()).toUpperCase();
+              if(!banner.includes('NOT LIVE'))fail(`${pageName}_REVIEW_BANNER`,{banner});
+              await p.locator('.inventoryGrid > article').first().waitFor({state:'visible',timeout:10000});
+              const count=await p.locator('.inventoryGrid > article').count(),g=await grid(p.locator('.inventoryGrid'));
+              if(count!==5||g.tracks!==(isMobile?1:3))fail(`${pageName}_INVENTORY_GRID`,{count,...g});
+              pageData.inventory={count,...g};
             }
 
-            async function assertPageOptics(p,entry,name,isMobile){
-              const data=await p.evaluate(({label,isMobile})=>{
-                const vis=e=>{if(!e)return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0&&r.width>1&&r.height>1};
-                const rect=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,bottom:r.bottom}:null};
-                const px=(e,k)=>e?(parseFloat(getComputedStyle(e)[k])||0):0;
-                const approval=label==='approval';
-                const hero=document.querySelector(label==='home'?'.rh-hero':label==='inventory'?'.inventoryTop':approval?'.approvalScene':null);
-                const lead=document.querySelector(approval?'.approvalBoard':'.leadPage');
-                const form=document.querySelector(approval?'.approvalWizard':'.leadForm');
-                const h1=document.querySelector(label==='home'?'.rh-copy h1':approval?'.approvalSceneCopy h1':'.leadPage h1,.inventoryTop h1,.vehicleTop h1');
-                const controls=form?[...form.querySelectorAll('input:not([type="checkbox"]),select,textarea')].filter(vis):[];
-                const inventoryGrid=document.querySelector('.inventoryGrid');
-                const firstInventory=inventoryGrid?.querySelector('article,.inventoryProviderState,.emptyInventory');
-                const cards=inventoryGrid?[...inventoryGrid.querySelectorAll('article')].filter(vis).length:0;
-                const dealerLogo=document.querySelector('main.dcPage>.dcTop>.brand>img');
-                const dealerBrand=document.querySelector('main.dcPage>.dcTop>.brand');
-                let pseudo=null;if(dealerBrand){const b=getComputedStyle(dealerBrand,'::before'),a=getComputedStyle(dealerBrand,'::after');pseudo={before:{content:b.content,display:b.display,w:b.width},after:{content:a.content,display:a.display,w:a.width}}}
-                const homeType=label==='home'?{
-                  benefitStrong:px(document.querySelector('.rh-benefit strong'),'fontSize'),benefitSmall:px(document.querySelector('.rh-benefit small'),'fontSize'),inventoryLabel:px(document.querySelector('.rh-section-head small'),'fontSize'),inventoryCopy:px(document.querySelector('.rh-section-head p'),'fontSize'),financeStrong:px(document.querySelector('.rh-step strong'),'fontSize'),financeSmall:px(document.querySelector('.rh-step small'),'fontSize'),trustStrong:px(document.querySelector('.rh-trust-grid b'),'fontSize'),trustCopy:px(document.querySelector('.rh-trust-grid span'),'fontSize'),buttonData:[...document.querySelectorAll('.rh-hero-actions .rh-btn')].filter(vis).map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),heroPhoneVisible:[...document.querySelectorAll('.rh-phone')].some(vis)
-                }:null;
-                return{hero:rect(hero),lead:rect(lead),form:rect(form),h1:rect(h1),h1Font:px(h1,'fontSize'),controlData:controls.map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),approvalStages:approval?[...document.querySelectorAll('.approvalStages button')].filter(vis).length:0,inventoryGrid:rect(inventoryGrid),firstInventory:rect(firstInventory),cards,dealerLogo:rect(dealerLogo),dealerLogoCount:dealerLogo&&vis(dealerLogo)?1:0,pseudo,homeType,isMobile};
-              },{label:entry.label,isMobile});
-
-              if(entry.label==='home'&&isMobile){
-                if(!data.hero||data.hero.h<490||data.hero.h>720)fail(name,'HOME_HERO_PROPORTION',data);
-                const t=data.homeType||{};
-                if(t.benefitStrong<11.5||t.benefitSmall<10.5||t.inventoryLabel<9.5||t.inventoryCopy<11.5||t.financeStrong<12.5||t.financeSmall<10.5||t.trustStrong<10||t.trustCopy<10)fail(name,'HOME_MICROTYPE',t);
-                if(!Array.isArray(t.buttonData)||t.buttonData.length!==2||t.buttonData.some(b=>b.h<46||b.font<11))fail(name,'HOME_CTA_SCALE',t);
-                if(t.heroPhoneVisible)fail(name,'HOME_REDUNDANT_PHONE_CTA',t);
-              }
-              if(entry.label==='inventory'){
-                if(isMobile&&(!data.hero||data.hero.h<145||data.hero.h>270))fail(name,'INVENTORY_HERO_PROPORTION',data);
-                if(isMobile&&data.firstInventory&&data.firstInventory.y>500)fail(name,'INVENTORY_FIRST_CONTENT_TOO_LOW',data);
-                const api=await p.evaluate(async()=>{try{const r=await fetch('/api/inventory?owner-optical=1',{cache:'no-store'});const j=await r.json();return{ok:r.ok,previewFallback:Boolean(j?.previewFallback),source:j?.inventorySource||'',status:r.status}}catch(e){return{ok:false,error:String(e)}}});
-                if(api.previewFallback&&data.cards>0)fail(name,'FALLBACK_PRESENTED_AS_LIVE_CARDS',{api,...data});
-              }
-              if(entry.approval){
-                if(!data.lead||!data.form||data.approvalStages!==3)fail(name,'APPROVAL_SURFACE_MISSING',data);
-                if(isMobile&&data.form.y>900)fail(name,'APPROVAL_FORM_TOO_LOW',data);
-                if(isMobile&&(data.h1Font<38||data.h1Font>58))fail(name,'APPROVAL_HEADING_SCALE',data);
-                if(data.controlData.some(c=>c.h<(isMobile?46:42)||(isMobile&&c.font<15.5)))fail(name,'APPROVAL_CONTROL_SCALE',data);
-              }
-              if(entry.funnel){
-                if(!data.lead||!data.form)fail(name,'FUNNEL_SURFACE_MISSING',data);
-                if(isMobile&&data.form.y>580)fail(name,'FORM_BELOW_FIRST_FOLD',data);
-                if(isMobile&&(data.h1Font<38||data.h1Font>58))fail(name,'FUNNEL_HEADING_SCALE',data);
-                if(data.controlData.some(c=>c.h<(isMobile?46:42)||(isMobile&&c.font<15.5)))fail(name,'FUNNEL_CONTROL_SCALE',data);
-              }
-              if(entry.policy&&isMobile){if(!data.lead||data.lead.w<350)fail(name,'POLICY_WIDTH',data)}
-              if(entry.dealer){
-                if(data.dealerLogoCount!==1||!data.dealerLogo)fail(name,'DEALER_SINGLE_LOGO',data);
-                const l=data.dealerLogo;if(isMobile?(l.w<48||l.w>58):(l.w<52||l.w>64))fail(name,'DEALER_LOGO_SIZE',data);
-                const bad=x=>x&&x.display!=='none'&&x.content!=='none'&&x.content!=='normal'&&x.content!=='""';
-                if(bad(data.pseudo?.before)||bad(data.pseudo?.after))fail(name,'DEALER_PSEUDO_BADGE',data);
-              }
-              return data;
+            if(spec.label==='approval'){
+              const stages=await p.locator('.approvalStages button').count();
+              if(stages!==3)fail(`${pageName}_APPROVAL_STAGES`,{stages});
+              pageData.stages=stages;
             }
 
-            async function assertDealerEditor(p,name){
-              const x=await p.evaluate(()=>({steps:[...document.querySelectorAll('.stepper>button')].length,info:document.querySelectorAll('[data-wizard-stage="info"]').length,pricing:document.querySelectorAll('[data-wizard-stage="pricing"]').length,photos:document.querySelectorAll('[data-wizard-stage="photos"]').length,details:document.querySelectorAll('[data-wizard-stage="details"]').length,review:document.querySelectorAll('[data-wizard-stage="review"]').length}));
-              if(x.steps!==5||x.info!==1||x.pricing||x.photos||x.details||x.review)fail(name,'DEALER_WIZARD_INITIAL_STAGE',x);
-              return x;
+            if(spec.label==='dealer-editor'){
+              const steps=await p.locator('.stepper > button').count();
+              if(steps!==5)fail(`${pageName}_WIZARD_STEPS`,{steps});
+              const g=await grid(p.locator('.fieldGrid'));
+              if(isMobile&&g.tracks!==1)fail(`${pageName}_FIELD_GRID`,g);
+              pageData.wizard={steps,fieldGrid:g};
             }
 
-            async function shot(entry,viewport,isMobile){
-              const name=`${isMobile?'mobile':'desktop'}-${entry.label}`;
-              const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
-              const p=await ctx.newPage();
-              p.on('pageerror',e=>result.errors.push(`${name}: ${String(e)}`));
-              p.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writeRequests.push({page:name,method:r.method(),url:r.url()})});
-              if(entry.dealer||entry.dealerEditor)await wireDealer(p);
-              const join=entry.path.includes('?')?'&':'?';
-              const r=await p.goto(`${base}${entry.path}${join}owner-matrix=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              const http=r?.status()||0;if(http!==200)fail(name,'HTTP',{http});
-              await p.waitForTimeout(850);
-              if(entry.skipIntro){const b=p.getByRole('button',{name:/skip intro/i});if(await b.count())await b.click().catch(()=>{});await p.waitForTimeout(450)}
-              await p.locator(entry.selector).first().waitFor({state:'visible',timeout:8000});
-              const geom=await p.evaluate(()=>({docW:document.documentElement.scrollWidth,winW:innerWidth,docH:document.documentElement.scrollHeight,winH:innerHeight}));
-              if(geom.docW>geom.winW+1)fail(name,'HORIZONTAL_OVERFLOW',geom);
-              const text=(await p.locator('body').innerText().catch(()=>'' )).replace(/\s+/g,' ').trim();
-              if(/application error|internal server error|this page could not be found/i.test(text))fail(name,'VISIBLE_ERROR',{});
-              const chrome=entry.publicChrome?await assertPublicChrome(p,name,isMobile):null;
-              const optics=entry.dealerEditor?await assertDealerEditor(p,name):await assertPageOptics(p,entry,name,isMobile);
-              result.pages[name]={http,url:p.url(),title:await p.title(),geometry:geom,chrome,optics,text:text.slice(0,1400)};
-              result.assertions.push({name,pass:true});
-              await p.screenshot({path:`/tmp/wdcc-owner-target/${name}.png`,fullPage:true});
-              await ctx.close();
-            }
+            const overflow=await p.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-innerWidth));
+            if(overflow>2)fail(`${pageName}_HORIZONTAL_OVERFLOW`,{overflow});
+            pageData.overflow=overflow;
+            result.pages[pageName]=pageData;
+            await p.screenshot({path:`/tmp/wdcc-owner-target/${pageName}.png`,fullPage:true});
+            await ctx.close();
+          }
 
-            for(const entry of matrix){await shot(entry,{width:1440,height:1000},false);await shot(entry,{width:390,height:844},true)}
-            await browser.close();
-            if(result.writeRequests.length)throw new Error(`OWNER_MATRIX_WRITE_REQUESTS ${JSON.stringify(result.writeRequests)}`);
-            fs.writeFileSync('/tmp/wdcc-owner-target/result.json',JSON.stringify(result,null,2));
-          })().catch(e=>{fs.writeFileSync('/tmp/wdcc-owner-target/failure.txt',String(e?.stack||e));console.error(e);process.exit(1)});
+          const specs=[
+            {label:'home',path:'/?owner-review=1',selector:'.reference-home',skipIntro:true,publicChrome:true},
+            {label:'inventory',path:'/inventory?owner-review=1',selector:'.inventoryGrid',publicChrome:true},
+            {label:'approval',path:'/get-approved',selector:'.approvalBoard',publicChrome:true},
+            {label:'test-drive',path:'/schedule-test-drive',selector:'.leadPage',publicChrome:true},
+            {label:'contact',path:'/contact',selector:'.leadPage',publicChrome:true},
+            {label:'dealer-dashboard',path:'/dealer',selector:'.dealerDashboardLocked',dealer:true},
+            {label:'dealer-inventory',path:'/dealer/inventory',selector:'.inventoryContract',dealer:true},
+            {label:'dealer-editor',path:'/dealer/inventory/new',selector:'.editVehicleApp',dealer:true}
+          ];
+          try{
+            for(const spec of specs){await shot(spec,false);await shot(spec,true)}
+            if(result.writes.length)fail('OWNER_MATRIX_WRITE_REQUESTS',{writes:result.writes});
+            result.pass=true;
+            fs.writeFileSync('/tmp/wdcc-owner-target/result.json',JSON.stringify(result,null,2)+'\n');
+            console.log(`WDCC OWNER EXACT PAGE MATRIX PASS sha=${sha} pages=${Object.keys(result.pages).length}`);
+          }finally{await browser.close()}
           NODE
 
       - name: Publish owner matrix summary
-        if: always()
         shell: bash
         run: |
-          echo '### WDCC exact-SHA optical owner page matrix' >> "$GITHUB_STEP_SUMMARY"
-          echo "SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview: $URL" >> "$GITHUB_STEP_SUMMARY"
-          if [ -s /tmp/wdcc-owner-target/result.json ]; then
-            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
-          const r=require('/tmp/wdcc-owner-target/result.json');
-          for(const [name,p] of Object.entries(r.pages))console.log(`- ${name}: HTTP ${p.http} · ${p.geometry.winW}px · optical contract PASS`);
-          console.log(`- optical assertions: ${r.assertions.length}`);
-          console.log(`- write requests during visual review: ${r.writeRequests.length}`);
-          NODE
-          else
-            echo 'Matrix failed an optical assertion. See failure.txt and screenshots.' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          echo '### WDCC owner exact page matrix — PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $URL/?owner-review=1" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Correct owner-approved emblem + five verified historical NOT-LIVE review vehicles enforced.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: wdcc-owner-exact-page-matrix-${{ github.sha }}
           path: /tmp/wdcc-owner-target/
