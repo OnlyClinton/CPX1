@@ -1,0 +1,78 @@
+name: WDCC Production Control Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject unguarded production-write lanes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          root=Path('.github/workflows')
+          errors=[]
+          dangerous=[]
+          for path in sorted([*root.glob('*.yml'), *root.glob('*.yaml')]):
+              text=path.read_text(errors='replace')
+              low=text.lower()
+              reasons=[]
+              if re.search(r'\bvercel\s+alias\s+set\b', low):
+                  reasons.append('vercel alias write')
+              if 'dns_records/' in low and re.search(r'-x\s+(patch|put|post|delete)\b', low):
+                  reasons.append('Cloudflare DNS write')
+              if 'workers/routes' in low and re.search(r'-x\s+(patch|put|post|delete)\b', low):
+                  reasons.append('Cloudflare route write')
+              if 'wrangler deploy' in low and (
+                  'wedontcarecars.com/*' in low or
+                  'www.wedontcarecars.com/*' in low or
+                  'dealer.wedontcarecars.com/*' in low or
+                  'zone_name' in low and 'wedontcarecars.com' in low
+              ):
+                  reasons.append('Cloudflare production deploy')
+              if re.search(r'\bvercel\b[^\n]*--prod\b', low):
+                  reasons.append('Vercel production deploy')
+              if not reasons:
+                  continue
+
+              dangerous.append((str(path), reasons))
+              header=text.split('permissions:',1)[0]
+              if re.search(r'(?m)^\s+push\s*:', header):
+                  errors.append(f'{path}: production-write workflow may not have a push trigger')
+              if re.search(r'(?m)^\s+pull_request\s*:', header):
+                  errors.append(f'{path}: production-write workflow may not have a pull_request trigger')
+
+              frozen='wdcc-production-freeze-check.yml' in text
+              hardened_alias=(
+                  path.name == 'emergency-vercel-alias-pin-2vfd.yml' and
+                  'OWNER-APPROVED-2VFD' in text and
+                  'release_control_issue' in text and
+                  'verify-only' in text
+              )
+              if not (frozen or hardened_alias):
+                  errors.append(f'{path}: production-write workflow lacks the approved #205 fail-closed gate')
+
+          print('Dangerous active workflow signatures:')
+          for path,reasons in dangerous:
+              print(f'  {path}: {", ".join(reasons)}')
+          if errors:
+              print('\nCONTROL AUDIT FAILED:', file=sys.stderr)
+              for error in errors:
+                  print(f'  - {error}', file=sys.stderr)
+              raise SystemExit(1)
+          print('WDCC_PRODUCTION_CONTROL_AUDIT=PASS')
+          PY

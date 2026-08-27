@@ -1,178 +1,28 @@
-name: WDCC Cloudflare Exact 2vfD Origin Repair
+name: WDCC Cloudflare Origin Repair [FROZEN by #205]
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/wdcc-cloudflare-origin-repair.yml'
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Production writes are frozen while issue #205 is NO-GO
+        required: true
+        default: verify-only
+        type: choice
+        options:
+          - verify-only
+      release_control_issue:
+        description: Controlling WDCC release-control issue
+        required: true
+        default: '205'
+        type: string
 
 permissions:
   contents: read
-
-concurrency:
-  group: wdcc-cloudflare-origin-repair
-  cancel-in-progress: true
-
-env:
-  CF_API: https://api.cloudflare.com/client/v4
-  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
-  DONOR_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
-  ORIGIN_HOST: origin-2vfd.wedontcarecars.com
-  ORIGIN: https://origin-2vfd.wedontcarecars.com
-  VERCEL_SCOPE: cpxagency
-  WORKER: wdcc-reference-root
+  issues: read
 
 jobs:
-  repair:
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    env:
-      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Require authority
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${CF_TOKEN:-}"
-          test -n "${CF_ACCOUNT:-}"
-          test -n "${VERCEL_TOKEN:-}"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install CLIs
-        run: npm install --global wrangler@4.90.0 vercel@59.5.0
-
-      - name: Fingerprint immutable 2vfD
-        shell: bash
-        run: |
-          set -euo pipefail
-          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor.html
-          grep -qi "we don.t care" /tmp/donor.html
-          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
-          grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
-          donor_css="$(grep -Eo '/_next/static/chunks/[^" ]+\.css' /tmp/donor.html | head -1)"
-          test -n "$donor_css"
-          printf '%s\n' "$donor_css" >/tmp/donor-css.txt
-          vercel --scope "$VERCEL_SCOPE" curl /wdcc-logo-transparent.webp --deployment "$DONOR_HOST" > /tmp/donor-logo.webp
-          vercel --scope "$VERCEL_SCOPE" curl /wdcc-hero-v2.webp --deployment "$DONOR_HOST" > /tmp/donor-hero.webp
-          test -s /tmp/donor-logo.webp
-          test -s /tmp/donor-hero.webp
-
-      - name: Create dedicated Cloudflare DNS origin and bind exact donor
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?type=CNAME&name=$ORIGIN_HOST" \
-            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' >/tmp/dns.json
-          jq -e '.success==true' /tmp/dns.json >/dev/null
-          rid="$(jq -r '.result[0].id // empty' /tmp/dns.json)"
-          payload="$(jq -nc --arg name "$ORIGIN_HOST" '{type:"CNAME",name:$name,content:"cname.vercel-dns.com",ttl:1,proxied:false}')"
-          if [ -n "$rid" ]; then
-            curl -fsS -X PUT "$CF_API/zones/$ZONE_ID/dns_records/$rid" \
-              -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' --data "$payload" >/tmp/dns-write.json
-          else
-            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" \
-              -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' --data "$payload" >/tmp/dns-write.json
-          fi
-          jq -e '.success==true' /tmp/dns-write.json >/dev/null
-          vercel alias set "$DONOR_HOST" "$ORIGIN_HOST" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
-
-      - name: Prove dedicated origin equals immutable donor
-        shell: bash
-        run: |
-          set -euo pipefail
-          donor_css="$(cat /tmp/donor-css.txt)"
-          ok=0
-          for i in $(seq 1 60); do
-            code="$(curl -sS -L --max-time 20 -o /tmp/origin.html -w '%{http_code}' "$ORIGIN/?proof=$GITHUB_RUN_ID-$i" || true)"
-            origin_css="$(grep -Eo '/_next/static/chunks/[^" ]+\.css' /tmp/origin.html 2>/dev/null | head -1 || true)"
-            if [ "$code" = 200 ] && [ "$origin_css" = "$donor_css" ]; then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = 1
-          curl -fsS "$ORIGIN/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID" -o /tmp/origin-logo.webp
-          curl -fsS "$ORIGIN/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID" -o /tmp/origin-hero.webp
-          test "$(sha256sum /tmp/origin-logo.webp | awk '{print $1}')" = "$(sha256sum /tmp/donor-logo.webp | awk '{print $1}')"
-          test "$(sha256sum /tmp/origin-hero.webp | awk '{print $1}')" = "$(sha256sum /tmp/donor-hero.webp | awk '{print $1}')"
-          code="$(curl -sS -D /tmp/origin-css.h --max-time 20 -o /tmp/origin.css -w '%{http_code}' "$ORIGIN$donor_css")"
-          test "$code" = 200
-          grep -qi '^content-type: text/css' /tmp/origin-css.h
-          test "$(wc -c </tmp/origin.css)" -gt 5000
-
-      - name: Preserve dealer route before public Worker update
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' >/tmp/routes-before.json
-          jq -e '.success==true' /tmp/routes-before.json >/dev/null
-          jq -e '.result[]|select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-before.json >/dev/null
-
-      - name: Update existing Cloudflare storefront Worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/wdcc-edge
-          cat >/tmp/wdcc-edge/worker.js <<'EOF'
-          const ORIGIN='https://origin-2vfd.wedontcarecars.com';
-          const VEHICLES=[
-            {id:'2004-nissan-350z',slug:'2004-nissan-350z',year:2004,make:'Nissan',model:'350Z',trim:'',price:4900,downPayment:2000,down_payment:2000,mileage:154000,status:'published',stock:'RECOVERED-2004-NISSAN-350Z',bodyStyle:'Car',drivetrain:'RWD',primary_image_url:'/assets/cars/2004-nissan-350z-1.webp',image:'/assets/cars/2004-nissan-350z-1.webp',featured:true,description:'2004 Nissan 350Z available from We Don’t Care Cars in Tampa Bay.'},
-            {id:'2016-ford-f150-limited',slug:'2016-ford-f150-limited',year:2016,make:'Ford',model:'F-150',trim:'Limited',price:15000,downPayment:6000,down_payment:6000,mileage:164000,status:'published',stock:'RECOVERED-2016-FORD-F150-LIM',bodyStyle:'Truck',transmission:'Automatic',primary_image_url:'/assets/cars/2016-ford-f150-limited-1.webp',image:'/assets/cars/2016-ford-f150-limited-1.webp',featured:true,description:'2016 Ford F-150 Limited available from We Don’t Care Cars in Tampa Bay.'},
-            {id:'2019-honda-pilot',slug:'2019-honda-pilot',year:2019,make:'Honda',model:'Pilot',trim:'',price:7900,downPayment:3000,down_payment:3000,mileage:380000,status:'published',stock:'RECOVERED-2019-HONDA-PILOT',bodyStyle:'SUV',transmission:'Automatic',primary_image_url:'/assets/cars/2019-honda-pilot-1.webp',image:'/assets/cars/2019-honda-pilot-1.webp',featured:true,description:'2019 Honda Pilot available from We Don’t Care Cars in Tampa Bay.'},
-            {id:'2019-kia-sportage',slug:'2019-kia-sportage',year:2019,make:'Kia',model:'Sportage',trim:'',price:6500,downPayment:2500,down_payment:2500,mileage:127000,status:'published',stock:'RECOVERED-2019-KIA-SPORTAGE',bodyStyle:'SUV',transmission:'Automatic',primary_image_url:'/assets/cars/2019-kia-sportage-1.webp',image:'/assets/cars/2019-kia-sportage-1.webp',featured:true,description:'2019 Kia Sportage available from We Don’t Care Cars in Tampa Bay.'},
-            {id:'2019-toyota-rav4',slug:'2019-toyota-rav4',year:2019,make:'Toyota',model:'RAV4',trim:'',price:10500,downPayment:4500,down_payment:4500,mileage:240000,status:'published',stock:'RECOVERED-2019-TOYOTA-RAV4',bodyStyle:'SUV',transmission:'Automatic',primary_image_url:'/assets/cars/2019-toyota-rav4-1.webp',image:'/assets/cars/2019-toyota-rav4-1.webp',featured:true,description:'2019 Toyota RAV4 available from We Don’t Care Cars in Tampa Bay.'}
-          ];
-          const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-wdcc-cloudflare-public':'exact-2vfd','x-wdcc-inventory-source':'verified-real-edge-recovery','x-wdcc-blob-state':'provider-blocked-read-only-fallback'}});
-          export default {async fetch(request){
-            const incoming=new URL(request.url);
-            if(request.method==='GET'&&incoming.pathname==='/api/inventory')return json({ok:true,items:VEHICLES,inventory:VEHICLES,count:5,inventorySource:'verified-real-edge-recovery',readOnly:true,providerDegraded:true,blobHealthy:false});
-            if(request.method==='GET'&&incoming.pathname.startsWith('/api/inventory/')){const id=decodeURIComponent(incoming.pathname.slice('/api/inventory/'.length));const item=VEHICLES.find(v=>v.id===id||v.slug===id||v.stock===id);return item?json({ok:true,item,inventorySource:'verified-real-edge-recovery',readOnly:true,providerDegraded:true,blobHealthy:false}):json({ok:false,error:'not_found'},404)}
-            const target=new URL(ORIGIN);target.pathname=incoming.pathname;target.search=incoming.search;
-            const h=new Headers(request.headers);h.delete('host');h.set('x-forwarded-host',incoming.host);h.set('x-forwarded-proto','https');
-            const upstream=await fetch(new Request(target.toString(),{method:request.method,headers:h,body:['GET','HEAD'].includes(request.method)?undefined:request.body,redirect:'manual'}));
-            const out=new Headers(upstream.headers);out.set('x-wdcc-cloudflare-public','exact-2vfd');out.set('x-wdcc-cloudflare-worker','wdcc-reference-root');out.set('x-wdcc-origin','origin-2vfd');
-            const loc=out.get('location');if(loc){try{const next=new URL(loc,target);if(next.hostname===new URL(ORIGIN).hostname){next.protocol='https:';next.host=incoming.host;out.set('location',next.toString())}}catch{}}
-            if((out.get('content-type')||'').includes('text/html'))out.set('cache-control','no-store,max-age=0');
-            return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:out});
-          }};
-          EOF
-          cat >/tmp/wdcc-edge/wrangler.jsonc <<'EOF'
-          {"name":"wdcc-reference-root","main":"worker.js","compatibility_date":"2026-08-27","workers_dev":true,"routes":[{"pattern":"wedontcarecars.com/*","zone_name":"wedontcarecars.com"},{"pattern":"www.wedontcarecars.com/*","zone_name":"wedontcarecars.com"}]}
-          EOF
-          cd /tmp/wdcc-edge
-          wrangler deploy --config wrangler.jsonc
-
-      - name: Prove live HTML CSS media inventory and dealer isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          donor_css="$(cat /tmp/donor-css.txt)"
-          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' >/tmp/routes-after.json
-          jq -e '.result[]|select(.pattern=="wedontcarecars.com/*" and .script=="wdcc-reference-root")' /tmp/routes-after.json >/dev/null
-          jq -e '.result[]|select(.pattern=="www.wedontcarecars.com/*" and .script=="wdcc-reference-root")' /tmp/routes-after.json >/dev/null
-          jq -e '.result[]|select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-after.json >/dev/null
-          for host in https://wedontcarecars.com https://www.wedontcarecars.com; do
-            code="$(curl -sS -D /tmp/live.h -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "$host/?proof=$GITHUB_RUN_ID")"
-            test "$code" = 200
-            grep -qi '^x-wdcc-origin: origin-2vfd' /tmp/live.h
-            live_css="$(grep -Eo '/_next/static/chunks/[^" ]+\.css' /tmp/live.html | head -1)"
-            test "$live_css" = "$donor_css"
-            curl -fsS "$host/wdcc-logo-transparent.webp?proof=$GITHUB_RUN_ID" -o /tmp/live-logo.webp
-            curl -fsS "$host/wdcc-hero-v2.webp?proof=$GITHUB_RUN_ID" -o /tmp/live-hero.webp
-            test "$(sha256sum /tmp/live-logo.webp | awk '{print $1}')" = "$(sha256sum /tmp/donor-logo.webp | awk '{print $1}')"
-            test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$(sha256sum /tmp/donor-hero.webp | awk '{print $1}')"
-            css_code="$(curl -sS -D /tmp/live-css.h --max-time 25 -o /tmp/live.css -w '%{http_code}' "$host$live_css")";test "$css_code" = 200;grep -qi '^content-type: text/css' /tmp/live-css.h;test "$(wc -c </tmp/live.css)" -gt 5000
-            curl -fsS "$host/api/inventory" -o /tmp/inventory.json;jq -e '.ok==true and (.items|length)==5' /tmp/inventory.json >/dev/null
-          done
-          dealer_code="$(curl -sS -L --max-time 20 -o /tmp/dealer.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer || true)";echo "$dealer_code"|grep -Eq '^(200|302|307|308)$'
-          upload_code="$(curl -sS -L --max-time 20 -o /tmp/upload.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer/inventory/new || true)";echo "$upload_code"|grep -Eq '^(200|302|307|308)$'
-          echo 'CLOUDFLARE_EXACT_2VFD_ORIGIN_REPAIR=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo 'LIVE_HTML_CSS_MEDIA_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo 'VERIFIED_REAL_FIVE_CAR_EDGE_READ=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo 'DEALER_ROUTE_PRESERVED=PASS' >> "$GITHUB_STEP_SUMMARY"
+  freeze:
+    uses: ./.github/workflows/wdcc-production-freeze-check.yml
+    with:
+      lane: cloudflare-origin-repair
+      release_control_issue: ${{ inputs.release_control_issue }}
