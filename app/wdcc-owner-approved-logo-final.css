@@ -1,0 +1,72 @@
+/* FINAL owner-approved WDCC logo authority.
+   Loaded after the screenshot switch so no legacy content:url can replace the emblem. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+  grid-template-columns:108px minmax(0,1fr) auto!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  width:100px!important;
+  min-width:100px!important;
+  height:78px!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:visible!important;
+  background:none!important;
+  filter:none!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art,
+html body [data-wdcc-public-chrome="header"] .rh-logo img[data-wdcc-logo-art="owner-approved"]{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:static!important;
+  width:86px!important;
+  min-width:86px!important;
+  max-width:86px!important;
+  height:86px!important;
+  min-height:86px!important;
+  max-height:86px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.55))!important;
+  transform:none!important;
+}
+html body .li .li-badge>img[data-wdcc-intro-badge-art="owner-approved"]{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  filter:drop-shadow(0 12px 28px rgba(0,0,0,.48))!important;
+}
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    width:96px!important;
+    min-width:96px!important;
+    height:78px!important;
+    justify-self:center!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art,
+  html body [data-wdcc-public-chrome="header"] .rh-logo img[data-wdcc-logo-art="owner-approved"]{
+    width:84px!important;
+    min-width:84px!important;
+    max-width:84px!important;
+    height:84px!important;
+    min-height:84px!important;
+    max-height:84px!important;
+  }
+}
