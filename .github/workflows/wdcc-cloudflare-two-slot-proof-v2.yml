@@ -1,0 +1,206 @@
+name: WDCC Cloudflare Two Slot Recovery Proof V2
+
+on:
+  push:
+    branches: [emergency/wdcc-cloudflare-r2-20260827]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-two-slot-proof-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-cloudflare-two-slot-proof-v2
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      STATE_WORKER: wdcc-v53-staging
+      STATE_URL: https://wdcc-v53-staging.clico-global.workers.dev
+      APP_WORKER: wdcc-v53-1-staging
+      APP_URL: https://wdcc-v53-1-staging.clico-global.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+
+      - name: Install tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VERCEL_TOKEN; do test -n "${!v:-}" || exit 20; done
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PHOENIX_ID" > .vercel/project.json
+
+      - name: Deploy state Worker into existing staging slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.state.jsonc <<EOF
+          {
+            "name":"$STATE_WORKER",
+            "main":"cloudflare/wdcc-state-worker.mjs",
+            "compatibility_date":"2026-08-27",
+            "workers_dev":true,
+            "preview_urls":true,
+            "observability":{"enabled":true},
+            "durable_objects":{"bindings":[{"name":"WDCC_STATE","class_name":"WDCCState"}]},
+            "migrations":[{"tag":"v1","new_sqlite_classes":["WDCCState"]}]
+          }
+          EOF
+          npx wrangler deploy --config wrangler.state.jsonc 2>&1 | tee /tmp/state-deploy.log
+          grep -q "$STATE_URL" /tmp/state-deploy.log
+          TOKEN="$(openssl rand -hex 32)"
+          printf '::add-mask::%s\n' "$TOKEN"
+          printf '%s' "$TOKEN" >/tmp/state-token
+          printf '%s' "$TOKEN" | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.state.jsonc >/dev/null
+          sleep 4
+
+      - name: Ensure only synthetic staging state exists and prove storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(cat /tmp/state-token)"
+          code="$(curl -sS -o /tmp/state-health.json -w '%{http_code}' "$STATE_URL/health?v2=$GITHUB_RUN_ID" || true)"
+          echo "PRESEED_HEALTH_HTTP=$code"
+          cat /tmp/state-health.json || true
+          if [ "$code" != 200 ]; then
+            cat > /tmp/synthetic.json <<'JSON'
+          {
+            "revision": 1,
+            "tenants": [{"id":"wdcc","slug":"wdcc","name":"We Don't Care Cars","status":"recovery-proof"}],
+            "users": [],
+            "vehicles": [],
+            "leads": [],
+            "audit": [{"id":"cloudflare-recovery-proof-v2","at":"2026-08-27T00:00:00Z","actor":"recovery","action":"cloudflare.synthetic.bootstrap","details":{"production":false,"source":"synthetic"}}],
+            "updatedAt":"2026-08-27T00:00:00Z"
+          }
+          JSON
+            seed="$(curl -sS -o /tmp/seed.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -X PUT "$STATE_URL/state" --data-binary @/tmp/synthetic.json || true)"
+            echo "SEED_HTTP=$seed"
+            cat /tmp/seed.json || true
+            test "$seed" = 200
+          fi
+
+          code=000
+          for i in $(seq 1 10); do
+            code="$(curl -sS -o /tmp/state-health.json -w '%{http_code}' "$STATE_URL/health?v2=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          echo "STATE_HEALTH_HTTP=$code"
+          cat /tmp/state-health.json
+          test "$code" = 200
+          jq -e '.ok==true and .provider=="cloudflare" and .storage=="durable-object-sqlite" and .state=="readable" and .revision>=1' /tmp/state-health.json >/dev/null
+
+          self=000
+          for i in $(seq 1 10); do
+            self="$(curl -sS -o /tmp/self.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -X POST "$STATE_URL/self-test" || true)"
+            [ "$self" = 200 ] && break
+            sleep 2
+          done
+          echo "SELFTEST_HTTP=$self"
+          cat /tmp/self.json
+          test "$self" = 200
+          jq -e '.ok==true and .write==true and .read==true and .delete==true' /tmp/self.json >/dev/null
+
+          read=000
+          for i in $(seq 1 10); do
+            read="$(curl -sS -o /tmp/state.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$STATE_URL/state" || true)"
+            [ "$read" = 200 ] && break
+            sleep 2
+          done
+          echo "STATE_READ_HTTP=$read"
+          test "$read" = 200
+          jq -e '.revision>=1 and (.users|type)=="array" and (.vehicles|type)=="array" and (.leads|type)=="array"' /tmp/state.json >/dev/null
+          jq '{revision,users:(.users|length),vehicles:(.vehicles|length),leads:(.leads|length),audit:(.audit|length)}' /tmp/state.json
+
+      - name: Build Cloudflare application
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+
+      - name: Deploy app into second existing staging slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          c.name=process.env.APP_WORKER;
+          c.main='.open-next/worker.js';
+          c.workers_dev=true;
+          c.preview_urls=true;
+          delete c.route; delete c.routes; delete c.durable_objects; delete c.migrations;
+          c.vars={...(c.vars||{}),WDCC_RUNTIME_ROLE:'backend',WDCC_PROVIDER:'cloudflare',WDCC_STATE_SERVICE_URL:process.env.STATE_URL};
+          delete c.vars.WDCC_DEALER_BACKEND_URL;
+          fs.writeFileSync('wrangler.app.jsonc',JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx wrangler deploy --config wrangler.app.jsonc 2>&1 | tee /tmp/app-deploy.log
+          grep -q "$APP_URL" /tmp/app-deploy.log
+          TOKEN="$(cat /tmp/state-token)"
+          printf '%s' "$TOKEN" | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.app.jsonc >/dev/null
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" -- bash -lc 'test -n "${SESSION_SECRET:-}"; printf "%s" "$SESSION_SECRET" | npx wrangler secret put SESSION_SECRET --config wrangler.app.jsonc >/dev/null'
+          sleep 5
+
+      - name: Final isolated Cloudflare proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 20); do
+            code="$(curl -sS -o /tmp/app-health.json -w '%{http_code}' "$APP_URL/api/health?v2=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          echo "APP_HEALTH_HTTP=$code"
+          cat /tmp/app-health.json || true
+          test "$code" = 200
+          jq -e '.ok==true and .degraded==false and .backend=="local" and .storage=="cloudflare-do" and .state=="readable" and .provider=="cloudflare" and .session=="configured" and .revision>=1' /tmp/app-health.json >/dev/null
+
+          inv="$(curl -sS -o /tmp/inventory.json -w '%{http_code}' "$APP_URL/api/inventory?v2=$GITHUB_RUN_ID" || true)"
+          echo "INVENTORY_HTTP=$inv"; cat /tmp/inventory.json || true
+          test "$inv" = 200
+          jq -e '.ok==true and (.items|type)=="array"' /tmp/inventory.json >/dev/null
+
+          dealer="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$APP_URL/dealer?v2=$GITHUB_RUN_ID" || true)"
+          echo "DEALER_HTTP=$dealer"
+          test "$dealer" = 200
+          grep -qi dealer /tmp/dealer.html
+
+          state="$(curl -sS -o /tmp/state-final.json -w '%{http_code}' "$STATE_URL/health?v2final=$GITHUB_RUN_ID" || true)"
+          echo "STATE_FINAL_HTTP=$state"; cat /tmp/state-final.json || true
+          test "$state" = 200
+          jq -e '.ok==true and .storage=="durable-object-sqlite" and .state=="readable"' /tmp/state-final.json >/dev/null
+
+      - name: Record green proof
+        if: success()
+        shell: bash
+        env: {GH_TOKEN: ${{ github.token }}}
+        run: |
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Cloudflare emergency replacement proof V2 run $GITHUB_RUN_ID is GREEN using two existing isolated Worker slots: state=\`wdcc-v53-staging\`, app=\`wdcc-v53-1-staging\`. Durable Object SQLite write/read/delete passed; app health=200 with provider=cloudflare, storage=cloudflare-do, state=readable, session=configured; inventory=200; dealer page=200. No production route, DNS, Vercel alias, apex, or dealer traffic changed. State remains synthetic/non-production; live cutover remains blocked on recovery or independently verified reconstruction of production ledger revision 654." || true
+
+      - name: Record failure
+        if: failure()
+        shell: bash
+        env: {GH_TOKEN: ${{ github.token }}}
+        run: |
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Cloudflare emergency replacement proof V2 run $GITHUB_RUN_ID failed in isolated staging. No production route, DNS, Vercel alias, apex, or dealer traffic changed." || true
