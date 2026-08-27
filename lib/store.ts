@@ -67,23 +67,46 @@ function remember(state:State){
   providerBlockedUntil=0;
 }
 
+function validateState(state:State,source:string){
+  if(!Number.isFinite(state.revision))throw Error(`STATE_INVALID:${source}`);
+  return state;
+}
+
 async function readBlobState(pathname:string):Promise<State>{
   const response=await get(pathname,{access:"private",useCache:false,...opt()});
   if(!response||response.statusCode!==200||!response.stream)throw Error(`STATE_BLOB_READ_FAILED:${pathname}`);
   const chunks:Uint8Array[]=[];
   for await(const chunk of response.stream as any)chunks.push(chunk);
   const raw=Buffer.concat(chunks).toString("utf8");
-  const parsed=JSON.parse(raw);
-  const state=normalizeState(parsed);
-  if(!Number.isFinite(state.revision))throw Error(`STATE_BLOB_INVALID:${pathname}`);
-  return state;
+  return validateState(normalizeState(JSON.parse(raw)),pathname);
+}
+
+async function readCloudflareState(authority:any):Promise<State>{
+  const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+    method:"GET",
+    headers:{Accept:"application/json",Authorization:`Bearer ${authority.options.stateServiceToken}`},
+    cache:"no-store"
+  });
+  if(!response.ok)throw Error(`STATE_CLOUDFLARE_READ_FAILED:${response.status}`);
+  return validateState(normalizeState(await response.json()),"cloudflare-do");
 }
 
 async function readStateFresh():Promise<State>{
-  const authority=blobAuthority();
+  const authority:any=blobAuthority();
   if(authority.mode==="missing"){
-    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:Boolean((process.env.BLOB_READ_WRITE_TOKEN||"").trim()),hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:Boolean((process.env.BLOB_READ_WRITE_TOKEN||"").trim()),hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID),hasStateServiceUrl:Boolean(process.env.WDCC_STATE_SERVICE_URL),hasStateServiceToken:Boolean(process.env.WDCC_STATE_SERVICE_TOKEN)}));
     throw Error("STATE_AUTHORITY_MISSING");
+  }
+
+  if(authority.mode==="cloudflare-do"){
+    try{
+      const state=await readCloudflareState(authority);
+      remember(state);
+      return state;
+    }catch(error){
+      console.error("WDCC_STATE_CLOUDFLARE_READ_FAILED",JSON.stringify({authority:authority.mode,error:errorText(error)}));
+      throw Error("STATE_READ_FAILED");
+    }
   }
 
   try{
@@ -127,7 +150,7 @@ async function readStateFresh():Promise<State>{
 export async function readState():Promise<State>{
   const now=Date.now();
   if(readCache&&readCache.expiresAt>now)return cloneState(readCache.state);
-  if(providerBlockedUntil>now)throw Error("STATE_PROVIDER_BACKOFF");
+  if(providerBlockedUntil>now&&blobAuthority().mode!=="cloudflare-do")throw Error("STATE_PROVIDER_BACKOFF");
 
   if(!readInFlight){
     readInFlight=readStateFresh().finally(()=>{readInFlight=null});
@@ -136,14 +159,27 @@ export async function readState():Promise<State>{
 }
 
 export async function writeState(input:State){
-  const authority=blobAuthority();
+  const authority:any=blobAuthority();
   if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   const state=normalizeState(input);
   state.revision=Number(state.revision||0)+1;
   state.updatedAt=new Date().toISOString();
   const body=JSON.stringify(state,null,2)+"\n";
-  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
 
+  if(authority.mode==="cloudflare-do"){
+    const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+      method:"PUT",
+      headers:{"Content-Type":"application/json",Accept:"application/json",Authorization:`Bearer ${authority.options.stateServiceToken}`},
+      body,
+      cache:"no-store"
+    });
+    const result:any=await response.json().catch(()=>({}));
+    if(!response.ok||result?.ok!==true)throw Error(`STATE_CLOUDFLARE_WRITE_FAILED:${response.status}:${result?.error||"unknown"}`);
+    remember(state);
+    return cloneState(state);
+  }
+
+  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
   await put(backupPath,body,{
     access:"private",
     addRandomSuffix:false,
@@ -183,7 +219,7 @@ export function isQaVehicleRecord(vehicle:any){
 }
 
 export function isInternalVehicleRecord(vehicle:any){
-  const visibility=String(vehicle?.visibility||vehicle?.listingVisibility||"").trim().toLowerCase();
+  const visibility=String(vehicle?.visibility||vehicle.listingVisibility||"").trim().toLowerCase();
   return vehicle?.internalOnly===true||visibility==="internal"||visibility==="dealer_only";
 }
 
