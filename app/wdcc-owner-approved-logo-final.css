@@ -67,12 +67,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   visibility:visible!important;
   opacity:1!important;
   position:static!important;
-  width:auto!important;
-  min-width:0!important;
-  max-width:104px!important;
-  height:72px!important;
-  min-height:0!important;
-  max-height:72px!important;
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  height:92px!important;
+  min-height:92px!important;
+  max-height:92px!important;
   object-fit:contain!important;
   object-position:center!important;
   border:0!important;
@@ -113,12 +113,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
-    width:auto!important;
-    min-width:0!important;
-    max-width:104px!important;
-    height:68px!important;
-    min-height:0!important;
-    max-height:68px!important;
+    width:92px!important;
+    min-width:92px!important;
+    max-width:92px!important;
+    height:92px!important;
+    min-height:92px!important;
+    max-height:92px!important;
     border-radius:0!important;
     clip-path:none!important;
     filter:drop-shadow(0 4px 10px rgba(0,0,0,.48))!important;
@@ -137,9 +137,11 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
-    width:auto!important;
-    max-width:100px!important;
-    height:66px!important;
-    max-height:66px!important;
+    width:92px!important;
+    min-width:92px!important;
+    max-width:92px!important;
+    height:92px!important;
+    min-height:92px!important;
+    max-height:92px!important;
   }
 }
