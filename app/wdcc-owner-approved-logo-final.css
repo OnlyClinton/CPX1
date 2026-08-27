@@ -94,9 +94,8 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     transform:translate(-50%,-50%)!important;
   }
 
-  /* Menu/call stay in the symmetric 10px-inset inner grid. Chromium positions
-     the absolute emblem against that 20px-narrower grid, so compensate its
-     half-gutter (+10px) to land the art on the actual viewport center. */
+  /* Menu/call stay in the symmetric inner grid. The logo is absolute against the
+     full header containing block, so 50% is the exact device viewport center. */
   html body [data-wdcc-public-chrome="header"]{
     position:sticky!important;
     top:0!important;
@@ -129,7 +128,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:absolute!important;
-    left:calc(50% + 10px)!important;
+    left:50%!important;
     top:50%!important;
     transform:translate(-50%,-50%)!important;
     grid-column:auto!important;
@@ -167,7 +166,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:absolute!important;
-    left:calc(50% + 10px)!important;
+    left:50%!important;
     top:50%!important;
     transform:translate(-50%,-50%)!important;
     grid-column:auto!important;
