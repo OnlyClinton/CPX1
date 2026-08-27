@@ -1,0 +1,143 @@
+name: WDCC Owner Final Lock Proof
+
+on:
+  push:
+    branches:
+      - fix/wdcc-owner-final-lock-20260827
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-final-lock-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  owner-final-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Lock owner-final source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/wdcc-owner-board-final.css
+          test -s app/owner-contract-lock.css
+          test -s .github/support/wdcc-owner-final-lock-proof.mjs
+          grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
+          grep -Fq 'owner-contract-lock.css' app/layout.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
+          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
+          ! grep -Fq 'wdcc-wordmark' app/WdccPublicChrome.tsx
+          grep -Fq '.rh-copy h1 .red{color:var(--wdcc-red)!important}' app/owner-contract-lock.css
+          grep -Fq '.rh-copy h1 .white{color:#fff!important}' app/owner-contract-lock.css
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create exact-SHA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name=`wof-${process.env.GITHUB_SHA}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.owner-final.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.owner-final.jsonc
+          grep -Fq "$GITHUB_SHA" wrangler.owner-final.jsonc
+
+      - name: Deploy exact-SHA preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.owner-final.jsonc 2>&1 | tee /tmp/wof.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wof.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Not exact SHA: $url" >&2; exit 1;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > owner-final-preview-url.txt
+
+      - name: Warm exact preview
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?warm=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          test "$code" = 200
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq "$local_build" /tmp/home.html
+          test "$(curl --http1.1 -sS -L -o /tmp/logo.bin -w '%{http_code}' "$URL/wdcc-owner-logo?warm=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/logo.bin
+          for id in nissan350z fordF150 hondaPilot kiaSportage toyotaRav4; do
+            code=000
+            for i in $(seq 1 10); do
+              code="$(curl --http1.1 -sS -L -o "/tmp/$id.webp" -w '%{http_code}' "$URL/wdcc-review-media/$id?warm=$GITHUB_RUN_ID-$i" || true)"
+              [ "$code" = 200 ] && break
+              sleep 1
+            done
+            test "$code" = 200
+            test -s "/tmp/$id.webp"
+          done
+
+      - name: Prove owner final lock
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/support/wdcc-owner-final-lock-proof.mjs
+
+      - name: Require exact branch head
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$GITHUB_SHA"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-final-lock-${{ github.sha }}
+          path: |
+            owner-final-preview-url.txt
+            owner-final-lock-proof/
+          if-no-files-found: warn
+          retention-days: 7
