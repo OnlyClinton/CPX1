@@ -25,7 +25,7 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body main.dealerDashboardLocked .dashboardContent>.dashboardGridLocked{display:contents!important}
   html body main.dealerDashboardLocked .inventoryOverview{grid-area:inventory!important;min-height:270px!important;padding:14px!important}
   html body main.dealerDashboardLocked .recentVehicles{grid-area:vehicles!important;min-height:270px!important;padding:14px!important}
-  html body main.dealerDashboardLocked .activityLocked{grid-area:activity!important;min-height:270px!important;margin:0!important;padding:14px!important;overflow:hidden!important}
+  html body main.dealerDashboardLocked .activityLocked{grid-area:activity!important;min-height:270px!important;margin:0!important;padding:14px!important;overflow:hidden!important;align-self:stretch!important;transform:translateY(-10px)!important;height:calc(100% + 10px)!important}
   html body main.dealerDashboardLocked .opsCards{grid-area:ops!important;margin:0!important}
   html body main.dealerDashboardLocked .activityLocked>a{min-height:41px!important;grid-template-columns:18px minmax(0,1fr) auto!important;gap:5px!important}
 }
