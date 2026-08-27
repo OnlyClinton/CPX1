@@ -2,8 +2,8 @@
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-grid{
     display:grid!important;
-    grid-template-columns:repeat(5,minmax(0,1fr))!important;
-    gap:12px!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:18px!important;
   }
 }
 html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand::before,
