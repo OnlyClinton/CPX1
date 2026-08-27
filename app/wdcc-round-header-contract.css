@@ -50,8 +50,7 @@
   html body .wdcc-public-header .rh-header-inner{
     grid-template-columns:96px minmax(0,1fr) auto!important;
   }
-  /* Match the compact-desktop owner board at Android Chrome "Desktop site" widths.
-     The full selector is intentional: the canonical base grid is also !important. */
+  /* Compact-desktop owner board / Android Chrome desktop-site widths. */
   html body main.reference-home.locked-storefront .rh-grid{
     grid-template-columns:repeat(4,minmax(0,1fr))!important;
   }
@@ -109,5 +108,79 @@
   }
   html body .wdcc-public-header .rh-nav{
     z-index:4!important;
+  }
+
+  /* Owner mobile board: the Tampa/Challenger art is the hero background,
+     not a 300px strip above a separate black copy block. This closeout is
+     intentionally loaded last so older split-hero rules cannot win. */
+  html body main.reference-home.locked-storefront .rh-hero{
+    position:relative!important;
+    height:650px!important;
+    min-height:650px!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    object-fit:cover!important;
+    object-position:64% 45%!important;
+    filter:saturate(1.2) contrast(1.05) brightness(1.08)!important;
+    transform:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    background:linear-gradient(90deg,rgba(2,7,12,.83) 0%,rgba(2,7,12,.69) 44%,rgba(2,7,12,.26) 73%,rgba(2,7,12,.08) 100%),linear-gradient(0deg,rgba(2,7,12,.92) 0%,rgba(2,7,12,.54) 31%,rgba(2,7,12,.05) 66%,rgba(2,7,12,.10) 100%)!important;
+    pointer-events:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    position:relative!important;
+    z-index:2!important;
+    width:100%!important;
+    height:650px!important;
+    min-height:650px!important;
+    margin:0!important;
+    display:flex!important;
+    align-items:flex-end!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:185px 14px 22px!important;
+    background:none!important;
+    color:#fff!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{
+    margin:0 0 8px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    font-size:clamp(38px,11.5vw,48px)!important;
+    line-height:.88!important;
+    margin:0!important;
+    text-shadow:0 4px 18px rgba(0,0,0,.92)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-proof-list{
+    margin-top:13px!important;
+    color:#fff!important;
+    text-shadow:0 2px 10px rgba(0,0,0,.9)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    margin-top:15px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-phone{
+    display:flex!important;
+    margin-top:11px!important;
+    color:#fff!important;
   }
 }
