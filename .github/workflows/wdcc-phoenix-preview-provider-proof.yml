@@ -1,9 +1,12 @@
-name: WDCC Phoenix Preview Provider Proof
+name: WDCC Phoenix Preview Provider Recovery
 
+# Code/build safety runs automatically on the isolated recovery branch.
+# Blob/provider proof is manual-only while the canonical Vercel Blob store is
+# known to be paused. This prevents quota/auth faults from creating probe fan-out.
 on:
   push:
     branches:
-      - fix/wdcc-locked-contract-20260826
+      - fix/wdcc-preview-provider-recovery-20260827
     paths:
       - 'lib/store.ts'
       - 'lib/wdccAuthority.ts'
@@ -17,11 +20,45 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-phoenix-preview-provider
+  group: wdcc-phoenix-preview-provider-recovery
   cancel-in-progress: true
 
+env:
+  VERCEL_CLI_VERSION: '59.3.0'
+
 jobs:
+  build-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify Vercel build isolation
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const ts=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));
+          const excluded=new Set(Array.isArray(ts.exclude)?ts.exclude:[]);
+          if(!excluded.has('open-next.config.ts')){
+            throw new Error('open-next.config.ts must stay outside the Vercel/Next typecheck');
+          }
+          NODE
+          npm run build
+
   provider-proof:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build-safety
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -35,7 +72,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install exact dependencies
@@ -59,47 +96,29 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set +e
-          npx --yes vercel@latest blob list-stores --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-project-stores.txt
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" blob list-stores --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-project-stores.txt
           echo "project_store_list_rc=${PIPESTATUS[0]}" | tee blob-project-stores-status.txt
-          npx --yes vercel@latest blob list-stores --all --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-team-stores.txt
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" blob list-stores --all --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-team-stores.txt
           echo "team_store_list_rc=${PIPESTATUS[0]}" | tee blob-team-stores-status.txt
-          npx --yes vercel@latest blob get-store "$WDCC_BLOB_STORE_ID" --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-store.txt
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" blob get-store "$WDCC_BLOB_STORE_ID" --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-store.txt
           echo "get_store_rc=${PIPESTATUS[0]}" | tee blob-store-status.txt
           set -e
 
-      - name: Mint project-scoped OIDC token
-        id: oidc
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          raw="$(npx --yes vercel@latest project token --token="$VERCEL_TOKEN" --scope=cpxagency --format=json)"
-          token="$(printf '%s' "$raw" | jq -r 'if type=="string" then . else (.token // .oidcToken // .value // empty) end' 2>/dev/null || true)"
-          if [ -z "$token" ] || [ "$token" = null ]; then
-            token="$(printf '%s' "$raw" | tr -d '\r\n')"
-            case "$token" in ''|'{'*|'['*) echo 'Unable to parse project OIDC token' >&2; exit 1;; esac
-          fi
-          echo "::add-mask::$token"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy PREVIEW only
+      - name: Deploy PREVIEW only with Vercel-managed runtime identity
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          PROJECT_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -uo pipefail
           log="$PWD/phoenix-preview-deploy.log"
           : > "$log"
-          npx --yes vercel@latest deploy --yes \
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --yes \
             --token="$VERCEL_TOKEN" \
             --scope=cpxagency \
             --env "BLOB_READ_WRITE_TOKEN=" \
             --env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
-            --env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
             --build-env "BLOB_READ_WRITE_TOKEN=" \
             --build-env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
-            --build-env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
             2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
           clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
@@ -113,37 +132,112 @@ jobs:
             exit 1
           fi
           case "$url" in
-            https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com) echo 'Refusing production or mutable project domain' >&2; exit 1;;
+            https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com)
+              echo 'Refusing production or mutable project domain' >&2
+              exit 1
+              ;;
           esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > phoenix-preview-url.txt
 
-      - name: Prove canonical state and public inventory READ ONLY
+      - name: Prove canonical state READ ONLY
+        id: health
         env:
           URL: ${{ steps.deploy.outputs.url }}
         run: |
           set -euo pipefail
-          health_code="$(curl -sS -L -o health.json -w '%{http_code}' "$URL/api/health")"
-          inv_code="$(curl -sS -L -o inventory.json -w '%{http_code}' "$URL/api/inventory")"
-          jq . health.json
-          jq '{ok,count,error,previewFallback,inventorySource}' inventory.json
-          test "$health_code" = 200
-          test "$inv_code" = 200
-          jq -e '.ok==true and .state=="readable"' health.json >/dev/null
-          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' inventory.json >/dev/null
-          node - <<'NODE'
+          : > health.json
+          health_code="$(curl -sS -L --connect-timeout 15 --max-time 30 -o health.json -w '%{http_code}' "$URL/api/health" || true)"
+          health_code="${health_code:-000}"
+          jq . health.json 2>/dev/null || cat health.json || true
+
+          if [ "$health_code" != 200 ] || ! jq -e '.ok==true and .state=="readable"' health.json >/dev/null 2>&1; then
+            HEALTH_CODE="$health_code" URL="$URL" node - <<'NODE'
+          const fs=require('fs');
+          let health={};
+          try{ health=JSON.parse(fs.readFileSync('health.json','utf8')); }catch{}
+          const providerErrors=new Set(['STATE_PROVIDER_BLOCKED','STATE_PROVIDER_BACKOFF','STATE_AUTHORITY_MISSING']);
+          const classification=providerErrors.has(String(health.error||''))?'provider-blocked':'health-unhealthy';
+          fs.writeFileSync('provider-classification.json',JSON.stringify({
+            sha:process.env.GITHUB_SHA,
+            url:process.env.URL,
+            classification,
+            healthCode:process.env.HEALTH_CODE,
+            error:health.error||null,
+            state:health.state||null,
+            storage:health.storage||null,
+            provider:health.provider||null,
+            writeRequests:0
+          },null,2)+'\n');
+          NODE
+            echo 'Provider proof stopped after health. Inventory was not queried.' >&2
+            exit 1
+          fi
+
+      - name: Prove public inventory READ ONLY
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          : > inventory.json
+          inv_code="$(curl -sS -L --connect-timeout 15 --max-time 30 -o inventory.json -w '%{http_code}' "$URL/api/inventory" || true)"
+          inv_code="${inv_code:-000}"
+          jq '{ok,count,error,previewFallback,inventorySource}' inventory.json 2>/dev/null || cat inventory.json || true
+
+          if [ "$inv_code" != 200 ] || ! jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' inventory.json >/dev/null 2>&1; then
+            INV_CODE="$inv_code" URL="$URL" node - <<'NODE'
+          const fs=require('fs');
+          let inventory={};
+          try{ inventory=JSON.parse(fs.readFileSync('inventory.json','utf8')); }catch{}
+          fs.writeFileSync('provider-classification.json',JSON.stringify({
+            sha:process.env.GITHUB_SHA,
+            url:process.env.URL,
+            classification:'inventory-unhealthy',
+            inventoryCode:process.env.INV_CODE,
+            error:inventory.error||null,
+            writeRequests:0
+          },null,2)+'\n');
+          NODE
+            exit 1
+          fi
+
+          URL="$URL" node - <<'NODE'
           const fs=require('fs');
           const h=JSON.parse(fs.readFileSync('health.json','utf8'));
           const i=JSON.parse(fs.readFileSync('inventory.json','utf8'));
-          const publicSummary=(Array.isArray(i.items)?i.items:[]).map(v=>({id:v.id,year:v.year,make:v.make,model:v.model,trim:v.trim||'',price:v.price??v.cashPrice,mileage:v.mileage,photo:Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)}));
-          fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.URL,health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},writeRequests:0},null,2)+'\n');
+          const publicSummary=(Array.isArray(i.items)?i.items:[]).map(v=>({
+            id:v.id,
+            year:v.year,
+            make:v.make,
+            model:v.model,
+            trim:v.trim||'',
+            price:v.price??v.cashPrice,
+            mileage:v.mileage,
+            photo:Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)
+          }));
+          const proof={
+            sha:process.env.GITHUB_SHA,
+            url:process.env.URL,
+            health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},
+            inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},
+            writeRequests:0
+          };
+          fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify(proof,null,2)+'\n');
+          fs.writeFileSync('provider-classification.json',JSON.stringify({
+            sha:process.env.GITHUB_SHA,
+            url:process.env.URL,
+            classification:'provider-green',
+            healthCode:200,
+            inventoryCode:200,
+            writeRequests:0
+          },null,2)+'\n');
           NODE
 
       - name: Upload proof and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wdcc-phoenix-preview-provider-${{ github.sha }}
+          name: wdcc-phoenix-preview-provider-recovery-${{ github.sha }}
           path: |
             blob-project-stores.txt
             blob-project-stores-status.txt
@@ -154,6 +248,7 @@ jobs:
             phoenix-preview-deploy.log
             phoenix-preview-url.txt
             phoenix-provider-proof.json
+            provider-classification.json
             health.json
             inventory.json
           if-no-files-found: warn
