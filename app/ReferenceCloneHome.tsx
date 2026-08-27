@@ -6,6 +6,7 @@ import LockedIntro from "./LockedIntro";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
 import {WdccPublicFooter,WdccPublicHeader} from "./WdccPublicChrome";
 import TrackedCallLink from "./TrackedCallLink";
+import {isWdccVisualReviewFixture,WDCC_VISUAL_REVIEW_INVENTORY,WDCC_VISUAL_REVIEW_LABEL} from "./wdccVisualReviewInventory";
 
 type Vehicle=WdccVehicle&{status?:string;stock?:string;stock_id?:string;badges?:string[];visibility?:string;internalOnly?:boolean};
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase(),stock=String(v?.stock||v?.stock_id||"").trim().toUpperCase(),visibility=String(v?.visibility||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x||"").toUpperCase());const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!qa&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"}
@@ -13,9 +14,10 @@ function customerVisible(v:any){const status=String(v?.status||"").toLowerCase()
 export default function ReferenceCloneHome(){
  const [items,setItems]=useState<Vehicle[]>([]);
  const [inventoryState,setInventoryState]=useState<"loading"|"ready"|"empty"|"error">("loading");
+ const [fixtureMode,setFixtureMode]=useState(false);
  const [active,setActive]=useState(0);
  const gridRef=useRef<HTMLDivElement|null>(null);
- useEffect(()=>{let live=true;fetch("/api/inventory",{cache:"no-store"}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok||j?.previewFallback||j?.inventorySource==="last-known-good-real-proof")throw new Error(`inventory ${r.status}`);return j}).then(j=>{if(!live)return;const vehicles=(j.items||j.inventory||[]).filter(customerVisible).slice(0,8);setItems(vehicles);setInventoryState(vehicles.length?"ready":"empty")}).catch(()=>{if(live){setItems([]);setInventoryState("error")}});return()=>{live=false}},[]);
+ useEffect(()=>{let live=true;if(isWdccVisualReviewFixture()){setFixtureMode(true);setItems(WDCC_VISUAL_REVIEW_INVENTORY as Vehicle[]);setInventoryState("ready");return()=>{live=false}}fetch("/api/inventory",{cache:"no-store"}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok||j?.previewFallback||j?.inventorySource==="last-known-good-real-proof")throw new Error(`inventory ${r.status}`);return j}).then(j=>{if(!live)return;const vehicles=(j.items||j.inventory||[]).filter(customerVisible).slice(0,8);setItems(vehicles);setInventoryState(vehicles.length?"ready":"empty")}).catch(()=>{if(live){setItems([]);setInventoryState("error")}});return()=>{live=false}},[]);
  const vehicles=useMemo(()=>items,[items]);
  const goTo=(i:number)=>{setActive(i);const node=gridRef.current?.children?.[i] as HTMLElement|undefined;node?.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"})};
  return <main className="reference-home locked-storefront owner-target-home">
@@ -39,6 +41,7 @@ export default function ReferenceCloneHome(){
      <article className="rh-benefit"><span className="rh-icon">◇</span><div><strong>SAFE & SECURE</strong><small>Your data is always protected.</small></div></article>
    </div></section>
    <section className="rh-inventory"><div className="rh-section-head"><div><small>FEATURED INVENTORY</small><h2>Vehicles ready now.</h2><p>Cash price and down payment shown clearly.</p></div><Link className="rh-view-all" href="/inventory">VIEW ALL INVENTORY →</Link></div>
+     {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
      {inventoryState==="loading"&&<div className="rh-inventory-state">Loading current inventory…</div>}
      {inventoryState==="empty"&&<div className="rh-inventory-state"><strong>Inventory is updating.</strong><span>Call Sean for the vehicles available right now.</span></div>}
      {inventoryState==="error"&&<div className="rh-inventory-state"><strong>Live inventory is temporarily unavailable.</strong><span>We are not substituting demo vehicles. Call Sean for current availability.</span></div>}
