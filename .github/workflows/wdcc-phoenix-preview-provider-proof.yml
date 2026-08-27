@@ -26,6 +26,7 @@ jobs:
     env:
       VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      WDCC_BLOB_STORE_ID: store_cNUyQRVlXtyvZQ5N
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,9 +58,26 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          set -euo pipefail
-          url="$(npx --yes vercel@latest deploy --yes --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/wdcc-phoenix-preview-deploy.log | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1)"
-          test -n "$url"
+          set -uo pipefail
+          log="$PWD/phoenix-preview-deploy.log"
+          : > "$log"
+          npx --yes vercel@latest deploy --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=cpxagency \
+            --env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --build-env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
+          url="$(printf '%s\n' "$clean" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1 || true)"
+          if [ "$rc" -ne 0 ]; then
+            echo "Vercel preview deploy failed rc=$rc" >&2
+            exit "$rc"
+          fi
+          if [ -z "$url" ]; then
+            echo 'Vercel preview deploy succeeded but emitted no immutable preview URL' >&2
+            exit 1
+          fi
           case "$url" in
             https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com) echo 'Refusing production or mutable project domain' >&2; exit 1;;
           esac
@@ -71,29 +89,32 @@ jobs:
           URL: ${{ steps.deploy.outputs.url }}
         run: |
           set -euo pipefail
-          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$URL/api/health")"
-          inv_code="$(curl -sS -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory")"
-          cat /tmp/health.json | jq .
-          cat /tmp/inventory.json | jq '{ok,count,error,previewFallback,inventorySource}'
+          health_code="$(curl -sS -L -o health.json -w '%{http_code}' "$URL/api/health")"
+          inv_code="$(curl -sS -L -o inventory.json -w '%{http_code}' "$URL/api/inventory")"
+          jq . health.json
+          jq '{ok,count,error,previewFallback,inventorySource}' inventory.json
           test "$health_code" = 200
           test "$inv_code" = 200
-          jq -e '.ok==true and .state=="readable"' /tmp/health.json >/dev/null
-          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' /tmp/inventory.json >/dev/null
+          jq -e '.ok==true and .state=="readable"' health.json >/dev/null
+          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' inventory.json >/dev/null
           node - <<'NODE'
           const fs=require('fs');
-          const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
-          const i=JSON.parse(fs.readFileSync('/tmp/inventory.json','utf8'));
+          const h=JSON.parse(fs.readFileSync('health.json','utf8'));
+          const i=JSON.parse(fs.readFileSync('inventory.json','utf8'));
           const publicSummary=(Array.isArray(i.items)?i.items:[]).map(v=>({id:v.id,year:v.year,make:v.make,model:v.model,trim:v.trim||'',price:v.price??v.cashPrice,mileage:v.mileage,photo:Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)}));
           fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.URL,health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},writeRequests:0},null,2)+'\n');
           NODE
 
-      - name: Upload proof
+      - name: Upload proof and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wdcc-phoenix-preview-provider-${{ github.sha }}
           path: |
+            phoenix-preview-deploy.log
             phoenix-preview-url.txt
             phoenix-provider-proof.json
+            health.json
+            inventory.json
           if-no-files-found: warn
           retention-days: 7
