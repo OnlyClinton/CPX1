@@ -1,0 +1,15 @@
+/* Owner WebGPU intro refinement: keep wheel motion inside the actual visible rim. */
+@media (max-width:600px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html body .li .li-wheel-front{
+    clip-path:circle(9.8vw at 89.5% 67.1%)!important;
+    transform-origin:89.5% 67.1%!important;
+  }
+  html body .li .li-wheel-rear{display:none!important}
+  html body .li .li-tag{display:none!important}
+}
+
+@media (max-width:430px){
+  html body .li .li-wheel-front{
+    clip-path:circle(9.6vw at 89.5% 67.1%)!important;
+  }
+}
