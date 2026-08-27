@@ -43,24 +43,50 @@ function normalizeState(value:any):State{
   };
 }
 
+function validateState(state:State,source:string){
+  if(!Number.isFinite(state.revision))throw Error(`STATE_INVALID:${source}`);
+  return state;
+}
+
 async function readBlobState(pathname:string):Promise<State>{
   const response=await get(pathname,{access:"private",useCache:false,...opt()});
   if(!response||response.statusCode!==200||!response.stream)throw Error(`STATE_BLOB_READ_FAILED:${pathname}`);
   const chunks:Uint8Array[]=[];
   for await(const chunk of response.stream as any)chunks.push(chunk);
   const raw=Buffer.concat(chunks).toString("utf8");
-  const parsed=JSON.parse(raw);
-  const state=normalizeState(parsed);
-  if(!Number.isFinite(state.revision))throw Error(`STATE_BLOB_INVALID:${pathname}`);
-  return state;
+  return validateState(normalizeState(JSON.parse(raw)),pathname);
+}
+
+async function readCloudflareState(authority:any):Promise<State>{
+  const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+    method:"GET",
+    headers:{
+      Accept:"application/json",
+      Authorization:`Bearer ${authority.options.stateServiceToken}`
+    },
+    cache:"no-store"
+  });
+  if(!response.ok)throw Error(`STATE_R2_READ_FAILED:${response.status}`);
+  const parsed=await response.json();
+  return validateState(normalizeState(parsed),"cloudflare-r2");
 }
 
 export async function readState():Promise<State>{
-  const authority=blobAuthority();
+  const authority:any=blobAuthority();
   if(authority.mode==="missing"){
-    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:false,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:false,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID),hasStateServiceUrl:Boolean(process.env.WDCC_STATE_SERVICE_URL),hasStateServiceToken:Boolean(process.env.WDCC_STATE_SERVICE_TOKEN)}));
     throw Error("STATE_AUTHORITY_MISSING");
   }
+
+  if(authority.mode==="cloudflare-r2"){
+    try{
+      return await readCloudflareState(authority);
+    }catch(error){
+      console.error("WDCC_STATE_R2_READ_FAILED",JSON.stringify({authority:authority.mode,error:error instanceof Error?error.message:"unknown"}));
+      throw Error("STATE_READ_FAILED");
+    }
+  }
+
   try{
     return await readBlobState(PATH);
   }catch(primaryError){
@@ -83,14 +109,30 @@ export async function readState():Promise<State>{
 }
 
 export async function writeState(input:State){
-  const authority=blobAuthority();
+  const authority:any=blobAuthority();
   if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   const state=normalizeState(input);
   state.revision=Number(state.revision||0)+1;
   state.updatedAt=new Date().toISOString();
   const body=JSON.stringify(state,null,2)+"\n";
-  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
 
+  if(authority.mode==="cloudflare-r2"){
+    const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+      method:"PUT",
+      headers:{
+        "Content-Type":"application/json",
+        Accept:"application/json",
+        Authorization:`Bearer ${authority.options.stateServiceToken}`
+      },
+      body,
+      cache:"no-store"
+    });
+    const result:any=await response.json().catch(()=>({}));
+    if(!response.ok||result?.ok!==true)throw Error(`STATE_R2_WRITE_FAILED:${response.status}:${result?.error||"unknown"}`);
+    return state;
+  }
+
+  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
   await put(backupPath,body,{
     access:"private",
     addRandomSuffix:false,
