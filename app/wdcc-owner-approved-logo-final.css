@@ -96,12 +96,20 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{
     grid-template-columns:50px minmax(0,1fr) 50px!important;
     gap:8px!important;
+    position:relative!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
+    position:absolute!important;
+    left:50%!important;
+    top:50%!important;
+    transform:translate(-50%,-50%)!important;
+    grid-column:auto!important;
+    grid-row:auto!important;
     width:104px!important;
     min-width:104px!important;
     height:78px!important;
-    justify-self:center!important;
+    justify-self:auto!important;
+    z-index:3!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
