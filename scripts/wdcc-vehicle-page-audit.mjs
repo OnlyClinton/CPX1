@@ -35,13 +35,17 @@ try{
     const metrics=await page.evaluate(({expected,mobile})=>{
       const root=document.querySelector(expected);
       const overflow=document.documentElement.scrollWidth-innerWidth;
-      const links=[...root.querySelectorAll('a')].filter(a=>{const r=a.getBoundingClientRect(),s=getComputedStyle(a);return r.width>1&&r.height>1&&s.display!=='none'&&s.visibility!=='hidden'}).map(a=>{const r=a.getBoundingClientRect();return{text:(a.textContent||'').trim(),w:r.width,h:r.height}});
+      const links=[...root.querySelectorAll('a')].filter(a=>{const r=a.getBoundingClientRect(),s=getComputedStyle(a);return r.width>1&&r.height>1&&s.display!=='none'&&s.visibility!=='hidden'}).map(a=>{const r=a.getBoundingClientRect();return{text:(a.textContent||'').trim(),w:r.width,h:r.height,href:a.getAttribute('href')||''}});
       const h2=root.querySelector('h2');
       return{overflow,docW:document.documentElement.scrollWidth,winW:innerWidth,heading:(h2?.textContent||'').trim(),headingFont:h2?parseFloat(getComputedStyle(h2).fontSize)||0:0,links,mobile};
     },{expected,mobile:spec.mobile});
     if(metrics.overflow>2)throw new Error(`VEHICLE_PAGE_HORIZONTAL_OVERFLOW_${spec.name}_${metrics.overflow}`);
     if(!metrics.heading||metrics.headingFont<(spec.mobile?24:26))throw new Error(`VEHICLE_PAGE_HEADING_BAD_${spec.name}_${JSON.stringify(metrics)}`);
-    if(metrics.links.length<3)throw new Error(`VEHICLE_PAGE_ACTIONS_MISSING_${spec.name}_${metrics.links.length}`);
+    if(realId){
+      if(metrics.links.length!==2)throw new Error(`VEHICLE_PAGE_PRIMARY_ACTION_COUNT_BAD_${spec.name}_${metrics.links.length}`);
+      const labels=metrics.links.map(x=>x.text.toUpperCase());
+      if(!labels.some(x=>x.includes('SCHEDULE TEST DRIVE'))||!labels.some(x=>x.includes('CALL SEAN')))throw new Error(`VEHICLE_PAGE_PRIMARY_ACTIONS_BAD_${spec.name}_${JSON.stringify(metrics.links)}`);
+    }else if(metrics.links.length<2)throw new Error(`VEHICLE_PAGE_FALLBACK_ACTIONS_MISSING_${spec.name}_${metrics.links.length}`);
     if(spec.mobile&&metrics.links.some(x=>x.h<46))throw new Error(`VEHICLE_PAGE_MOBILE_ACTION_HEIGHT_${JSON.stringify(metrics.links)}`);
     const screenshot=`${out}/${spec.name}-vehicle-detail.png`;
     await page.screenshot({path:screenshot,fullPage:true});
