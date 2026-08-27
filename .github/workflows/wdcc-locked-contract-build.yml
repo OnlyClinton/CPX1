@@ -8,6 +8,7 @@ on:
       - '.github/workflows/wdcc-recover-8ar-hero.yml'
       - 'scripts/wdcc-hydrate-8ar-hero.mjs'
       - 'app/**'
+      - 'lib/**'
       - 'public/**'
       - 'package.json'
       - 'package-lock.json'
@@ -96,7 +97,9 @@ jobs:
           grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
           grep -q 'Suspense' app/dealer/inventory/new/page.tsx
           grep -q 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'handleUploadUrl:"/api/upload"' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'import {uploadVehiclePhoto}' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'uploadVehiclePhoto({vehicleId:id,requestId,file})' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'fetch("/api/upload",{method:"POST"' lib/wdccUploadClient.ts
           grep -q 'method:"PATCH"' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'previewModal' app/dealer/inventory/VehicleEditor.tsx
