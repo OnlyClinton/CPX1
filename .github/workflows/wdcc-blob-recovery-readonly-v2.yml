@@ -1,0 +1,104 @@
+name: WDCC Blob Recovery Readonly V2
+
+on:
+  push:
+    branches: [ops/wdcc-blob-recovery-20260827]
+    paths:
+      - '.github/workflows/wdcc-blob-recovery-readonly-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Blob client
+        run: |
+          mkdir diag && cd diag
+          npm init -y >/dev/null
+          npm install @vercel/blob@2 >/dev/null
+      - name: Mint Phoenix OIDC
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_json="$(curl -fsS -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H 'content-type: application/json' \
+            "https://api.vercel.com/v1/projects/$PHOENIX_PROJECT/token?teamId=$ORG_ID" \
+            --data '{"source":"wdcc-blob-recovery-readonly-v2"}')"
+          oidc="$(printf '%s' "$token_json" | jq -r '.token // empty')"
+          test -n "$oidc"
+          echo "token=$oidc" >> "$GITHUB_OUTPUT"
+      - name: Probe canonical copies
+        shell: bash
+        env:
+          OIDC: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -euo pipefail
+          cd diag
+          node --input-type=module <<'NODE' | tee ../recovery-candidates.json
+          import crypto from 'node:crypto';
+          import {get,list} from '@vercel/blob';
+          const stores=[
+            ['wdcc-live-20260824-013607','store_WtHRfeknoGWfBJaG'],
+            ['wdcc-live-20260824-012925','store_p3tfLnQ5WvnqNbOJ'],
+            ['wdcc-v10-20260819-194257','store_cNUyQRVlXtyvZQ5N'],
+            ['wdcc-clean-20260819-173749','store_vVJ5kU6x76yZVkGs'],
+            ['wdcc-rescue-20260819-172412','store_KopvAQeMcatdS5DS'],
+            ['wdcc-private-20260801-013053','store_A0xNekR2GnstDXyZ'],
+            ['wdcc-private-20260801005157','store_LdMSV1550BRgc0SP'],
+            ['wdcc-production-1785324309','store_Vlt7vqRfSvpRxwxQ']
+          ];
+          const oidc=process.env.OIDC;
+          const out=[];
+          async function readJson(storeId,path){
+            const r=await get(path,{access:'private',useCache:false,oidcToken:oidc,storeId});
+            if(!r||r.statusCode!==200||!r.stream)throw new Error(`HTTP_${r?.statusCode||0}`);
+            const chunks=[];for await(const c of r.stream)chunks.push(c);const raw=Buffer.concat(chunks);return {raw,json:JSON.parse(raw.toString('utf8'))};
+          }
+          for(const [name,storeId] of stores){
+            const row={name,storeId,listOk:false,canonical:false,readOk:false,backupCount:null,revision:null,updatedAt:null,tenants:null,users:null,vehicles:null,leads:null,audit:null,sha256:null,error:null};
+            try{
+              const l=await list({prefix:'private/state/',limit:1000,oidcToken:oidc,storeId});
+              row.listOk=true;
+              const paths=(l.blobs||[]).map(x=>x.pathname);
+              row.canonical=paths.includes('private/state/platform-v3.json');
+              row.backupCount=paths.filter(p=>p.startsWith('private/state/backups/')).length;
+              if(row.canonical){
+                const {raw,json:s}=await readJson(storeId,'private/state/platform-v3.json');
+                row.readOk=true;row.revision=Number(s?.revision||0);row.updatedAt=s?.updatedAt||null;
+                row.tenants=Array.isArray(s?.tenants)?s.tenants.length:null;
+                row.users=Array.isArray(s?.users)?s.users.length:null;
+                row.vehicles=Array.isArray(s?.vehicles)?s.vehicles.length:null;
+                row.leads=Array.isArray(s?.leads)?s.leads.length:null;
+                row.audit=Array.isArray(s?.audit)?s.audit.length:null;
+                row.sha256=crypto.createHash('sha256').update(raw).digest('hex');
+              }
+            }catch(e){row.error=String(e?.message||e)}
+            out.push(row);
+          }
+          console.log(JSON.stringify(out,null,2));
+          NODE
+      - name: Rank readable copies
+        if: always()
+        run: |
+          if [ -s recovery-candidates.json ]; then jq '[.[]|select(.readOk==true)]|sort_by(.revision)|reverse' recovery-candidates.json > recovery-ranked.json; else printf '[]\n' > recovery-ranked.json; fi
+          cat recovery-ranked.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-blob-recovery-readonly-v2-${{ github.sha }}
+          path: |
+            recovery-candidates.json
+            recovery-ranked.json
+          retention-days: 3
