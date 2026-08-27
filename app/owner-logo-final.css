@@ -11,6 +11,27 @@ html body main.reference-home.locked-storefront .rh-header .rh-header-inner .rh-
   border-radius:50%!important;
 }
 
+/* Dealer dashboard must expose the real brand image element; older CSS hid it and
+   drew a pseudo-element instead, which breaks both semantics and immutable visual QA. */
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{
+  display:block!important;
+  width:58px!important;
+  height:58px!important;
+  flex:0 0 58px!important;
+  content:url('/wdcc-official-logo.webp')!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  clip-path:circle(48% at 50% 50%)!important;
+  border-radius:50%!important;
+  background:transparent!important;
+  border:2px solid rgba(255,255,255,.78)!important;
+  box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
+}
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before{
+  content:none!important;
+  display:none!important;
+}
+
 /* Older acceptance CSS reserves space for fixed chrome. On real mobile the final
    device layer makes utility/header sticky in normal flow, so that spacer must go. */
 @media(max-width:1100px),(hover:none) and (pointer:coarse){
@@ -49,5 +70,11 @@ html body main.reference-home.locked-storefront .rh-header .rh-header-inner .rh-
     color:#fff!important;
     border-color:#647482!important;
     box-shadow:none!important;
+  }
+
+  html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{
+    width:50px!important;
+    height:50px!important;
+    flex-basis:50px!important;
   }
 }
