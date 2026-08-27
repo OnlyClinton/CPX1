@@ -18,10 +18,11 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   useEffect(()=>{if(!id)return;setError("");fetch(`/api/inventory/${encodeURIComponent(id)}`,{cache:"no-store"}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||"Vehicle unavailable");setV(j.item);setActive(0)}).catch(e=>setError(e.message||"Vehicle unavailable"))},[id]);
   const images=useMemo(()=>vehicleImages(v),[v]);
   const q=id?`?vehicle=${encodeURIComponent(id)}&source=vdp`:"";
+  const downPayment=Number((v?.downPayment??v?.down_payment)||0);
   return <><Header/><main className="wdccVdp"><div className="wdccVdpWrap">
     {error?<section className="wdccVdpEmpty"><h1>Vehicle unavailable</h1><p>{error}</p><Link href="/inventory">Back to inventory</Link></section>:v?<>
       <div className="wdccVdpKicker">AVAILABLE · TAMPA BAY</div>
-      <div className="wdccVdpHeading"><div><h1>{v.year} {v.make} {v.model}{v.trim?` ${v.trim}`:""}</h1><p>Stock #{v.stock||String(v.id||"").slice(-8)}</p></div><div><strong>${Number(v.price||0).toLocaleString()}</strong>{Number(v.downPayment??v.down_payment||0)>0&&<span>${Number(v.downPayment??v.down_payment).toLocaleString()} estimated down</span>}</div></div>
+      <div className="wdccVdpHeading"><div><h1>{v.year} {v.make} {v.model}{v.trim?` ${v.trim}`:""}</h1><p>Stock #{v.stock||String(v.id||"").slice(-8)}</p></div><div><strong>${Number(v.price||0).toLocaleString()}</strong>{downPayment>0&&<span>${downPayment.toLocaleString()} estimated down</span>}</div></div>
       <div className="wdccVdpGrid">
         <section className="wdccVdpGallery">
           <div className="wdccVdpMainPhoto">{images.length?<img src={images[Math.min(active,images.length-1)]} alt={`${v.year} ${v.make} ${v.model}`}/>:<div>PHOTOS COMING</div>}</div>
