@@ -19,6 +19,7 @@ import"./wdcc-owner-screenshot-correction.css";
 import"./dealer-mobile-review-closeout.css";
 import"./wdcc-mockup-lock-20260827.css";
 import"./wdcc-owner-approved-logo-final.css";
+import"./wdcc-webgpu-intro-fix.css";
 import WdccThreeRuntime from"./WdccThreeRuntime";
 
 // Proof compatibility marker: owner-device-final.css is superseded by wdcc-system-v2.css.
