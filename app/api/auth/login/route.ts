@@ -1,6 +1,6 @@
 import {readState,type User} from "../../../../lib/store";
 
-const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
+const AUTH_BASE=(process.env.WDCC_NEON_AUTH_BASE||"https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth").trim().replace(/\/$/,"");
 const LOGIN_MAP:Record<string,string>={admin:"admin@internal.wedontcarecars.com",dealer:"dealer@internal.wedontcarecars.com"};
 export const dynamic="force-dynamic";
 
