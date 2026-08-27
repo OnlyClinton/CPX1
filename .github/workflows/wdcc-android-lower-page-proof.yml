@@ -1,0 +1,227 @@
+name: WDCC Android Desktop-Site Lower Page Proof
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-android-lower-page-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  android-desktop-site-lower-page:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Lock exact lower-page correction source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -s app/wdcc-public-owner-render-fix.css
+          test -s app/wdcc-review-media/[id]/route.ts
+          grep -Fq '@media(min-width:768px) and (max-width:1180px) and (hover:none) and (pointer:coarse)' app/wdcc-public-owner-render-fix.css
+          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-public-owner-render-fix.css
+          grep -Fq 'scroll-snap-type:none!important' app/wdcc-public-owner-render-fix.css
+          grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
+          grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
+          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
+          test "$last_wdcc_css" = 'wdcc-public-owner-render-fix.css'
+
+      - name: Build exact Cloudflare candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create exact-SHA no-route Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name=`wdcc-android-lower-${process.env.GITHUB_SHA}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.android-lower.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.android-lower.jsonc
+          grep -Fq "$GITHUB_SHA" wrangler.android-lower.jsonc
+
+      - name: Deploy immutable isolated lower-page preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.android-lower.jsonc 2>&1 | tee /tmp/wdcc-android-lower.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-android-lower.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Lower-page preview is not SHA-specific: $url" >&2; exit 1;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > android-lower-preview-url.txt
+
+      - name: Verify recovered first-party media routes
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android-lower-proof
+          for id in nissan350z fordF150 hondaPilot kiaSportage toyotaRav4; do
+            code=000
+            for i in $(seq 1 8); do
+              code="$(curl --http1.1 -sS -D "/tmp/$id.headers" -L -o "/tmp/$id.webp" -w '%{http_code}' "$URL/wdcc-review-media/$id?lower-media=$GITHUB_RUN_ID-$i" || true)"
+              [ "$code" = 200 ] && break
+              sleep 2
+            done
+            test "$code" = 200
+            test -s "/tmp/$id.webp"
+            grep -qi '^content-type: image/webp' "/tmp/$id.headers"
+            grep -qi '^x-wdcc-media-truth: verified-first-party-recovery' "/tmp/$id.headers"
+          done
+
+      - name: Prove lower homepage in Android Desktop-Site mode
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const base=process.env.URL;
+          const out='android-lower-proof';
+          const ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36';
+          fs.mkdirSync(out,{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const writes=[];
+          try{
+            const ctx=await browser.newContext({viewport:{width:980,height:844},screen:{width:980,height:844},deviceScaleFactor:1,isMobile:false,hasTouch:true,userAgent:ua,reducedMotion:'no-preference'});
+            const page=await ctx.newPage();
+            page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
+            const response=await page.goto(`${base}/?owner-review=1&desktop-lower=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!response||response.status()!==200)throw new Error(`ANDROID_LOWER_HOME_HTTP_${response?.status()||0}`);
+            const skip=page.getByRole('button',{name:/skip intro/i});
+            if(await skip.count())await skip.click().catch(()=>{});
+            await page.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
+            await page.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
+            await page.waitForFunction(()=>{
+              const imgs=[...document.querySelectorAll('.rh-grid > article img')];
+              return imgs.length===5&&imgs.every(i=>i.complete&&i.naturalWidth>20&&i.naturalHeight>20);
+            },null,{timeout:20000});
+
+            const result=await page.evaluate(()=>{
+              const q=s=>document.querySelector(s);
+              const R=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom}:null};
+              const utility=q('[data-wdcc-public-chrome="utility"]');
+              const header=q('[data-wdcc-public-chrome="header"]');
+              const hero=q('.rh-hero');
+              const buttons=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(R);
+              const benefits=q('.rh-benefits');
+              const grid=q('.rh-grid');
+              const cards=[...grid.children].map(R);
+              const imgs=[...grid.querySelectorAll('img')].map(i=>({src:i.getAttribute('src')||'',naturalWidth:i.naturalWidth,naturalHeight:i.naturalHeight}));
+              const dots=q('.rh-mobile-dots');
+              const steps=q('.rh-steps');
+              const trust=q('.rh-trust-grid');
+              const gridStyle=getComputedStyle(grid);
+              return{
+                winW:innerWidth,
+                utility:R(utility),header:R(header),hero:R(hero),buttons,
+                benefitTracks:getComputedStyle(benefits).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+                gridDisplay:gridStyle.display,
+                gridTracks:gridStyle.gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+                gridOverflowX:gridStyle.overflowX,
+                cards,imgs,
+                placeholders:grid.querySelectorAll('[role="img"][aria-label*="photo unavailable" i]').length,
+                dotsDisplay:dots?getComputedStyle(dots).display:'none',
+                financeTracks:getComputedStyle(steps).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+                trustTracks:getComputedStyle(trust).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+                overflow:document.documentElement.scrollWidth-innerWidth
+              };
+            });
+
+            if(!result.utility||result.utility.h<28)throw new Error(`ANDROID_LOWER_UTILITY_${JSON.stringify(result)}`);
+            if(!result.header||result.header.h<82||result.header.h>90)throw new Error(`ANDROID_LOWER_HEADER_${JSON.stringify(result)}`);
+            if(!result.hero||Math.abs(result.hero.y-result.header.bottom)>3)throw new Error(`ANDROID_LOWER_HERO_${JSON.stringify(result)}`);
+            if(result.buttons.length!==2||Math.abs(result.buttons[0].y-result.buttons[1].y)>3||result.buttons.some(b=>!b||b.w<160))throw new Error(`ANDROID_LOWER_CTAS_${JSON.stringify(result)}`);
+            if(result.benefitTracks!==4)throw new Error(`ANDROID_LOWER_BENEFITS_${JSON.stringify(result)}`);
+            if(result.gridDisplay!=='grid'||result.gridTracks!==4||result.cards.length!==5||result.cards.some(c=>!c||c.w<205||c.w>250))throw new Error(`ANDROID_LOWER_FEATURED_GEOMETRY_${JSON.stringify(result)}`);
+            if(result.placeholders!==0||result.imgs.length!==5||result.imgs.some(i=>!i.src.startsWith('/wdcc-review-media/')||i.naturalWidth<20||i.naturalHeight<20))throw new Error(`ANDROID_LOWER_FEATURED_MEDIA_${JSON.stringify(result)}`);
+            if(result.dotsDisplay!=='none')throw new Error(`ANDROID_LOWER_MOBILE_DOTS_${JSON.stringify(result)}`);
+            if(result.financeTracks!==4||result.trustTracks!==4)throw new Error(`ANDROID_LOWER_DESKTOP_SECTIONS_${JSON.stringify(result)}`);
+            if(result.overflow>2)throw new Error(`ANDROID_LOWER_OVERFLOW_${JSON.stringify(result)}`);
+            if(writes.length)throw new Error(`ANDROID_LOWER_WRITE_REQUESTS_${JSON.stringify(writes)}`);
+
+            await page.locator('.rh-inventory').screenshot({path:`${out}/android-desktop-site-featured.png`});
+            await page.screenshot({path:`${out}/android-desktop-site-lower-full.png`,fullPage:true});
+            fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,result,writes,pass:true},null,2)+'\n');
+            console.log('WDCC_ANDROID_LOWER_PAGE_PASS',JSON.stringify({benefits:result.benefitTracks,featuredTracks:result.gridTracks,cardW:result.cards[0].w,photos:result.imgs.length,finance:result.financeTracks,trust:result.trustTracks,writes:writes.length}));
+            await ctx.close();
+          }finally{await browser.close()}
+          NODE
+
+      - name: Require exact current head
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$GITHUB_SHA"
+
+      - name: Publish lower-page summary
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          echo '### WDCC Android Desktop-Site lower-page proof' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Isolated Worker: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s android-lower-proof/result.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const r=require('./android-lower-proof/result.json').result;
+          console.log(`Benefits: ${r.benefitTracks} tracks`);
+          console.log(`Featured inventory: ${r.gridTracks} tracks · ${r.cards[0].w.toFixed(1)} px first card · ${r.imgs.length} recovered photos`);
+          console.log(`Financing: ${r.financeTracks} tracks · Trust: ${r.trustTracks} tracks`);
+          NODE
+          else
+            echo 'ANDROID_LOWER_PAGE_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-android-lower-page-${{ github.sha }}
+          path: |
+            android-lower-preview-url.txt
+            android-lower-proof/
+          if-no-files-found: warn
+          retention-days: 7
