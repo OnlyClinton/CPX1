@@ -7,6 +7,7 @@ on:
     paths:
       - 'app/**'
       - 'scripts/wdcc-verified-real-snapshot-visual-stress.mjs'
+      - 'scripts/wdcc-verified-real-snapshot-owner-contract.mjs'
       - '.github/workflows/wdcc-verified-real-snapshot-visual-stress.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -61,14 +62,14 @@ jobs:
             exit 1
           fi
 
-      - name: Stress populated storefront, VDP and dealer surfaces
+      - name: Stress populated storefront, VDP and dealer surfaces against owner contract
         env:
           URL: http://127.0.0.1:4176
           OUT: verified-real-visual-stress
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/wdcc-verified-real-snapshot-visual-stress.mjs
+          node scripts/wdcc-verified-real-snapshot-owner-contract.mjs
 
       - name: Require current branch head
         shell: bash
@@ -84,7 +85,7 @@ jobs:
         run: |
           echo '### WDCC verified historical real-record visual stress' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Purpose: visual-only population stress using previously verified WDCC vehicle records/media. This does not claim the snapshot is live and does not replace canonical provider acceptance.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Purpose: visual-only population stress using previously verified WDCC vehicle records/media. It validates the locked 3-column desktop + dominant mobile swipe-card contract; it does not claim the snapshot is live and does not replace canonical provider acceptance.' >> "$GITHUB_STEP_SUMMARY"
           if [ -s verified-real-visual-stress/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./verified-real-visual-stress/result.json');
