@@ -64,6 +64,33 @@ jobs:
           grep -q 'if(oidcToken&&canonicalStoreId)' lib/wdccAuthority.ts
           echo 'WDCC_BLOB_HARDENING_STATIC=PASS' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Read-only provider/store metadata diagnostic
+        id: provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          code="$(curl -sS -o /tmp/wdcc-store-meta.json -w '%{http_code}' \
+            "https://api.vercel.com/storage/stores/$EXPECTED_STORE_ID?teamId=$ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN")"
+          echo "http=$code" >> "$GITHUB_OUTPUT"
+          if jq -e . /tmp/wdcc-store-meta.json >/dev/null 2>&1; then
+            jq '{id,name,type,status,region,access,ownerId,projectId,projects,createdAt,updatedAt,usage,reason,error,message}' \
+              /tmp/wdcc-store-meta.json | tee /tmp/wdcc-store-meta-sanitized.json
+          else
+            printf '{"http":%q,"body":"non-json"}\n' "$code" | tee /tmp/wdcc-store-meta-sanitized.json
+          fi
+          {
+            echo '### WDCC Blob provider metadata'
+            echo
+            echo "HTTP: $code"
+            echo '```json'
+            cat /tmp/wdcc-store-meta-sanitized.json
+            echo '```'
+            echo
+            echo 'Metadata read only; no storage or project setting changed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Read-only exact canonical recovery proof
         shell: bash
         run: |
