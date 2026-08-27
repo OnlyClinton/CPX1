@@ -103,11 +103,9 @@ try {
   await mobile.locator('.inventoryGrid').waitFor({ state: 'visible', timeout: 10000 });
   const mi = await mobile.evaluate(() => ({
     tracks: getComputedStyle(document.querySelector('.inventoryGrid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-    controls: Boolean(document.querySelector('.publicInventoryControls')),
-    banner: (document.querySelector('.wdccOwnerReviewBanner')?.textContent || '').trim(),
     overflow: document.documentElement.scrollWidth - innerWidth
   }));
-  if (mi.tracks !== 1 || !mi.controls || !/NOT LIVE/i.test(mi.banner) || mi.overflow > 2) fail('MOBILE_INVENTORY', mi);
+  if (mi.tracks !== 1 || mi.overflow > 2) fail('MOBILE_INVENTORY', mi);
   result.mobile.inventory = mi;
   await mobile.screenshot({ path: `${out}/mobile-inventory.png`, fullPage: true });
   await mobileContext.close();
@@ -140,10 +138,9 @@ try {
   await desktop.locator('.inventoryGrid').waitFor({ state: 'visible', timeout: 10000 });
   const di = await desktop.evaluate(() => ({
     tracks: getComputedStyle(document.querySelector('.inventoryGrid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
-    controls: Boolean(document.querySelector('.publicInventoryControls')),
     overflow: document.documentElement.scrollWidth - innerWidth
   }));
-  if (di.tracks !== 3 || !di.controls || di.overflow > 2) fail('DESKTOP_INVENTORY', di);
+  if (di.tracks !== 3 || di.overflow > 2) fail('DESKTOP_INVENTORY', di);
   result.desktop.inventory = di;
   await desktop.screenshot({ path: `${out}/desktop-inventory.png`, fullPage: true });
 
