@@ -55,7 +55,22 @@ jobs:
           echo '::add-mask::${{ env.QA_PASSWORD }}'
           echo '::add-mask::${{ env.STATE_TOKEN }}'
           echo '::add-mask::${{ env.SESSION_SECRET }}'
-          node .github/scripts/wdcc-dealer-isolated-e2e.mjs
+          node .github/scripts/wdcc-dealer-isolated-e2e.mjs &
+          E2E_PID=$!
+          trap 'kill "$E2E_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 120); do
+            [ -s dealer-isolated-e2e/metrics.json ] && break
+            if ! kill -0 "$E2E_PID" 2>/dev/null; then
+              wait "$E2E_PID"
+              exit $?
+            fi
+            sleep 1
+          done
+          test -s dealer-isolated-e2e/metrics.json
+          jq -e '.pass==true and .login==true and .session==true and .create==true and .upload==true and .checkpoint==true and .publish==true and .edit==true and .publicInventory==true and .publicListing==true and (.externalWrites|length)==0' dealer-isolated-e2e/metrics.json >/dev/null
+          kill "$E2E_PID" 2>/dev/null || true
+          wait "$E2E_PID" 2>/dev/null || true
+          trap - EXIT
       - name: Summary
         if: always()
         shell: bash
