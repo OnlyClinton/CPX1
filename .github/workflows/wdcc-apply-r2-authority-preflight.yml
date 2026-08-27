@@ -1,0 +1,46 @@
+name: WDCC Apply R2 Authority Preflight
+
+on:
+  push:
+    branches: [fix/wdcc-cloudflare-provider-cutover-20260827]
+    paths:
+      - '.github/workflows/wdcc-apply-r2-authority-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-apply-r2-authority-preflight
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-cloudflare-provider-cutover-20260827
+          fetch-depth: 0
+      - name: Patch R2 authority preflight
+        run: python3 scripts/wdcc-fix-r2-authority-preflight.py
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'wrangler r2 bucket list --json' .github/workflows/wdcc-cloudflare-r2-cutover.yml
+          git diff --check
+      - name: Commit corrected cutover proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/wdcc-cloudflare-r2-cutover.yml; then
+            echo 'R2 preflight already corrected.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/wdcc-cloudflare-r2-cutover.yml
+          git commit -m 'fix(wdcc): verify existing R2 bucket before create'
+          git push origin HEAD:fix/wdcc-cloudflare-provider-cutover-20260827
