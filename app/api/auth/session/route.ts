@@ -16,7 +16,7 @@ async function accessUser(email:string){
   const roles=admin?new Set(["platform_admin","tenant_admin","admin"]):new Set(["dealer_agent","dealer"]);
   const candidates=state.users.filter(user=>active(user)&&roles.has(String(user.role||"").toLowerCase()));
   const keys=new Set([email,username]);
-  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||candidates[0]||null;
+  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;
 }
 function responseFor(user:User,email?:string,extraHeaders?:Headers){
   const headers=extraHeaders||new Headers();
