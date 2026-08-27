@@ -9,17 +9,32 @@ html body main.dcPage.inventoryContract .inventoryFooter{font-size:8.5px!importa
 html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important;line-height:1!important}
 
 /* Dealer editor: the real component root is editVehicleApp, not vehicleEditor. */
+html body main.editVehicleApp [data-wizard-stage="photos"] button{font-size:9px!important}
+html body main.editVehicleApp [data-wizard-stage="photos"] small,
+html body main.editVehicleApp [data-wizard-stage="photos"] span,
+html body main.editVehicleApp [data-wizard-stage="photos"] em{font-size:8.5px!important;line-height:1.2!important}
 html body main.editVehicleApp .photoTools b{font-size:10px!important;line-height:1.1!important}
 html body main.editVehicleApp .photoTools span{font-size:8.5px!important;line-height:1.2!important}
 html body main.editVehicleApp .thumb em{font-size:8.5px!important;line-height:1!important}
+html body main.editVehicleApp .thumb button{font-size:12px!important;line-height:1!important}
+html body main.editVehicleApp .thumbGrid .addPhoto{font-size:18px!important}
 html body main.editVehicleApp .thumbGrid .addPhoto span{font-size:8.5px!important;line-height:1.1!important}
 html body main.editVehicleApp .readinessCard li,
 html body main.editVehicleApp .mobileReadiness li{font-size:8.5px!important;line-height:1.25!important}
 html body main.editVehicleApp .readinessCard small,
 html body main.editVehicleApp .mobileReadiness small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp [data-wizard-stage="review"] span,
+html body main.editVehicleApp [data-wizard-stage="review"] small,
+html body main.editVehicleApp [data-wizard-stage="review"] em{font-size:8.5px!important;line-height:1.2!important}
+html body main.editVehicleApp .reviewGrid b{font-size:10px!important;line-height:1.15!important}
 html body main.editVehicleApp .reviewGrid span{font-size:8.5px!important;line-height:1.1!important}
 html body main.editVehicleApp .reviewGrid small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .internalToggle b{font-size:9px!important;line-height:1.15!important}
 html body main.editVehicleApp .internalToggle small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .previewModal button{font-size:12px!important}
+html body main.editVehicleApp .previewModal small,
+html body main.editVehicleApp .previewModal span,
+html body main.editVehicleApp .previewModal em{font-size:8.5px!important;line-height:1.2!important}
 html body main.editVehicleApp .vehiclePreview .previewImage small{font-size:8.5px!important;line-height:1!important}
 html body main.editVehicleApp .vehiclePreview .previewPrice b{font-size:8.5px!important;line-height:1!important}
 html body main.editVehicleApp .vehiclePreview .previewSpecs span{font-size:8.5px!important;line-height:1.2!important}
@@ -36,18 +51,33 @@ html body main.editVehicleApp .photoStageActions button{font-size:9px!important;
   html body main.dcPage.inventoryContract .actionCell small{font-size:8.5px!important}
   html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important}
 
-  html body main.editVehicleApp .photoTools button{min-height:72px!important}
+  html body main.editVehicleApp [data-wizard-stage="photos"] button{font-size:9px!important}
+  html body main.editVehicleApp [data-wizard-stage="photos"] small,
+  html body main.editVehicleApp [data-wizard-stage="photos"] span,
+  html body main.editVehicleApp [data-wizard-stage="photos"] em{font-size:8.5px!important}
+  html body main.editVehicleApp .photoTools button{min-height:72px!important;font-size:9px!important}
   html body main.editVehicleApp .photoTools b{font-size:10px!important}
   html body main.editVehicleApp .photoTools span{font-size:8.5px!important}
   html body main.editVehicleApp .thumb em,
   html body main.editVehicleApp .thumbGrid .addPhoto span{font-size:8.5px!important}
+  html body main.editVehicleApp .thumb button{font-size:12px!important}
+  html body main.editVehicleApp .thumbGrid .addPhoto{font-size:18px!important}
   html body main.editVehicleApp .readinessCard li,
   html body main.editVehicleApp .mobileReadiness li,
   html body main.editVehicleApp .readinessCard small,
   html body main.editVehicleApp .mobileReadiness small{font-size:8.5px!important}
+  html body main.editVehicleApp [data-wizard-stage="review"] span,
+  html body main.editVehicleApp [data-wizard-stage="review"] small,
+  html body main.editVehicleApp [data-wizard-stage="review"] em{font-size:8.5px!important}
+  html body main.editVehicleApp .reviewGrid b{font-size:10px!important}
+  html body main.editVehicleApp .internalToggle b{font-size:9px!important}
   html body main.editVehicleApp .reviewGrid span,
   html body main.editVehicleApp .reviewGrid small,
   html body main.editVehicleApp .internalToggle small{font-size:8.5px!important}
+  html body main.editVehicleApp .previewModal button{font-size:12px!important}
+  html body main.editVehicleApp .previewModal small,
+  html body main.editVehicleApp .previewModal span,
+  html body main.editVehicleApp .previewModal em{font-size:8.5px!important}
   html body main.editVehicleApp .vehiclePreview .previewImage small,
   html body main.editVehicleApp .vehiclePreview .previewPrice b,
   html body main.editVehicleApp .vehiclePreview .previewSpecs span,
