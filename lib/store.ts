@@ -32,6 +32,7 @@ const BACKUP_PREFIX="private/state/backups/platform-v3-r";
 const READ_CACHE_MS=2500;
 const PROVIDER_BACKOFF_MS=60_000;
 const BACKUP_RECOVERY_LIMIT=6;
+const STATE_CONFLICT_RETRIES=4;
 const opt=()=>blobAuthority().options as any;
 
 let readCache:{state:State;expiresAt:number}|null=null;
@@ -60,6 +61,10 @@ function errorText(error:unknown){
 
 function providerAccessBlocked(error:unknown){
   return /(403|forbidden|suspend|blocked|billing|quota|limit|unauthori[sz]ed|invalid\s+token|token\s+expired)/i.test(errorText(error));
+}
+
+function stateWriteConflict(error:unknown){
+  return /STATE_CLOUDFLARE_WRITE_FAILED:409:(stale_revision|revision_conflict)/i.test(errorText(error));
 }
 
 function remember(state:State){
@@ -196,6 +201,26 @@ export async function writeState(input:State){
   });
   remember(state);
   return cloneState(state);
+}
+
+export async function mutateState<T>(mutator:(state:State)=>T|Promise<T>,maxAttempts=STATE_CONFLICT_RETRIES):Promise<{state:State;result:T;attempt:number}>{
+  const attempts=Math.max(1,Math.min(8,Math.trunc(maxAttempts)||STATE_CONFLICT_RETRIES));
+  let lastError:unknown=null;
+  for(let attempt=1;attempt<=attempts;attempt++){
+    readCache=null;
+    const state=await readStateFresh();
+    const result=await mutator(state);
+    try{
+      const saved=await writeState(state);
+      return {state:saved,result,attempt};
+    }catch(error){
+      lastError=error;
+      if(!stateWriteConflict(error)||attempt===attempts)throw error;
+      readCache=null;
+      await new Promise(resolve=>setTimeout(resolve,35*attempt));
+    }
+  }
+  throw (lastError instanceof Error?lastError:Error("STATE_MUTATION_FAILED"));
 }
 
 export function isQaVehicleRecord(vehicle:any){
