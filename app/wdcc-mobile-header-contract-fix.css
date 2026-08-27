@@ -2,13 +2,17 @@
    Mobile uses one header only; there is no separate utility strip above it.
    Preview branch visual-only correction. */
 @media (max-width:767px){
-  html body [data-wdcc-public-chrome="utility"]{
+  html body [data-wdcc-public-chrome="utility"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="utility"].rh-utility{
     display:none!important;
     height:0!important;
     min-height:0!important;
     max-height:0!important;
+    visibility:hidden!important;
+    opacity:0!important;
   }
-  html body [data-wdcc-public-chrome="header"]{
+  html body [data-wdcc-public-chrome="header"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
     top:0!important;
   }
   html body .approvalBoard .approvalFieldGrid label{
@@ -16,4 +20,4 @@
   }
 }
 
-/* Exact-head synchronization marker for FINAL VISUAL AUTHORITY 51077/51075/51073. */
+/* Exact-head synchronization marker for FINAL VISUAL AUTHORITY 51077/51075/51073 — cascade root fixed. */
