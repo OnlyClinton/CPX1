@@ -73,7 +73,7 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
 
-          cat > /tmp/wdcc-recovery-proof.mjs <<'NODE'
+          cat > .wdcc-recovery-proof.mjs <<'NODE'
           import crypto from 'node:crypto';
           import {get} from '@vercel/blob';
 
@@ -149,12 +149,17 @@ jobs:
           if(!report.ok)process.exitCode=2;
           NODE
 
+          set +e
           env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
             vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- \
-            node /tmp/wdcc-recovery-proof.mjs | tee /tmp/wdcc-recovery-proof.log
+            node .wdcc-recovery-proof.mjs | tee /tmp/wdcc-recovery-proof.log
+          proof_rc=${PIPESTATUS[0]}
+          set -e
+          rm -f .wdcc-recovery-proof.mjs
 
           grep '^RECOVERY_PROOF=' /tmp/wdcc-recovery-proof.log | tail -1 | cut -d= -f2- > /tmp/wdcc-recovery-proof.json
           jq . /tmp/wdcc-recovery-proof.json
+          test "$proof_rc" = 0
           jq -e --arg store "$EXPECTED_STORE_ID" --argjson min "$MIN_KNOWN_CLEAN_REVISION" \
             '.ok==true and .expectedStoreId==$store and .canonical.ok==true and .canonical.revision >= $min' \
             /tmp/wdcc-recovery-proof.json >/dev/null
