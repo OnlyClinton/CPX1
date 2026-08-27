@@ -1,17 +1,13 @@
 /* WDCC final visual contract closeout.
    Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
 
-/* Chromium can leave the replaced <img> box blank under the legacy content cascade.
-   Paint the canonical horizontal asset on the non-replaced logo link instead. The
-   underlying img remains geometry-only for the existing exact-head proof until the
-   proof selector is migrated; it is visually suppressed and cannot overlap nav. */
+/* Public header wordmark: render the canonical horizontal asset on a dedicated,
+   non-replaced element. Legacy CSS is still allowed to size the hidden img for
+   compatibility with older geometry probes, but it can no longer control or blank
+   the visible brand artwork. */
 html body [data-wdcc-public-chrome="header"] .rh-logo{
-  background-image:url('/wdcc-logo-transparent.webp')!important;
-  background-repeat:no-repeat!important;
-  background-position:center!important;
-  background-size:148px auto!important;
-  background-color:transparent!important;
-  filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
+  background:none!important;
+  filter:none!important;
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo>img{
   content:normal!important;
@@ -21,6 +17,19 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img{
   position:static!important;
   background:none!important;
   filter:none!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
+  grid-area:1/1!important;
+  display:block!important;
+  width:148px!important;
+  min-width:148px!important;
+  max-width:148px!important;
+  height:48px!important;
+  min-height:48px!important;
+  max-height:48px!important;
+  background:url('/wdcc-logo-transparent.webp') center/contain no-repeat!important;
+  filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
+  pointer-events:none!important;
 }
 
 /* Home desktop: reserve enough real space for the complete horizontal wordmark. */
@@ -60,7 +69,15 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img{
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
     top:0!important;
   }
-  html body [data-wdcc-public-chrome="header"] .rh-logo{background-size:132px auto!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
+    width:132px!important;
+    min-width:132px!important;
+    max-width:132px!important;
+    height:44px!important;
+    min-height:44px!important;
+    max-height:44px!important;
+    filter:brightness(0) invert(1) drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+  }
   html body .approvalBoard .approvalFieldGrid label{font-size:11px!important}
 }
 
@@ -129,9 +146,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
   html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
 }
 
-/* Exact-head proof sync: canonical single-wordmark render revision. */
-/* Exact-head sync after diagnostics cleanup: render unchanged. */
-/* Resilient background render prevents blank replaced-image output. */
-/* Canonical wordmark now paints on the non-replaced public-logo link. */
-/* Final synchronization: hardened build-id proof + canonical header renderer. */
-/* Human visual QA: full-width single-column dealer fields on phone. */
+/* Exact-head proof sync: dedicated canonical public-wordmark renderer. */
