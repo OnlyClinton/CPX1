@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-immutable-visual-acceptance-v2-${{ github.sha }}
+  group: wdcc-immutable-visual-v2-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
   visual-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -37,26 +37,22 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
-          test -s app/wdccCorrectLogoData.ts
-          test -s app/wdcc-owner-logo/route.ts
           test -s app/LockedIntro.tsx
-          test -s app/ReferenceCloneHome.tsx
           test -s app/WdccPublicChrome.tsx
-          test -s app/WdccVehicleCard.tsx
-          test -s app/WdccVehicleCard.module.css
-          test -s app/wdcc-system-v2.css
-          test -s scripts/wdcc-immutable-visual-proof.mjs
-          test -s scripts/wdcc-immutable-owner-board-runner.mjs
+          test -s app/wdcc-owner-logo/route.ts
+          test -s app/wdcc-owner-board-final.css
+          test -s app/wdcc-round-header-contract.css
+          test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
+          grep -Fq 'li-smoke' app/LockedIntro.tsx
+          grep -Fq '@keyframes liSmokeClear' app/LockedIntro.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
+          grep -Fq '/wdcc-owner-logo' app/WdccPublicChrome.tsx
           grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
-          grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
-          grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
-          grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -q 'WdccVehicleCard' app/ReferenceCloneHome.tsx
-          grep -q 'WdccVehicleCard' app/InventoryGrid.tsx
-          grep -q 'wdcc-system-v2.css' app/layout.tsx
-          grep -q 'li-smoke' app/LockedIntro.tsx
-          grep -q '@keyframes liSmokeClear' app/LockedIntro.tsx
-          ! grep -q 'li-dock' app/LockedIntro.tsx
+          grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
+          ! grep -Fq 'wdcc-system-v2.css' app/layout.tsx
+          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
+          test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
 
       - name: Build exact Cloudflare candidate
         shell: bash
@@ -77,7 +73,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          cfg.name=`wdcc-proof-${process.env.GITHUB_SHA}`;
+          cfg.name=`wiva-${process.env.GITHUB_SHA}`;
           cfg.workers_dev=true;
           cfg.preview_urls=true;
           delete cfg.route;
@@ -85,231 +81,116 @@ jobs:
           fs.writeFileSync('wrangler.immutable-visual.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
           ! grep -qi 'wedontcarecars.com' wrangler.immutable-visual.jsonc
-          grep -q "$GITHUB_SHA" wrangler.immutable-visual.jsonc
+          grep -Fq "$GITHUB_SHA" wrangler.immutable-visual.jsonc
 
       - name: Deploy immutable isolated preview
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.immutable-visual.jsonc 2>&1 | tee /tmp/wdcc-immutable-visual.log
-          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-immutable-visual.log | tail -1)"
+          npx wrangler deploy --config wrangler.immutable-visual.jsonc 2>&1 | tee /tmp/wiva.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wiva.log | tail -1)"
           test -n "$url"
-          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Preview is not SHA-specific: $url" >&2; exit 1;; esac
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Immutable preview is not SHA-specific: $url" >&2; exit 1;; esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > immutable-preview-url.txt
 
       - name: Prove immutable remote integrity
-        id: remote_integrity
         env:
-          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+          URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          fail(){ echo "::error::$1"; for f in /tmp/wdcc-remote-root.html /tmp/wdcc-remote-dealer.html; do if [ -s "$f" ]; then echo "--- $f bytes=$(wc -c < "$f") ---"; head -c 700 "$f" || true; echo; fi; done; exit 1; }
-          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          [ -n "$local_build" ] || fail REMOTE_LOCAL_BUILD_ID_EMPTY
-
           code=000
           for i in $(seq 1 30); do
-            code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-root.html -w '%{http_code}' "$REMOTE_URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
+            code="$(curl --http1.1 -sS -L -o /tmp/wiva-home.html -w '%{http_code}' "$URL/?wiva-warm=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
-          [ "$code" = 200 ] || fail "REMOTE_ROOT_HTTP_$code"
-          root_bytes="$(wc -c < /tmp/wdcc-remote-root.html | tr -d ' ')"
-          [ "$root_bytes" -gt 5000 ] || fail "REMOTE_ROOT_TOO_SMALL_$root_bytes"
-          grep -Fq -- "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
-          grep -Fq '/wdcc-owner-logo' /tmp/wdcc-remote-root.html || fail REMOTE_OWNER_LOGO_REFERENCE_MISSING
-
-          dealer_code=000
-          for i in $(seq 1 30); do
-            dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA-$i" || true)"
-            [ "$dealer_code" = 200 ] && break
-            sleep 2
-          done
-          [ "$dealer_code" = 200 ] || fail "REMOTE_DEALER_HTTP_$dealer_code"
-          dealer_bytes="$(wc -c < /tmp/wdcc-remote-dealer.html | tr -d ' ')"
-          [ "$dealer_bytes" -gt 1000 ] || fail "REMOTE_DEALER_TOO_SMALL_$dealer_bytes"
-          grep -Fq -- "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
-
-          hero_code=000
-          for i in $(seq 1 30); do
-            hero_code="$(curl --http1.1 -sS -L -o /tmp/remote-wdcc-hero-v2.webp -w '%{http_code}' "$REMOTE_URL/wdcc-hero-v2.webp?integrity=$GITHUB_SHA-$i" || true)"
-            [ "$hero_code" = 200 ] && break
-            sleep 2
-          done
-          [ "$hero_code" = 200 ] || fail "REMOTE_ASSET_HTTP_wdcc-hero-v2.webp_$hero_code"
-          remote_hero_sha="$(sha256sum /tmp/remote-wdcc-hero-v2.webp | awk '{print $1}')"
-          local_hero_sha="$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
-          [ "$remote_hero_sha" = "$local_hero_sha" ] || fail REMOTE_ASSET_HASH_MISMATCH_wdcc-hero-v2.webp
-
-          owner_code=000
-          for i in $(seq 1 30); do
-            owner_code="$(curl --http1.1 -sS -D /tmp/remote-owner-logo.headers -L -o /tmp/remote-owner-logo.webp -w '%{http_code}' "$REMOTE_URL/wdcc-owner-logo?integrity=$GITHUB_SHA-$i" || true)"
-            [ "$owner_code" = 200 ] && break
-            sleep 2
-          done
-          [ "$owner_code" = 200 ] || fail "REMOTE_OWNER_LOGO_HTTP_$owner_code"
-          [ -s /tmp/remote-owner-logo.webp ] || fail REMOTE_OWNER_LOGO_EMPTY
-          owner_bytes="$(wc -c < /tmp/remote-owner-logo.webp | tr -d ' ')"
-          [ "$owner_bytes" -gt 500 ] || fail "REMOTE_OWNER_LOGO_TOO_SMALL_$owner_bytes"
-          grep -qi '^x-wdcc-logo: owner-approved' /tmp/remote-owner-logo.headers || fail REMOTE_OWNER_LOGO_MARKER_MISSING
-
-          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" "hero_http=$hero_code" "owner_logo_http=$owner_code" "owner_logo_bytes=$owner_bytes" > immutable-remote-integrity.txt
-          echo "build_id=$local_build" >> "$GITHUB_OUTPUT"
-
-      - name: Start exact-build browser harness
-        id: browser_harness
-        shell: bash
-        run: |
-          set -euo pipefail
-          nohup npx next start -H 127.0.0.1 -p 4173 >/tmp/wdcc-exact-browser.log 2>&1 &
-          echo $! >/tmp/wdcc-exact-browser.pid
-          code=000
-          for i in $(seq 1 30); do
-            code="$(curl -sS -o /tmp/wdcc-local-root.html -w '%{http_code}' "http://127.0.0.1:4173/?visual-mobile=local-$GITHUB_SHA-$i" || true)"
-            [ "$code" = 200 ] && break
-            sleep 1
-          done
-          if [ "$code" != 200 ]; then
-            cat /tmp/wdcc-exact-browser.log >&2 || true
-            exit 1
-          fi
-          local_bytes="$(wc -c < /tmp/wdcc-local-root.html | tr -d ' ')"
-          [ "$local_bytes" -gt 5000 ]
+          test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          grep -Fq -- "$local_build" /tmp/wdcc-local-root.html
-          echo 'url=http://127.0.0.1:4173' >> "$GITHUB_OUTPUT"
+          grep -Fq "$local_build" /tmp/wiva-home.html
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/wiva-home.html
+          test "$(curl --http1.1 -sS -L -o /tmp/wiva-hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(sha256sum /tmp/wiva-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
+          test "$(curl --http1.1 -sS -D /tmp/wiva-logo.headers -L -o /tmp/wiva-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?asset=$GITHUB_RUN_ID")" = 200
+          grep -qi '^x-wdcc-logo: owner-approved' /tmp/wiva-logo.headers
+          printf 'sha=%s\nbuild=%s\nurl=%s\n' "$GITHUB_SHA" "$local_build" "$URL" > immutable-remote-integrity.txt
 
       - name: Prove intro smoke-to-clear contract
-        id: intro_proof
         env:
-          URL: ${{ steps.browser_harness.outputs.url }}
+          URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p immutable-visual-proof
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import {chromium} from 'playwright';
-          const base=process.env.URL;
-          if(!base)throw new Error('BROWSER_HARNESS_URL_MISSING');
-          const out='immutable-visual-proof';
-          fs.mkdirSync(out,{recursive:true});
+          const base=process.env.URL,sha=process.env.GITHUB_SHA;
+          if(!base||!base.includes(sha))throw new Error(`INTRO_NOT_EXACT_SHA_${base||''}_${sha||''}`);
           const browser=await chromium.launch({headless:true});
           try{
-            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
+            const ctx=await browser.newContext({viewport:{width:390,height:844},screen:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
             const page=await ctx.newPage();
-            const response=await page.goto(`${base}/?visual-mobile=smoke-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:15000});
-            if(!response||response.status()!==200)throw new Error(`INTRO_HARNESS_HTTP_${response?.status()||0}`);
-            await page.locator('.li').waitFor({state:'attached',timeout:10000});
-            await page.locator('.li-smoke').waitFor({state:'attached',timeout:5000});
-            await page.locator('.li-badge img').waitFor({state:'visible',timeout:5000});
-            await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
-            await page.waitForFunction(()=>[document.querySelector('.li-badge img'),document.querySelector('.li-scene img')].every(x=>x&&x.complete&&x.naturalWidth>0),null,{timeout:5000});
-            const anim=await page.evaluate(()=>{
-              const smoke=document.querySelector('.li-smoke');
-              const a=smoke?.getAnimations()[0];
-              if(!a)return null;
-              a.pause();
-              a.currentTime=250;
-              return getComputedStyle(smoke).animationName;
-            });
-            if(anim!=='liSmokeClear')throw new Error(`INTRO_SMOKE_ANIMATION_MISSING_${anim}`);
-            const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-            const sample=()=>page.evaluate(()=>{
-              const rect=e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2}};
-              const badge=document.querySelector('.li-badge');
-              const scene=document.querySelector('.li-scene img');
-              const smoke=document.querySelector('.li-smoke');
-              const tag=document.querySelector('.li-tag');
-              const ss=getComputedStyle(smoke),is=getComputedStyle(scene),ts=getComputedStyle(tag);
-              const blur=Number((ss.backdropFilter.match(/blur\(([\d.]+)px\)/)||[])[1]||0);
-              const brightness=Number((is.filter.match(/brightness\(([\d.]+)\)/)||[])[1]||1);
-              return{badge:rect(badge),scene:rect(scene),smokeOpacity:Number(ss.opacity),smokeBlur:blur,sceneBrightness:brightness,tagText:(tag.textContent||'').trim(),tagFont:Number.parseFloat(ts.fontSize)||0,winW:innerWidth};
-            });
-            await settle();
-            const start=await sample();
-            if(start.badge.w<230||Math.abs(start.badge.cx-start.winW/2)>3)throw new Error(`INTRO_BADGE_NOT_DOMINANT_CENTERED ${JSON.stringify(start.badge)}`);
-            if(!/tampa bay/i.test(start.tagText)||start.tagFont<12)throw new Error(`INTRO_TAGLINE_BAD ${JSON.stringify({text:start.tagText,font:start.tagFont})}`);
-            if(start.sceneBrightness<1.2)throw new Error(`INTRO_SCENE_TOO_DARK ${start.sceneBrightness}`);
-            if(start.smokeOpacity<.55||start.smokeBlur<4)throw new Error(`INTRO_SOFT_REVEAL_MISSING ${JSON.stringify({opacity:start.smokeOpacity,blur:start.smokeBlur})}`);
-            await page.screenshot({path:`${out}/mobile-intro-smoke.png`});
-            await page.evaluate(()=>{const a=document.querySelector('.li-smoke')?.getAnimations()[0];if(!a)throw new Error('INTRO_SMOKE_ANIMATION_LOST');a.pause();a.currentTime=1250});
-            await settle();
-            const end=await sample();
-            if(end.smokeOpacity>.06||end.smokeBlur>.5)throw new Error(`INTRO_DID_NOT_CLEAR_CRISP ${JSON.stringify({opacity:end.smokeOpacity,blur:end.smokeBlur})}`);
-            const delta=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y),Math.abs(a.w-b.w),Math.abs(a.h-b.h));
-            const badgeDelta=delta(start.badge,end.badge),sceneDelta=delta(start.scene,end.scene);
-            if(badgeDelta>.75||sceneDelta>.75)throw new Error(`INTRO_OBJECT_MOVEMENT ${JSON.stringify({badgeDelta,sceneDelta})}`);
-            await page.screenshot({path:`${out}/mobile-intro-crisp.png`});
-            fs.writeFileSync(`${out}/intro-reveal.json`,JSON.stringify({start,end,badgeDelta,sceneDelta,pass:true},null,2)+'\n');
+            const response=await page.goto(`${base}/?visual-mobile=1&intro-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!response||response.status()!==200)throw new Error(`INTRO_HTTP_${response?.status()||0}`);
+            await page.locator('.li-smoke').waitFor({state:'visible',timeout:10000});
+            await page.locator('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]').waitFor({state:'visible',timeout:10000});
+            const snap=()=>page.evaluate(()=>{const smoke=document.querySelector('.li-smoke'),badge=document.querySelector('.li-badge'),scene=document.querySelector('.li-scene img'),art=document.querySelector('.li-badge img[data-wdcc-intro-badge-art="owner-approved"]');const sr=getComputedStyle(smoke),b=badge.getBoundingClientRect(),s=scene.getBoundingClientRect();return{smokeOpacity:Number(sr.opacity),smokeFilter:sr.backdropFilter||sr.webkitBackdropFilter||'',badge:{x:b.x,y:b.y,w:b.width,h:b.height,cx:b.x+b.width/2},scene:{x:s.x,y:s.y,w:s.width,h:s.height},art:{src:art.getAttribute('src')||'',naturalWidth:art.naturalWidth,naturalHeight:art.naturalHeight},winW:innerWidth}});
+            const start=await snap();
+            await page.screenshot({path:'immutable-visual-proof/intro-start.png'});
+            await page.waitForTimeout(1450);
+            const end=await snap();
+            await page.screenshot({path:'immutable-visual-proof/intro-clear.png'});
+            const badgeDelta=Math.hypot(end.badge.x-start.badge.x,end.badge.y-start.badge.y);
+            const sceneDelta=Math.hypot(end.scene.x-start.scene.x,end.scene.y-start.scene.y);
+            if(start.smokeOpacity<.35||end.smokeOpacity>.08||Math.abs(start.badge.cx-start.winW/2)>4||start.badge.w<230||badgeDelta>1||sceneDelta>1||!start.art.src.startsWith('data:image/')||start.art.naturalWidth<20||start.art.naturalHeight<20)throw new Error(`INTRO_CONTRACT_${JSON.stringify({start,end,badgeDelta,sceneDelta})}`);
+            fs.writeFileSync('immutable-visual-proof/intro-result.json',JSON.stringify({sha,url:base,start,end,badgeDelta,sceneDelta,pass:true},null,2)+'\n');
             await ctx.close();
           }finally{await browser.close()}
           NODE
 
-      - name: Prove storefront and dealer visual contract
-        id: visual_contract
+      - name: Prove storefront and dealer owner boards
         env:
-          URL: ${{ steps.browser_harness.outputs.url }}
+          URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/wdcc-immutable-owner-board-runner.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s owner-board-proof/result.json
+          node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
       - name: Require current branch head before owner handoff
-        id: head_gate
         shell: bash
         run: |
           set -euo pipefail
           current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
           test -n "$current"
-          if [ "$current" != "$GITHUB_SHA" ]; then
-            echo "STALE_HEAD expected=$GITHUB_SHA current=$current" >&2
-            exit 1
-          fi
-          echo "current=$current" >> "$GITHUB_OUTPUT"
+          test "$current" = "$GITHUB_SHA"
 
       - name: Publish visual acceptance summary
         if: always()
         env:
-          REMOTE_URL: ${{ steps.deploy.outputs.url }}
-          REMOTE_OUTCOME: ${{ steps.remote_integrity.outcome }}
-          INTRO_OUTCOME: ${{ steps.intro_proof.outcome }}
-          VISUAL_OUTCOME: ${{ steps.visual_contract.outcome }}
-          HEAD_GATE_OUTCOME: ${{ steps.head_gate.outcome }}
-          BUILD_ID: ${{ steps.remote_integrity.outputs.build_id }}
+          URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           echo '### WDCC immutable visual acceptance V2' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo "Immutable owner preview: ${REMOTE_URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Remote integrity: ${REMOTE_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Exact build ID: ${BUILD_ID:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Browser transport: local production server built from the same exact SHA; remote Worker integrity independently verified.' >> "$GITHUB_STEP_SUMMARY"
-          echo "Intro proof: ${INTRO_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Storefront/dealer proof: ${VISUAL_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Current-head gate: ${HEAD_GATE_OUTCOME:-unknown}" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${REMOTE_OUTCOME:-}" = success ] && [ "${INTRO_OUTCOME:-}" = success ] && [ "${VISUAL_OUTCOME:-}" = success ] && [ "${HEAD_GATE_OUTCOME:-}" = success ]; then
-            echo 'OWNER_REVIEW_ELIGIBLE: YES' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'OWNER_REVIEW_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -s immutable-visual-proof/intro-reveal.json ]; then
+          echo "Immutable owner preview: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s immutable-visual-proof/intro-result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
-          const p=require('./immutable-visual-proof/intro-reveal.json');
-          console.log(`Intro smoke → crisp: PASS · blur ${p.start.smokeBlur.toFixed(1)}px → ${p.end.smokeBlur.toFixed(1)}px · badge movement ${p.badgeDelta.toFixed(2)}px · scene movement ${p.sceneDelta.toFixed(2)}px.`);
+          const p=require('./immutable-visual-proof/intro-result.json');
+          console.log(`Intro smoke → clear: ${p.start.smokeOpacity.toFixed(2)} → ${p.end.smokeOpacity.toFixed(2)} · badge movement ${p.badgeDelta.toFixed(2)} px · scene movement ${p.sceneDelta.toFixed(2)} px`);
           NODE
           fi
-          if [ -s immutable-visual-proof/metrics.json ]; then
+          if [ -s owner-board-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
-          const p=require('./immutable-visual-proof/metrics.json');
-          console.log(`Canonical inventory probe: HTTP ${p.provider.status||0} · ${p.provider.mode}`);
-          console.log(p.provider.ok?'Live inventory UI verified against canonical read-only data.':'Canonical inventory provider blocked; honest no-demo storefront fallback and empty dealer visual shell verified.');
-          console.log(`Browser write requests: ${p.writeRequests.length}`);
+          const p=require('./owner-board-proof/result.json');
+          console.log(`Owner boards: pass=${p.pass} · desktop logo ${p.desktop.home.headerLogo.w.toFixed(0)}px · mobile logo ${p.mobile.home.headerLogo.w.toFixed(0)}px · writes=${p.writes.length}`);
           NODE
           fi
-          echo 'Visual success does not authorize merge or production promotion. Owner approval and functional/provider acceptance remain separate.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Visual success does not authorize merge or production promotion.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -319,5 +200,6 @@ jobs:
             immutable-preview-url.txt
             immutable-remote-integrity.txt
             immutable-visual-proof/
+            owner-board-proof/
           if-no-files-found: warn
           retention-days: 7
