@@ -1,4 +1,4 @@
-// Cloudflare dealer front door and customer lead facade use this authority map while Phoenix remains the canonical data backend.
+// Cloudflare dealer front door and customer lead facade use this authority map while Phoenix remains the rollback backend.
 export const WDCC_CANONICAL_BACKEND_DEFAULT="https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
 export const WDCC_DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 export const WDCC_PHOENIX_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
@@ -9,6 +9,10 @@ export function canonicalDealerBackend(){
 }
 
 export function blobAuthority(){
+  const stateServiceUrl=(process.env.WDCC_STATE_SERVICE_URL||"").trim().replace(/\/$/,"");
+  const stateServiceToken=(process.env.WDCC_STATE_SERVICE_TOKEN||"").trim();
+  if(stateServiceUrl&&stateServiceToken)return {mode:"cloudflare-do" as const,options:{stateServiceUrl,stateServiceToken}};
+
   // Prefer Vercel's short-lived project-scoped OIDC whenever it is available.
   // A stale long-lived Blob token must never shadow a valid scoped runtime identity.
   const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
@@ -19,4 +23,11 @@ export function blobAuthority(){
   if(token)return {mode:"token" as const,options:{token}};
 
   return {mode:"missing" as const,options:{}};
+}
+
+export function mediaAuthority(){
+  const mediaServiceUrl=(process.env.WDCC_MEDIA_SERVICE_URL||"").trim().replace(/\/$/,"");
+  const mediaServiceToken=(process.env.WDCC_MEDIA_SERVICE_TOKEN||"").trim();
+  if(mediaServiceUrl&&mediaServiceToken)return {mode:"cloudflare-do" as const,options:{mediaServiceUrl,mediaServiceToken}};
+  return {mode:"blob" as const,options:{}};
 }
