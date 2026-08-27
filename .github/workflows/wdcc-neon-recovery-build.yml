@@ -5,12 +5,12 @@ on:
     branches:
       - fix/wdcc-preview-provider-recovery-20260827
     paths:
-      - 'lib/wdccNeonRecovery.ts'
-      - 'lib/auth.ts'
       - 'lib/store.ts'
-      - 'app/api/auth/**'
-      - 'app/api/crm/dashboard/route.ts'
-      - 'app/api/admin/users/route.ts'
+      - 'lib/wdccPreviewRecoveryState.ts'
+      - 'app/api/health/route.ts'
+      - 'app/api/inventory/**'
+      - 'tsconfig.json'
+      - '.github/workflows/wdcc-preview-blocker-repair.yml'
       - '.github/workflows/wdcc-neon-recovery-build.yml'
   workflow_dispatch:
 
@@ -33,14 +33,26 @@ jobs:
       - run: npm ci
       - name: Build recovery source without deployment
         run: npm run build
-      - name: Verify recovery boundaries
+      - name: Verify provider-independent recovery boundaries
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'previewRecoveryEnabled' lib/wdccNeonRecovery.ts
-          grep -q 'wdcc_recovery_dashboard' app/api/crm/dashboard/route.ts
-          grep -q 'RECOVERY_READ_ONLY' app/api/admin/users/route.ts
-          grep -q 'PREVIEW_RECOVERY_READ_ONLY' lib/store.ts
-          grep -q 'VERCEL_ENV==="preview"' lib/wdccPreviewRecoveryState.ts
+          node - <<'NODE'
+          const fs=require('fs');
+          const ts=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));
+          if(!(ts.exclude||[]).includes('open-next.config.ts')) throw new Error('open-next.config.ts isolation missing');
+
+          const recovery=fs.readFileSync('lib/wdccPreviewRecoveryState.ts','utf8');
+          if(!recovery.includes('process.env.VERCEL_ENV==="preview"')) throw new Error('preview-only recovery guard missing');
+          if(!recovery.includes('process.env.WDCC_PREVIEW_RECOVERY_STATE===RECOVERY_MODE')) throw new Error('recovery selector guard missing');
+          if(!recovery.includes('users:[]')) throw new Error('recovery users must remain empty');
+          if(!recovery.includes('leads:[]')) throw new Error('recovery leads must remain empty');
+          const stocks=[...recovery.matchAll(/stock:"([^"]+)"/g)].map(m=>m[1]);
+          if(stocks.length!==5) throw new Error(`expected exactly five recovered inventory records, found ${stocks.length}`);
+          if(stocks.some(stock=>/^(R36TEST|QA|TEST)[-_]/i.test(stock))) throw new Error('QA/test inventory is not allowed in recovery state');
+
+          const store=fs.readFileSync('lib/store.ts','utf8');
+          if(!store.includes('PREVIEW_RECOVERY_READ_ONLY')) throw new Error('recovery write lock missing');
+          NODE
           ! grep -R --line-number -E 'postgres(ql)?://[^ ]+:[^ ]+@' lib app
           ! grep -R --line-number -E 'NEON_AUTH_COOKIE_SECRET=' lib app
