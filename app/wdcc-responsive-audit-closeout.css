@@ -96,8 +96,27 @@ html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{content:no
 
   html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{width:50px!important;min-width:50px!important;height:50px!important;min-height:50px!important}
 
-  /* Mobile drawer keeps its own identity because the desktop sidebar brand is hidden above. */
+  /* 3293 mobile editor: real reflow, not desktop fields stacked one per row. */
+  html body .editVehicleApp .fieldGrid{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:10px!important;
+    align-items:start!important;
+  }
+  html body .editVehicleApp .fieldGrid>label{min-width:0!important;width:auto!important}
+  html body .editVehicleApp .fieldGrid input,
+  html body .editVehicleApp .fieldGrid select,
+  html body .editVehicleApp .fieldGrid textarea{width:100%!important;min-width:0!important}
+  html body .editVehicleApp .fieldGrid .description{grid-column:1/-1!important}
+
+  /* Mobile drawer identity appears when the off-canvas menu itself is opened. */
   html body .editVehicleApp .editSide>.editBrand{display:flex!important}
+}
+
+/* Wider phones / compact tablets can reproduce the four-across 3293 field rhythm. */
+@media(min-width:430px) and (max-width:767px){
+  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:9px!important}
+  html body .editVehicleApp .fieldGrid .description{grid-column:1/-1!important}
 }
 
 @media(max-width:420px){
