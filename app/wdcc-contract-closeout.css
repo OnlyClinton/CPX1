@@ -1,0 +1,9 @@
+/* WDCC CONTRACT CLOSEOUT
+   Single late-stage visual authority entrypoint.
+   Order is intentional: public chrome -> storefront optics -> real-device scale -> audit fixes -> owner lock.
+   Do not import these modules individually from app/layout.tsx. */
+@import "./wdcc-public-chrome-final.css";
+@import "./storefront-optical-final.css";
+@import "./wdcc-real-device-scale-final.css";
+@import "./wdcc-responsive-audit-closeout.css";
+@import "./wdcc-owner-contract-final.css";

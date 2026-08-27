@@ -1,0 +1,644 @@
+/*
+  R31 owner-board convergence — preview lane only.
+  Visual geometry and presentation only: no route, provider, auth, schema,
+  persistence, inventory, or production-control behavior is changed here.
+*/
+
+html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(3),
+html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(4),
+html body main.reference-home.locked-storefront .rh-nav>a:last-child,
+html body .wdcc-public-utility .rh-utility-inner>span:nth-child(3),
+html body .wdcc-public-utility .rh-utility-inner>span:nth-child(4),
+html body .wdcc-public-header .rh-nav>a:last-child{
+  display:none!important;
+}
+
+html body main.reference-home.locked-storefront .rh-btn::after{
+  content:" →";
+  margin-left:7px;
+}
+
+html body main.reference-home.locked-storefront .rh-phone::before{
+  content:"☎";
+  color:#ef202f;
+  font-size:14px;
+}
+
+@media(min-width:768px){
+  html body main.reference-home.locked-storefront .rh-utility,
+  html body .wdcc-public-utility{
+    height:34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-utility-inner,
+  html body .wdcc-public-utility .rh-utility-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    gap:20px!important;
+    font-size:9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-utility-inner>a,
+  html body .wdcc-public-utility .rh-utility-inner>a{
+    margin-left:auto!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-header,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{
+    height:94px!important;
+    min-height:94px!important;
+    top:34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-inner,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    height:94px!important;
+    grid-template-columns:132px minmax(0,1fr) auto!important;
+    gap:26px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
+    width:124px!important;
+    height:94px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:112px!important;
+    min-width:112px!important;
+    max-width:112px!important;
+    height:112px!important;
+    min-height:112px!important;
+    max-height:112px!important;
+    object-fit:contain!important;
+    filter:drop-shadow(0 7px 18px rgba(0,0,0,.52))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{
+    justify-content:flex-start!important;
+    gap:34px!important;
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-actions>a:first-child,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions>a:first-child{
+    display:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-primary,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-primary{
+    min-height:48px!important;
+    padding:0 25px!important;
+    border-radius:5px!important;
+    font-size:10px!important;
+    box-shadow:0 9px 22px rgba(239,31,47,.24)!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-hero{
+    height:535px!important;
+    min-height:535px!important;
+    overflow:hidden!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    object-fit:cover!important;
+    object-position:60% 49%!important;
+    filter:saturate(1.1) contrast(1.045) brightness(1.035)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    height:100%!important;
+    background:linear-gradient(90deg,rgba(2,8,13,.97) 0%,rgba(2,8,13,.88) 27%,rgba(2,8,13,.45) 49%,rgba(2,8,13,.06) 72%,rgba(2,8,13,.1) 100%),linear-gradient(180deg,rgba(2,8,13,.03),rgba(2,8,13,.07) 58%,rgba(2,8,13,.5) 100%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    height:535px!important;
+    min-height:535px!important;
+    margin:0 auto!important;
+    padding:0!important;
+    align-items:center!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    width:min(590px,46vw)!important;
+    max-width:590px!important;
+    padding:34px 0 38px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{
+    margin-bottom:13px!important;
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    max-width:590px!important;
+    font-size:clamp(64px,5.65vw,82px)!important;
+    line-height:.88!important;
+    letter-spacing:-.057em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-proof-copy{
+    max-width:450px!important;
+    margin-top:17px!important;
+    font-size:15px!important;
+    line-height:1.38!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    margin-top:23px!important;
+    gap:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-btn{
+    min-height:49px!important;
+    padding:0 24px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-phone{
+    margin-top:15px!important;
+    font-size:11px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-benefit-wrap{
+    margin-top:-28px!important;
+    padding:0 26px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefits{
+    width:min(1360px,100%)!important;
+    border-radius:10px!important;
+    box-shadow:0 16px 36px rgba(10,25,38,.15)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:108px!important;
+    padding:18px 22px!important;
+    grid-template-columns:42px minmax(0,1fr)!important;
+    gap:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:38px!important;
+    height:38px!important;
+    font-size:17px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:48px max(28px,calc((100vw - 1360px)/2)) 54px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    margin-bottom:16px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head p{
+    font-size:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    width:min(1360px,100%)!important;
+    gap:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{
+    aspect-ratio:1.33!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div{
+    padding:12px 13px 14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{
+    min-height:35px!important;
+    font-size:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{
+    font-size:23px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:48px 28px 52px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance-inner,
+  html body main.reference-home.locked-storefront .rh-trust-grid{
+    width:min(1360px,100%)!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:31px!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading p{
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step{
+    min-height:132px!important;
+    padding:18px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step>b{
+    width:34px!important;
+    height:34px!important;
+    font-size:13px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust{
+    padding:0 28px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid article{
+    min-height:88px!important;
+    padding:15px 18px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer{
+    padding:30px 28px!important;
+  }
+}
+
+@media(max-width:767px),(hover:none) and (pointer:coarse) and (max-width:1180px){
+  html body main.reference-home.locked-storefront .rh-utility,
+  html body .wdcc-public-utility{
+    display:none!important;
+    visibility:hidden!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    position:static!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
+    top:0!important;
+    position:sticky!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-inner,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
+    width:calc(100% - 24px)!important;
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
+    grid-template-columns:46px minmax(0,1fr) 46px!important;
+    grid-template-rows:76px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu,
+  html body main.reference-home.locked-storefront .rh-call,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    min-height:44px!important;
+    max-width:44px!important;
+    max-height:44px!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu{
+    grid-column:1!important;
+    grid-row:1!important;
+    justify-self:start!important;
+    position:relative!important;
+    border:0!important;
+    border-radius:50%!important;
+    background:#0a1722!important;
+    color:#fff!important;
+    font-size:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu::before{
+    content:""!important;
+    width:22px!important;
+    height:16px!important;
+    background:linear-gradient(#fff,#fff) 0 0/22px 2px no-repeat,linear-gradient(#fff,#fff) 0 7px/22px 2px no-repeat,linear-gradient(#fff,#fff) 0 14px/22px 2px no-repeat!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu[aria-expanded="true"]::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu[aria-expanded="true"]::before{
+    content:"×"!important;
+    width:auto!important;
+    height:auto!important;
+    background:none!important;
+    font-size:28px!important;
+    font-weight:500!important;
+  }
+  html body main.reference-home.locked-storefront .rh-call,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{
+    grid-column:3!important;
+    grid-row:1!important;
+    justify-self:end!important;
+    border-radius:50%!important;
+    background:#ef1f2f!important;
+    color:#fff!important;
+    text-decoration:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-call>span,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call>span{
+    display:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-call::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call::before{
+    content:"☎"!important;
+    font-size:18px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
+    width:86px!important;
+    min-width:86px!important;
+    max-width:86px!important;
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:82px!important;
+    min-width:82px!important;
+    max-width:82px!important;
+    height:82px!important;
+    min-height:82px!important;
+    max-height:82px!important;
+    object-fit:contain!important;
+    filter:drop-shadow(0 5px 13px rgba(0,0,0,.5))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{
+    display:none!important;
+    position:absolute!important;
+    left:0!important;
+    right:0!important;
+    top:76px!important;
+    padding:10px!important;
+    grid-template-columns:1fr!important;
+    gap:0!important;
+    background:#06121d!important;
+    border-top:1px solid #203548!important;
+    box-shadow:0 18px 34px rgba(0,0,0,.34)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav.open,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav.open{
+    display:grid!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav>a,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav>a{
+    min-height:48px!important;
+    display:flex!important;
+    align-items:center!important;
+    padding:0 14px!important;
+    border-bottom:1px solid #152a3a!important;
+    font-size:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-actions,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions{
+    display:none!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-hero{
+    height:525px!important;
+    min-height:525px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    object-position:64% 48%!important;
+    filter:saturate(1.14) contrast(1.04) brightness(1.06)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    height:100%!important;
+    background:linear-gradient(180deg,rgba(2,8,13,.05) 0%,rgba(2,8,13,.14) 34%,rgba(2,8,13,.58) 58%,rgba(2,8,13,.96) 78%,#02080d 100%),linear-gradient(90deg,rgba(2,8,13,.45),rgba(2,8,13,.04) 76%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    box-sizing:border-box!important;
+    width:100%!important;
+    height:525px!important;
+    min-height:525px!important;
+    padding:0 15px 21px!important;
+    align-items:flex-end!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    width:100%!important;
+    max-width:370px!important;
+    padding:0!important;
+    background:transparent!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{
+    margin-bottom:8px!important;
+    font-size:8.5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    max-width:360px!important;
+    font-size:39px!important;
+    line-height:.9!important;
+    white-space:nowrap!important;
+  }
+  html body main.reference-home.locked-storefront .rh-proof-copy{
+    max-width:330px!important;
+    margin-top:11px!important;
+    font-size:11.5px!important;
+    line-height:1.34!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    margin-top:15px!important;
+    gap:8px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-btn{
+    min-height:47px!important;
+    font-size:9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-phone{
+    display:flex!important;
+    margin-top:11px!important;
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-benefits{
+    width:100%!important;
+    margin:0!important;
+    border-radius:0!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit-wrap{
+    margin-top:0!important;
+    padding:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:92px!important;
+    padding:12px 13px!important;
+    grid-template-columns:34px minmax(0,1fr)!important;
+    gap:9px!important;
+    text-align:left!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:31px!important;
+    height:31px!important;
+    font-size:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:10.5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:9.5px!important;
+    line-height:1.3!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:22px 0 34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    box-sizing:border-box!important;
+    width:100%!important;
+    padding:0 14px!important;
+    margin-bottom:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:27px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    width:100%!important;
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:7px!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:14px!important;
+    padding:0 14px 4px!important;
+  }
+  html body main.reference-home.locked-storefront .wdccRecoveryInventoryBanner,
+  html body main.reference-home.locked-storefront .wdccOwnerReviewBanner{
+    box-sizing:border-box!important;
+    width:calc(100% - 28px)!important;
+    margin:0 14px 10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 31.5vw!important;
+    width:31.5vw!important;
+    min-width:118px!important;
+    max-width:140px!important;
+    scroll-snap-align:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{
+    aspect-ratio:1.16!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div{
+    padding:7px 7px 9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{
+    min-height:21px!important;
+    font-size:9.5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{
+    font-size:16px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-mobile-dots{
+    display:flex!important;
+    justify-content:center!important;
+    gap:6px!important;
+    margin-top:10px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:34px 14px 39px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-steps{
+    grid-template-columns:1fr!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:27px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step{
+    min-height:82px!important;
+    padding:12px 11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid{
+    width:100%!important;
+    grid-template-columns:1fr 1fr!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid article{
+    min-height:94px!important;
+    padding:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer{
+    padding:31px 20px 34px!important;
+  }
+}
+
+/* Android "Desktop site" keeps a wide layout viewport. Pointer capability is
+   the stable signal, so preserve the same physical proportions with vw units. */
+@media(hover:none) and (pointer:coarse) and (min-width:768px) and (max-width:1180px){
+  html body main.reference-home.locked-storefront .rh-header,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"],
+  html body main.reference-home.locked-storefront .rh-header-inner,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
+    height:19.5vw!important;
+    min-height:19.5vw!important;
+    max-height:19.5vw!important;
+    grid-template-columns:11.8vw minmax(0,1fr) 11.8vw!important;
+    grid-template-rows:19.5vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu,
+  html body main.reference-home.locked-storefront .rh-call,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{
+    width:11.3vw!important;
+    height:11.3vw!important;
+    min-width:11.3vw!important;
+    min-height:11.3vw!important;
+    max-width:11.3vw!important;
+    max-height:11.3vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo,
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:21vw!important;
+    min-width:21vw!important;
+    max-width:21vw!important;
+    height:21vw!important;
+    min-height:21vw!important;
+    max-height:21vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{top:19.5vw!important}
+  html body main.reference-home.locked-storefront .rh-menu::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu::before{
+    width:5.65vw!important;
+    height:4.1vw!important;
+    background:linear-gradient(#fff,#fff) 0 0/5.65vw .52vw no-repeat,linear-gradient(#fff,#fff) 0 1.8vw/5.65vw .52vw no-repeat,linear-gradient(#fff,#fff) 0 3.6vw/5.65vw .52vw no-repeat!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu[aria-expanded="true"]::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu[aria-expanded="true"]::before{width:auto!important;height:auto!important;background:none!important;font-size:7.2vw!important}
+  html body main.reference-home.locked-storefront .rh-call::before,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call::before{font-size:4.6vw!important}
+  html body main.reference-home.locked-storefront .rh-hero,
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    height:134vw!important;
+    min-height:134vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{padding:0 3.85vw 5.4vw!important}
+  html body main.reference-home.locked-storefront .rh-copy{max-width:94vw!important}
+  html body main.reference-home.locked-storefront .rh-kicker{font-size:2.18vw!important;margin-bottom:2.05vw!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{max-width:92vw!important;font-size:9.25vw!important}
+  html body main.reference-home.locked-storefront .rh-proof-copy{max-width:85vw!important;margin-top:2.8vw!important;font-size:2.95vw!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:3.85vw!important;gap:2.05vw!important}
+  html body main.reference-home.locked-storefront .rh-btn{min-height:12vw!important;font-size:2.3vw!important}
+  html body main.reference-home.locked-storefront .rh-phone{margin-top:2.8vw!important;font-size:2.3vw!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:23.6vw!important;padding:3.1vw 3.3vw!important;grid-template-columns:8.7vw minmax(0,1fr)!important;gap:2.3vw!important}
+  html body main.reference-home.locked-storefront .rh-icon{width:7.95vw!important;height:7.95vw!important;font-size:3.6vw!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:2.7vw!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:2.45vw!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding:5.65vw 0 8.7vw!important}
+  html body main.reference-home.locked-storefront .rh-section-head{padding-inline:3.6vw!important}
+  html body main.reference-home.locked-storefront .rh-section-head small{font-size:2vw!important}
+  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:6.9vw!important}
+  html body main.reference-home.locked-storefront .rh-section-head p{font-size:2.2vw!important}
+  html body main.reference-home.locked-storefront .rh-view-all{font-size:2vw!important}
+  html body main.reference-home.locked-storefront .rh-grid{gap:1.8vw!important;padding-inline:3.6vw!important;scroll-padding-inline:3.6vw!important}
+  html body main.reference-home.locked-storefront .rh-grid>article{flex-basis:31.5vw!important;width:31.5vw!important;min-width:31.5vw!important;max-width:31.5vw!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div{padding:1.8vw 1.8vw 2.3vw!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{min-height:5.4vw!important;font-size:2.45vw!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{font-size:4.1vw!important}
+}
+
+@media(max-width:390px){
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    font-size:36px!important;
+  }
+}

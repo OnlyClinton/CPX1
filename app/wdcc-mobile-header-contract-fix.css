@@ -1,0 +1,242 @@
+/* WDCC final visual contract closeout.
+   Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
+
+/* Public header wordmark: the actual 400x128 WDCC horizontal asset is the visible
+   authority. Do not recolor it, synthesize it with text, round it, or hide it. */
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  background:none!important;
+  filter:none!important;
+  position:relative!important;
+  overflow:visible!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:relative!important;
+  inset:auto!important;
+  transform:none!important;
+  width:158px!important;
+  min-width:158px!important;
+  max-width:158px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:58px!important;
+  object-fit:contain!important;
+  border-radius:0!important;
+  background:none!important;
+  filter:none!important;
+  pointer-events:none!important;
+  z-index:3!important;
+}
+
+/* Owner-review historical fixture is explicit and never presented as live. */
+html body .wdccOwnerReviewBanner{
+  box-sizing:border-box!important;
+  width:min(1440px,calc(100% - 42px))!important;
+  margin:0 auto 14px!important;
+  padding:10px 14px!important;
+  border:1px solid #d59b00!important;
+  border-radius:7px!important;
+  background:#fff5cf!important;
+  color:#4a3500!important;
+  font:950 11px/1.35 Inter,ui-sans-serif,system-ui,sans-serif!important;
+  letter-spacing:.035em!important;
+  text-align:center!important;
+  text-transform:uppercase!important;
+}
+
+/* Home desktop: reserve enough real space for the complete horizontal wordmark. */
+@media (min-width:768px){
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:184px minmax(0,1fr) auto!important;
+    gap:20px!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo{
+    width:176px!important;
+    min-width:176px!important;
+    overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav{gap:20px!important;min-width:0!important}
+
+  html body main.reference-home.locked-storefront .rh-benefit-wrap,
+  html body main.reference-home.locked-storefront .rh-benefits{background:#fff!important;color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit{background:#fff!important;color:#101820!important;border-color:#d9e0e6!important}
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{color:#ef1f2f!important;border-color:#c8d1d8!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{color:#5d6872!important}
+}
+
+/* Mobile public chrome: one header only, flush to the top. */
+@media (max-width:767px){
+  html body [data-wdcc-public-chrome="utility"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="utility"].rh-utility{
+    display:none!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    visibility:hidden!important;
+    opacity:0!important;
+  }
+  html body [data-wdcc-public-chrome="header"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
+    top:0!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    width:148px!important;
+    min-width:148px!important;
+    height:78px!important;
+    justify-self:center!important;
+    overflow:visible!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+    width:142px!important;
+    min-width:142px!important;
+    max-width:142px!important;
+    height:auto!important;
+    max-height:46px!important;
+  }
+  html body .wdccOwnerReviewBanner{
+    width:calc(100% - 20px)!important;
+    margin-bottom:10px!important;
+    padding:9px 10px!important;
+    font-size:9.5px!important;
+  }
+  html body .approvalBoard .approvalFieldGrid label{font-size:11px!important}
+}
+
+/* Dealer five-step wizard: production-grade controls instead of browser defaults. */
+html body .editVehicleApp .wizardNav{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  flex-wrap:wrap!important;
+  gap:10px!important;
+  margin-top:16px!important;
+  padding-top:16px!important;
+  border-top:1px solid #d8e0e6!important;
+}
+html body .editVehicleApp .wizardNav button{
+  appearance:none!important;
+  min-height:44px!important;
+  min-width:112px!important;
+  padding:0 18px!important;
+  border:1px solid #cbd5dc!important;
+  border-radius:7px!important;
+  background:#fff!important;
+  color:#0a1722!important;
+  font:900 12px/1 Inter,ui-sans-serif,system-ui,sans-serif!important;
+  cursor:pointer!important;
+}
+html body .editVehicleApp .wizardNav .next,
+html body .editVehicleApp .wizardNav .publish{
+  border-color:#ef1f2f!important;
+  background:#ef1f2f!important;
+  color:#fff!important;
+}
+html body .editVehicleApp .wizardNav .back{background:#0a1722!important;border-color:#0a1722!important;color:#fff!important}
+html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;cursor:not-allowed!important}
+
+@media (max-width:767px){
+  html body .editVehicleApp .fieldGrid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:12px!important;
+    width:100%!important;
+  }
+  html body .editVehicleApp .fieldGrid>label{
+    display:grid!important;
+    grid-column:1/-1!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  html body .editVehicleApp .fieldGrid>label.description{grid-column:1/-1!important}
+  html body .editVehicleApp .fieldGrid input:not([type="checkbox"]),
+  html body .editVehicleApp .fieldGrid select,
+  html body .editVehicleApp .fieldGrid textarea{
+    box-sizing:border-box!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    min-height:50px!important;
+    font-size:15.5px!important;
+  }
+  html body .editVehicleApp .fieldGrid textarea{min-height:120px!important}
+  html body .editVehicleApp .fieldGrid label>span{font-size:10.5px!important;line-height:1.2!important}
+  html body .editVehicleApp .wizardNav{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%!important}
+  html body .editVehicleApp .wizardNav button{width:100%!important;min-width:0!important;min-height:48px!important;font-size:12px!important}
+  html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
+}
+
+/* Exact-head proof sync: official logo + explicit owner-only historical inventory review mode. */
+
+/* FINAL LOGO RELIABILITY: render the official round badge as a real image.
+   Do not rely on CSS content:url swaps or filtered transparent wordmarks. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+  grid-template-columns:104px minmax(0,1fr) auto!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  width:96px!important;
+  min-width:96px!important;
+  height:78px!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:78px!important;
+  min-width:78px!important;
+  max-width:78px!important;
+  height:78px!important;
+  min-height:78px!important;
+  max-height:78px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+  background:transparent!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+}
+html body .li .li-badge-art{display:none!important;visibility:hidden!important;opacity:0!important}
+html body .li .li-badge>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  z-index:2!important;
+  width:96%!important;
+  height:96%!important;
+  object-fit:contain!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+}
+@media (min-width:768px){
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:108px minmax(0,1fr) auto!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo{
+    width:96px!important;
+    min-width:96px!important;
+  }
+}
+@media (max-width:767px){
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    width:104px!important;
+    min-width:104px!important;
+    height:78px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+    width:92px!important;
+    min-width:92px!important;
+    max-width:92px!important;
+    height:92px!important;
+    min-height:92px!important;
+    max-height:92px!important;
+  }
+}

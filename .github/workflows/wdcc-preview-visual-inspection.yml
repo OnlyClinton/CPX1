@@ -1,0 +1,137 @@
+name: WDCC Preview Visual Inspection
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+    paths:
+      - '.github/workflows/wdcc-preview-visual-inspection.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-preview-visual-inspection
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      URL: https://wdcc-locked-preview.clico-global.workers.dev
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: HTTP route and asset diagnostics
+        id: http
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-visual
+          check(){
+            label="$1"; path="$2"; out="/tmp/wdcc-visual/${label}.body"; hdr="/tmp/wdcc-visual/${label}.headers"
+            code="$(curl -sS -L -D "$hdr" -o "$out" -w '%{http_code}' "$URL$path?inspect=$GITHUB_RUN_ID" || true)"
+            bytes="$(wc -c < "$out" 2>/dev/null || echo 0)"
+            printf '%s=%s\n' "${label}_http" "$code" >> "$GITHUB_OUTPUT"
+            printf '%s=%s\n' "${label}_bytes" "$bytes" >> "$GITHUB_OUTPUT"
+          }
+          check home /
+          check hero /wdcc-hero-v2.webp
+          check official_logo /wdcc-official-logo.webp
+          check transparent_logo /wdcc-logo-transparent.webp
+          check dealer /dealer
+          printf 'home_brand=%s\n' "$(grep -Eqi "we don.?t care" /tmp/wdcc-visual/home.body && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          printf 'dealer_marker=%s\n' "$(grep -Eqi 'dealer|secure dealer access|run your dealership' /tmp/wdcc-visual/dealer.body && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Install browser
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Capture desktop and mobile evidence
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-visual/screens
+          node <<'NODE'
+          const fs=require('fs');const{chromium}=require('playwright');
+          const URL=process.env.URL;
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const result={url:URL,consoleErrors:[],requestFailures:[],pages:{}};
+            async function capture(name,viewport,isMobile=false){
+              const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile});
+              const p=await ctx.newPage();
+              p.on('console',m=>{if(m.type()==='error')result.consoleErrors.push(`${name}: ${m.text()}`)});
+              p.on('requestfailed',r=>result.requestFailures.push(`${name}: ${r.method()} ${r.url()} ${r.failure()?.errorText||''}`));
+              const r=await p.goto(`${URL}/?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              result.pages[`${name}HomeHttp`]=r?.status()||0;
+              await p.waitForTimeout(1150);
+              result.pages[`${name}IntroBadge`]=await p.locator('.li-badge img').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,clipPath:getComputedStyle(el).clipPath,opacity:getComputedStyle(el).opacity})).catch(e=>({error:String(e)}));
+              await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-intro.png`,fullPage:false});
+              const skip=p.getByRole('button',{name:/skip intro/i}); if(await skip.count())await skip.click().catch(()=>{});
+              await p.waitForTimeout(500);
+              result.pages[`${name}Title`]=await p.title();
+              result.pages[`${name}Headline`]=(await p.locator('h1').first().innerText().catch(()=>''));
+              result.pages[`${name}HeadlineBox`]=await p.locator('h1').first().boundingBox().catch(()=>null);
+              result.pages[`${name}HeaderLogo`]=await p.locator('.rh-logo img').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight})).catch(e=>({error:String(e)}));
+              result.pages[`${name}HeroImage`]=await p.locator('.rh-hero-art').evaluate(el=>({src:el.getAttribute('src'),naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight})).catch(e=>({error:String(e)}));
+              await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-home.png`,fullPage:true});
+              const dr=await p.goto(`${URL}/dealer?visual=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              result.pages[`${name}DealerHttp`]=dr?.status()||0;
+              await p.waitForTimeout(900);
+              result.pages[`${name}DealerLogo`]=await p.locator('.targetDealerLoginHero>img').evaluate(el=>({src:el.getAttribute('src'),currentSrc:el.currentSrc,naturalWidth:el.naturalWidth,naturalHeight:el.naturalHeight,content:getComputedStyle(el).content})).catch(e=>({error:String(e)}));
+              result.pages[`${name}DealerText`]=(await p.locator('body').innerText().catch(()=>'' )).slice(0,1200);
+              await p.screenshot({path:`/tmp/wdcc-visual/screens/${name}-dealer.png`,fullPage:true});
+              await ctx.close();
+            }
+            await capture('desktop',{width:1440,height:1000});
+            await capture('mobile',{width:390,height:844},true);
+            await browser.close();
+            fs.writeFileSync('/tmp/wdcc-visual/result.json',JSON.stringify(result,null,2));
+            console.log(JSON.stringify(result,null,2));
+          })().catch(e=>{fs.writeFileSync('/tmp/wdcc-visual/result.json',JSON.stringify({fatal:String(e?.stack||e)},null,2));console.error(e);process.exit(1)})
+          NODE
+          test -s /tmp/wdcc-visual/result.json
+          echo ok=true >> "$GITHUB_OUTPUT"
+
+      - name: Upload visual inspection artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-preview-visual-inspection-${{ github.run_id }}
+          path: /tmp/wdcc-visual/
+          retention-days: 7
+
+      - name: Publish inspection evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOME_HTTP: ${{ steps.http.outputs.home_http }}
+          HERO_HTTP: ${{ steps.http.outputs.hero_http }}
+          OFFICIAL_HTTP: ${{ steps.http.outputs.official_logo_http }}
+          TRANSPARENT_HTTP: ${{ steps.http.outputs.transparent_logo_http }}
+          DEALER_HTTP: ${{ steps.http.outputs.dealer_http }}
+          HOME_BRAND: ${{ steps.http.outputs.home_brand }}
+          DEALER_MARKER: ${{ steps.http.outputs.dealer_marker }}
+        shell: bash
+        run: |
+          summary='not-captured'
+          [ -f /tmp/wdcc-visual/result.json ] && summary="$(jq -c '{pages,consoleErrors,requestFailures,fatal}' /tmp/wdcc-visual/result.json)"
+          cat > /tmp/wdcc-visual/issue.md <<EOF
+          Preview: \`$URL\`
+          Branch SHA: \`$GITHUB_SHA\`
+          Homepage/hero/official-logo/transparent-logo/dealer HTTP: \`$HOME_HTTP/$HERO_HTTP/$OFFICIAL_HTTP/$TRANSPARENT_HTTP/$DEALER_HTTP\`
+          Homepage brand marker: **$HOME_BRAND**
+          Dealer marker: **$DEALER_MARKER**
+          Browser result: \`$summary\`
+          Screenshots are attached to the workflow artifact. No production route, alias, DNS or deployment was changed by this inspection.
+          EOF
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC preview visual inspection $GITHUB_RUN_ID" --body-file /tmp/wdcc-visual/issue.md || true

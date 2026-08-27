@@ -1,0 +1,155 @@
+/* WDCC OWNER REAL-DEVICE CORRECTION
+   Physical Android/iPhone evidence overrides synthetic viewport assumptions.
+   Visual-only preview correction: no provider, routing, schema, or production changes. */
+
+@media (max-width:900px),(hover:none) and (pointer:coarse){
+  /* Do not turn the storefront root into a scroll container: that breaks sticky chrome on some Android browsers. */
+  html,body{overflow-x:clip!important}
+  html body main.reference-home.locked-storefront{
+    overflow-x:clip!important;
+    overflow-y:visible!important;
+  }
+  html body main.reference-home.locked-storefront>.rh-utility{
+    position:sticky!important;
+    top:0!important;
+    z-index:5201!important;
+  }
+  html body main.reference-home.locked-storefront>header.rh-header{
+    position:sticky!important;
+    top:29px!important;
+    z-index:5200!important;
+  }
+
+  /* Use a deterministic three-line menu instead of a platform-dependent Unicode glyph. */
+  html body main.reference-home.locked-storefront .rh-menu,
+  html body:has(.inventoryTop) .mobileMenuButton,
+  html body:has(.leadPage) .mobileMenuButton{
+    position:relative!important;
+    font-size:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu:before,
+  html body:has(.inventoryTop) .mobileMenuButton:before,
+  html body:has(.leadPage) .mobileMenuButton:before{
+    content:""!important;
+    display:block!important;
+    width:24px!important;
+    height:18px!important;
+    background:
+      linear-gradient(#fff,#fff) 0 0/24px 3px no-repeat,
+      linear-gradient(#fff,#fff) 0 7.5px/24px 3px no-repeat,
+      linear-gradient(#fff,#fff) 0 15px/24px 3px no-repeat!important;
+    border:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu[aria-expanded="true"]:before,
+  html body:has(.inventoryTop) .mobileMenuButton[aria-expanded="true"]:before,
+  html body:has(.leadPage) .mobileMenuButton[aria-expanded="true"]:before{
+    content:"×"!important;
+    width:auto!important;
+    height:auto!important;
+    background:none!important;
+    font-size:30px!important;
+    font-weight:500!important;
+    line-height:1!important;
+  }
+
+  /* Home: the live-data carousel was not exercised by the outage-mode synthetic proof. Keep it compact and readable when real cars arrive. */
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:14.5px!important;
+    line-height:1.16!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:12.5px!important;
+    line-height:1.36!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    scroll-padding-inline:10vw!important;
+    padding-left:10vw!important;
+    padding-right:10vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card{
+    flex-basis:80vw!important;
+    min-width:80vw!important;
+    max-width:80vw!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card .rh-photo{
+    aspect-ratio:1.82!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card .rh-photo:has(.rh-photo-placeholder){
+    aspect-ratio:1.95!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo-placeholder small{
+    font-size:11px!important;
+    line-height:1.2!important;
+    letter-spacing:.10em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-photo-placeholder strong{
+    font-size:13px!important;
+    line-height:1.25!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card-body{
+    padding:17px 18px 19px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-eyebrow{font-size:11.5px!important}
+  html body main.reference-home.locked-storefront .rh-title{font-size:20px!important;line-height:1.12!important}
+  html body main.reference-home.locked-storefront .rh-price{font-size:32px!important;line-height:1!important}
+  html body main.reference-home.locked-storefront .rh-payment{font-size:13.5px!important;line-height:1.25!important}
+  html body main.reference-home.locked-storefront .rh-pills span{font-size:10.5px!important;line-height:1.2!important}
+
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:32px!important;
+    line-height:1.04!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading p{font-size:13.5px!important}
+  html body main.reference-home.locked-storefront .rh-finance .rh-step>strong{font-size:15px!important}
+  html body main.reference-home.locked-storefront .rh-finance .rh-step>small{font-size:13px!important;line-height:1.42!important}
+
+  /* Public inventory: reduce masthead dominance so the first live vehicle reaches the viewport sooner. */
+  html body:has(.inventoryTop) .commandStrip .wrap,
+  html body:has(.leadPage) .commandStrip .wrap{
+    font-size:9px!important;
+    letter-spacing:.04em!important;
+  }
+  html body:has(.inventoryTop) .inventoryTop{
+    padding:142px 0 27px!important;
+  }
+  html body:has(.inventoryTop) .inventoryTop:before{height:128px!important}
+  html body:has(.inventoryTop) .inventoryTop:after{
+    background:linear-gradient(180deg,transparent 0,rgba(7,21,34,.08) 66px,#071522 128px,#071522 100%)!important;
+  }
+  html body:has(.inventoryTop) .inventoryTop h1{
+    font-size:clamp(40px,10.8vw,48px)!important;
+    line-height:.93!important;
+    margin-bottom:12px!important;
+  }
+  html body:has(.inventoryTop) .inventoryTop .lede{
+    font-size:15px!important;
+    line-height:1.45!important;
+  }
+  html body:has(.inventoryTop) .section.light{padding-top:16px!important}
+  html body:has(.inventoryTop) .card .photo:not(:has(img)){
+    aspect-ratio:1.95!important;
+    min-height:0!important;
+    font-size:12.5px!important;
+    letter-spacing:.07em!important;
+  }
+  html body:has(.inventoryTop) .card .photo:not(:has(img)):before{
+    width:52px!important;
+    height:52px!important;
+    flex-basis:52px!important;
+  }
+  html body:has(.inventoryTop) .cardBody{padding:17px 17px 19px!important}
+  html body:has(.inventoryTop) .carTitle{font-size:20px!important;line-height:1.15!important}
+  html body:has(.inventoryTop) .facts{font-size:11.5px!important;line-height:1.3!important}
+  html body:has(.inventoryTop) .price{font-size:30px!important;line-height:1!important}
+  html body:has(.inventoryTop) .down{font-size:12.5px!important;line-height:1.3!important}
+  html body:has(.inventoryTop) .cardButtons span{min-height:46px!important;font-size:10.5px!important}
+}
+
+@media(max-width:430px){
+  html body main.reference-home.locked-storefront .rh-card{
+    flex-basis:82vw!important;
+    min-width:82vw!important;
+    max-width:82vw!important;
+  }
+  html body:has(.inventoryTop) .inventoryTop h1{font-size:44px!important}
+}

@@ -1,0 +1,100 @@
+name: WDCC Intro DOM Diagnostic
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 playwright@1.55.0
+          npm run build
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Start exact local production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx next start -H 127.0.0.1 -p 4174 >/tmp/wdcc-intro-diag-server.log 2>&1 &
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/intro-ssr.html -w '%{http_code}' "http://127.0.0.1:4174/?visual-mobile=diag-$GITHUB_SHA-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          test "$code" = 200
+          echo "SSR_BYTES=$(wc -c < /tmp/intro-ssr.html)"
+          echo "SSR_INTRO=$(grep -o 'aria-label=\"WDCC opening intro\"' /tmp/intro-ssr.html | wc -l || true)"
+          echo "SSR_LI=$(grep -o 'class=\"li ' /tmp/intro-ssr.html | wc -l || true)"
+          echo "SSR_SMOKE=$(grep -o 'li-smoke' /tmp/intro-ssr.html | wc -l || true)"
+          echo "SSR_BADGE=$(grep -o 'li-badge' /tmp/intro-ssr.html | wc -l || true)"
+          echo "SSR_SCENE=$(grep -o 'li-scene' /tmp/intro-ssr.html | wc -l || true)"
+      - name: Inspect hydrated intro DOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          try{
+            const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
+            const page=await ctx.newPage();
+            const errors=[];
+            page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
+            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            const r=await page.goto(`http://127.0.0.1:4174/?visual-mobile=diag-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:15000});
+            await page.waitForTimeout(500);
+            const data=await page.evaluate(()=>{
+              const q=s=>document.querySelectorAll(s).length;
+              const intro=document.querySelector('[aria-label="WDCC opening intro"]');
+              return {
+                href: location.href,
+                intro:q('[aria-label="WDCC opening intro"]'),
+                li:q('.li'), smoke:q('.li-smoke'), badge:q('.li-badge'), scene:q('.li-scene'), tag:q('.li-tag'),
+                scopedSmoke:intro?.querySelectorAll('.li-smoke').length||0,
+                scopedBadge:intro?.querySelectorAll('.li-badge').length||0,
+                scopedScene:intro?.querySelectorAll('.li-scene').length||0,
+                visualProof:document.documentElement.classList.contains('wdcc-visual-proof'),
+                introActive:document.documentElement.classList.contains('wdcc-intro-active'),
+                outer:intro?.outerHTML||null
+              };
+            });
+            data.responseStatus=r?.status()||0;
+            data.errors=errors;
+            fs.mkdirSync('intro-dom-diagnostic',{recursive:true});
+            fs.writeFileSync('intro-dom-diagnostic/dom.json',JSON.stringify(data,null,2)+'\n');
+            fs.writeFileSync('intro-dom-diagnostic/intro-outer.html',data.outer||'');
+            console.log(JSON.stringify({...data,outer:data.outer?.slice(0,3000)},null,2));
+            if(data.responseStatus!==200)throw new Error(`INTRO_DIAG_HTTP_${data.responseStatus}`);
+            if(data.intro!==1)throw new Error(`INTRO_ROOT_COUNT_${data.intro}`);
+            if(data.scopedBadge!==1||data.scopedScene!==1)throw new Error(`INTRO_BASE_DOM_BAD_${JSON.stringify({badge:data.scopedBadge,scene:data.scopedScene})}`);
+            if(data.scopedSmoke!==1)throw new Error(`INTRO_SMOKE_DOM_COUNT_${data.scopedSmoke}`);
+            await ctx.close();
+          }finally{await browser.close()}
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-intro-dom-diagnostic-${{ github.sha }}
+          path: |
+            intro-dom-diagnostic/
+            /tmp/intro-ssr.html
+          if-no-files-found: warn
+          retention-days: 3

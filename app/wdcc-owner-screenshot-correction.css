@@ -1,0 +1,49 @@
+/* Owner screenshot correction — preview-only inventory optics.
+   This late layer MUST NOT own intro or public-logo rendering.
+   Logo authority lives exclusively in wdcc-owner-approved-logo-final.css. */
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  /* Home Featured Inventory: one readable card plus controlled next-card peek. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:10px!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:14px!important;
+    padding-left:14px!important;
+    padding-right:14px!important;
+    padding-bottom:5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 min(82vw,330px)!important;
+    width:min(82vw,330px)!important;
+    min-width:min(82vw,330px)!important;
+    max-width:330px!important;
+    scroll-snap-align:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{
+    aspect-ratio:1.55!important;
+    min-height:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{padding:13px 14px 15px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:17px!important;min-height:0!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:25px!important}
+
+  /* Full inventory: browseable cards while uploaded photos remain provider-blocked. */
+  html body .inventoryPage [class*="WdccVehicleCard_photo__"]{
+    aspect-ratio:1.95!important;
+    min-height:0!important;
+    max-height:215px!important;
+  }
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"]{padding:12px!important;gap:4px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"]::before{width:44px!important;height:44px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"] small{font-size:8px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_placeholder__"] strong{font-size:12px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_body__"]{padding:13px 14px 15px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_title__"]{font-size:18px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_price__"]{font-size:27px!important;margin-top:9px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_down__"]{font-size:10.5px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_actions__"]{margin-top:10px!important;gap:7px!important}
+  html body .inventoryPage [class*="WdccVehicleCard_actions__"] a{min-height:44px!important;font-size:9.5px!important}
+}

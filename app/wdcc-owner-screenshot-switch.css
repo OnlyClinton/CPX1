@@ -1,0 +1,92 @@
+/* Owner screenshot switch — preview-only storefront optical tuning.
+   IMPORTANT: this layer no longer owns intro or public-logo rendering.
+   app/wdcc-owner-approved-logo-final.css is the sole logo authority and loads last.
+   This file may tune storefront scene/spacing and the explicit NOT LIVE review banner only. */
+
+/* Storefront: expose the Challenger and Tampa skyline while retaining message hierarchy. */
+html body main.reference-home.locked-storefront .rh-hero-art{
+  filter:saturate(1.22) contrast(1.04) brightness(1.24)!important;
+  object-position:64% 42%!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-shade{
+  background:linear-gradient(90deg,rgba(2,8,13,.78) 0%,rgba(2,8,13,.56) 38%,rgba(2,8,13,.13) 67%,rgba(2,8,13,.02) 100%),linear-gradient(0deg,rgba(2,8,13,.52) 0%,rgba(2,8,13,.04) 48%)!important;
+}
+html body main.reference-home.locked-storefront .rh-copy h1{letter-spacing:-.046em!important}
+html body main.reference-home.locked-storefront .rh-benefits{box-shadow:0 9px 24px rgba(0,0,0,.11)!important}
+
+/* Verified historical review inventory stays visibly and unmistakably NOT LIVE. */
+html body .wdccOwnerReviewBanner{
+  box-sizing:border-box!important;
+  width:min(1440px,calc(100% - 42px))!important;
+  margin:0 auto 14px!important;
+  padding:9px 13px!important;
+  border:1px solid #d59b00!important;
+  border-radius:7px!important;
+  background:#fff5cf!important;
+  color:#4a3500!important;
+  font:900 10.5px/1.35 Inter,ui-sans-serif,system-ui,sans-serif!important;
+  letter-spacing:.03em!important;
+  text-align:center!important;
+  text-transform:uppercase!important;
+}
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html body [data-wdcc-public-chrome="utility"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="utility"].rh-utility{
+    display:none!important;
+    visibility:hidden!important;
+    opacity:0!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    overflow:hidden!important;
+  }
+  html body [data-wdcc-public-chrome="header"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
+    top:0!important;
+    height:78px!important;
+    min-height:78px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-hero{min-height:520px!important;height:auto!important;max-height:none!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    min-height:520px!important;
+    height:auto!important;
+    width:calc(100% - 28px)!important;
+    align-items:flex-end!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    object-position:67% 38%!important;
+    filter:saturate(1.24) contrast(1.04) brightness(1.27)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    background:linear-gradient(180deg,rgba(2,8,13,.02) 0%,rgba(2,8,13,.08) 28%,rgba(2,8,13,.52) 58%,rgba(2,8,13,.94) 100%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{padding:180px 0 16px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    font-size:clamp(31px,8.7vw,35px)!important;
+    line-height:.92!important;
+    margin-bottom:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{margin-bottom:7px!important;font-size:10px!important}
+  html body main.reference-home.locked-storefront .rh-proof-list{margin:8px 0!important;gap:3px!important;font-size:11px!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:9px!important;gap:7px!important}
+  html body main.reference-home.locked-storefront .rh-btn{min-height:46px!important;font-size:10.75px!important}
+
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:76px!important;
+    padding:9px 8px!important;
+    grid-template-columns:32px minmax(0,1fr)!important;
+    gap:7px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important;font-size:14px!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:10.75px!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:9.75px!important;line-height:1.25!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding-top:16px!important}
+  html body .wdccOwnerReviewBanner{width:calc(100% - 20px)!important;margin-bottom:10px!important;padding:8px 9px!important;font-size:9px!important}
+}
+
+@media(max-width:420px){
+  html body main.reference-home.locked-storefront .rh-copy{padding-top:172px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:32px!important}
+}

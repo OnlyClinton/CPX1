@@ -1,0 +1,180 @@
+name: WDCC Owner Exact Page Matrix
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-exact-page-matrix-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      URL: https://wdcc-proof-${{ github.sha }}.clico-global.workers.dev
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Wait for exact immutable preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Waiting for exact SHA preview: $URL"
+          for i in $(seq 1 120); do
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?owner-review=1&wait=$i" || true)"
+            if [ "$code" = 200 ] && grep -Eqi "we don.?t care" /tmp/home.html; then exit 0; fi
+            sleep 2
+          done
+          echo "Exact preview did not become ready: $URL" >&2
+          exit 1
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Capture current owner-board review matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-owner-target
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const base=process.env.URL,sha=process.env.GITHUB_SHA;
+          if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA_PREVIEW ${base} ${sha}`);
+          const result={base,sha,pages:{},writes:[]};
+          const fail=(name,data={})=>{throw new Error(`${name}_${JSON.stringify(data)}`)};
+          const grid=async l=>l.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,w:r.width,h:r.height}});
+          const browser=await chromium.launch({headless:true});
+
+          async function wireDealer(p){
+            const session={authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}};
+            const dashboard={summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:[],leads:[]};
+            await p.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
+            await p.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
+            await p.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
+            await p.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
+          }
+
+          async function assertLogo(p,name,isMobile){
+            const x=await p.evaluate(()=>{
+              const header=document.querySelector('[data-wdcc-public-chrome="header"]');
+              const logo=header?.querySelector('img[data-wdcc-logo-art="owner-approved"]');
+              const hr=header?.getBoundingClientRect(),r=logo?.getBoundingClientRect(),s=logo?getComputedStyle(logo):null;
+              const utility=document.querySelector('[data-wdcc-public-chrome="utility"]');
+              const us=utility?getComputedStyle(utility):null,ur=utility?.getBoundingClientRect();
+              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,w:r?.width||0,h:r?.height||0,cx:r?r.x+r.width/2:0,headerH:hr?.height||0,winW:innerWidth,display:s?.display||'',visibility:s?.visibility||'',opacity:Number(s?.opacity||0),clipPath:s?.clipPath||'',content:s?.content||'',utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),count:header?.querySelectorAll('img[data-wdcc-logo-art="owner-approved"]').length||0};
+            });
+            if(!x.found||x.count!==1||!x.complete||x.naturalWidth<20||x.naturalHeight<20||x.src!=='/wdcc-owner-logo'||x.display==='none'||x.visibility==='hidden'||x.opacity<=0||x.content!=='normal'||x.clipPath!=='none')fail(`${name}_OWNER_LOGO_LOAD`,x);
+            const min=isMobile?58:68,max=isMobile?66:84;
+            if(x.w<min||x.w>max||x.h<min||x.h>max||x.w/Math.max(x.h,1)<.82||x.w/Math.max(x.h,1)>1.18)fail(`${name}_OWNER_LOGO_GEOMETRY`,x);
+            if(isMobile&&(x.headerH<60||x.headerH>68))fail(`${name}_MOBILE_HEADER_HEIGHT`,x);
+            if(isMobile&&Math.abs(x.cx-x.winW/2)>4)fail(`${name}_OWNER_LOGO_CENTER`,x);
+            if(isMobile&&x.utilityVisible)fail(`${name}_MOBILE_UTILITY_VISIBLE`,x);
+            if(!isMobile&&!x.utilityVisible)fail(`${name}_DESKTOP_UTILITY_MISSING`,x);
+            return x;
+          }
+
+          async function shot(spec,isMobile){
+            const viewport=isMobile?{width:390,height:844}:{width:1440,height:1000};
+            const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
+            const p=await ctx.newPage();
+            p.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writes.push({page:spec.label,method:r.method(),url:r.url()})});
+            if(spec.dealer)await wireDealer(p);
+            const join=spec.path.includes('?')?'&':'?';
+            const response=await p.goto(`${base}${spec.path}${join}owner-matrix=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!response||response.status()!==200)fail(`${spec.label}_HTTP`,{status:response?.status()||0});
+            await p.waitForTimeout(900);
+            if(spec.skipIntro){const b=p.getByRole('button',{name:/skip intro/i});if(await b.count())await b.click().catch(()=>{});await p.waitForTimeout(350)}
+            await p.locator(spec.selector).first().waitFor({state:'visible',timeout:10000});
+            const pageName=`${isMobile?'mobile':'desktop'}-${spec.label}`;
+            const pageData={};
+            if(spec.publicChrome)pageData.logo=await assertLogo(p,pageName,isMobile);
+
+            if(spec.label==='home'){
+              await p.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
+              const banner=(await p.locator('.wdccOwnerReviewBanner').innerText()).toUpperCase();
+              if(!banner.includes('NOT LIVE'))fail(`${pageName}_REVIEW_BANNER`,{banner});
+              await p.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
+              const count=await p.locator('.rh-grid > article').count();
+              if(count!==5)fail(`${pageName}_FEATURED_COUNT`,{count});
+              const geom=await p.locator('.rh-grid').evaluate(el=>{const s=getComputedStyle(el),cards=[...el.children].map(e=>e.getBoundingClientRect());return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,firstW:cards[0]?.width||0,secondX:cards[1]?.x||9999,thirdX:cards[2]?.x||9999,fourthX:cards[3]?.x||9999,viewport:innerWidth}});
+              if(isMobile){if(geom.display!=='flex'||geom.firstW<100||geom.firstW>130||geom.secondX>=170||geom.thirdX>=390||geom.fourthX<350||geom.fourthX>430)fail(`${pageName}_FEATURED_DENSE_STRIP`,geom)}else if(geom.tracks!==5)fail(`${pageName}_FEATURED_GRID`,geom);
+              pageData.featured={count,...geom};
+            }
+
+            if(spec.label==='inventory'){
+              await p.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
+              const banner=(await p.locator('.wdccOwnerReviewBanner').innerText()).toUpperCase();
+              if(!banner.includes('NOT LIVE'))fail(`${pageName}_REVIEW_BANNER`,{banner});
+              await p.locator('.inventoryGrid > article').first().waitFor({state:'visible',timeout:10000});
+              const count=await p.locator('.inventoryGrid > article').count(),g=await grid(p.locator('.inventoryGrid'));
+              if(count!==5||g.tracks!==(isMobile?1:3))fail(`${pageName}_INVENTORY_GRID`,{count,...g});
+              pageData.inventory={count,...g};
+            }
+
+            if(spec.label==='approval'){
+              const stages=await p.locator('.approvalStages button').count();
+              if(stages!==3)fail(`${pageName}_APPROVAL_STAGES`,{stages});
+              pageData.stages=stages;
+            }
+
+            if(spec.label==='dealer-editor'){
+              const steps=await p.locator('.stepper > button').count();
+              if(steps!==5)fail(`${pageName}_WIZARD_STEPS`,{steps});
+              const g=await grid(p.locator('.fieldGrid'));
+              if(isMobile&&g.tracks!==1)fail(`${pageName}_FIELD_GRID`,g);
+              pageData.wizard={steps,fieldGrid:g};
+            }
+
+            const overflow=await p.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-innerWidth));
+            if(overflow>2)fail(`${pageName}_HORIZONTAL_OVERFLOW`,{overflow});
+            pageData.overflow=overflow;
+            result.pages[pageName]=pageData;
+            await p.screenshot({path:`/tmp/wdcc-owner-target/${pageName}.png`,fullPage:true});
+            await ctx.close();
+          }
+
+          const specs=[
+            {label:'home',path:'/?owner-review=1',selector:'.reference-home',skipIntro:true,publicChrome:true},
+            {label:'inventory',path:'/inventory?owner-review=1',selector:'.inventoryGrid',publicChrome:true},
+            {label:'approval',path:'/get-approved',selector:'.approvalBoard',publicChrome:true},
+            {label:'test-drive',path:'/schedule-test-drive',selector:'.leadPage',publicChrome:true},
+            {label:'contact',path:'/contact',selector:'.leadPage',publicChrome:true},
+            {label:'dealer-dashboard',path:'/dealer',selector:'.dealerDashboardLocked',dealer:true},
+            {label:'dealer-inventory',path:'/dealer/inventory',selector:'.inventoryContract',dealer:true},
+            {label:'dealer-editor',path:'/dealer/inventory/new',selector:'.editVehicleApp',dealer:true}
+          ];
+          try{
+            for(const spec of specs){await shot(spec,false);await shot(spec,true)}
+            if(result.writes.length)fail('OWNER_MATRIX_WRITE_REQUESTS',{writes:result.writes});
+            result.pass=true;
+            fs.writeFileSync('/tmp/wdcc-owner-target/result.json',JSON.stringify(result,null,2)+'\n');
+            console.log(`WDCC OWNER EXACT PAGE MATRIX PASS sha=${sha} pages=${Object.keys(result.pages).length}`);
+          }finally{await browser.close()}
+          NODE
+
+      - name: Publish owner matrix summary
+        shell: bash
+        run: |
+          echo '### WDCC owner exact page matrix — PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $URL/?owner-review=1" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Compact centered owner-approved emblem + dense three-card mobile strip + five verified historical NOT-LIVE review vehicles enforced.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-owner-exact-page-matrix-${{ github.sha }}
+          path: /tmp/wdcc-owner-target/
+          retention-days: 7

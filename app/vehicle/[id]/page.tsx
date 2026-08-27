@@ -1,2 +1,72 @@
-"use client";import Link from"next/link";import{useEffect,useState}from"react";import{Footer,Header}from"../../components";
-export default function Vehicle({params}:{params:Promise<{id:string}>}){const[id,setId]=useState(""),[v,setV]=useState<any>();useEffect(()=>{params.then(x=>setId(x.id))},[params]);useEffect(()=>{if(id)fetch(`/api/inventory/${id}`).then(r=>r.json()).then(j=>setV(j.item))},[id]);const q=id?`?vehicle=${encodeURIComponent(id)}&source=vdp`:"";return <><Header/><main className="section light"><div className="wrap">{v?<><div className="eyebrow muted">VEHICLE DETAILS</div><h2>{v.year} {v.make} {v.model}</h2><div className="grid" style={{gridTemplateColumns:"1.4fr .8fr"}}><div className="photo" style={{borderRadius:22}}>{v.primaryPhotoPathname?<img src={`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`} alt={`${v.year} ${v.make} ${v.model}`}/>:v.primary_image_url?<img src={v.primary_image_url} alt={`${v.year} ${v.make} ${v.model}`}/>:"PHOTOS COMING"}</div><div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null&&<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} estimated down</div>}<p>{Number(v.mileage||0).toLocaleString()} miles</p><p>{v.description}</p><div className="actions"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><Link className="cta" href={`/get-approved${q}`}>GET APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN</a></div></div></div></>:<h2>Loading vehicle…</h2>}</div></main><Footer/></>}
+"use client";
+
+import Link from"next/link";
+import{useEffect,useState}from"react";
+import{WdccPublicFooter,WdccPublicHeader}from"../../WdccPublicChrome";
+import{isWdccVisualReviewFixture,wdccVisualReviewVehicle,WDCC_VISUAL_REVIEW_LABEL}from"../../wdccVisualReviewInventory";
+import{WDCC_RECOVERY_INVENTORY}from"../../../lib/recoveryInventory";
+
+type LoadState="loading"|"ready"|"error";
+type VehicleRecord=Record<string,any>;
+
+function customerVisible(v:VehicleRecord){
+  const status=String(v?.status||"").toLowerCase();
+  const stock=String(v?.stock||v?.stock_id||"").trim().toUpperCase();
+  const visibility=String(v?.visibility||"").toLowerCase();
+  const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x||"").toUpperCase());
+  const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));
+  return status==="published"&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"&&!qa;
+}
+
+export default function Vehicle({params}:{params:Promise<{id:string}>}){
+  const[id,setId]=useState("");
+  const[vehicle,setVehicle]=useState<VehicleRecord|null>(null);
+  const[state,setState]=useState<LoadState>("loading");
+  const[fixtureMode,setFixtureMode]=useState(false);
+  const[recoveryMode,setRecoveryMode]=useState(false);
+
+  useEffect(()=>{let live=true;params.then(x=>{if(live)setId(String(x?.id||""))}).catch(()=>{if(live)setState("error")});return()=>{live=false}},[params]);
+  useEffect(()=>{
+    if(!id)return;
+    if(isWdccVisualReviewFixture()){
+      setFixtureMode(true);setRecoveryMode(false);
+      const item=wdccVisualReviewVehicle(id);
+      if(item){setVehicle(item);setState("ready")}else{setVehicle(null);setState("error")}
+      return;
+    }
+    const recovery=WDCC_RECOVERY_INVENTORY.find(item=>String(item.id)===id||String(item.slug)===id);
+    if(recovery){setFixtureMode(false);setRecoveryMode(true);setVehicle({...recovery});setState("ready");return;}
+    const controller=new AbortController();
+    let live=true;
+    setFixtureMode(false);setRecoveryMode(false);setState("loading");
+    fetch(`/api/inventory/${encodeURIComponent(id)}`,{cache:"no-store",signal:controller.signal})
+      .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok||body?.previewFallback||body?.inventorySource==="last-known-good-real-proof")throw new Error(body?.error||`Vehicle ${r.status}`);const item=body?.item||body?.vehicle;if(!item||!customerVisible(item))throw new Error("VEHICLE_NOT_PUBLIC");return item})
+      .then(item=>{if(live){setVehicle(item);setState("ready")}})
+      .catch(e=>{if(live&&e?.name!=="AbortError"){setVehicle(null);setState("error")}});
+    return()=>{live=false;controller.abort()};
+  },[id]);
+
+  const v=vehicle;
+  const q=id?`?vehicle=${encodeURIComponent(id)}&source=vdp`:"";
+  const title=v?`${v.year} ${v.make} ${v.model}`:"VEHICLE DETAILS";
+  const src=v?.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:String(v?.primary_image_url||v?.image||"").trim();
+  const down=v?.downPayment??v?.down_payment;
+
+  return <>
+    <WdccPublicHeader/>
+    <main className="vehiclePage wdcc-public-page">
+      <section className="inventoryTop vehicleTop"><div className="wrap"><div className="eyebrow">{recoveryMode?"VERIFIED RECOVERY VEHICLE":"CURRENT VEHICLE DETAILS"}</div><h1>{title}</h1><p className="lede">{recoveryMode?"Last verified public record. Confirm current availability with Sean before visiting.":"Real published inventory only. Clear pricing, direct answers, and no demo vehicle substitutions."}</p></div></section>
+      <section className="section light vehicleSection"><div className="wrap">
+        {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
+        {recoveryMode&&<div className="wdccRecoveryInventoryBanner" role="status"><strong>VERIFIED RECOVERY RECORD</strong><span>Provider sync is temporarily unavailable. Confirm availability with Sean · 813-516-4752.</span></div>}
+        {state==="loading"&&<div className="vehicleStatus" role="status"><span className="vehicleStatusBadge">WDCC</span><div><h2>Loading current vehicle details…</h2><p>Checking the published inventory record.</p></div></div>}
+        {state==="error"&&<section className="vehicleUnavailable" role="status"><div className="eyebrow muted">INVENTORY STATUS</div><h2>Vehicle details are temporarily unavailable.</h2><p>We are not substituting a demo vehicle or made-up listing. Call Sean for current availability, or return to inventory.</p><div className="vehicleActions"><Link className="cta red" href="/inventory">BROWSE INVENTORY</Link><Link className="cta" href="/get-approved?source=vehicle-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>}
+        {state==="ready"&&v&&<div className="vehicleLayout">
+          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing" role="img" aria-label={`${title} photo temporarily unavailable`}><span>PHOTO TEMPORARILY UNAVAILABLE</span></div>}</div><p>{recoveryMode?"The vehicle record is verified; media is not being substituted while storage is unavailable.":fixtureMode?"Historical record photo is not being substituted while media storage is blocked.":"Photos shown are attached to this published vehicle record."}</p></section>
+          <section className="vehicleSummary"><div className="eyebrow muted">{recoveryMode?"CONFIRM AVAILABILITY":fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions vehicleActionsPrimary"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><a className="cta dark" href="tel:+18135164752">CALL SEAN</a></div></section>
+        </div>}
+      </div></section>
+    </main>
+    <WdccPublicFooter/>
+  </>;
+}

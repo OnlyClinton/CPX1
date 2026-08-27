@@ -1,0 +1,129 @@
+/* OWNER LOCKED CONTRACT — loaded last. This file is the final visual authority. */
+
+/* Newest owner override: public storefront/conversion chrome uses the large horizontal WDCC wordmark.
+   Intro and dealer/admin surfaces retain the round official WDCC badge. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:164px minmax(0,1fr) auto!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo{display:grid!important;place-items:center!important;width:160px!important;height:78px!important;overflow:visible!important;background:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo::before,
+html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;width:148px!important;min-width:148px!important;max-width:148px!important;height:auto!important;min-height:0!important;max-height:50px!important;object-fit:contain!important;object-position:center!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important}
+
+/* Desktop section rhythm: 51077 density. */
+@media(min-width:1200px){
+  html body main.reference-home.locked-storefront .rh-hero{height:500px!important;min-height:500px!important;max-height:500px!important}
+  html body main.reference-home.locked-storefront .rh-copy{max-width:560px!important;padding:26px 0 30px!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:88px!important;padding:13px 18px!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding:28px 22px 32px!important}
+  html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:14px!important}
+  html body main.reference-home.locked-storefront .rh-grid{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important}
+  html body main.reference-home.locked-storefront .rh-finance{padding:28px 22px 32px!important}
+  html body main.reference-home.locked-storefront .finance-heading{margin-bottom:16px!important}
+  html body main.reference-home.locked-storefront .rh-step{min-height:108px!important;padding:15px 16px!important}
+  html body main.reference-home.locked-storefront .rh-step>b{margin-bottom:10px!important}
+  html body main.reference-home.locked-storefront .rh-trust{padding:18px 22px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article{min-height:52px!important}
+
+  html body .inventoryPage .inventoryTop{min-height:188px!important;padding:34px 0 26px!important}
+  html body .inventoryPage>.section.light{padding:22px 0 56px!important}
+  html body .vehiclePage .vehicleTop{min-height:178px!important;padding:32px 0 24px!important}
+  html body .vehiclePage .vehicleSection{padding:22px 0 60px!important}
+
+  html body main.dcPage .dcContent,
+  html body main.dealerDashboardLocked .dashboardContent{padding:20px!important}
+  html body main.dcPage .dcTitle{margin-bottom:14px!important}
+  html body main.dealerDashboardLocked .dashMetrics{gap:9px!important;margin-bottom:10px!important}
+  html body main.dealerDashboardLocked .dashMetrics article{min-height:78px!important;padding:12px 14px!important}
+  html body main.dealerDashboardLocked .dashboardGridLocked{gap:10px!important}
+  html body main.dealerDashboardLocked .inventoryOverview,
+  html body main.dealerDashboardLocked .recentVehicles{min-height:245px!important}
+  html body main.dealerDashboardLocked .opsCards{margin-top:9px!important;gap:9px!important}
+  html body main.dealerDashboardLocked .opsCards article{min-height:116px!important;padding:14px!important}
+  html body .editVehicleApp .editLayout{padding:18px!important;gap:14px!important}
+  html body .editVehicleApp .editHead{padding:17px 18px 14px!important}
+  html body .editVehicleApp .sectionBlock{padding:17px 18px!important}
+}
+
+/* Dealer dashboard: exactly one actual round badge, no pseudo-element clone. */
+html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand::before,
+html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand::after{content:none!important;display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;max-width:0!important;max-height:0!important;flex:0 0 0!important;margin:0!important;padding:0!important;border:0!important;background:none!important;box-shadow:none!important;pointer-events:none!important}
+html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdcc-official-logo.webp')!important;display:block!important;visibility:visible!important;opacity:1!important;position:static!important;width:58px!important;min-width:58px!important;max-width:58px!important;height:58px!important;min-height:58px!important;max-height:58px!important;flex:0 0 58px!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;background:transparent!important;border:0!important;box-shadow:none!important;pointer-events:auto!important}
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  /* 51077 mobile has one public header only. */
+  html body [data-wdcc-public-chrome="utility"].rh-utility{display:none!important;visibility:hidden!important;opacity:0!important;height:0!important;min-height:0!important;max-height:0!important;overflow:hidden!important}
+  html body [data-wdcc-public-chrome="header"].rh-header{top:0!important;height:78px!important;min-height:78px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:50px minmax(0,1fr) 50px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:150px!important;height:78px!important;justify-self:center!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;width:136px!important;min-width:136px!important;max-width:136px!important;height:auto!important;min-height:0!important;max-height:46px!important;object-fit:contain!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 5px 12px rgba(0,0,0,.48))!important}
+  html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{width:50px!important;min-width:50px!important;max-width:50px!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-basis:50px!important}
+
+  /* Mobile section rhythm follows 51077 rather than desktop proportions scaled down. */
+  html body main.reference-home.locked-storefront .rh-hero{min-height:555px!important;height:auto!important;max-height:none!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{min-height:555px!important;height:auto!important;align-items:flex-end!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding:105px 0 18px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:clamp(34px,9.5vw,39px)!important;line-height:.91!important}
+  html body main.reference-home.locked-storefront .rh-proof-list{margin:9px 0!important;gap:3px!important;font-size:11.5px!important;line-height:1.25!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:10px!important;gap:7px!important}
+  html body main.reference-home.locked-storefront .rh-btn{min-height:46px!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:82px!important;padding:10px 9px!important;grid-template-columns:36px minmax(0,1fr)!important;gap:8px!important}
+  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:34px!important;min-width:34px!important;height:34px!important;min-height:34px!important;font-size:17px!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:11.5px!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:10.5px!important;line-height:1.3!important;margin-top:3px!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding:20px 0 24px!important}
+  html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:11px!important}
+
+  /* 51077: one readable card plus a controlled next-card peek. */
+  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;gap:10px!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:14px!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:4px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 clamp(286px,82vw,330px)!important;min-width:clamp(286px,82vw,330px)!important;max-width:clamp(286px,82vw,330px)!important;scroll-snap-align:start!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{padding:14px 15px 16px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_eyebrow__"]{font-size:10.5px!important;line-height:1.2!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:18px!important;line-height:1.12!important;min-height:0!important;margin-top:5px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:26px!important;line-height:1!important;margin-top:10px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_down__"]{font-size:11.5px!important;line-height:1.2!important;margin-top:6px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"]{display:flex!important;gap:6px!important;margin-top:10px!important;flex-wrap:wrap!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"] span{font-size:10.5px!important;line-height:1.15!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_badge__"]{font-size:9px!important;padding:5px 7px!important;left:8px!important;top:8px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{aspect-ratio:1.5!important}
+
+  html body main.reference-home.locked-storefront .rh-finance{padding:22px 14px 24px!important}
+  html body main.reference-home.locked-storefront .finance-heading{margin-bottom:10px!important}
+  html body main.reference-home.locked-storefront .rh-steps{gap:6px!important}
+  html body main.reference-home.locked-storefront .rh-step{min-height:70px!important;padding:9px 10px!important;grid-template-columns:30px minmax(0,1fr)!important;column-gap:9px!important}
+  html body main.reference-home.locked-storefront .rh-step>b{width:30px!important;height:30px!important;font-size:13px!important}
+  html body main.reference-home.locked-storefront .rh-step>strong{font-size:12.5px!important}
+  html body main.reference-home.locked-storefront .rh-step>small{font-size:10.5px!important;line-height:1.3!important}
+  html body main.reference-home.locked-storefront .rh-trust{padding:16px 14px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{gap:10px 8px!important}
+
+  html body .inventoryPage .inventoryTop{min-height:150px!important;padding:22px 0 18px!important}
+  html body .inventoryPage>.section.light{padding:12px 0 88px!important}
+  html body .vehiclePage .vehicleTop{min-height:145px!important;padding:21px 0 17px!important}
+  html body .vehiclePage .vehicleSection{padding:12px 0 88px!important}
+
+  html body main.dcPage .dcContent,
+  html body main.dealerDashboardLocked .dashboardContent{padding:13px 10px 88px!important}
+  html body main.dcPage .dcTitle{margin-bottom:11px!important}
+  html body main.dealerDashboardLocked .dashMetrics{gap:7px!important;margin-bottom:8px!important}
+  html body main.dealerDashboardLocked .dashMetrics article{min-height:76px!important;padding:11px!important}
+  html body main.dealerDashboardLocked .dashboardGridLocked{gap:7px!important}
+  html body main.dealerDashboardLocked .opsCards{gap:7px!important;margin-top:7px!important}
+  html body main.dealerDashboardLocked .opsCards article{min-height:104px!important;padding:11px!important}
+  html body .editVehicleApp .editLayout{padding:9px!important}
+  html body .editVehicleApp .editHead{padding:13px 11px 11px!important}
+  html body .editVehicleApp .sectionBlock{padding:13px 11px!important}
+
+  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+  html body .editVehicleApp label.description{grid-column:1/-1!important}
+}
+
+@media(min-width:430px) and (max-width:767px){
+  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+  html body .editVehicleApp label.description{grid-column:1/-1!important}
+  html body .editVehicleApp input:not([type="checkbox"]),
+  html body .editVehicleApp select{padding-left:7px!important;padding-right:7px!important;font-size:13px!important}
+}
+
+@media(max-width:420px){
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:146px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo img{width:132px!important;min-width:132px!important;max-width:132px!important;height:auto!important;min-height:0!important;max-height:44px!important}
+}

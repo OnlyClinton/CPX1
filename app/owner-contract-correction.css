@@ -1,0 +1,126 @@
+/* OWNER CONTRACT CORRECTION — final authority for explicit locked requirements.
+   Visual only. No routing, auth, provider, data, DNS, alias, or production changes. */
+
+/* Persistent storefront branding is the large ROUND official WDCC badge, never a wide wordmark. */
+html body main.owner-target-home .rh-header-inner{
+  grid-template-columns:132px minmax(0,1fr) auto!important;
+}
+html body main.owner-target-home .rh-logo{
+  width:112px!important;
+  height:78px!important;
+  display:grid!important;
+  place-items:center!important;
+  justify-content:center!important;
+  overflow:visible!important;
+  background:transparent!important;
+}
+html body main.owner-target-home .rh-logo img{
+  content:url('/wdcc-official-logo.webp')!important;
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  height:92px!important;
+  min-height:92px!important;
+  max-height:92px!important;
+  display:block!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+  filter:drop-shadow(0 6px 15px rgba(0,0,0,.52))!important;
+  transform:none!important;
+  animation:none!important;
+  transition:none!important;
+}
+
+/* Locked wide-desktop inventory contract is exactly three columns. */
+@media(min-width:1101px){
+  html body main.owner-target-home .rh-grid{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:18px!important;
+    overflow:visible!important;
+    padding:0!important;
+  }
+  html body main.owner-target-home .rh-card{
+    min-width:0!important;
+    max-width:none!important;
+  }
+  html body main.owner-target-home .rh-photo{
+    aspect-ratio:1.72!important;
+  }
+  html body main.owner-target-home .rh-card-body{
+    padding:15px 16px 17px!important;
+  }
+  html body main.owner-target-home .rh-title{
+    min-height:0!important;
+    font-size:17px!important;
+  }
+  html body main.owner-target-home .rh-price{
+    font-size:28px!important;
+  }
+}
+
+/* Mobile keeps the same round badge and the locked one-card-at-a-time swipe lane. */
+@media(max-width:1100px),(hover:none) and (pointer:coarse){
+  html body main.owner-target-home .rh-header-inner{
+    grid-template-columns:52px minmax(0,1fr) 52px!important;
+  }
+  html body main.owner-target-home .rh-logo{
+    width:100px!important;
+    height:78px!important;
+    justify-self:center!important;
+  }
+  html body main.owner-target-home .rh-logo img{
+    width:90px!important;
+    min-width:90px!important;
+    max-width:90px!important;
+    height:90px!important;
+    min-height:90px!important;
+    max-height:90px!important;
+  }
+  html body main.owner-target-home .rh-grid{
+    display:flex!important;
+    gap:13px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:8vw!important;
+    padding:0 8vw 9px!important;
+  }
+  html body main.owner-target-home .rh-card{
+    flex:0 0 84vw!important;
+    min-width:84vw!important;
+    max-width:84vw!important;
+    scroll-snap-align:center!important;
+    scroll-snap-stop:always!important;
+  }
+
+  /* Interior customer pages already have page-specific actions and a round call button.
+     Remove the repeated fixed three-button rail so forms/cards are never obscured. */
+  html body:has(.inventoryTop) .stickyCtaBar,
+  html body:has(.leadPage) .stickyCtaBar,
+  html body:has(.loginShell) .stickyCtaBar,
+  html body:has(.vehiclePage) .stickyCtaBar{
+    display:none!important;
+  }
+  html body:has(.inventoryTop) .premiumFooter,
+  html body:has(.leadPage) .premiumFooter,
+  html body:has(.vehiclePage) .premiumFooter{
+    padding-bottom:calc(30px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+/* Dealer/admin light workspaces should end light, not expose the site's dark body underneath. */
+html body:has(main.dealerDashboardLocked),
+html body:has(main.inventoryContract),
+html body:has(.editVehicleApp),
+html body:has(.adminUsersPage){
+  background:#f3f5f7!important;
+}
+html body main.dealerDashboardLocked,
+html body main.inventoryContract,
+html body .editVehicleApp,
+html body .adminUsersPage{
+  min-height:100svh!important;
+}

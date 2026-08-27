@@ -1,0 +1,203 @@
+/* WDCC mockup convergence — preview branch only.
+   FINAL owner authority: 9194 + 50869 public storefront, 51074 All Vehicles,
+   10668 dashboard IA/light workspace, 10667 Add/Edit density, 10702 page family,
+   with 51073 Photos/Readiness/Preview interaction where compatible.
+   No routing, provider, auth, persistence, schema, DNS, alias, or production behavior. */
+
+/* Compact persistent public mobile chrome from the latest owner boards. */
+@media(max-width:767px){
+  html body [data-wdcc-public-chrome="header"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"]{
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+    top:0!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner,
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
+    box-sizing:border-box!important;
+    width:calc(100% - 20px)!important;
+    max-width:none!important;
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+    margin:0 auto!important;
+    padding:0!important;
+    display:grid!important;
+    grid-template-columns:44px minmax(0,1fr) 44px!important;
+    grid-template-rows:64px!important;
+    gap:8px!important;
+    align-items:center!important;
+    position:relative!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-menu,
+  html body [data-wdcc-public-chrome="header"] .rh-call,
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-menu,
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-call{
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    min-height:42px!important;
+    max-width:42px!important;
+    max-height:42px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo,
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{
+    position:static!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    transform:none!important;
+    grid-column:2!important;
+    grid-row:1!important;
+    justify-self:center!important;
+    align-self:center!important;
+    display:grid!important;
+    place-items:center!important;
+    width:66px!important;
+    min-width:66px!important;
+    max-width:66px!important;
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:visible!important;
+    z-index:4!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    content:normal!important;
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:62px!important;
+    min-width:62px!important;
+    max-width:62px!important;
+    height:62px!important;
+    min-height:62px!important;
+    max-height:62px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    clip-path:none!important;
+    border-radius:0!important;
+    transform:none!important;
+    filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-nav,
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-nav{
+    top:64px!important;
+  }
+
+  /* 9194 / 50869 mobile conversion hierarchy. */
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:7px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-btn{
+    width:100%!important;
+    min-width:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefits{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:72px!important;
+    padding:8px 5px!important;
+    grid-template-columns:1fr!important;
+    justify-items:center!important;
+    text-align:center!important;
+    gap:4px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:25px!important;
+    height:25px!important;
+    font-size:13px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:7.5px!important;
+    line-height:1.08!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:6.5px!important;
+    line-height:1.15!important;
+    margin-top:1px!important;
+  }
+
+  /* Keep the current three-card VehicleCard implementation authoritative.
+     This layer only owns the strip mechanics, not card typography or width. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    grid-template-columns:none!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:10px!important;
+    padding:0 10px 3px!important;
+    gap:7px!important;
+    width:100%!important;
+  }
+
+  /* Preserve accessible customer-form controls even when older CSS wins specificity. */
+  html body .approvalBoard .approvalFieldGrid input,
+  html body .approvalBoard .approvalFieldGrid select{
+    height:50px!important;
+    min-height:50px!important;
+    font-size:16px!important;
+  }
+}
+
+/* 10668 + 51074: dark dealer shell, light operational workspace. */
+html body main.dcPage.dealerDashboardLocked{
+  background:#f3f5f7!important;
+  color:#111820!important;
+}
+html body main.dcPage.dealerDashboardLocked .dcShell,
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{
+  background:#f6f7f9!important;
+  color:#111820!important;
+}
+html body main.dcPage.dealerDashboardLocked .dashboardGridLocked,
+html body main.dcPage.dealerDashboardLocked .dashMetrics,
+html body main.dcPage.dealerDashboardLocked .opsCards{
+  background:transparent!important;
+}
+html body main.dcPage.dealerDashboardLocked .dcTitle h1,
+html body main.dcPage.dealerDashboardLocked .dcCard,
+html body main.dcPage.dealerDashboardLocked .dashMetrics article{
+  color:#111820!important;
+}
+
+/* 10667 / 51073: one desktop Photos preview rail; mobile stacks readiness then preview. */
+@media(min-width:768px){
+  html body .editVehicleApp .mobileReadiness,
+  html body .editVehicleApp .mobilePreview{
+    display:none!important;
+  }
+  html body .editVehicleApp .editRight{
+    display:block!important;
+    position:sticky!important;
+    top:90px!important;
+    align-self:start!important;
+  }
+  html body .editVehicleApp [data-wizard-stage="photos"] .photoDrop{
+    min-height:190px!important;
+  }
+  html body .editVehicleApp [data-wizard-stage="photos"] .thumbGrid{
+    align-content:start!important;
+  }
+}
+
+@media(max-width:767px){
+  html body .editVehicleApp .editRight{
+    display:none!important;
+  }
+  html body .editVehicleApp .mobileReadiness,
+  html body .editVehicleApp .mobilePreview{
+    display:block!important;
+  }
+  html body .editVehicleApp [data-wizard-stage="photos"],
+  html body .editVehicleApp [data-wizard-stage="review"]{
+    background:#fff!important;
+  }
+}

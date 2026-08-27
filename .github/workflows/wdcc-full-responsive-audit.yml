@@ -1,0 +1,131 @@
+name: WDCC Full Responsive Audit
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+    paths:
+      - 'app/**'
+      - 'lib/store.ts'
+      - 'lib/wdccAuthority.ts'
+      - 'tsconfig.json'
+      - 'scripts/wdcc-full-responsive-audit.mjs'
+      - 'scripts/wdcc-vehicle-page-audit.mjs'
+      - 'scripts/wdcc-verified-real-snapshot-visual-stress.mjs'
+      - 'scripts/wdcc-verified-real-snapshot-owner-contract.mjs'
+      - '.github/workflows/wdcc-full-responsive-audit.yml'
+      - '.github/workflows/wdcc-verified-real-snapshot-visual-stress.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-full-responsive-audit-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  responsive-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build exact responsive candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 playwright@1.55.0
+          npm run build
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Start exact SHA server
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npx next start -H 127.0.0.1 -p 4175 >/tmp/wdcc-responsive-server.log 2>&1 &
+          echo $! >/tmp/wdcc-responsive-server.pid
+          code=000
+          for i in $(seq 1 35); do
+            code="$(curl -sS -o /tmp/wdcc-responsive-root.html -w '%{http_code}' 'http://127.0.0.1:4175/?responsive-warm=1' || true)"
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          if [ "$code" != 200 ]; then
+            cat /tmp/wdcc-responsive-server.log >&2 || true
+            exit 1
+          fi
+
+      - name: Audit every public, dealer, admin page at desktop and mobile sizes
+        id: audit
+        env:
+          URL: http://127.0.0.1:4175
+          OUT: responsive-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-full-responsive-audit.mjs
+
+      - name: Audit vehicle detail or honest unavailable fallback
+        id: vehicle_audit
+        env:
+          URL: http://127.0.0.1:4175
+          OUT: responsive-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-vehicle-page-audit.mjs
+
+      - name: Require current branch head
+        id: head_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$GITHUB_SHA"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+
+      - name: Publish responsive audit summary
+        if: always()
+        shell: bash
+        run: |
+          echo '### WDCC full responsive audit' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s responsive-audit/responsive-audit.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const p=require('./responsive-audit/responsive-audit.json');
+          console.log(`Page captures: ${p.summary.pageCaptures}`);
+          console.log(`Critical sizing defects: ${p.summary.critical}`);
+          console.log(`Warnings: ${p.summary.warnings}`);
+          console.log(`Dynamic routes skipped rather than faked: ${p.summary.skipped}`);
+          console.log(`Write requests: ${p.summary.writeRequests}`);
+          NODE
+          else
+            echo 'Audit output unavailable.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -s responsive-audit/vehicle-page-audit.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const p=require('./responsive-audit/vehicle-page-audit.json');
+          console.log(`Vehicle detail proof: PASS · ${p.mode} · captures ${p.captures.length} · writes ${p.writes.length}`);
+          NODE
+          else
+            echo 'Vehicle detail proof: unavailable.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Current-head gate: ${{ steps.head_gate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-full-responsive-${{ github.sha }}
+          path: responsive-audit/
+          retention-days: 7

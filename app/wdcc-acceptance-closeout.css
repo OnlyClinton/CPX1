@@ -1,0 +1,65 @@
+/* WDCC OWNER-BOARD ACCEPTANCE CLOSEOUT.
+   Loaded last. This file exists only to prevent earlier acceptance CSS from
+   overriding the latest owner-supplied 9194/50869/10702/10668/10667/51074 geometry.
+   Public chrome is rendered outside main.reference-home, so header rules must
+   target the header itself. Repeated .rh-header is an intentional specificity
+   guard against superseded !important mobile-header layers. */
+
+@media(max-width:767px){
+  /* Compact owner header from the supplied mobile boards. */
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{box-sizing:border-box!important;height:64px!important;min-height:64px!important;max-height:64px!important;padding:0!important;top:0!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{box-sizing:border-box!important;width:calc(100% - 20px)!important;max-width:none!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0 auto!important;padding:0!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;gap:8px!important;align-items:center!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;max-width:42px!important;max-height:42px!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{position:static!important;left:auto!important;right:auto!important;top:auto!important;transform:none!important;grid-column:2!important;grid-row:1!important;justify-self:center!important;align-self:center!important;display:grid!important;place-items:center!important;width:66px!important;min-width:66px!important;max-width:66px!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0!important;padding:0!important;overflow:visible!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{content:normal!important;display:block!important;visibility:visible!important;opacity:1!important;width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;object-fit:contain!important;object-position:center!important;clip-path:none!important;border-radius:0!important;transform:none!important;filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{top:64px!important}
+
+  /* Public hero conversion controls stack like the latest mobile board. */
+  html body main.reference-home.locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:7px!important}
+  html body main.reference-home.locked-storefront .rh-btn{width:100%!important;min-width:0!important}
+
+  /* Four compact benefits across mobile. */
+  html body main.reference-home.locked-storefront .rh-benefits{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:72px!important;padding:8px 5px!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:4px!important}
+  html body main.reference-home.locked-storefront .rh-icon{width:25px!important;height:25px!important;font-size:13px!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:7.5px!important;line-height:1.08!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:6.5px!important;line-height:1.15!important;margin-top:1px!important}
+
+  /* Dense three-card mobile featured strip from 9194/50869. */
+  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;grid-template-columns:none!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:10px!important;padding:0 10px 3px!important;gap:7px!important;width:100%!important}
+  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 29.5vw!important;width:29.5vw!important;min-width:108px!important;max-width:124px!important;scroll-snap-align:start!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>a{aspect-ratio:1.18!important;min-height:0!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div{padding:7px 7px 8px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>p:first-child{font-size:6px!important;margin:0!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{font-size:9.5px!important;line-height:1.08!important;min-height:20px!important;display:block!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{font-size:15px!important;margin-top:5px!important;display:block!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){font-size:6.5px!important;margin:3px 0 0!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>div{gap:2px!important;margin-top:5px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article>div>div>span{font-size:5.5px!important;min-height:16px!important;padding:0 3px!important}
+
+  /* Customer form controls remain comfortably tappable. */
+  html body .approvalBoard .approvalFieldGrid input,
+  html body .approvalBoard .approvalFieldGrid select{height:50px!important;min-height:50px!important;font-size:16px!important}
+}
+
+@media(max-width:360px){
+  html body main.reference-home.locked-storefront .rh-grid>article{flex-basis:30vw!important;width:30vw!important;min-width:102px!important}
+}
+
+/* 10668 desktop: the shell stays dark, but the operational canvas is decisively light. */
+@media(min-width:761px){
+  html body main.dcPage.dealerDashboardLocked>.dcShell{background:#f6f7f9!important}
+  html body main.dcPage.dealerDashboardLocked>.dcShell>.dcSide{background:#071522!important}
+  html body main.dcPage.dealerDashboardLocked>.dcShell>.dcContent.dashboardContent{box-sizing:border-box!important;background:#f6f7f9!important;color:#172129!important;min-height:calc(100vh - 70px)!important}
+}
+
+/* 51073 Photos step: compact real actions beside Listing Readiness, not just on Review. */
+html body .editVehicleApp .photoStageActions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:12px!important}
+html body .editVehicleApp .photoStageActions button{min-height:42px!important;border:1px solid #cfd7de!important;border-radius:5px!important;background:#fff!important;color:#172129!important;font-size:10px!important;font-weight:900!important;padding:0 10px!important}
+html body .editVehicleApp .photoStageActions button.publish{grid-column:1/-1!important;background:#ef1f2f!important;border-color:#ef1f2f!important;color:#fff!important}
+@media(min-width:768px){html body .editVehicleApp .mobileReadiness .photoStageActions{display:none!important}}
+@media(max-width:767px){
+  html body .editVehicleApp .mobileReadiness .photoStageActions{display:grid!important}
+  html body .editVehicleApp .mobileReadiness .photoStageActions button{min-height:46px!important;font-size:11px!important}
+}

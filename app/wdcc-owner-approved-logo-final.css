@@ -1,0 +1,212 @@
+/* FINAL owner-approved WDCC logo authority.
+   Loaded LAST. The exact embedded owner emblem is authoritative in both intro
+   and persistent public header. No CSS content:url substitution is permitted. */
+
+/* Intro: dominant centered owner emblem, complete and unclipped. */
+html body .li .li-badge{
+  left:50%!important;
+  top:39%!important;
+  width:clamp(236px,29vw,292px)!important;
+  min-width:236px!important;
+  max-width:292px!important;
+  aspect-ratio:1!important;
+  transform:translate(-50%,-50%)!important;
+  display:grid!important;
+  place-items:center!important;
+  background:transparent!important;
+  border:0!important;
+  border-radius:0!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+html body .li .li-badge:before{display:block!important;content:""!important;border-radius:50%!important}
+html body .li .li-badge>img[data-wdcc-intro-badge-art="owner-approved"]{
+  content:normal!important;
+  position:absolute!important;
+  inset:0!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:100%!important;
+  min-width:100%!important;
+  max-width:100%!important;
+  height:100%!important;
+  min-height:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  filter:drop-shadow(0 14px 30px rgba(0,0,0,.52))!important;
+  transform:none!important;
+}
+html body .li .li-tag{display:block!important}
+
+/* Persistent public chrome: same exact owner emblem, never an alternate wordmark. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+  grid-template-columns:112px minmax(0,1fr) auto!important;
+  gap:20px!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  width:104px!important;
+  min-width:104px!important;
+  height:78px!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:visible!important;
+  background:none!important;
+  filter:none!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo::before,
+html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:static!important;
+  width:100px!important;
+  min-width:100px!important;
+  max-width:100px!important;
+  height:100px!important;
+  min-height:100px!important;
+  max-height:100px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+  transform:none!important;
+}
+
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  html body .li .li-badge{
+    left:50%!important;
+    top:38.5%!important;
+    width:min(70vw,276px)!important;
+    min-width:238px!important;
+    max-width:276px!important;
+    transform:translate(-50%,-50%)!important;
+  }
+
+  /* Mobile owner chrome: symmetric controls and center track. */
+  html body [data-wdcc-public-chrome="header"]{
+    position:sticky!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+    box-sizing:border-box!important;
+    width:calc(100% - 20px)!important;
+    max-width:none!important;
+    height:78px!important;
+    min-height:78px!important;
+    margin:0 auto!important;
+    padding:0!important;
+    display:grid!important;
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+    grid-template-rows:78px!important;
+    column-gap:8px!important;
+    row-gap:0!important;
+    align-items:center!important;
+    position:static!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-menu{
+    grid-column:1!important;
+    grid-row:1!important;
+    justify-self:start!important;
+    align-self:center!important;
+  }
+
+  /* wdcc-system-v2 has a higher-specificity home rule that historically kept
+     this wrapper as a 116px flex row. Match that specificity so the 96px
+     approved emblem is centered inside the grid track rather than flex-started
+     10px left of viewport center. */
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo,
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    position:static!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    transform:none!important;
+    grid-column:2!important;
+    grid-row:1!important;
+    justify-self:center!important;
+    align-self:center!important;
+    display:grid!important;
+    place-items:center!important;
+    place-content:center!important;
+    width:104px!important;
+    min-width:104px!important;
+    max-width:104px!important;
+    height:78px!important;
+    min-height:78px!important;
+    max-height:78px!important;
+    margin:0!important;
+    padding:0!important;
+    z-index:3!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-call{
+    grid-column:3!important;
+    grid-row:1!important;
+    justify-self:end!important;
+    align-self:center!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    content:normal!important;
+    width:96px!important;
+    min-width:96px!important;
+    max-width:96px!important;
+    height:96px!important;
+    min-height:96px!important;
+    max-height:96px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    border-radius:0!important;
+    clip-path:none!important;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.48))!important;
+    transform:none!important;
+  }
+}
+
+@media(max-width:420px){
+  html body .li .li-badge{
+    width:min(69vw,270px)!important;
+    min-width:236px!important;
+    max-width:270px!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo,
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    position:static!important;
+    left:auto!important;
+    right:auto!important;
+    top:auto!important;
+    transform:none!important;
+    grid-column:2!important;
+    grid-row:1!important;
+    justify-self:center!important;
+    display:grid!important;
+    place-items:center!important;
+    width:104px!important;
+    min-width:104px!important;
+    max-width:104px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    content:normal!important;
+    width:96px!important;
+    min-width:96px!important;
+    max-width:96px!important;
+    height:96px!important;
+    min-height:96px!important;
+    max-height:96px!important;
+  }
+}

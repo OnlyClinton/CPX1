@@ -1,0 +1,27 @@
+/* OWNER CTA LOCK — visual priority only.
+   Preserve each action's existing destination while matching the approved 51077 hierarchy:
+   primary red = Get approved; secondary dark = Browse cars. */
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.red{
+  order:2!important;
+  background:#08111a!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.46)!important;
+  box-shadow:none!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.dark{
+  order:1!important;
+  background:#ef1925!important;
+  color:#fff!important;
+  border:1px solid #ef1925!important;
+  box-shadow:0 8px 22px rgba(239,25,37,.22)!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.dark:hover,
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.dark:focus-visible{
+  background:#ff2632!important;
+  border-color:#ff2632!important;
+}
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.red:hover,
+html body main.reference-home.locked-storefront .rh-hero-actions .rh-btn.red:focus-visible{
+  background:#101b25!important;
+  border-color:rgba(255,255,255,.7)!important;
+}

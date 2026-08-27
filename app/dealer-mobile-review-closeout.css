@@ -1,0 +1,83 @@
+/* WDCC dealer mobile owner-review closeout.
+   Loaded after the existing visual authorities. Fixes only defects observed in the
+   exact-SHA owner screenshot packet; no data, routing, auth, or production behavior. */
+
+@media(max-width:760px){
+  /* Dealer Dashboard: keep the operational canvas light so the title and cards
+     match the locked mobile dealer reference instead of disappearing into dark chrome. */
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent{
+    background:#f3f5f7!important;
+    color:#111820!important;
+  }
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dcTitle,
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dcTitle>div{
+    color:#111820!important;
+  }
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dcTitle h1,
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dcTitle>div>h1{
+    color:#111820!important;
+    opacity:1!important;
+    text-shadow:none!important;
+  }
+  html body main.dcPage.dealerDashboardLocked .dcShell .dcContent.dashboardContent .dcTitle p{
+    color:#68747e!important;
+  }
+}
+
+@media(max-width:600px){
+  /* Add/Edit > Photos: one real, touch-sized action card per row. The prior cascade
+     collapsed these controls into narrow vertical strips on a 390px Android viewport. */
+  html body .editVehicleApp .photosStage .photoTools{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-auto-flow:row!important;
+    gap:9px!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  html body .editVehicleApp .photosStage .photoTools>button{
+    box-sizing:border-box!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    place-items:center!important;
+    align-content:center!important;
+    justify-content:center!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    min-height:72px!important;
+    padding:11px 14px!important;
+    gap:3px!important;
+    writing-mode:horizontal-tb!important;
+    white-space:normal!important;
+    word-break:normal!important;
+    overflow-wrap:normal!important;
+    text-align:center!important;
+  }
+  html body .editVehicleApp .photosStage .photoTools>button b,
+  html body .editVehicleApp .photosStage .photoTools>button span{
+    display:block!important;
+    width:auto!important;
+    max-width:100%!important;
+    writing-mode:horizontal-tb!important;
+    white-space:normal!important;
+    word-break:normal!important;
+    overflow-wrap:normal!important;
+    text-align:center!important;
+  }
+  html body .editVehicleApp .photosStage .photoTools>button b{
+    font-size:11px!important;
+    line-height:1.15!important;
+  }
+  html body .editVehicleApp .photosStage .photoTools>button span{
+    font-size:9px!important;
+    line-height:1.25!important;
+  }
+  html body .editVehicleApp .photosStage .photoDrop{
+    box-sizing:border-box!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+}

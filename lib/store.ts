@@ -29,7 +29,14 @@ export type State={
 
 const PATH="private/state/platform-v3.json";
 const BACKUP_PREFIX="private/state/backups/platform-v3-r";
+const READ_CACHE_MS=2500;
+const PROVIDER_BACKOFF_MS=60_000;
+const BACKUP_RECOVERY_LIMIT=6;
 const opt=()=>blobAuthority().options as any;
+
+let readCache:{state:State;expiresAt:number}|null=null;
+let readInFlight:Promise<State>|null=null;
+let providerBlockedUntil=0;
 
 function normalizeState(value:any):State{
   return {
@@ -43,54 +50,136 @@ function normalizeState(value:any):State{
   };
 }
 
+function cloneState(state:State):State{
+  return normalizeState(JSON.parse(JSON.stringify(state)));
+}
+
+function errorText(error:unknown){
+  return error instanceof Error?error.message:String(error||"unknown");
+}
+
+function providerAccessBlocked(error:unknown){
+  return /(403|forbidden|suspend|blocked|billing|quota|limit|unauthori[sz]ed|invalid\s+token|token\s+expired)/i.test(errorText(error));
+}
+
+function remember(state:State){
+  readCache={state:cloneState(state),expiresAt:Date.now()+READ_CACHE_MS};
+  providerBlockedUntil=0;
+}
+
+function validateState(state:State,source:string){
+  if(!Number.isFinite(state.revision))throw Error(`STATE_INVALID:${source}`);
+  return state;
+}
+
 async function readBlobState(pathname:string):Promise<State>{
   const response=await get(pathname,{access:"private",useCache:false,...opt()});
   if(!response||response.statusCode!==200||!response.stream)throw Error(`STATE_BLOB_READ_FAILED:${pathname}`);
   const chunks:Uint8Array[]=[];
   for await(const chunk of response.stream as any)chunks.push(chunk);
   const raw=Buffer.concat(chunks).toString("utf8");
-  const parsed=JSON.parse(raw);
-  const state=normalizeState(parsed);
-  if(!Number.isFinite(state.revision))throw Error(`STATE_BLOB_INVALID:${pathname}`);
-  return state;
+  return validateState(normalizeState(JSON.parse(raw)),pathname);
 }
 
-export async function readState():Promise<State>{
-  const authority=blobAuthority();
+async function readCloudflareState(authority:any):Promise<State>{
+  const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+    method:"GET",
+    headers:{Accept:"application/json",Authorization:`Bearer ${authority.options.stateServiceToken}`},
+    cache:"no-store"
+  });
+  if(!response.ok)throw Error(`STATE_CLOUDFLARE_READ_FAILED:${response.status}`);
+  return validateState(normalizeState(await response.json()),"cloudflare-do");
+}
+
+async function readStateFresh():Promise<State>{
+  const authority:any=blobAuthority();
   if(authority.mode==="missing"){
-    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:false,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+    console.error("WDCC_STATE_AUTHORITY_MISSING",JSON.stringify({hasBlobToken:Boolean((process.env.BLOB_READ_WRITE_TOKEN||"").trim()),hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID),hasStateServiceUrl:Boolean(process.env.WDCC_STATE_SERVICE_URL),hasStateServiceToken:Boolean(process.env.WDCC_STATE_SERVICE_TOKEN)}));
     throw Error("STATE_AUTHORITY_MISSING");
   }
+
+  if(authority.mode==="cloudflare-do"){
+    try{
+      const state=await readCloudflareState(authority);
+      remember(state);
+      return state;
+    }catch(error){
+      console.error("WDCC_STATE_CLOUDFLARE_READ_FAILED",JSON.stringify({authority:authority.mode,error:errorText(error)}));
+      throw Error("STATE_READ_FAILED");
+    }
+  }
+
   try{
-    return await readBlobState(PATH);
+    const state=await readBlobState(PATH);
+    remember(state);
+    return state;
   }catch(primaryError){
+    // Authorization, billing, quota and suspension failures affect the store itself.
+    // Scanning backups cannot repair those faults and would only multiply provider work.
+    if(providerAccessBlocked(primaryError)){
+      providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+      console.error("WDCC_STATE_PROVIDER_BLOCKED",JSON.stringify({path:PATH,authority:authority.mode,backoffMs:PROVIDER_BACKOFF_MS,error:errorText(primaryError)}));
+      throw Error("STATE_PROVIDER_BLOCKED");
+    }
+
     try{
       const result=await list({prefix:BACKUP_PREFIX,limit:1000,...opt()});
       const backups=[...result.blobs].sort((a:any,b:any)=>String(b.uploadedAt||"").localeCompare(String(a.uploadedAt||"")));
-      for(const blob of backups.slice(0,20)){
+      for(const blob of backups.slice(0,BACKUP_RECOVERY_LIMIT)){
         try{
           const recovered=await readBlobState(blob.pathname);
-          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,authority:authority.mode,primaryError:primaryError instanceof Error?primaryError.message:"unknown"}));
+          remember(recovered);
+          console.warn("WDCC_STATE_RECOVERED_FROM_BACKUP",JSON.stringify({pathname:blob.pathname,revision:recovered.revision,authority:authority.mode,primaryError:errorText(primaryError)}));
           return recovered;
-        }catch{}
+        }catch(backupReadError){
+          if(providerAccessBlocked(backupReadError)){
+            providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+            break;
+          }
+        }
       }
     }catch(backupError){
-      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({authority:authority.mode,error:backupError instanceof Error?backupError.message:"unknown"}));
+      if(providerAccessBlocked(backupError))providerBlockedUntil=Date.now()+PROVIDER_BACKOFF_MS;
+      console.error("WDCC_STATE_BACKUP_SCAN_FAILED",JSON.stringify({authority:authority.mode,error:errorText(backupError)}));
     }
-    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,authority:authority.mode,error:primaryError instanceof Error?primaryError.message:"unknown"}));
+    console.error("WDCC_STATE_READ_FAILED",JSON.stringify({path:PATH,authority:authority.mode,error:errorText(primaryError)}));
     throw Error("STATE_READ_FAILED");
   }
 }
 
+export async function readState():Promise<State>{
+  const now=Date.now();
+  if(readCache&&readCache.expiresAt>now)return cloneState(readCache.state);
+  if(providerBlockedUntil>now&&blobAuthority().mode!=="cloudflare-do")throw Error("STATE_PROVIDER_BACKOFF");
+
+  if(!readInFlight){
+    readInFlight=readStateFresh().finally(()=>{readInFlight=null});
+  }
+  return cloneState(await readInFlight);
+}
+
 export async function writeState(input:State){
-  const authority=blobAuthority();
+  const authority:any=blobAuthority();
   if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   const state=normalizeState(input);
   state.revision=Number(state.revision||0)+1;
   state.updatedAt=new Date().toISOString();
   const body=JSON.stringify(state,null,2)+"\n";
-  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
 
+  if(authority.mode==="cloudflare-do"){
+    const response=await fetch(`${authority.options.stateServiceUrl}/state`,{
+      method:"PUT",
+      headers:{"Content-Type":"application/json",Accept:"application/json",Authorization:`Bearer ${authority.options.stateServiceToken}`},
+      body,
+      cache:"no-store"
+    });
+    const result:any=await response.json().catch(()=>({}));
+    if(!response.ok||result?.ok!==true)throw Error(`STATE_CLOUDFLARE_WRITE_FAILED:${response.status}:${result?.error||"unknown"}`);
+    remember(state);
+    return cloneState(state);
+  }
+
+  const backupPath=`private/state/backups/platform-v3-r${state.revision}-${crypto.randomUUID()}.json`;
   await put(backupPath,body,{
     access:"private",
     addRandomSuffix:false,
@@ -105,7 +194,8 @@ export async function writeState(input:State){
     contentType:"application/json",
     ...opt()
   });
-  return state;
+  remember(state);
+  return cloneState(state);
 }
 
 export function isQaVehicleRecord(vehicle:any){
@@ -129,7 +219,7 @@ export function isQaVehicleRecord(vehicle:any){
 }
 
 export function isInternalVehicleRecord(vehicle:any){
-  const visibility=String(vehicle?.visibility||vehicle?.listingVisibility||"").trim().toLowerCase();
+  const visibility=String(vehicle?.visibility||vehicle.listingVisibility||"").trim().toLowerCase();
   return vehicle?.internalOnly===true||visibility==="internal"||visibility==="dealer_only";
 }
 

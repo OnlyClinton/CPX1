@@ -1,0 +1,130 @@
+/* WDCC mobile visual lock — generated from owner screenshot review. Preview-only. */
+.locked-storefront .rh-hero{position:relative!important;isolation:isolate!important;overflow:hidden!important;background:#02070c!important}
+.locked-storefront .rh-hero-art{position:absolute!important;inset:0!important;z-index:0!important;width:100%!important;height:100%!important;display:block!important;visibility:visible!important;opacity:1!important;object-fit:cover!important;object-position:68% center!important;filter:saturate(1.12) contrast(1.08) brightness(1.02)!important;pointer-events:none!important}
+.locked-storefront .rh-hero-shade{position:absolute!important;inset:0!important;z-index:1!important;pointer-events:none!important;background:linear-gradient(90deg,rgba(2,7,12,.96) 0%,rgba(2,7,12,.82) 30%,rgba(2,7,12,.3) 58%,rgba(2,7,12,.05) 78%),linear-gradient(0deg,rgba(2,7,12,.96) 0%,rgba(2,7,12,.18) 48%,rgba(2,7,12,.04) 100%)!important}
+.locked-storefront .rh-hero-inner{position:relative!important;z-index:2!important}
+.locked-storefront h1>span{display:block!important;white-space:nowrap!important;width:max-content!important;max-width:100%!important}
+.locked-storefront h1 .white{color:#fff!important}
+.locked-storefront .rh-logo{display:grid!important;place-items:center!important;visibility:visible!important;opacity:1!important;overflow:visible!important;position:relative!important;z-index:4!important}
+.locked-storefront .rh-logo img{display:block!important;visibility:visible!important;opacity:0!important;object-fit:contain!important;position:relative!important;z-index:2!important}
+.locked-storefront .rh-logo:after{content:""!important;position:absolute!important;z-index:3!important;width:94px!important;height:94px!important;border-radius:50%!important;clip-path:circle(49% at 50% 50%)!important;background:url('/wdcc-official-logo.webp') center/cover no-repeat!important;filter:drop-shadow(0 8px 22px rgba(0,0,0,.72)) drop-shadow(0 0 10px rgba(255,255,255,.08))!important;pointer-events:none!important}
+
+@media(max-width:820px){
+  .locked-storefront .rh-header{height:72px!important;min-height:72px!important;background:#02080df8!important}
+  .locked-storefront .rh-header-inner{height:72px!important;grid-template-columns:48px minmax(0,1fr) 48px!important;padding:0 12px!important;gap:4px!important}
+  .locked-storefront .rh-menu{grid-column:1!important;grid-row:1!important;display:grid!important;place-items:center!important;width:44px!important;height:44px!important;justify-self:start!important;color:#fff!important;font-size:28px!important;line-height:1!important}
+  .locked-storefront .rh-logo{grid-column:2!important;grid-row:1!important;justify-self:center!important;width:96px!important;height:72px!important;margin:0!important;padding:0!important}
+  .locked-storefront .rh-logo:before{content:""!important;position:absolute!important;width:64px!important;height:64px!important;border-radius:50%!important;background:radial-gradient(circle,rgba(255,255,255,.1) 0%,rgba(255,255,255,.03) 58%,transparent 70%)!important;box-shadow:0 0 0 1px rgba(255,255,255,.08)!important}
+  .locked-storefront .rh-logo:after{width:74px!important;height:74px!important;filter:drop-shadow(0 7px 18px rgba(0,0,0,.8))!important}
+  .locked-storefront .rh-logo img{width:74px!important;height:74px!important}
+  .locked-storefront .rh-call{grid-column:3!important;grid-row:1!important;display:grid!important;place-items:center!important;width:44px!important;height:44px!important;justify-self:end!important;border-radius:50%!important;background:#f01f2f!important;color:#fff!important;font-size:18px!important}
+  .locked-storefront .rh-hero{min-height:590px!important;height:auto!important;background:#02070c!important}
+  .locked-storefront .rh-hero-art{object-position:74% 38%!important;filter:saturate(1.16) contrast(1.08) brightness(1.08)!important}
+  .locked-storefront .rh-hero-shade{background:linear-gradient(180deg,rgba(2,7,12,.02) 0%,rgba(2,7,12,.08) 34%,rgba(2,7,12,.72) 59%,rgba(2,7,12,.97) 79%,#02070c 100%),linear-gradient(90deg,rgba(2,7,12,.14) 0%,rgba(2,7,12,.03) 58%,rgba(2,7,12,.02) 100%)!important}
+  .locked-storefront .rh-hero-inner{width:100%!important;min-height:590px!important;align-items:flex-end!important}
+  .locked-storefront .rh-copy{width:100%!important;max-width:none!important;padding:252px 16px 25px!important;background:none!important}
+  .locked-storefront .rh-kicker{margin:0 0 10px!important;font-size:10px!important;line-height:1.2!important;letter-spacing:.12em!important}
+  .locked-storefront h1{margin:0 0 15px!important;font-size:clamp(38px,11.2vw,47px)!important;line-height:.9!important;letter-spacing:-.045em!important;text-shadow:0 5px 22px rgba(0,0,0,.92)!important}
+  .locked-storefront h1>span{width:max-content!important;white-space:nowrap!important}
+  .locked-storefront .rh-lead{max-width:92%!important;margin:0!important;font-size:13px!important;line-height:1.4!important;color:#f3f7fa!important;text-shadow:0 3px 12px #000!important}
+  .locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;margin-top:16px!important}
+  .locked-storefront .rh-btn{width:100%!important;min-height:46px!important;padding:0 15px!important;font-size:9px!important}
+  .locked-storefront .rh-btn.red{min-width:0!important}
+  .locked-storefront .rh-btn.dark{min-width:0!important;background:rgba(3,10,16,.38)!important;border-color:rgba(255,255,255,.42)!important}
+  .locked-storefront .rh-benefits{grid-template-columns:1fr 1fr!important;width:100%!important}
+  .locked-storefront .rh-benefit{min-height:88px!important;padding:11px 10px!important;grid-template-columns:32px minmax(0,1fr)!important;gap:9px!important}
+  .locked-storefront .rh-icon{width:30px!important;height:30px!important;font-size:12px!important}
+  .locked-storefront .rh-benefit strong{font-size:8.5px!important;line-height:1.15!important}
+  .locked-storefront .rh-benefit small{font-size:7.5px!important;line-height:1.25!important}
+}
+
+@media(max-width:430px){
+  .locked-storefront .rh-hero{min-height:570px!important}
+  .locked-storefront .rh-hero-inner{min-height:570px!important}
+  .locked-storefront .rh-hero-art{object-position:75% 36%!important}
+  .locked-storefront .rh-copy{padding:238px 14px 22px!important}
+  .locked-storefront h1{font-size:clamp(37px,11vw,44px)!important;letter-spacing:-.042em!important}
+  .locked-storefront .rh-lead{font-size:12.5px!important}
+}
+
+/* OWNER P0 MOBILE CLOSEOUT — inventory route + dealer/auth reflow. */
+@media(max-width:900px), (hover:none) and (pointer:coarse){
+  html,body{max-width:100%!important;overflow-x:hidden!important}
+
+  /* Shared storefront header used on /inventory and customer forms. */
+  .commandStrip{height:30px!important;min-height:30px!important;font-size:9px!important;overflow:hidden!important}
+  .commandStrip .wrap{height:30px!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;padding:0 10px!important;white-space:nowrap!important;overflow:hidden!important}
+  .commandStrip .wrap span{display:block!important;font-size:9px!important}
+  .commandStrip .wrap span:nth-child(2){display:block!important}
+  .premiumHeader,.premiumHeader .nav{height:78px!important;min-height:78px!important}
+  .premiumHeader{top:0!important;background:#02080df8!important}
+  .premiumHeader .nav{display:grid!important;grid-template-columns:52px minmax(0,1fr) 52px!important;align-items:center!important;padding:0 12px!important;position:relative!important}
+  .premiumHeader .logoBrand{grid-column:2!important;grid-row:1!important;justify-self:center!important;display:grid!important;place-items:center!important;width:82px!important;height:78px!important;visibility:visible!important;opacity:1!important}
+  .premiumHeader .logoBrand img{content:url('/wdcc-official-logo.webp')!important;width:76px!important;height:76px!important;display:block!important;visibility:visible!important;opacity:1!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;filter:drop-shadow(0 6px 16px rgba(0,0,0,.7))!important}
+  .premiumHeader .mobileMenuButton{grid-column:1!important;grid-row:1!important;justify-self:start!important;display:grid!important;place-items:center!important;width:46px!important;height:46px!important;border:0!important;background:transparent!important;color:#fff!important;font-size:0!important}
+  .premiumHeader .mobileMenuButton:after{content:'☰'!important;font-size:31px!important;line-height:1!important}
+  .premiumHeader .mobileCallButton{grid-column:3!important;grid-row:1!important;justify-self:end!important;display:grid!important;place-items:center!important;width:46px!important;height:46px!important;min-width:46px!important;border-radius:50%!important;background:#f2263d!important;color:#fff!important;font-size:20px!important;text-decoration:none!important}
+  .premiumHeader .navlinks{display:none!important}
+  .mobileHeaderMenu{position:fixed!important;top:108px!important;left:12px!important;right:12px!important;z-index:3000!important;background:#07121c!important;border:1px solid rgba(255,255,255,.14)!important;border-radius:12px!important;box-shadow:0 18px 44px rgba(0,0,0,.5)!important;padding:8px!important}
+  .mobileHeaderMenu a{display:flex!important;align-items:center!important;min-height:48px!important;padding:0 14px!important;border-bottom:1px solid rgba(255,255,255,.08)!important;font-size:14px!important}
+
+  /* Full inventory route: never squeeze desktop columns onto a phone. */
+  .inventoryTop{padding:72px 0 54px!important;min-height:0!important;background:#101b24!important}
+  .inventoryTop .wrap{padding:0 22px!important}
+  .inventoryTop .eyebrow{font-size:12px!important;letter-spacing:.16em!important;margin-bottom:20px!important}
+  .inventoryTop h1{font-size:clamp(52px,14vw,68px)!important;line-height:.9!important;letter-spacing:-.055em!important;margin:0 0 24px!important;max-width:350px!important}
+  .inventoryTop .lede{font-size:18px!important;line-height:1.48!important;max-width:350px!important;margin:0!important}
+  main .section.light{padding:48px 0 92px!important;background:#f5f1e9!important}
+  main .section.light>.wrap{width:100%!important;max-width:none!important;padding:0 16px!important}
+  main .section.light .grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:20px!important;width:100%!important;overflow:visible!important;padding:0!important;margin:0!important}
+  main .section.light .grid>.card{width:100%!important;min-width:0!important;max-width:none!important;margin:0!important;border-radius:18px!important;overflow:hidden!important;box-shadow:0 10px 28px rgba(9,22,35,.10)!important}
+  main .section.light .card .photo{width:100%!important;min-height:0!important;aspect-ratio:1.45!important;font-size:18px!important}
+  main .section.light .card .photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+  main .section.light .cardBody{padding:20px 20px 22px!important}
+  main .section.light .carTitle{font-size:24px!important;line-height:1.05!important;min-height:0!important}
+  main .section.light .facts{font-size:12px!important;margin-top:10px!important}
+  main .section.light .price{font-size:36px!important;line-height:1!important;margin-top:10px!important}
+  main .section.light .down{font-size:13px!important;margin-top:5px!important}
+  main .section.light .cardButtons{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important;margin-top:18px!important}
+  main .section.light .cardButtons span{min-height:48px!important;font-size:10px!important;border-radius:7px!important}
+
+  /* Bottom action rail must clear Android/iOS safe areas. */
+  .stickyCtaBar{height:auto!important;min-height:62px!important;padding-bottom:env(safe-area-inset-bottom)!important;bottom:0!important;z-index:2500!important}
+  .stickyCtaBar>a{min-height:62px!important;font-size:12px!important}
+  .premiumFooter{padding-bottom:calc(94px + env(safe-area-inset-bottom))!important}
+
+  /* /dealer unauthenticated state: branded hero above, full-width login below. */
+  .lockedDealerLogin{min-height:100svh!important;display:flex!important;flex-direction:column!important;grid-template-columns:none!important;background:#03080e!important;overflow-x:hidden!important}
+  .lockedDealerLogin .loginVisual{flex:0 0 auto!important;min-height:39svh!important;height:39svh!important;width:100%!important;background-position:72% 36%!important;background-size:cover!important}
+  .lockedDealerLogin .loginVisual>img{content:url('/wdcc-official-logo.webp')!important;left:50%!important;top:16px!important;transform:translateX(-50%)!important;width:92px!important;height:92px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;filter:drop-shadow(0 8px 20px rgba(0,0,0,.72))!important}
+  .lockedDealerLogin .loginVisual>div{left:20px!important;right:20px!important;bottom:18px!important}
+  .lockedDealerLogin .loginVisual small{font-size:9px!important}
+  .lockedDealerLogin .loginVisual h1{font-size:clamp(34px,9.7vw,43px)!important;line-height:.92!important;letter-spacing:-.05em!important;margin:6px 0!important}
+  .lockedDealerLogin .loginVisual p{font-size:11px!important;line-height:1.35!important;margin:8px 0 0!important;max-width:340px!important}
+  .lockedDealerLogin>form{flex:1 0 auto!important;width:100%!important;min-height:61svh!important;box-sizing:border-box!important;padding:28px 20px calc(38px + env(safe-area-inset-bottom))!important;justify-content:flex-start!important;background:linear-gradient(180deg,#0b1a28 0%,#06111b 54%,#03080e 100%)!important}
+  .lockedDealerLogin>form>small{font-size:10px!important;margin-top:2px!important}
+  .lockedDealerLogin h2{font-size:30px!important;margin:6px 0 18px!important}
+  .lockedDealerLogin label{font-size:10px!important;margin:10px 0!important;gap:7px!important}
+  .lockedDealerLogin input{width:100%!important;height:54px!important;box-sizing:border-box!important;border-radius:8px!important;font-size:16px!important}
+  .lockedDealerLogin form button{width:100%!important;height:54px!important;border-radius:8px!important;margin-top:12px!important;font-size:13px!important}
+  .lockedDealerLogin form p{min-height:26px!important;font-size:12px!important;line-height:1.4!important;margin:12px 0 0!important;color:#ffb7bd!important}
+
+  /* Unified /login route gets the same vertical mobile contract. */
+  .loginShell{display:flex!important;flex-direction:column!important;min-height:100svh!important;overflow-x:hidden!important}
+  .loginShell .brandPanel{min-height:38svh!important;height:38svh!important;width:100%!important;background-position:72% 36%!important}
+  .loginShell .brandPanel>img{left:50%!important;top:16px!important;transform:translateX(-50%)!important;width:92px!important;height:92px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
+  .loginShell .brandPanel .copy{left:20px!important;right:20px!important;bottom:20px!important}
+  .loginShell .brandPanel .copy h1{font-size:38px!important;line-height:.92!important}
+  .loginShell .formPanel{min-height:62svh!important;width:100%!important;box-sizing:border-box!important;padding:24px 18px calc(36px + env(safe-area-inset-bottom))!important;align-items:start!important}
+  .loginShell .formPanel form{width:100%!important;max-width:430px!important;box-sizing:border-box!important;margin:-18px auto 0!important;padding:24px!important;border-radius:14px!important}
+}
+
+@media(max-width:430px){
+  .commandStrip .wrap span{font-size:8px!important}
+  .premiumHeader .logoBrand img{width:72px!important;height:72px!important}
+  .inventoryTop{padding-top:62px!important}
+  .inventoryTop h1{font-size:clamp(50px,14vw,62px)!important}
+  main .section.light{padding-top:38px!important}
+  .lockedDealerLogin .loginVisual{min-height:37svh!important;height:37svh!important}
+  .lockedDealerLogin>form{min-height:63svh!important}
+}

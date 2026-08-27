@@ -1,0 +1,160 @@
+name: WDCC Phoenix Preview Provider Proof
+
+on:
+  push:
+    branches:
+      - fix/wdcc-locked-contract-20260826
+    paths:
+      - 'lib/store.ts'
+      - 'lib/wdccAuthority.ts'
+      - 'app/api/health/route.ts'
+      - 'app/api/inventory/**'
+      - 'tsconfig.json'
+      - '.github/workflows/wdcc-phoenix-preview-provider-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-phoenix-preview-provider
+  cancel-in-progress: true
+
+jobs:
+  provider-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      WDCC_BLOB_STORE_ID: store_cNUyQRVlXtyvZQ5N
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+
+      - name: Link isolated Phoenix project
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Inspect Blob project connection READ ONLY
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          npx --yes vercel@latest blob list-stores --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-project-stores.txt
+          echo "project_store_list_rc=${PIPESTATUS[0]}" | tee blob-project-stores-status.txt
+          npx --yes vercel@latest blob list-stores --all --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-team-stores.txt
+          echo "team_store_list_rc=${PIPESTATUS[0]}" | tee blob-team-stores-status.txt
+          npx --yes vercel@latest blob get-store "$WDCC_BLOB_STORE_ID" --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-store.txt
+          echo "get_store_rc=${PIPESTATUS[0]}" | tee blob-store-status.txt
+          set -e
+
+      - name: Mint project-scoped OIDC token
+        id: oidc
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          raw="$(npx --yes vercel@latest project token --token="$VERCEL_TOKEN" --scope=cpxagency --format=json)"
+          token="$(printf '%s' "$raw" | jq -r 'if type=="string" then . else (.token // .oidcToken // .value // empty) end' 2>/dev/null || true)"
+          if [ -z "$token" ] || [ "$token" = null ]; then
+            token="$(printf '%s' "$raw" | tr -d '\r\n')"
+            case "$token" in ''|'{'*|'['*) echo 'Unable to parse project OIDC token' >&2; exit 1;; esac
+          fi
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy PREVIEW only
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PROJECT_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -uo pipefail
+          log="$PWD/phoenix-preview-deploy.log"
+          : > "$log"
+          npx --yes vercel@latest deploy --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=cpxagency \
+            --env "BLOB_READ_WRITE_TOKEN=" \
+            --env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
+            --build-env "BLOB_READ_WRITE_TOKEN=" \
+            --build-env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --build-env "VERCEL_OIDC_TOKEN=$PROJECT_OIDC_TOKEN" \
+            2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
+          url="$(printf '%s\n' "$clean" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1 || true)"
+          if [ "$rc" -ne 0 ]; then
+            echo "Vercel preview deploy failed rc=$rc" >&2
+            exit "$rc"
+          fi
+          if [ -z "$url" ]; then
+            echo 'Vercel preview deploy succeeded but emitted no immutable preview URL' >&2
+            exit 1
+          fi
+          case "$url" in
+            https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com) echo 'Refusing production or mutable project domain' >&2; exit 1;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > phoenix-preview-url.txt
+
+      - name: Prove canonical state and public inventory READ ONLY
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          health_code="$(curl -sS -L -o health.json -w '%{http_code}' "$URL/api/health")"
+          inv_code="$(curl -sS -L -o inventory.json -w '%{http_code}' "$URL/api/inventory")"
+          jq . health.json
+          jq '{ok,count,error,previewFallback,inventorySource}' inventory.json
+          test "$health_code" = 200
+          test "$inv_code" = 200
+          jq -e '.ok==true and .state=="readable"' health.json >/dev/null
+          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' inventory.json >/dev/null
+          node - <<'NODE'
+          const fs=require('fs');
+          const h=JSON.parse(fs.readFileSync('health.json','utf8'));
+          const i=JSON.parse(fs.readFileSync('inventory.json','utf8'));
+          const publicSummary=(Array.isArray(i.items)?i.items:[]).map(v=>({id:v.id,year:v.year,make:v.make,model:v.model,trim:v.trim||'',price:v.price??v.cashPrice,mileage:v.mileage,photo:Boolean(v.primaryPhotoPathname||v.primary_image_url||v.image)}));
+          fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.URL,health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},writeRequests:0},null,2)+'\n');
+          NODE
+
+      - name: Upload proof and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-phoenix-preview-provider-${{ github.sha }}
+          path: |
+            blob-project-stores.txt
+            blob-project-stores-status.txt
+            blob-team-stores.txt
+            blob-team-stores-status.txt
+            blob-store.txt
+            blob-store-status.txt
+            phoenix-preview-deploy.log
+            phoenix-preview-url.txt
+            phoenix-provider-proof.json
+            health.json
+            inventory.json
+          if-no-files-found: warn
+          retention-days: 7

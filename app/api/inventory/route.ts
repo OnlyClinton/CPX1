@@ -5,6 +5,8 @@ import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {isIsolatedWorkersDevRequest,visualProofInventoryFallback} from "../../../lib/visualProofInventory";
+import {recoveryInventoryPayload} from "../../../lib/recoveryInventory";
 
 export const dynamic="force-dynamic";
 const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
@@ -23,13 +25,49 @@ function publicEligible(item:any){
   return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
 }
 
+function recoveryResponse(status:number){
+  return NextResponse.json(recoveryInventoryPayload(status),{
+    status:200,
+    headers:{
+      "Cache-Control":"public, max-age=30, stale-while-revalidate=120",
+      "X-WDCC-Inventory-Source":"verified-recovery-readonly",
+      "X-WDCC-Upstream-Status":String(status),
+      "X-WDCC-Inventory-Live":"false"
+    }
+  });
+}
+
 async function proxyPublicInventory(request:Request){
-  const upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok)return upstream;
+  let upstream:Response|null=null;
+  // Never retry 500 here: quota/storage faults can make each retry consume more provider work.
+  const retryable=new Set([502,503,504]);
+  const isolatedPreview=isIsolatedWorkersDevRequest(request);
+  if(isolatedPreview&&process.env.WDCC_VISUAL_PROOF_FALLBACK==="1"){
+    return NextResponse.json(visualProofInventoryFallback(503),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":"503","X-WDCC-Public-Inventory-Attempts":"0","X-WDCC-Visual-Proof-Mode":"forced"}});
+  }
+  const maxAttempts=isolatedPreview?1:3;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    upstream=await proxyDealer(request,"/api/inventory");
+    if(upstream.ok||!retryable.has(upstream.status))break;
+    if(attempt<maxAttempts-1)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+  }
+  if(!upstream){
+    if(isolatedPreview){
+      return NextResponse.json(visualProofInventoryFallback(503),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":"503","X-WDCC-Public-Inventory-Attempts":"1"}});
+    }
+    return recoveryResponse(503);
+  }
+  if(!upstream.ok){
+    if(isolatedPreview&&upstream.status>=500){
+      return NextResponse.json(visualProofInventoryFallback(upstream.status),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":String(upstream.status),"X-WDCC-Public-Inventory-Attempts":"1"}});
+    }
+    if(upstream.status>=500)return recoveryResponse(upstream.status);
+    return upstream;
+  }
   const json=await upstream.json().catch(()=>({}));
   const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
   const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+  return NextResponse.json({...json,ok:true,live:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":"live","X-WDCC-Inventory-Live":"true","X-WDCC-Public-Inventory-Attempts":String(maxAttempts)}});
 }
 
 export async function GET(request:Request){
