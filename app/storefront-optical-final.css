@@ -37,10 +37,10 @@
   }
 }
 
-@media(max-width:767px){
-  /* Mobile hero: car first, then a compact financing pitch like 51077. */
+@media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  /* Mobile hero: car first, then a compact but readable financing pitch. */
   html body main.reference-home.locked-storefront .rh-hero{
-    min-height:500px!important;
+    min-height:510px!important;
     height:auto!important;
   }
   html body main.reference-home.locked-storefront .rh-hero-art{
@@ -57,122 +57,113 @@
   html body main.reference-home.locked-storefront .rh-copy{
     max-width:none!important;
     width:100%!important;
-    padding:188px 0 18px!important;
+    padding:188px 0 20px!important;
   }
   html body main.reference-home.locked-storefront .rh-kicker{
-    margin-bottom:7px!important;
-    font-size:9.5px!important;
+    margin-bottom:8px!important;
+    font-size:10.5px!important;
     letter-spacing:.075em!important;
   }
   html body main.reference-home.locked-storefront .rh-copy h1{
-    font-size:clamp(33px,9.6vw,39px)!important;
+    font-size:clamp(35px,10vw,41px)!important;
     line-height:.92!important;
     letter-spacing:-.044em!important;
   }
   html body main.reference-home.locked-storefront .rh-proof-list{
-    margin:10px 0!important;
-    gap:3px!important;
-    font-size:11px!important;
-    line-height:1.25!important;
+    margin:11px 0!important;
+    gap:4px!important;
+    font-size:12px!important;
+    line-height:1.32!important;
   }
   html body main.reference-home.locked-storefront .rh-hero-actions{
-    gap:6px!important;
-    margin-top:11px!important;
+    gap:8px!important;
+    margin-top:12px!important;
   }
   html body main.reference-home.locked-storefront .rh-btn{
-    min-height:44px!important;
+    min-height:48px!important;
     padding:0 12px!important;
-    border-radius:5px!important;
-    font-size:10.5px!important;
+    border-radius:6px!important;
+    font-size:11.5px!important;
   }
-  html body main.reference-home.locked-storefront .rh-phone{
-    display:flex!important;
-    align-items:center!important;
-    gap:5px!important;
-    width:max-content!important;
-    margin:9px 0 0!important;
-    color:#fff!important;
-    font-size:10.5px!important;
-    line-height:1.2!important;
-    font-weight:850!important;
-    text-decoration:none!important;
-  }
-  html body main.reference-home.locked-storefront .rh-phone:before{content:"☎";color:#ef1f2f;font-size:12px!important}
-  html body main.reference-home.locked-storefront .rh-phone b{color:#ef1f2f!important;font-size:11px!important}
+  /* The circular header phone already owns this conversion action on mobile. */
+  html body main.reference-home.locked-storefront .rh-phone{display:none!important}
 
-  /* 2x2 benefit panel: compact enough to read as one band, not four tall cards. */
+  /* 2x2 benefit panel: compact, but never microtype. */
   html body main.reference-home.locked-storefront .rh-benefit{
-    min-height:86px!important;
-    padding:10px 9px!important;
-    grid-template-columns:30px minmax(0,1fr)!important;
-    gap:8px!important;
+    min-height:94px!important;
+    padding:12px 10px!important;
+    grid-template-columns:32px minmax(0,1fr)!important;
+    gap:9px!important;
   }
   html body main.reference-home.locked-storefront .rh-icon{
-    width:28px!important;
-    height:28px!important;
+    width:30px!important;
+    height:30px!important;
     font-size:14px!important;
   }
   html body main.reference-home.locked-storefront .rh-benefit strong{
-    font-size:10.5px!important;
-    line-height:1.15!important;
+    font-size:12px!important;
+    line-height:1.18!important;
   }
   html body main.reference-home.locked-storefront .rh-benefit small{
     margin-top:3px!important;
-    font-size:9.5px!important;
-    line-height:1.28!important;
+    font-size:10.75px!important;
+    line-height:1.34!important;
   }
 
   /* Featured inventory should arrive immediately below the benefits. */
-  html body main.reference-home.locked-storefront .rh-inventory{padding:22px 0 27px!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding:24px 0 30px!important}
   html body main.reference-home.locked-storefront .rh-section-head{
     width:calc(100% - 28px)!important;
-    margin-bottom:11px!important;
-    gap:8px!important;
+    margin-bottom:13px!important;
+    gap:9px!important;
   }
-  html body main.reference-home.locked-storefront .rh-section-head small{font-size:9px!important}
-  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:24px!important;line-height:1.02!important;margin:4px 0 5px!important}
-  html body main.reference-home.locked-storefront .rh-section-head p{font-size:10.5px!important;line-height:1.35!important}
-  html body main.reference-home.locked-storefront .rh-view-all{font-size:9px!important}
-  html body main.reference-home.locked-storefront .rh-card{flex-basis:88vw!important;min-width:88vw!important;max-width:88vw!important}
-  html body main.reference-home.locked-storefront .rh-card-body{padding:12px 13px 14px!important}
-  html body main.reference-home.locked-storefront .rh-title{font-size:17px!important;line-height:1.12!important}
-  html body main.reference-home.locked-storefront .rh-price{font-size:25px!important;margin-top:9px!important}
-  html body main.reference-home.locked-storefront .rh-payment{font-size:10.5px!important}
+  html body main.reference-home.locked-storefront .rh-section-head small{font-size:10px!important}
+  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:27px!important;line-height:1.03!important;margin:4px 0 6px!important}
+  html body main.reference-home.locked-storefront .rh-section-head p{font-size:12px!important;line-height:1.42!important}
+  html body main.reference-home.locked-storefront .rh-view-all{font-size:10px!important}
+  html body main.reference-home.locked-storefront .rh-card{flex-basis:86vw!important;min-width:86vw!important;max-width:86vw!important}
+  html body main.reference-home.locked-storefront .rh-card-body{padding:14px 15px 16px!important}
+  html body main.reference-home.locked-storefront .rh-title{font-size:19px!important;line-height:1.14!important}
+  html body main.reference-home.locked-storefront .rh-price{font-size:28px!important;margin-top:10px!important}
+  html body main.reference-home.locked-storefront .rh-payment{font-size:11.5px!important}
   html body main.reference-home.locked-storefront .rh-inventory-state{
     width:calc(100% - 28px)!important;
-    min-height:94px!important;
-    padding:15px!important;
-    font-size:11.5px!important;
-    line-height:1.35!important;
+    min-height:98px!important;
+    padding:16px!important;
+    font-size:12.5px!important;
+    line-height:1.42!important;
   }
-  html body main.reference-home.locked-storefront .rh-inventory-state strong{font-size:13.5px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_body__"]{padding:12px 13px 14px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_title__"]{font-size:17px!important;line-height:1.12!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_price__"]{font-size:25px!important;margin-top:9px!important}
-  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_down__"]{font-size:10.5px!important}
+  html body main.reference-home.locked-storefront .rh-inventory-state strong{font-size:14.5px!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_body__"]{padding:14px 15px 16px!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_eyebrow__"]{font-size:10.5px!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_title__"]{font-size:19px!important;line-height:1.14!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_price__"]{font-size:28px!important;margin-top:10px!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_down__"]{font-size:11.5px!important}
+  html body main.reference-home.locked-storefront [class*="WdccVehicleCard_actions__"] a{min-height:48px!important;font-size:10.75px!important}
 
-  /* Financing steps become the short stacked process shown in the mobile mockup. */
-  html body main.reference-home.locked-storefront .rh-finance{padding:23px 14px 27px!important}
-  html body main.reference-home.locked-storefront .finance-heading{margin-bottom:11px!important}
-  html body main.reference-home.locked-storefront .finance-heading h2{font-size:24px!important;line-height:1.02!important}
-  html body main.reference-home.locked-storefront .finance-heading p{font-size:10.5px!important;line-height:1.35!important;margin-top:4px!important}
-  html body main.reference-home.locked-storefront .rh-steps{gap:6px!important}
+  /* Financing steps stay short, while supporting copy remains readable. */
+  html body main.reference-home.locked-storefront .rh-finance{padding:25px 14px 30px!important}
+  html body main.reference-home.locked-storefront .finance-heading{margin-bottom:13px!important}
+  html body main.reference-home.locked-storefront .finance-heading h2{font-size:27px!important;line-height:1.03!important}
+  html body main.reference-home.locked-storefront .finance-heading p{font-size:12px!important;line-height:1.42!important;margin-top:5px!important}
+  html body main.reference-home.locked-storefront .rh-steps{gap:7px!important}
   html body main.reference-home.locked-storefront .rh-step{
-    min-height:70px!important;
-    padding:10px 11px!important;
-    grid-template-columns:32px minmax(0,1fr)!important;
-    column-gap:9px!important;
+    min-height:80px!important;
+    padding:11px 12px!important;
+    grid-template-columns:34px minmax(0,1fr)!important;
+    column-gap:10px!important;
   }
-  html body main.reference-home.locked-storefront .rh-step>b{width:30px!important;height:30px!important;font-size:13px!important}
-  html body main.reference-home.locked-storefront .rh-step>strong{font-size:11.5px!important;line-height:1.18!important}
-  html body main.reference-home.locked-storefront .rh-step>small{font-size:9.8px!important;line-height:1.3!important;margin-top:1px!important}
-  html body main.reference-home.locked-storefront .rh-trust{padding:17px 14px!important}
-  html body main.reference-home.locked-storefront .rh-trust-grid{gap:12px 9px!important}
-  html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:9.5px!important}
-  html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:9.2px!important;line-height:1.3!important}
+  html body main.reference-home.locked-storefront .rh-step>b{width:32px!important;height:32px!important;font-size:14px!important}
+  html body main.reference-home.locked-storefront .rh-step>strong{font-size:13px!important;line-height:1.2!important}
+  html body main.reference-home.locked-storefront .rh-step>small{font-size:11px!important;line-height:1.38!important;margin-top:2px!important}
+  html body main.reference-home.locked-storefront .rh-trust{padding:20px 14px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{gap:14px 10px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:10.75px!important;line-height:1.2!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:10.5px!important;line-height:1.38!important}
 }
 
 @media(max-width:430px){
-  html body main.reference-home.locked-storefront .rh-copy{padding-top:180px!important}
-  html body main.reference-home.locked-storefront .rh-copy h1{font-size:34px!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding-top:182px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:36px!important}
+  html body main.reference-home.locked-storefront .rh-card{flex-basis:88vw!important;min-width:88vw!important;max-width:88vw!important}
 }
