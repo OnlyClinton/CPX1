@@ -1,0 +1,135 @@
+name: WDCC P0 Preview Hardening Proof V2
+
+on:
+  push:
+    branches: [preview/wdcc-p0-hardening-20260827]
+    paths:
+      - '.github/workflows/wdcc-p0-preview-hardening-proof-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-p0-preview-hardening-v2-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+      STATE_TOKEN: preview-state-token
+      MEDIA_TOKEN: preview-media-token
+      SESSION_SECRET: preview-only-session-secret-4e03a5152c9f4e60b5ea7530bdac932d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove zero-production scope and exact hardening source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'preview/wdcc-p0-hardening-20260827'
+          grep -Fq 'return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;' app/api/auth/login/route.ts
+          grep -Fq 'return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;' app/api/auth/session/route.ts
+          grep -Fq 'export async function mutateState' lib/store.ts
+          grep -Fq 'storefront_verification_failed' 'app/api/inventory/[id]/route.ts'
+          grep -Fq 'checkpointed:true' app/api/upload/route.ts
+          grep -Fq 'wdcc-preview-hardening.css' app/layout.tsx
+          ! grep -Eq 'wrangler deploy|vercel (alias|deploy)|cloudflare.*routes|api\.cloudflare\.com' .github/workflows/wdcc-p0-preview-hardening-proof-v2.yml
+          echo 'ZERO_PRODUCTION_MUTATION_SCOPE=PASS'
+
+      - name: Build and install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.55.0 >/dev/null
+          npm run build
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Start localhost-only state and media fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wdcc-preview-services.mjs <<'NODE'
+          import http from 'node:http';import fs from 'node:fs';import crypto from 'node:crypto';
+          const stateToken=process.env.STATE_TOKEN,mediaToken=process.env.MEDIA_TOKEN,hero=fs.readFileSync('public/wdcc-hero-v2.webp'),now=new Date().toISOString();
+          let state={revision:10,tenants:[{id:'wdcc',name:'WDCC',status:'active'}],users:[
+            {id:'other-dealer',tenantId:'wdcc',email:'other@internal.wedontcarecars.com',username:'other',displayName:'Other Dealer',role:'dealer_agent',status:'active'},
+            {id:'exact-dealer',tenantId:'wdcc',email:'dealer@internal.wedontcarecars.com',username:'dealer',loginAlias:'dealer',aliases:['dealer'],displayName:'WDCC Dealer',role:'dealer_agent',status:'active'},
+            {id:'exact-admin',tenantId:'wdcc',email:'admin@internal.wedontcarecars.com',username:'admin',loginAlias:'admin',aliases:['admin'],displayName:'WDCC Admin',role:'platform_admin',status:'active'}
+          ],vehicles:[],leads:[],audit:[],updatedAt:now};
+          const media=new Map();
+          for(let i=1;i<=5;i++){const id=`fixture-${i}`,path=`media/wdcc/${id}/hero.webp`;media.set(path,{body:hero,type:'image/webp'});state.vehicles.push({id,tenantId:'wdcc',year:2018+i,make:['Ford','Honda','Toyota','Kia','Nissan'][i-1],model:['F-150','Pilot','RAV4','Sportage','350Z'][i-1],trim:'',price:6900+i*1400,downPayment:1500+i*300,mileage:55000+i*17000,stock:`FIX-${i}`,status:'published',visibility:'public',internalOnly:false,transmission:'Automatic',drivetrain:i%2?'FWD':'AWD',fuelType:'Gasoline',description:'Preview-only local fixture vehicle.',photoPathnames:[path],primaryPhotoPathname:path,createdAt:now,updatedAt:now});}
+          let conflictRemaining=1,failNextMedia=false;
+          const read=req=>new Promise((resolve,reject)=>{const c=[];req.on('data',x=>c.push(x));req.on('end',()=>resolve(Buffer.concat(c)));req.on('error',reject)});
+          const send=(res,status,body,headers={})=>{const data=typeof body==='string'?body:JSON.stringify(body);res.writeHead(status,{'content-type':'application/json','cache-control':'no-store',...headers});res.end(data)};
+          http.createServer(async(req,res)=>{const u=new URL(req.url,'http://local');if(req.method==='GET'&&u.pathname==='/health')return send(res,200,{ok:true,state:'readable',revision:state.revision});if(u.pathname!=='/state')return send(res,404,{ok:false});if(req.headers.authorization!==`Bearer ${stateToken}`)return send(res,401,{ok:false,error:'unauthorized'});if(req.method==='GET')return send(res,200,state,{'x-wdcc-state-revision':String(state.revision)});if(req.method==='PUT'){const next=JSON.parse((await read(req)).toString());if(conflictRemaining>0){conflictRemaining--;state={...state,revision:state.revision+1,updatedAt:new Date().toISOString()};return send(res,409,{ok:false,error:'stale_revision',currentRevision:state.revision});}if(Number(next.revision)<=Number(state.revision))return send(res,409,{ok:false,error:'stale_revision',currentRevision:state.revision});state=next;return send(res,200,{ok:true,revision:state.revision});}return send(res,405,{ok:false});}).listen(4101,'127.0.0.1');
+          http.createServer(async(req,res)=>{const u=new URL(req.url,'http://local');if(req.method==='POST'&&u.pathname==='/__control/fail-next'){if(req.headers.authorization!==`Bearer ${mediaToken}`)return send(res,401,{ok:false});failNextMedia=true;return send(res,200,{ok:true});}if(req.method==='GET'&&u.pathname==='/health')return send(res,200,{ok:true});if(u.pathname!=='/media')return send(res,404,{ok:false});if(req.headers.authorization!==`Bearer ${mediaToken}`)return send(res,401,{ok:false,error:'unauthorized'});const path=u.searchParams.get('p')||'';if(req.method==='PUT'){if(failNextMedia){failNextMedia=false;return send(res,503,{ok:false,error:'injected_media_failure'});}const body=await read(req),type=String(req.headers['content-type']||'application/octet-stream'),sha256=crypto.createHash('sha256').update(body).digest('hex');media.set(path,{body,type});return send(res,200,{ok:true,sha256,bytes:body.length});}if(req.method==='GET'||req.method==='HEAD'){const item=media.get(path);if(!item){res.writeHead(404);return res.end();}res.writeHead(200,{'content-type':item.type,'content-length':String(item.body.length),'cache-control':'no-store'});return res.end(req.method==='HEAD'?undefined:item.body);}return send(res,405,{ok:false});}).listen(4102,'127.0.0.1');
+          NODE
+          nohup node /tmp/wdcc-preview-services.mjs >/tmp/wdcc-preview-services.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:4101/health >/dev/null && curl -fsS http://127.0.0.1:4102/health >/dev/null && exit 0; sleep .2; done
+          cat /tmp/wdcc-preview-services.log >&2;exit 1
+
+      - name: Start two localhost application runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          common='WDCC_RUNTIME_ROLE=canonical WDCC_STATE_SERVICE_URL=http://127.0.0.1:4101 WDCC_STATE_SERVICE_TOKEN=preview-state-token WDCC_MEDIA_SERVICE_URL=http://127.0.0.1:4102 WDCC_MEDIA_SERVICE_TOKEN=preview-media-token SESSION_SECRET=preview-only-session-secret-4e03a5152c9f4e60b5ea7530bdac932d'
+          nohup env $common WDCC_STOREFRONT_VERIFY_URL=http://localhost:3000 PORT=3000 npm start >/tmp/wdcc-app-3000.log 2>&1 &
+          nohup env $common WDCC_STOREFRONT_VERIFY_URL=http://127.0.0.1:4199 PORT=3001 npm start >/tmp/wdcc-app-3001.log 2>&1 &
+          for port in 3000 3001;do ok=0;for i in $(seq 1 80);do code="$(curl -sS -o /tmp/health-$port.json -w '%{http_code}' http://localhost:$port/api/health||true)";if [ "$code" = 200 ];then ok=1;break;fi;sleep .25;done;test "$ok" = 1||{ cat /tmp/wdcc-app-$port.log >&2;exit 1;};jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do" and .session=="signed-local"' /tmp/health-$port.json >/dev/null;done
+
+      - name: Hard functional and visual browser proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wdcc-preview-proof-v2
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';import crypto from 'node:crypto';import {chromium,request as requestFactory} from 'playwright';
+          const base='http://localhost:3000',bad='http://localhost:3001',secret=process.env.SESSION_SECRET;
+          const report={sha:process.env.GITHUB_SHA,functional:[],browserErrors:[],metrics:{},neonCredentialProbe:null};
+          const assert=(ok,msg)=>{if(!ok)throw new Error(msg)},j=async r=>await r.json().catch(()=>({}));
+          const raw=Buffer.from(JSON.stringify({id:'exact-dealer',role:'dealer_agent',exp:Date.now()+2*60*60*1000})).toString('base64url');const sig=crypto.createHmac('sha256',secret).update(raw).digest('base64url');const token=`${raw}.${sig}`;
+          const browser=await chromium.launch({headless:true});const dealer=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});await dealer.addCookies([{name:'__Host-wdcc_session',value:token,url:base,httpOnly:true,secure:true,sameSite:'Strict'}]);const api=dealer.request;
+          let r=await api.get(`${base}/api/auth/session`),body=await j(r);assert(r.status()===200&&body?.authenticated===true&&body?.user?.id==='exact-dealer',`SIGNED_SESSION_${r.status()}_${JSON.stringify(body)}`);report.functional.push('signed_preview_session_exact_dealer');
+          if(process.env.WDCC_DEALER_E2E_PASSWORD){const probe=await requestFactory.newContext();const pr=await probe.post(`${base}/api/auth/login`,{data:{username:'dealer',password:process.env.WDCC_DEALER_E2E_PASSWORD}}),pj=await j(pr);report.neonCredentialProbe={status:pr.status(),ok:pj?.ok===true,error:pj?.error||null};await probe.dispose();}
+
+          const stock=`WDCC-QA-PREVIEW-${Date.now()}`;r=await api.post(`${base}/api/inventory`,{data:{year:2022,make:'WDCC',model:'Conflict Retry',price:19995,downPayment:2500,mileage:12345,stock,internalOnly:true,description:'automated temporary qa vehicle preview-only'}});body=await j(r);assert(r.status()===201&&body?.item?.id&&body?.mutationAttempt===2,`CREATE_RETRY_${r.status()}_${JSON.stringify(body)}`);const id=String(body.item.id);report.functional.push('conflict_retry_create');
+          const image=fs.readFileSync('public/wdcc-hero-v2.webp');r=await api.post(`${base}/api/upload`,{multipart:{vehicleId:id,requestId:`upload-${Date.now()}`,file:{name:'proof.webp',mimeType:'image/webp',buffer:image}}});body=await j(r);assert(r.status()===200&&body?.checkpointed===true&&body?.pathname,`UPLOAD_${r.status()}_${JSON.stringify(body)}`);const pathname=String(body.pathname);r=await api.get(`${base}/api/inventory/${id}`);body=await j(r);assert(r.status()===200&&body?.item?.photoPathnames?.includes(pathname)&&body?.item?.primaryPhotoPathname===pathname,`CHECKPOINT_${r.status()}_${JSON.stringify(body)}`);r=await api.get(`${base}/api/media?p=${encodeURIComponent(pathname)}`);assert(r.status()===200&&(await r.body()).length===image.length,`MEDIA_READ_${r.status()}`);report.functional.push('media_upload_checkpoint_readback');
+          r=await api.patch(`${base}/api/inventory/${id}`,{data:{status:'published',internalOnly:true,visibility:'internal'}});body=await j(r);assert(r.status()===200&&body?.storefront?.verified===true&&body?.storefront?.expected==='hidden',`INTERNAL_PUBLISH_${r.status()}_${JSON.stringify(body)}`);const anon=await requestFactory.newContext({baseURL:base});r=await anon.get('/api/inventory');body=await j(r);assert(r.status()===200&&!body?.items?.some(v=>String(v?.id)===id),`PUBLIC_ISOLATION_${r.status()}_${JSON.stringify(body)}`);report.functional.push('publish_verified_hidden_public_isolation');
+          const partialStock=`WDCC-QA-PARTIAL-${Date.now()}`;r=await api.post(`${base}/api/inventory`,{data:{year:2021,make:'WDCC',model:'Partial Media',price:15500,downPayment:2000,mileage:22000,stock:partialStock,internalOnly:true,description:'automated temporary qa vehicle preview-only'}});body=await j(r);assert(r.status()===201&&body?.item?.id,'PARTIAL_CREATE');const partialId=String(body.item.id);r=await api.post(`${base}/api/upload`,{multipart:{vehicleId:partialId,requestId:'partial-1',file:{name:'first.webp',mimeType:'image/webp',buffer:image}}});body=await j(r);assert(r.status()===200&&body?.checkpointed===true,`PARTIAL_FIRST_${r.status()}`);const firstPath=String(body.pathname);await fetch('http://127.0.0.1:4102/__control/fail-next',{method:'POST',headers:{Authorization:'Bearer preview-media-token'}});r=await api.post(`${base}/api/upload`,{multipart:{vehicleId:partialId,requestId:'partial-2',file:{name:'second.webp',mimeType:'image/webp',buffer:image}}});body=await j(r);assert(r.status()>=400&&String(body?.error||'').includes('media_provider_failed'),`PARTIAL_SECOND_${r.status()}_${JSON.stringify(body)}`);r=await api.get(`${base}/api/inventory/${partialId}`);body=await j(r);assert(r.status()===200&&body?.item?.photoPathnames?.length===1&&body?.item?.photoPathnames?.[0]===firstPath,`PARTIAL_PRESERVE_${r.status()}_${JSON.stringify(body)}`);report.functional.push('partial_upload_keeps_prior_checkpoint');
+          const failStock=`WDCC-QA-VERIFY-${Date.now()}`;r=await api.post(`${base}/api/inventory`,{data:{year:2020,make:'WDCC',model:'Verify Fail',price:14500,downPayment:1800,mileage:33000,stock:failStock,internalOnly:false,description:'preview publication verification test'}});body=await j(r);assert(r.status()===201&&body?.item?.id,'VERIFY_CREATE');const failId=String(body.item.id);r=await api.post(`${base}/api/upload`,{multipart:{vehicleId:failId,requestId:'verify-photo',file:{name:'verify.webp',mimeType:'image/webp',buffer:image}}});assert(r.status()===200,`VERIFY_UPLOAD_${r.status()}`);r=await api.patch(`${bad}/api/inventory/${failId}`,{data:{status:'published',internalOnly:false,visibility:'public'}});body=await j(r);assert(r.status()===409&&body?.error==='storefront_verification_failed'&&body?.storefront?.verified===false,`VERIFY_FAIL_CLOSED_${r.status()}_${JSON.stringify(body)}`);await api.patch(`${base}/api/inventory/${failId}`,{data:{status:'draft'}});report.functional.push('publish_verification_failure_is_409');
+
+          const storageState=await dealer.storageState(),ignore=u=>{try{return ['/favicon.ico'].includes(new URL(u).pathname)}catch{return false}},watch=(page,label)=>{page.on('console',m=>{if(m.type()==='error')report.browserErrors.push(`${label}:console:${m.text()}`)});page.on('pageerror',e=>report.browserErrors.push(`${label}:pageerror:${String(e)}`));page.on('requestfailed',q=>report.browserErrors.push(`${label}:requestfailed:${q.url()}:${q.failure()?.errorText||''}`));page.on('response',x=>{if(x.status()>=400&&!ignore(x.url()))report.browserErrors.push(`${label}:http${x.status()}:${x.url()}`)});};
+          async function publicShots(viewport,label){const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:label==='mobile',hasTouch:label==='mobile'}),page=await ctx.newPage();watch(page,`${label}-public`);let resp=await page.goto(`${base}/?intro=1&proof=${Date.now()}`,{waitUntil:'domcontentloaded'});assert(resp?.status()===200,`${label}_ROOT`);await page.waitForTimeout(650);await page.screenshot({path:`wdcc-preview-proof-v2/${label}-01-intro.png`});const skip=page.locator('.li-skip');if(await skip.count())await skip.click({force:true});await page.waitForTimeout(300);await page.screenshot({path:`wdcc-preview-proof-v2/${label}-02-home.png`,fullPage:true});resp=await page.goto(`${base}/inventory?proof=${Date.now()}`,{waitUntil:'domcontentloaded'});assert(resp?.status()===200,`${label}_INVENTORY`);await page.waitForTimeout(600);await page.screenshot({path:`wdcc-preview-proof-v2/${label}-03-inventory.png`,fullPage:true});if(label==='mobile'){const vals=await page.evaluate(()=>[...document.querySelectorAll('.inventoryPage *')].filter(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&el.textContent?.trim()}).map(el=>parseFloat(getComputedStyle(el).fontSize)).filter(n=>Number.isFinite(n)&&n>0&&n<30));report.metrics.mobileInventoryMinFont=Math.min(...vals);assert(report.metrics.mobileInventoryMinFont>=8,`MOBILE_MICROTYPE_${report.metrics.mobileInventoryMinFont}`);}await ctx.close();}
+          async function dealerShots(viewport,label){const ctx=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:label==='mobile',hasTouch:label==='mobile',storageState}),page=await ctx.newPage();watch(page,`${label}-dealer`);for(const [name,path] of [['dashboard','/dealer/dashboard'],['inventory','/dealer/inventory'],['editor','/dealer/inventory/new']]){const resp=await page.goto(`${base}${path}`,{waitUntil:'domcontentloaded'});assert(resp?.status()===200,`${label}_${name}_${resp?.status()}`);await page.waitForTimeout(500);assert(!page.url().endsWith('/dealer'),`${label}_${name}_AUTH_REDIRECT`);await page.screenshot({path:`wdcc-preview-proof-v2/${label}-dealer-${name}.png`,fullPage:true});}const year=page.locator('input[name="year"]'),box=await year.boundingBox();assert(await year.count()===1&&Boolean(box)&&box.height>=40,`${label}_EDITOR_CONTROL_${box?.height}`);await ctx.close();}
+          await publicShots({width:1440,height:1000},'desktop');await publicShots({width:390,height:844},'mobile');await dealerShots({width:1440,height:1000},'desktop');await dealerShots({width:390,height:844},'mobile');assert(report.browserErrors.length===0,`BROWSER_ERRORS_${JSON.stringify(report.browserErrors)}`);report.functional.push('browser_clean_public_dealer_desktop_mobile');fs.writeFileSync('wdcc-preview-proof-v2/report.json',JSON.stringify(report,null,2)+'\n');await anon.dispose();await dealer.close();await browser.close();
+          NODE
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo '## WDCC P0 Preview Hardening V2' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact preview head: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'State/media are localhost-only. No production provider, route, DNS, alias, or database mutation.' >> "$GITHUB_STEP_SUMMARY"
+          [ ! -s wdcc-preview-proof-v2/report.json ] || cat wdcc-preview-proof-v2/report.json >> "$GITHUB_STEP_SUMMARY"
+          tail -40 /tmp/wdcc-app-3000.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-p0-preview-hardening-v2-${{ github.sha }}
+          path: wdcc-preview-proof-v2/
+          if-no-files-found: warn
+          retention-days: 7
