@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'public/**'
       - 'scripts/**'
+      - '.github/support/wdcc-current-owner-proof.mjs'
       - '.github/workflows/wdcc-owner-approval-current.yml'
   workflow_dispatch:
 
@@ -14,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-current-board-owner-${{ github.ref }}
-  cancel-in-progress: true
+  group: wdcc-current-board-owner-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -45,6 +46,7 @@ jobs:
           test -s app/wdcc-acceptance-closeout.css
           test -s app/WdccPublicChrome.tsx
           test -s app/ReferenceCloneHome.tsx
+          test -s .github/support/wdcc-current-owner-proof.mjs
           grep -Fq 'height:64px!important' app/wdcc-acceptance-closeout.css
           grep -Fq 'width:62px!important' app/wdcc-acceptance-closeout.css
           grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-acceptance-closeout.css
@@ -100,116 +102,42 @@ jobs:
           set -euo pipefail
           mkdir -p current-owner-proof
           code=000
-          for i in $(seq 1 25); do
-            code="$(curl --http1.1 -sS -L -o /tmp/current-home.html -w '%{http_code}' "$URL/?owner-review=1&warm=$i" || true)"
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -L -o /tmp/current-home.html -w '%{http_code}' "$URL/?owner-review=1&root-warm=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
           test "$code" = 200
           build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq -- "$build" /tmp/current-home.html
-          curl --http1.1 -fsSL "$URL/wdcc-hero-v2.webp" -o /tmp/current-hero.webp
-          test "$(sha256sum /tmp/current-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
-          printf 'sha=%s\nurl=%s\nbuild=%s\nroot_http=%s\n' "$GITHUB_SHA" "$URL" "$build" "$code" > current-owner-proof/remote-integrity.txt
 
-      - name: Capture and prove current 9194 50869 owner board
+          asset_code=000
+          for i in $(seq 1 30); do
+            asset_code="$(curl --http1.1 -sS -L -o /tmp/current-hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset-warm=$GITHUB_RUN_ID-$i" || true)"
+            [ "$asset_code" = 200 ] && break
+            sleep 2
+          done
+          test "$asset_code" = 200
+          test "$(sha256sum /tmp/current-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
+
+          logo_code=000
+          for i in $(seq 1 30); do
+            logo_code="$(curl --http1.1 -sS -L -D /tmp/current-logo.headers -o /tmp/current-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?logo-warm=$GITHUB_RUN_ID-$i" || true)"
+            [ "$logo_code" = 200 ] && break
+            sleep 2
+          done
+          test "$logo_code" = 200
+          test -s /tmp/current-logo.webp
+          grep -qi '^x-wdcc-logo: owner-approved' /tmp/current-logo.headers
+          printf 'sha=%s\nurl=%s\nbuild=%s\nroot_http=%s\nhero_http=%s\nlogo_http=%s\n' "$GITHUB_SHA" "$URL" "$build" "$code" "$asset_code" "$logo_code" > current-owner-proof/remote-integrity.txt
+
+      - name: Capture and prove current owner board
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import {chromium} from 'playwright';
-          const base=process.env.URL,sha=process.env.GITHUB_SHA,out='current-owner-proof';
-          fs.mkdirSync(out,{recursive:true});
-          const result={sha,url:base,mobile:{},desktop:{},dealer:{},writes:[],pass:false};
-          const fail=(name,data={})=>{throw new Error(`${name}_${JSON.stringify(data)}`)};
-          const rect=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom,cx:r.x+r.width/2}:null};
-          const tracks=e=>getComputedStyle(e).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
-          const browser=await chromium.launch({headless:true});
-          const watch=p=>p.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writes.push({method:r.method(),url:r.url()})});
-          const skipIntro=async p=>{const intro=p.locator('.li');if(await intro.count()){const b=p.getByRole('button',{name:/skip intro/i});if(await b.count())await b.click().catch(()=>{});await intro.waitFor({state:'detached',timeout:7000}).catch(()=>{})}};
-          const wireDealer=async p=>{
-            const session={authenticated:true,name:'WDCC Owner Review',role:'dealer_agent',tenantId:'wdcc',user:{id:'owner-visual',displayName:'WDCC Owner Review',role:'dealer_agent',tenantId:'wdcc'}};
-            const dashboard={summary:{soldThisWeek:0,newToday:0,appointments:0,applications:0,messages:0},inventory:[],leads:[]};
-            await p.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
-            await p.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
-            await p.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
-            await p.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
-          };
-          try{
-            const mc=await browser.newContext({viewport:{width:390,height:844},screen:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
-            const m=await mc.newPage();watch(m);
-            let response=await m.goto(`${base}/?owner-review=1&current-board=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            if(!response||response.status()!==200)fail('MOBILE_HOME_HTTP',{status:response?.status()||0});
-            await m.locator('.li').waitFor({state:'visible',timeout:10000});
-            await m.locator('.li-scene img').waitFor({state:'visible',timeout:10000});
-            await m.locator('.li-badge img').waitFor({state:'visible',timeout:10000});
-            await m.waitForFunction(()=>[document.querySelector('.li-scene img'),document.querySelector('.li-badge img')].every(x=>x&&x.complete&&x.naturalWidth>0),null,{timeout:10000});
-            await m.screenshot({path:`${out}/mobile-intro.png`});
-            await skipIntro(m);
-            await m.locator('.reference-home').waitFor({state:'visible',timeout:10000});
-            await m.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
-            await m.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
-            const mm=await m.evaluate(()=>{
-              const q=s=>document.querySelector(s),R=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom,cx:r.x+r.width/2}:null};
-              const header=q('[data-wdcc-public-chrome="header"]'),logo=q('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]'),call=q('.rh-call'),utility=q('[data-wdcc-public-chrome="utility"]'),hero=q('.rh-hero'),art=q('.rh-hero-art'),benefits=q('.rh-benefits'),grid=q('.rh-grid');
-              const cards=[...grid.children].map(R),ctas=[...document.querySelectorAll('.rh-hero-actions .rh-btn')].map(e=>({text:(e.textContent||'').trim(),...R(e)}));
-              const us=utility?getComputedStyle(utility):null,cs=getComputedStyle(call);
-              return{winW:innerWidth,header:R(header),logo:R(logo),logoSrc:logo?.getAttribute('src')||'',logoNatural:[logo?.naturalWidth||0,logo?.naturalHeight||0],call:R(call),callRadius:cs.borderTopLeftRadius,utility:R(utility),utilityDisplay:us?.display||'none',hero:R(hero),heroLoaded:Boolean(art?.complete&&art?.naturalWidth>0),heroNatural:[art?.naturalWidth||0,art?.naturalHeight||0],headline:[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim()),benefitTracks:getComputedStyle(benefits).gridTemplateColumns.split(/\s+/).filter(Boolean).length,ctas,cards,banner:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),overflow:document.documentElement.scrollWidth-innerWidth};
-            });
-            if(mm.header.h<60||mm.header.h>68||Math.abs(mm.header.y)>2)fail('MOBILE_HEADER_HEIGHT',mm);
-            if(mm.logo.w<58||mm.logo.w>66||mm.logo.h<58||mm.logo.h>66||Math.abs(mm.logo.cx-mm.winW/2)>4||mm.logoSrc!=='/wdcc-owner-logo'||mm.logoNatural[0]<20)fail('MOBILE_LOGO',mm);
-            if(mm.call.w<40||mm.call.w>44||Math.abs(mm.call.w-mm.call.h)>1||mm.callRadius!=='50%')fail('MOBILE_CALL',mm);
-            if(mm.utilityDisplay!=='none'&&(mm.utility?.h||0)>1)fail('MOBILE_UTILITY_VISIBLE',mm);
-            if(!mm.heroLoaded||Math.abs(mm.hero.y-mm.header.bottom)>2)fail('MOBILE_HERO',mm);
-            if(JSON.stringify(mm.headline)!==JSON.stringify(['BAD CREDIT?','NO CREDIT?',"WE DON'T CARE."]))fail('MOBILE_HEADLINE',mm);
-            if(mm.benefitTracks!==4)fail('MOBILE_BENEFITS',mm);
-            if(mm.ctas.length!==2||mm.ctas.some(x=>x.w<340)||mm.ctas[1].y<=mm.ctas[0].bottom)fail('MOBILE_CTAS',mm);
-            if(!/NOT LIVE/i.test(mm.banner)||mm.cards.length!==5||mm.cards[0].w<100||mm.cards[0].w>135||!mm.cards[2]||mm.cards[2].right>390)fail('MOBILE_FEATURED_THREE_CARD_STRIP',mm);
-            if(mm.overflow>2)fail('MOBILE_OVERFLOW',mm);
-            result.mobile.home=mm;
-            await m.screenshot({path:`${out}/mobile-home.png`,fullPage:true});
-
-            response=await m.goto(`${base}/inventory?owner-review=1&current-board=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            if(!response||response.status()!==200)fail('MOBILE_INVENTORY_HTTP',{status:response?.status()||0});
-            await m.locator('.inventoryGrid').waitFor({state:'visible',timeout:10000});
-            const mi=await m.evaluate(()=>({tracks:getComputedStyle(document.querySelector('.inventoryGrid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,controls:Boolean(document.querySelector('.publicInventoryControls')),banner:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),overflow:document.documentElement.scrollWidth-innerWidth}));
-            if(mi.tracks!==1||!mi.controls||! /NOT LIVE/i.test(mi.banner)||mi.overflow>2)fail('MOBILE_INVENTORY',mi);
-            result.mobile.inventory=mi;await m.screenshot({path:`${out}/mobile-inventory.png`,fullPage:true});
-            await mc.close();
-
-            const dc=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
-            const d=await dc.newPage();watch(d);
-            response=await d.goto(`${base}/?owner-review=1&current-board=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            if(!response||response.status()!==200)fail('DESKTOP_HOME_HTTP',{status:response?.status()||0});
-            await skipIntro(d);await d.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
-            const dm=await d.evaluate(()=>{const art=document.querySelector('.rh-hero-art'),utility=document.querySelector('[data-wdcc-public-chrome="utility"]'),grid=document.querySelector('.rh-grid'),logo=document.querySelector('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');return{heroLoaded:Boolean(art?.complete&&art?.naturalWidth>0),utilityH:utility?.getBoundingClientRect().height||0,logoW:logo?.getBoundingClientRect().width||0,headline:[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim()),benefitTracks:getComputedStyle(document.querySelector('.rh-benefits')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,gridDisplay:getComputedStyle(grid).display,gridTracks:getComputedStyle(grid).gridTemplateColumns.split(/\s+/).filter(Boolean).length,cards:grid.children.length,overflow:document.documentElement.scrollWidth-innerWidth}});
-            if(!dm.heroLoaded||dm.utilityH<20||dm.logoW<60||JSON.stringify(dm.headline)!==JSON.stringify(['BAD CREDIT?','NO CREDIT?',"WE DON'T CARE."])||dm.benefitTracks!==4||dm.gridDisplay!=='grid'||dm.gridTracks!==5||dm.cards!==5||dm.overflow>2)fail('DESKTOP_HOME',dm);
-            result.desktop.home=dm;await d.screenshot({path:`${out}/desktop-home.png`,fullPage:true});
-
-            response=await d.goto(`${base}/inventory?owner-review=1&current-board=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-            if(!response||response.status()!==200)fail('DESKTOP_INVENTORY_HTTP',{status:response?.status()||0});
-            await d.locator('.inventoryGrid').waitFor({state:'visible',timeout:10000});
-            const di=await d.evaluate(()=>({tracks:getComputedStyle(document.querySelector('.inventoryGrid')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,controls:Boolean(document.querySelector('.publicInventoryControls')),overflow:document.documentElement.scrollWidth-innerWidth}));
-            if(di.tracks!==3||!di.controls||di.overflow>2)fail('DESKTOP_INVENTORY',di);
-            result.desktop.inventory=di;await d.screenshot({path:`${out}/desktop-inventory.png`,fullPage:true});
-
-            const dealer=await dc.newPage();watch(dealer);await wireDealer(dealer);
-            for(const spec of [{name:'dashboard',path:'/dealer',selector:'.dealerDashboardLocked'},{name:'inventory',path:'/dealer/inventory',selector:'.inventoryContract'},{name:'editor',path:'/dealer/inventory/new',selector:'.editVehicleApp'}]){
-              response=await dealer.goto(`${base}${spec.path}?current-board=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              if(!response||response.status()!==200)fail(`DEALER_${spec.name.toUpperCase()}_HTTP`,{status:response?.status()||0});
-              await dealer.locator(spec.selector).waitFor({state:'visible',timeout:10000});
-              if(spec.name==='editor'){const steps=await dealer.locator('.stepper button').count();if(steps!==5)fail('DEALER_EDITOR_STEPS',{steps});result.dealer.editor={steps};const photos=dealer.locator('.stepper button').filter({hasText:/photos/i}).first();if(await photos.count())await photos.click().catch(()=>{});}
-              await dealer.screenshot({path:`${out}/dealer-${spec.name}-desktop.png`,fullPage:true});
-            }
-            await dc.close();
-            if(result.writes.length)fail('OWNER_PROOF_WRITE_REQUESTS',result.writes);
-            result.pass=true;fs.writeFileSync(`${out}/result.json`,JSON.stringify(result,null,2)+'\n');
-            console.log('WDCC_CURRENT_OWNER_APPROVAL_PASS',JSON.stringify({sha,mobileHeader:result.mobile.home.header.h,mobileLogo:result.mobile.home.logo.w,mobileBenefits:result.mobile.home.benefitTracks,mobileCardWidth:result.mobile.home.cards[0].w,desktopCards:result.desktop.home.cards,writes:result.writes.length}));
-          } finally {await browser.close()}
-          NODE
+          node .github/support/wdcc-current-owner-proof.mjs
 
       - name: Require exact current branch head
         shell: bash
