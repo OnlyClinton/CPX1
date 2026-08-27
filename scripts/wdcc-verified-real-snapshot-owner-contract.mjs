@@ -6,7 +6,7 @@ import {pathToFileURL} from 'node:url';
   The base fixture owns the populated visual data while this wrapper aligns legacy
   mechanical assertions with the current FINAL VISUAL AUTHORITY:
     - desktop Featured Inventory: five compact columns
-    - phone Featured Inventory: one dominant readable card plus controlled next-card peek
+    - phone Featured Inventory: dense horizontal strip with roughly three compact cards visible
     - full /inventory: three columns desktop, one column mobile
     - phone Add/Edit: one full-width readable field column at 390px
   It also corrects drawer visibility semantics: the off-canvas sidebar does not
@@ -22,7 +22,7 @@ if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIF
 code=code.replace(editorFrom,editorTo);
 
 const densityFrom="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.46||d.cardW<d.viewport*.28||d.secondX>=d.viewport)fail('MOBILE_FEATURED_DENSITY_3294',d)";
-const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.88||d.cardW<d.viewport*.72||d.secondX>=d.viewport*.96||d.secondX<=d.viewport*.78)fail('MOBILE_FEATURED_DENSITY_3294',d)";
+const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.34||d.cardW<d.viewport*.26||d.secondX>=d.viewport*.5)fail('MOBILE_FEATURED_DENSITY_3294',d)";
 if(!code.includes(densityFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${densityFrom}`);
 code=code.replace(densityFrom,densityTo);
 
