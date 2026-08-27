@@ -1,0 +1,205 @@
+name: WDCC WebGPU Owner Preview
+
+on:
+  push:
+    branches:
+      - feat/wdcc-webgpu-intro-owner-override-20260827
+    paths:
+      - 'app/LockedIntro.tsx'
+      - 'app/ReferenceCloneHome.tsx'
+      - 'public/wdcc-hero-v2.webp'
+      - 'OWNER_WEBGPU_THREE_INTRO_OVERRIDE_20260827.md'
+      - '.github/workflows/wdcc-webgpu-owner-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-webgpu-owner-preview-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  owner-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate owner WebGPU lane
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -s OWNER_WEBGPU_THREE_INTRO_OVERRIDE_20260827.md
+          test -s app/LockedIntro.tsx
+          test -s public/wdcc-hero-v2.webp
+          grep -q 'three.webgpu.min.js' app/LockedIntro.tsx
+          grep -q 'WebGPURenderer' app/LockedIntro.tsx
+          grep -q 'WebGLRenderer' app/LockedIntro.tsx
+          grep -q 'li-wheel-front' app/LockedIntro.tsx
+          grep -q 'TAP FOR DEEP SOUND' app/LockedIntro.tsx
+          grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
+          grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
+          grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create SHA-specific no-route worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name=`wdcc-webgpu-${process.env.GITHUB_SHA}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.webgpu-owner.jsonc',JSON.stringify(cfg,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.webgpu-owner.jsonc
+          grep -q "$GITHUB_SHA" wrangler.webgpu-owner.jsonc
+
+      - name: Deploy immutable isolated owner preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.webgpu-owner.jsonc 2>&1 | tee /tmp/wdcc-webgpu-owner.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-webgpu-owner.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Preview is not SHA-specific: $url" >&2; exit 1;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > webgpu-owner-preview-url.txt
+
+      - name: Prove remote integrity
+        id: integrity
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 15); do
+            code="$(curl --http1.1 -sS -L -o /tmp/root.html -w '%{http_code}' "$REMOTE_URL/?owner-webgpu=warm-$GITHUB_SHA-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          [ "$code" = 200 ]
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq -- "$local_build" /tmp/root.html
+          curl --http1.1 -fsSL "$REMOTE_URL/wdcc-hero-v2.webp" -o /tmp/hero.webp
+          [ "$(sha256sum /tmp/hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')" ]
+          printf 'remote_url=%s\nbuild_id=%s\nroot_http=%s\n' "$REMOTE_URL" "$local_build" "$code" > webgpu-owner-integrity.txt
+
+      - name: Capture real intro motion and handoff
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const out='webgpu-owner-proof';
+          fs.mkdirSync(out,{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          try{
+            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
+            const page=await ctx.newPage();
+            const consoleErrors=[];
+            page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
+            page.on('pageerror',e=>consoleErrors.push(String(e)));
+            const start=Date.now();
+            const response=await page.goto(`${process.env.REMOTE_URL}/?owner-webgpu=1&owner-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:20000});
+            if(!response||response.status()!==200)throw new Error(`OWNER_PREVIEW_HTTP_${response?.status()||0}`);
+            await page.locator('.li').waitFor({state:'attached',timeout:10000});
+            await page.locator('.li-scene img').waitFor({state:'visible',timeout:5000});
+            await page.waitForFunction(()=>{const x=document.querySelector('.li-scene img');return x&&x.complete&&x.naturalWidth>0},null,{timeout:5000});
+            const root=page.locator('.li');
+            const wheel=page.locator('.li-wheel-front');
+            const sound=page.locator('.li-sound');
+            await page.waitForTimeout(120);
+            await page.screenshot({path:`${out}/mobile-01-opening.png`});
+            const transformA=await wheel.evaluate(el=>getComputedStyle(el).transform);
+            await sound.click();
+            const soundPressed=await sound.getAttribute('aria-pressed');
+            await page.waitForTimeout(290);
+            const transformB=await wheel.evaluate(el=>getComputedStyle(el).transform);
+            if(transformA===transformB)throw new Error(`WHEEL_SPIN_NOT_ADVANCING_${transformA}`);
+            await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
+            await page.waitForTimeout(300);
+            const renderMode=await root.getAttribute('data-render-mode');
+            if(renderMode!=='webgpu'&&renderMode!=='webgl')throw new Error(`THREE_RENDERER_FALLBACK_${renderMode}`);
+            const wheelBlur=await wheel.evaluate(el=>getComputedStyle(el).filter);
+            await page.screenshot({path:`${out}/mobile-03-gpu-settle.png`});
+            await page.waitForTimeout(370);
+            await page.screenshot({path:`${out}/mobile-04-logo-clear.png`});
+            await page.waitForTimeout(360);
+            const handoff=await page.evaluate(()=>({rootOpacity:Number(getComputedStyle(document.querySelector('.li')).opacity),uiOpacity:Number(getComputedStyle(document.querySelector('.rh-hero-inner')).opacity),docHandoff:document.documentElement.classList.contains('wdcc-intro-handoff')}));
+            await page.screenshot({path:`${out}/mobile-05-handoff.png`});
+            await page.waitForTimeout(420);
+            const introCount=await page.locator('.li').count();
+            const finalUi=await page.locator('.rh-hero-inner').evaluate(el=>Number(getComputedStyle(el).opacity));
+            await page.screenshot({path:`${out}/mobile-06-site.png`});
+            if(introCount!==0)throw new Error(`INTRO_NOT_DISPOSED_${introCount}`);
+            if(finalUi<.95)throw new Error(`SITE_UI_NOT_VISIBLE_${finalUi}`);
+            fs.writeFileSync(`${out}/metrics.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,elapsedMs:Date.now()-start,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi,consoleErrors},null,2)+'\n');
+            await ctx.close();
+          }finally{await browser.close()}
+          NODE
+
+      - name: Publish owner preview summary
+        if: always()
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo '### WDCC WebGPU / Three.js owner preview' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable preview: ${REMOTE_URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s webgpu-owner-proof/metrics.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const p=require('./webgpu-owner-proof/metrics.json');
+          console.log(`Renderer: ${p.renderMode}`);
+          console.log(`Wheel transform advanced: ${p.transformA!==p.transformB?'YES':'NO'}`);
+          console.log(`Sound control activated: ${p.soundPressed}`);
+          console.log(`Intro disposed after handoff: ${p.introCount===0?'YES':'NO'}`);
+          console.log(`Final site UI opacity: ${p.finalUi}`);
+          NODE
+          fi
+          echo 'Preview only. No production route or alias was changed.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-webgpu-owner-${{ github.sha }}
+          path: |
+            webgpu-owner-preview-url.txt
+            webgpu-owner-integrity.txt
+            webgpu-owner-proof/
+          if-no-files-found: warn
+          retention-days: 7
