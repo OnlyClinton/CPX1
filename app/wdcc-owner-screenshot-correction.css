@@ -1,111 +1,9 @@
-/* Owner screenshot correction — preview-only and intentionally loaded last.
-   Final authority for the actual defects seen on owner Android review.
-   Preserve the centered intro from LockedIntro and the exact owner-approved emblem from the DOM. */
-
-/* Persistent public header: large owner-approved emblem, complete and unclipped. */
-html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-  grid-template-columns:112px minmax(0,1fr) auto!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo{
-  width:104px!important;
-  min-width:104px!important;
-  height:78px!important;
-  display:grid!important;
-  place-items:center!important;
-  overflow:visible!important;
-  background:none!important;
-  filter:none!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo::before,
-html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
-  content:normal!important;
-  display:block!important;
-  visibility:visible!important;
-  opacity:1!important;
-  position:relative!important;
-  inset:auto!important;
-  width:96px!important;
-  min-width:96px!important;
-  max-width:96px!important;
-  height:96px!important;
-  min-height:96px!important;
-  max-height:96px!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  border:0!important;
-  border-radius:0!important;
-  clip-path:none!important;
-  background:transparent!important;
-  box-shadow:none!important;
-  filter:drop-shadow(0 5px 12px rgba(0,0,0,.46))!important;
-  transform:none!important;
-}
-
-/* Do not override .li-badge or .li-tag here.
-   LockedIntro + owner-approved-logo-final own the centered dominant intro. */
+/* Owner screenshot correction — preview-only inventory optics.
+   This late layer MUST NOT own intro or public-logo rendering.
+   Logo authority lives exclusively in wdcc-owner-approved-logo-final.css. */
 
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
-  /* Exactly one phone header: hamburger | large emblem | call. */
-  html body [data-wdcc-public-chrome="utility"]{
-    display:none!important;
-    height:0!important;
-    min-height:0!important;
-    max-height:0!important;
-    visibility:hidden!important;
-    opacity:0!important;
-    overflow:hidden!important;
-  }
-  html body [data-wdcc-public-chrome="header"]{
-    top:0!important;
-    height:78px!important;
-    min-height:78px!important;
-    max-height:78px!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-    width:calc(100% - 20px)!important;
-    height:78px!important;
-    min-height:78px!important;
-    grid-template-columns:50px minmax(0,1fr) 50px!important;
-    gap:8px!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-menu,
-  html body [data-wdcc-public-chrome="header"] .rh-call{
-    display:grid!important;
-    width:48px!important;
-    height:48px!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-header-actions{display:none!important}
-  html body [data-wdcc-public-chrome="header"] #wdcc-public-nav:not(.open){display:none!important}
-  html body [data-wdcc-public-chrome="header"] #wdcc-public-nav.open{
-    display:grid!important;
-    position:absolute!important;
-    left:0!important;
-    right:0!important;
-    top:78px!important;
-    z-index:10!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-logo{
-    grid-column:2!important;
-    grid-row:1!important;
-    width:112px!important;
-    min-width:112px!important;
-    height:78px!important;
-    justify-self:center!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
-    width:100px!important;
-    min-width:100px!important;
-    max-width:100px!important;
-    height:100px!important;
-    min-height:100px!important;
-    max-height:100px!important;
-    object-fit:contain!important;
-    border-radius:0!important;
-    clip-path:none!important;
-  }
-
-  /* Home featured inventory: one readable card plus a controlled next-card peek. */
+  /* Home Featured Inventory: one readable card plus controlled next-card peek. */
   html body main.reference-home.locked-storefront .rh-grid{
     display:flex!important;
     grid-template-columns:none!important;
@@ -132,7 +30,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:17px!important;min-height:0!important}
   html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:25px!important}
 
-  /* Full inventory: browseable cards while real uploaded photos remain provider-blocked. */
+  /* Full inventory: browseable cards while uploaded photos remain provider-blocked. */
   html body .inventoryPage [class*="WdccVehicleCard_photo__"]{
     aspect-ratio:1.95!important;
     min-height:0!important;
@@ -148,16 +46,4 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   html body .inventoryPage [class*="WdccVehicleCard_down__"]{font-size:10.5px!important}
   html body .inventoryPage [class*="WdccVehicleCard_actions__"]{margin-top:10px!important;gap:7px!important}
   html body .inventoryPage [class*="WdccVehicleCard_actions__"] a{min-height:44px!important;font-size:9.5px!important}
-}
-
-@media(max-width:420px){
-  html body [data-wdcc-public-chrome="header"] .rh-logo{width:108px!important;min-width:108px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
-    width:96px!important;
-    min-width:96px!important;
-    max-width:96px!important;
-    height:96px!important;
-    min-height:96px!important;
-    max-height:96px!important;
-  }
 }
