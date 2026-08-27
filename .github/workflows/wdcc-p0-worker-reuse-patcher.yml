@@ -64,9 +64,12 @@ jobs:
             "          echo 'P0_EXACT_UNROUTED_REUSE_PREFLIGHT=PASS'",
             '',
           ]
-          preflight='\n'.join(lines)+'\n'
-          s=s.replace(marker,preflight+marker,1)
-          if 'wdcc-p0-state' in s or 'wdcc-p0-media' in s or 'wdcc-p0-dealer-app' in s: raise SystemExit('new-worker names remain')
+          s=s.replace(marker,'\n'.join(lines)+'\n'+marker,1)
+          active_old=[
+            '  STATE_WORKER: wdcc-p0-state\n','  MEDIA_WORKER: wdcc-p0-media\n','  APP_WORKER: wdcc-p0-dealer-app\n',
+            '  STATE_URL: https://wdcc-p0-state.clico-global.workers.dev\n','  MEDIA_URL: https://wdcc-p0-media.clico-global.workers.dev\n','  APP_URL: https://wdcc-p0-dealer-app.clico-global.workers.dev\n'
+          ]
+          if any(x in s for x in active_old): raise SystemExit('old active worker binding remains')
           if 'PROMOTE-WDCC-P0-DEALER-UPLOAD-NEON-E3332FEA' in s: raise SystemExit('old trigger remains')
           p.write_text(s)
           PY
