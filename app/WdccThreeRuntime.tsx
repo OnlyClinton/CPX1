@@ -1,55 +1,219 @@
 "use client";
 
-import {useEffect} from "react";
+import { useEffect } from "react";
 import * as THREE_GL from "three";
 
-type Runtime={renderer:any;scene:any;camera:any;objects:any[];raf:number;resize:()=>void;observer:MutationObserver|null};
+type ThreeMode = "webgpu" | "webgl";
 
-export default function WdccThreeRuntime(){
-  useEffect(()=>{
-    let runtime:Runtime|null=null;
-    let disposed=false;
-    let rootObserver:MutationObserver|null=null;
+export default function WdccThreeRuntime() {
+  useEffect(() => {
+    let disposed = false;
+    let currentRoot: HTMLElement | null = null;
+    let renderer: any = null;
+    let scene: any = null;
+    let camera: any = null;
+    let objects: any[] = [];
+    let raf = 0;
+    let resizeHandler: (() => void) | null = null;
+    let attributeObserver: MutationObserver | null = null;
+    let rootObserver: MutationObserver | null = null;
 
-    const dispose=()=>{
-      const r=runtime;if(!r)return;
-      cancelAnimationFrame(r.raf);window.removeEventListener("resize",r.resize);r.observer?.disconnect();
-      for(const o of r.objects){try{o.material?.map?.dispose?.();o.material?.dispose?.()}catch{}}
-      try{r.renderer?.dispose?.()}catch{}
-      try{r.renderer?.domElement?.remove?.()}catch{}
-      runtime=null;
-    };
+    const disposeScene = () => {
+      cancelAnimationFrame(raf);
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
+      attributeObserver?.disconnect();
+      attributeObserver = null;
+      resizeHandler = null;
 
-    const attach=async(root:HTMLElement)=>{
-      if(disposed||runtime||document.documentElement.classList.contains("wdcc-visual-proof"))return;
-      const host=root.querySelector<HTMLElement>(".li-gpu");if(!host)return;
-      let THREE:any=THREE_GL,renderer:any=null,mode="webgl";
-      if("gpu" in navigator){
-        try{const WEBGPU:any=await import("three/webgpu");renderer=new WEBGPU.WebGPURenderer({alpha:true,antialias:true});if(renderer.init)await renderer.init();THREE=WEBGPU;mode="webgpu"}catch{renderer=null;THREE=THREE_GL;mode="webgl"}
+      for (const object of objects) {
+        try { object.material?.map?.dispose?.(); } catch {}
+        try { object.material?.dispose?.(); } catch {}
       }
-      if(!renderer){try{renderer=new (THREE_GL as any).WebGLRenderer({alpha:true,antialias:true,powerPreference:"high-performance"})}catch{return}
-      if(disposed||!root.isConnected){try{renderer.dispose()}catch{};return}
-      const setMode=()=>{root.dataset.threeRuntimeMode=mode;root.dataset.renderMode=mode};setMode();
-      const observer=new MutationObserver(()=>{if(root.dataset.threeRuntimeMode!==mode)root.dataset.threeRuntimeMode=mode;if(root.dataset.renderMode!==mode)root.dataset.renderMode=mode});
-      observer.observe(root,{attributes:true,attributeFilter:["data-render-mode","data-three-runtime-mode"]});
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.setClearColor(0x000000,0);renderer.domElement.setAttribute("aria-hidden","true");host.replaceChildren(renderer.domElement);
-      const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,10);camera.position.z=2;
-      const objects:any[]=[];
-      const radial=(inner:string,outer:string)=>{const c=document.createElement("canvas");c.width=c.height=96;const x=c.getContext("2d");if(!x)return null;const g=x.createRadialGradient(48,48,0,48,48,48);g.addColorStop(0,inner);g.addColorStop(.24,inner);g.addColorStop(1,outer);x.fillStyle=g;x.fillRect(0,0,96,96);const tex=new THREE.CanvasTexture(c);tex.needsUpdate=true;return tex};
-      const smokeTex=radial("rgba(236,243,248,.38)","rgba(184,204,218,0)");
-      if(smokeTex)for(let i=0;i<10;i++){const mat=new THREE.SpriteMaterial({map:smokeTex,transparent:true,depthWrite:false,opacity:.045+Math.random()*.05});const s=new THREE.Sprite(mat);s.position.set(-1.12+Math.random()*2.24,-.76+Math.random()*1.52,.1);const k=.28+Math.random()*.48;s.scale.set(k,k*.58,1);s.userData={vx:(Math.random()-.5)*.00013,vy:.00009+Math.random()*.00011,base:mat.opacity,smoke:true};scene.add(s);objects.push(s)}
-      const blue=radial("rgba(205,237,255,.74)","rgba(42,149,255,0)"),red=radial("rgba(255,176,176,.46)","rgba(255,36,48,0)");
-      const flare=(tex:any,x:number,y:number,sx:number,sy:number,opacity:number)=>{if(!tex)return;const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,opacity});const s=new THREE.Sprite(mat);s.position.set(x,y,.2);s.scale.set(sx,sy,1);s.userData={base:opacity,smoke:false};scene.add(s);objects.push(s)};
-      flare(blue,-.50,-.30,.38,.20,.18);flare(blue,-.14,-.30,.31,.17,.14);flare(red,.73,-.59,.46,.22,.09);
-      const resize=()=>renderer.setSize(host.clientWidth||window.innerWidth,host.clientHeight||window.innerHeight,false);resize();window.addEventListener("resize",resize,{passive:true});
-      const started=performance.now();let raf=0,last=started;
-      const frame=(now:number)=>{if(disposed||!root.isConnected){dispose();return}const elapsed=(now-started)/1000,dt=Math.min(.034,(now-last)/1000);last=now;const settle=1-Math.min(1,Math.max(0,(elapsed-.20)/1.02));for(const o of objects){if(o.userData?.smoke){o.position.x+=o.userData.vx*(dt*1000);o.position.y+=o.userData.vy*(dt*1000);o.material.opacity=o.userData.base*settle}else{o.material.opacity=o.userData.base*(.45+.55*settle)}}try{renderer.render(scene,camera)}catch{};if(elapsed<1.84)raf=requestAnimationFrame(frame)};raf=requestAnimationFrame(frame);
-      runtime={renderer,scene,camera,objects,raf,resize,observer};
+      objects = [];
+
+      try { renderer?.dispose?.(); } catch {}
+      try { renderer?.domElement?.remove?.(); } catch {}
+      renderer = null;
+      scene = null;
+      camera = null;
+      currentRoot = null;
     };
 
-    const scan=()=>{const root=document.querySelector<HTMLElement>('[data-wdcc-cinematic-intro="webgpu-three"]');if(root)void attach(root);else dispose()};
-    scan();rootObserver=new MutationObserver(scan);rootObserver.observe(document.body,{childList:true,subtree:true});
-    return()=>{disposed=true;rootObserver?.disconnect();dispose()};
-  },[]);
+    const attach = async (root: HTMLElement) => {
+      if (disposed || currentRoot === root) return;
+      if (document.documentElement.classList.contains("wdcc-visual-proof")) return;
+
+      const host = root.querySelector<HTMLElement>(".li-gpu");
+      if (!host) return;
+      currentRoot = root;
+
+      let THREE: any = THREE_GL;
+      let mode: ThreeMode = "webgl";
+      let localRenderer: any = null;
+
+      if ("gpu" in navigator) {
+        try {
+          const THREE_GPU: any = await import("three/webgpu");
+          localRenderer = new THREE_GPU.WebGPURenderer({ alpha: true, antialias: true });
+          if (localRenderer.init) await localRenderer.init();
+          THREE = THREE_GPU;
+          mode = "webgpu";
+        } catch {
+          localRenderer = null;
+          THREE = THREE_GL;
+          mode = "webgl";
+        }
+      }
+
+      if (!localRenderer) {
+        try {
+          localRenderer = new (THREE_GL as any).WebGLRenderer({
+            alpha: true,
+            antialias: true,
+            powerPreference: "high-performance"
+          });
+        } catch {
+          currentRoot = null;
+          return;
+        }
+      }
+
+      if (disposed || !root.isConnected || currentRoot !== root) {
+        try { localRenderer.dispose?.(); } catch {}
+        return;
+      }
+
+      renderer = localRenderer;
+      const publishMode = () => {
+        root.dataset.threeRuntimeMode = mode;
+        root.dataset.renderMode = mode;
+      };
+      publishMode();
+      attributeObserver = new MutationObserver(publishMode);
+      attributeObserver.observe(root, {
+        attributes: true,
+        attributeFilter: ["data-render-mode", "data-three-runtime-mode"]
+      });
+
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.setClearColor(0x000000, 0);
+      renderer.domElement.setAttribute("aria-hidden", "true");
+      host.replaceChildren(renderer.domElement);
+
+      scene = new THREE.Scene();
+      camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+      camera.position.z = 2;
+
+      const radialTexture = (inner: string, outer: string) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 96;
+        const context = canvas.getContext("2d");
+        if (!context) return null;
+        const gradient = context.createRadialGradient(48, 48, 0, 48, 48, 48);
+        gradient.addColorStop(0, inner);
+        gradient.addColorStop(0.24, inner);
+        gradient.addColorStop(1, outer);
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 96, 96);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        return texture;
+      };
+
+      const smokeTexture = radialTexture("rgba(236,243,248,.38)", "rgba(184,204,218,0)");
+      if (smokeTexture) {
+        for (let i = 0; i < 10; i += 1) {
+          const material = new THREE.SpriteMaterial({
+            map: smokeTexture,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.045 + Math.random() * 0.05
+          });
+          const sprite = new THREE.Sprite(material);
+          sprite.position.set(-1.12 + Math.random() * 2.24, -0.76 + Math.random() * 1.52, 0.1);
+          const scale = 0.28 + Math.random() * 0.48;
+          sprite.scale.set(scale, scale * 0.58, 1);
+          sprite.userData = {
+            vx: (Math.random() - 0.5) * 0.00013,
+            vy: 0.00009 + Math.random() * 0.00011,
+            base: material.opacity,
+            smoke: true
+          };
+          scene.add(sprite);
+          objects.push(sprite);
+        }
+      }
+
+      const blue = radialTexture("rgba(205,237,255,.74)", "rgba(42,149,255,0)");
+      const red = radialTexture("rgba(255,176,176,.46)", "rgba(255,36,48,0)");
+      const addFlare = (texture: any, x: number, y: number, sx: number, sy: number, opacity: number) => {
+        if (!texture) return;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity });
+        const sprite = new THREE.Sprite(material);
+        sprite.position.set(x, y, 0.2);
+        sprite.scale.set(sx, sy, 1);
+        sprite.userData = { base: opacity, smoke: false };
+        scene.add(sprite);
+        objects.push(sprite);
+      };
+      addFlare(blue, -0.50, -0.30, 0.38, 0.20, 0.18);
+      addFlare(blue, -0.14, -0.30, 0.31, 0.17, 0.14);
+      addFlare(red, 0.73, -0.59, 0.46, 0.22, 0.09);
+
+      resizeHandler = () => {
+        if (!renderer || !host.isConnected) return;
+        renderer.setSize(host.clientWidth || window.innerWidth, host.clientHeight || window.innerHeight, false);
+      };
+      resizeHandler();
+      window.addEventListener("resize", resizeHandler, { passive: true });
+
+      const started = performance.now();
+      let last = started;
+      const frame = (now: number) => {
+        if (disposed || !root.isConnected || currentRoot !== root) {
+          disposeScene();
+          return;
+        }
+        const elapsed = (now - started) / 1000;
+        const dt = Math.min(0.034, (now - last) / 1000);
+        last = now;
+        const settle = 1 - Math.min(1, Math.max(0, (elapsed - 0.20) / 1.02));
+
+        for (const object of objects) {
+          if (object.userData?.smoke) {
+            object.position.x += object.userData.vx * (dt * 1000);
+            object.position.y += object.userData.vy * (dt * 1000);
+            object.material.opacity = object.userData.base * settle;
+          } else {
+            object.material.opacity = object.userData.base * (0.45 + 0.55 * settle);
+          }
+        }
+
+        try { renderer.render(scene, camera); } catch {}
+        if (elapsed < 1.84) raf = requestAnimationFrame(frame);
+      };
+      raf = requestAnimationFrame(frame);
+    };
+
+    const scan = () => {
+      const root = document.querySelector<HTMLElement>('[data-wdcc-cinematic-intro="webgpu-three"]');
+      if (root) {
+        void attach(root);
+      } else if (currentRoot) {
+        disposeScene();
+      }
+    };
+
+    scan();
+    rootObserver = new MutationObserver(scan);
+    rootObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      disposed = true;
+      rootObserver?.disconnect();
+      disposeScene();
+    };
+  }, []);
+
   return null;
 }
