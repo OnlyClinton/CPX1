@@ -48,14 +48,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/wdcc-owner-target
-          node <<'NODE'
-          const fs=require('fs');
-          const {chromium}=require('playwright');
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
           const base=process.env.URL,sha=process.env.GITHUB_SHA;
           if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA_PREVIEW ${base} ${sha}`);
           const result={base,sha,pages:{},writes:[]};
           const fail=(name,data={})=>{throw new Error(`${name}_${JSON.stringify(data)}`)};
-          const visible=async l=>l.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0&&r.width>1&&r.height>1});
           const grid=async l=>l.evaluate(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,w:r.width,h:r.height}});
           const browser=await chromium.launch({headless:true});
 
@@ -74,10 +73,11 @@ jobs:
               const r=logo?.getBoundingClientRect(),s=logo?getComputedStyle(logo):null;
               const utility=document.querySelector('[data-wdcc-public-chrome="utility"]');
               const us=utility?getComputedStyle(utility):null,ur=utility?.getBoundingClientRect();
-              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,w:r?.width||0,h:r?.height||0,display:s?.display||'',visibility:s?.visibility||'',opacity:Number(s?.opacity||0),utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),count:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').length};
+              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,w:r?.width||0,h:r?.height||0,cx:r?r.x+r.width/2:0,winW:innerWidth,display:s?.display||'',visibility:s?.visibility||'',opacity:Number(s?.opacity||0),clipPath:s?.clipPath||'',content:s?.content||'',utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),count:document.querySelectorAll('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]').length};
             });
-            if(!x.found||x.count!==1||!x.complete||x.naturalWidth<20||x.naturalHeight<20||!x.src.startsWith('data:image/')||x.display==='none'||x.visibility==='hidden'||x.opacity<=0)fail(`${name}_OWNER_LOGO_LOAD`,x);
+            if(!x.found||x.count!==1||!x.complete||x.naturalWidth<20||x.naturalHeight<20||!x.src.startsWith('data:image/')||x.display==='none'||x.visibility==='hidden'||x.opacity<=0||x.content!=='normal'||x.clipPath!=='none')fail(`${name}_OWNER_LOGO_LOAD`,x);
             if(x.w<72||x.w>104||x.h<72||x.h>104||x.w/Math.max(x.h,1)<.82||x.w/Math.max(x.h,1)>1.18)fail(`${name}_OWNER_LOGO_GEOMETRY`,x);
+            if(isMobile&&Math.abs(x.cx-x.winW/2)>4)fail(`${name}_OWNER_LOGO_CENTER`,x);
             if(isMobile&&x.utilityVisible)fail(`${name}_MOBILE_UTILITY_VISIBLE`,x);
             if(!isMobile&&!x.utilityVisible)fail(`${name}_DESKTOP_UTILITY_MISSING`,x);
             return x;
