@@ -20,6 +20,8 @@ env:
   VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
   RECOVERY_MODE: drive-r6-20260822
+  NEON_AUTH_BASE: https://ep-autumn-union-aym7q37b.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+  NEON_DATA_API: https://ep-autumn-union-aym7q37b.apirest.c-5.us-east-2.aws.neon.tech/neondb/rest/v1
 
 jobs:
   build-safety:
@@ -35,6 +37,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Verify isolated Vercel build and recovery guard
+        env:
+          VERCEL_ENV: preview
+          WDCC_PREVIEW_RECOVERY_STATE: ${{ env.RECOVERY_MODE }}
         run: |
           set -euo pipefail
           node - <<'NODE'
@@ -46,6 +51,8 @@ jobs:
           if(!recovery.includes('process.env.WDCC_PREVIEW_RECOVERY_STATE===RECOVERY_MODE')) throw new Error('recovery selector guard missing');
           const store=fs.readFileSync('lib/store.ts','utf8');
           if(!store.includes('PREVIEW_RECOVERY_READ_ONLY')) throw new Error('recovery write lock missing');
+          const auth=fs.readFileSync('lib/wdccNeonRecovery.ts','utf8');
+          if(!auth.includes('/sign-in/email')||!auth.includes('/get-session')||!auth.includes('set-auth-jwt')) throw new Error('Neon recovery auth bridge incomplete');
           NODE
           npm run build
 
@@ -88,7 +95,11 @@ jobs:
             --token="$VERCEL_TOKEN" \
             --scope=cpxagency \
             --env "WDCC_PREVIEW_RECOVERY_STATE=$RECOVERY_MODE" \
+            --env "WDCC_NEON_AUTH_BASE_URL=$NEON_AUTH_BASE" \
+            --env "WDCC_NEON_DATA_API_URL=$NEON_DATA_API" \
             --build-env "WDCC_PREVIEW_RECOVERY_STATE=$RECOVERY_MODE" \
+            --build-env "WDCC_NEON_AUTH_BASE_URL=$NEON_AUTH_BASE" \
+            --build-env "WDCC_NEON_DATA_API_URL=$NEON_DATA_API" \
             2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
           clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
@@ -127,7 +138,44 @@ jobs:
             jq -n --arg code "$code" '{classification:"inventory-blocked",http:$code,inventoryQueried:true,productionTouched:false}' > recovery-result.json
             exit 1
           fi
-          jq -n --arg url "$URL" --arg sha "$GITHUB_SHA" --arg mode "$RECOVERY_MODE" --argjson count "$(jq '.items|length' inventory.json)" '{classification:"preview-recovered",sha:$sha,url:$url,recoveryMode:$mode,inventoryCount:$count,productionTouched:false,blobRequests:0,authCertified:false}' > recovery-result.json
+
+      - name: Neon auth and protected-route boundary
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          session_code="$(curl -sS -D session.headers -o session.json -w '%{http_code}' "$URL/api/auth/session")"
+          test "$session_code" = 200
+          jq -e '.authenticated==false and .recovery==true' session.json >/dev/null
+          grep -qi '^x-wdcc-recovery-auth: neon' session.headers
+
+          crm_code="$(curl -sS -o crm.json -w '%{http_code}' "$URL/api/crm/dashboard")"
+          test "$crm_code" = 401
+          jq -e '.ok==false and .recovery==true' crm.json >/dev/null
+
+          admin_code="$(curl -sS -o admin.json -w '%{http_code}' "$URL/api/admin/users")"
+          test "$admin_code" = 401
+          jq -e '.ok==false and .recovery==true' admin.json >/dev/null
+
+          login_code="$(curl -sS -D login.headers -o login.json -w '%{http_code}' -X POST "$URL/api/auth/login" -H 'content-type: application/json' --data '{"email":"wdcc-recovery-proof@invalid.example","password":"NotARealCredential-2026!"}')"
+          test "$login_code" = 401
+          jq -e '.ok==false and .error=="invalid_credentials" and .recovery==true' login.json >/dev/null
+          grep -qi '^x-wdcc-recovery-auth: neon' login.headers
+
+          lock_code="$(curl -sS -o admin-write.json -w '%{http_code}' -X POST "$URL/api/admin/users" -H 'content-type: application/json' --data '{}')"
+          test "$lock_code" = 423
+          jq -e '.error=="RECOVERY_READ_ONLY" and .recovery==true' admin-write.json >/dev/null
+
+          jq -n --arg session "$session_code" --arg crm "$crm_code" --arg admin "$admin_code" --arg login "$login_code" --arg lock "$lock_code" '{session:$session,crmUnauthenticated:$crm,adminUnauthenticated:$admin,invalidCredential:$login,adminWriteLocked:$lock}' > auth-boundary.json
+
+      - name: Final recovery result
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          jq -n --arg url "$URL" --arg sha "$GITHUB_SHA" --arg mode "$RECOVERY_MODE" --argjson count "$(jq '.items|length' inventory.json)" --slurpfile auth auth-boundary.json '{classification:"preview-neon-recovery-ready",sha:$sha,url:$url,recoveryMode:$mode,inventoryCount:$count,productionTouched:false,blobRequests:0,recoveryWritesLocked:true,authBridge:"neon",protectedBoundary:$auth[0],realCredentialCertified:false}' > recovery-result.json
+          cat recovery-result.json
 
       - name: Upload recovery evidence
         if: always()
@@ -140,5 +188,10 @@ jobs:
             phoenix-preview-url.txt
             health.json
             inventory.json
+            session.json
+            crm.json
+            admin.json
+            login.json
+            auth-boundary.json
           if-no-files-found: warn
           retention-days: 7
