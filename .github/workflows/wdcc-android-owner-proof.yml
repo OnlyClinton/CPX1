@@ -44,6 +44,7 @@ jobs:
           grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq 'Specificity bridge' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'header[data-wdcc-public-chrome="header"].rh-header.wdcc-public-header .rh-logo' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'width:72px!important' app/wdcc-owner-approved-logo-final.css
           ! grep -Fq 'content:url(' app/wdcc-owner-approved-logo-final.css
 
       - name: Build exact Cloudflare candidate
@@ -143,11 +144,13 @@ jobs:
               const inner=h.querySelector('.rh-header-inner');
               const link=h.querySelector('.rh-logo');
               const a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]');
-              const rect=x=>{const r=x.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2}};
+              const rect=x=>{const r=x.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cx:r.x+r.width/2,cy:r.y+r.height/2,bottom:r.bottom,right:r.right}};
               const ls=getComputedStyle(link),as=getComputedStyle(a),ins=getComputedStyle(inner);
               return{winW:innerWidth,header:rect(h),inner:rect(inner),link:rect(link),logo:rect(a),linkDisplay:ls.display,linkJustify:ls.justifyContent,linkPlaceItems:ls.placeItems,innerPosition:ins.position,logoContent:as.content,logoClip:as.clipPath,logoOpacity:Number(as.opacity),src:a.getAttribute('src')||''};
             });
-            if(Math.abs(header.logo.cx-header.winW/2)>2||Math.abs(header.link.cx-header.winW/2)>2||header.logo.w!==96||header.logo.h!==96||header.link.w!==104||header.linkDisplay!=='grid'||header.logoContent!=='normal'||header.logoClip!=='none'||header.logoOpacity<.99||!header.src.startsWith('data:image/'))throw new Error(`HEADER_BAD_${JSON.stringify(header)}`);
+            const centered=Math.abs(header.logo.cx-header.winW/2)<=2&&Math.abs(header.link.cx-header.winW/2)<=2;
+            const contained=header.logo.y>=header.header.y+2&&header.logo.bottom<=header.header.bottom-2;
+            if(!centered||!contained||header.logo.w!==72||header.logo.h!==72||header.link.w!==104||header.linkDisplay!=='grid'||header.logoContent!=='normal'||header.logoClip!=='none'||header.logoOpacity<.99||!header.src.startsWith('data:image/'))throw new Error(`HEADER_BAD_${JSON.stringify({centered,contained,...header})}`);
             await page.locator('header[data-wdcc-public-chrome="header"]').screenshot({path:`${out}/android-header.png`});
 
             r=await page.goto(`${base}/?owner-review=1&frozen=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
@@ -161,7 +164,7 @@ jobs:
             if(writes.length)throw new Error(`WRITE_REQUESTS_${JSON.stringify(writes)}`);
             const result={sha:process.env.GITHUB_SHA,url:base,intro,header,inventory,writes,pass:true};
             fs.writeFileSync(`${out}/result.json`,JSON.stringify(result,null,2)+'\n');
-            console.log('WDCC_FROZEN_ANDROID_PASS',JSON.stringify({introCenter:intro.badge.cx,headerLinkCenter:header.link.cx,headerLogoCenter:header.logo.cx,headerSize:[header.logo.w,header.logo.h],cards:inventory.count,writes:writes.length}));
+            console.log('WDCC_FROZEN_ANDROID_PASS',JSON.stringify({introCenter:intro.badge.cx,headerLinkCenter:header.link.cx,headerLogoCenter:header.logo.cx,headerSize:[header.logo.w,header.logo.h],headerTop:header.logo.y,headerBottom:header.logo.bottom,cards:inventory.count,writes:writes.length}));
           }finally{await ctx.close();await browser.close()}
           NODE
 
