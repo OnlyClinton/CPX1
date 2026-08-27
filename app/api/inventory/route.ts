@@ -5,7 +5,7 @@ import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
-import {isIsolatedWorkersDevRequest,visualProofInventoryFallback} from "../../../lib/visualProofInventory";
+import {isIsolatedWorkersDevRequest,mockupPreviewInventoryPayload,visualProofInventoryFallback} from "../../../lib/visualProofInventory";
 import {recoveryInventoryPayload} from "../../../lib/recoveryInventory";
 
 export const dynamic="force-dynamic";
@@ -42,6 +42,9 @@ async function proxyPublicInventory(request:Request){
   // Never retry 500 here: quota/storage faults can make each retry consume more provider work.
   const retryable=new Set([502,503,504]);
   const isolatedPreview=isIsolatedWorkersDevRequest(request);
+  if(isolatedPreview&&process.env.WDCC_MOCKUP_PREVIEW==="1"){
+    return NextResponse.json(mockupPreviewInventoryPayload(),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"r31-r25-design-reference","X-WDCC-Inventory-Live":"false","X-WDCC-Mockup-Preview":"forced","X-WDCC-Public-Inventory-Attempts":"0"}});
+  }
   if(isolatedPreview&&process.env.WDCC_VISUAL_PROOF_FALLBACK==="1"){
     return NextResponse.json(visualProofInventoryFallback(503),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":"503","X-WDCC-Public-Inventory-Attempts":"0","X-WDCC-Visual-Proof-Mode":"forced"}});
   }

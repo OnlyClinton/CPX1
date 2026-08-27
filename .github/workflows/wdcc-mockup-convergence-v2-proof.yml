@@ -46,6 +46,15 @@ jobs:
           test -s public/wdcc-recovered-media/2019-honda-pilot.webp
           test -s public/wdcc-recovered-media/2019-kia-sportage.webp
           test -s public/wdcc-recovered-media/2019-toyota-rav4.webp
+          test -s public/wdcc-mockup-preview/2020-dodge-challenger-sxt.webp
+          test -s public/wdcc-mockup-preview/2019-dodge-charger-rt.webp
+          test -s public/wdcc-mockup-preview/2018-chevrolet-camaro-lt.webp
+          test -s public/wdcc-mockup-preview/2020-jeep-grand-cherokee-laredo.webp
+          test -s public/wdcc-mockup-preview/2018-ford-f150-xlt.webp
+          test -s public/wdcc-dealer-proof/challenger-front-secondary.webp
+          test -s public/wdcc-dealer-proof/challenger-interior.webp
+          test -s public/wdcc-dealer-proof/challenger-rear.webp
+          test -s public/wdcc-dealer-proof/challenger-rear-secondary.webp
           test -s app/dealer-editor-r31-convergence.css
           test -s app/favicon.ico
           grep -q 'RECOVERED FIRST-PARTY MEDIA' app/wdccVisualReviewInventory.ts
@@ -53,6 +62,7 @@ jobs:
           grep -q 'pointer:coarse' app/wdcc-r31-owner-convergence.css
           grep -Fq 'wizardStep${step+1}' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'WDCC_VISUAL_PROOF_FALLBACK' app/api/inventory/route.ts
+          grep -q 'WDCC_MOCKUP_PREVIEW' app/api/inventory/route.ts
           grep -q 'data-wdcc-cinematic-intro="owner-v3"' app/LockedIntro.tsx
           grep -q 'wdcc-owner-board-convergence-v2.css' app/layout.tsx
 
@@ -78,7 +88,7 @@ jobs:
           c.name=`wdcc-v2-${process.env.GITHUB_SHA.slice(0,12)}`;
           c.workers_dev=true;
           c.preview_urls=true;
-          c.vars={...(c.vars||{}),WDCC_VISUAL_PROOF_FALLBACK:"1"};
+          c.vars={...(c.vars||{}),WDCC_MOCKUP_PREVIEW:"1"};
           delete c.route;
           delete c.routes;
           fs.writeFileSync('wrangler.mockup-v2.jsonc',JSON.stringify(c,null,2)+'\n');
@@ -105,7 +115,7 @@ jobs:
           set -euo pipefail
           code=000
           for i in $(seq 1 18); do
-            code="$(curl --http1.1 -sS -L -o /tmp/root.html -w '%{http_code}' "$REMOTE_URL/?owner-review=1&proof=$i" || true)"
+            code="$(curl --http1.1 -sS -L -o /tmp/root.html -w '%{http_code}' "$REMOTE_URL/?owner-review=0&proof=$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
@@ -120,7 +130,7 @@ jobs:
           done
           [ "$hero_code" = 200 ]
           [ "$(sha256sum /tmp/hero.webp|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp|awk '{print $1}')" ]
-          for asset in public/wdcc-recovered-media/*.webp; do
+          for asset in public/wdcc-recovered-media/*.webp public/wdcc-mockup-preview/*.webp; do
             remote_asset="${asset#public/}"
             curl --http1.1 -fsSL "$REMOTE_URL/$remote_asset?asset-proof=$GITHUB_SHA" -o "/tmp/$(basename "$asset")"
             [ "$(sha256sum "/tmp/$(basename "$asset")"|awk '{print $1}')" = "$(sha256sum "$asset"|awk '{print $1}')" ]
@@ -129,9 +139,9 @@ jobs:
           [ "$(sha256sum /tmp/favicon.ico|awk '{print $1}')" = "$(sha256sum app/favicon.ico|awk '{print $1}')" ]
           inventory_code="$(curl --http1.1 -sS -D /tmp/inventory.headers -o /tmp/inventory.json -w '%{http_code}' "$REMOTE_URL/api/inventory")"
           [ "$inventory_code" = 200 ]
-          grep -qi '^x-wdcc-visual-proof-mode: forced' /tmp/inventory.headers
-          jq -e '.previewFallback == true and (.items|length) == 5 and ([.items[].primary_image_url|startswith("/wdcc-recovered-media/")]|all)' /tmp/inventory.json >/dev/null
-          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\nhero_http=%s\ninventory_http=%s\ninventory_mode=forced-preview-fallback\nrecovered_media=5/5\nfavicon=verified\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" "$hero_code" "$inventory_code" > mockup-v2-integrity.txt
+          grep -qi '^x-wdcc-mockup-preview: forced' /tmp/inventory.headers
+          jq -e '.mockupPreview == true and .inventorySource == "r31-r25-design-reference" and (.items|length) == 5 and ([.items[].primary_image_url|startswith("/wdcc-mockup-preview/")]|all) and ([.items[]|(.year|tostring)+" "+.make+" "+.model+" "+.trim] == ["2020 Dodge Challenger SXT","2019 Dodge Charger R/T","2018 Chevrolet Camaro LT","2020 Jeep Grand Cherokee Laredo","2018 Ford F-150 XLT"])' /tmp/inventory.json >/dev/null
+          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\nhero_http=%s\ninventory_http=%s\ninventory_mode=isolated-r31-r25-design-reference\nmockup_media=5/5\nfavicon=verified\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" "$hero_code" "$inventory_code" > mockup-v2-integrity.txt
 
       - name: Render owner-board proof and fail on regressions
         shell: bash
@@ -176,6 +186,9 @@ jobs:
               const call=document.querySelector('.rh-call');
               const nav=document.querySelector('.rh-nav');
               const heroHeight=document.querySelector('.rh-hero')?.getBoundingClientRect().height||0;
+              const benefitsHeight=benefits?.getBoundingClientRect().height||0;
+              const inventoryTop=document.querySelector('.rh-inventory')?.getBoundingClientRect().top||0;
+              const h1Top=h1?.getBoundingClientRect().top||0;
               const firstCardWidth=cards[0]?.getBoundingClientRect().width||0;
               const menuBox=menu?.getBoundingClientRect();
               const logoBox=logo?.getBoundingClientRect();
@@ -184,15 +197,20 @@ jobs:
               return {
                 viewportWidth:innerWidth,screenWidth:screen.width,documentWidth:document.documentElement.scrollWidth,
                 coarsePointer:matchMedia('(pointer:coarse)').matches,
+                hoverNone:matchMedia('(hover:none)').matches,hoverHover:matchMedia('(hover:hover)').matches,
+                mobileQueryMatches:matchMedia('(max-width:767px), (pointer:coarse) and (max-width:1180px)').matches,
                 h1Font:h1?parseFloat(getComputedStyle(h1).fontSize):0,
-                effectiveH1Font:(h1?parseFloat(getComputedStyle(h1).fontSize):0)*scale,
+                effectiveH1Font:(h1?parseFloat(getComputedStyle(h1).fontSize):0)*scale,h1Top,effectiveH1Top:h1Top*scale,
                 heroHeight,effectiveHeroHeight:heroHeight*scale,heroVwRatio:heroHeight/innerWidth,
-                bannerHeight:banner?.getBoundingClientRect().height||0,
+                benefitsHeight,effectiveBenefitsHeight:benefitsHeight*scale,inventoryTop,effectiveInventoryTop:inventoryTop*scale,
+                bannerHeight:banner?.getBoundingClientRect().height||0,bannerVisible:Boolean(banner)&&getComputedStyle(banner).display!=='none',
                 bannerText:banner?.textContent||'',cards:cards.length,visibleCards:visible,
                 firstCardWidth,effectiveCardWidth:firstCardWidth*scale,cardVwRatio:firstCardWidth/innerWidth,
                 benefitColumns:benefits?getComputedStyle(benefits).gridTemplateColumns.split(' ').filter(Boolean).length:0,
-                menuVisible:Boolean(menu)&&getComputedStyle(menu).display!=='none',
+                menuVisible:Boolean(menu)&&getComputedStyle(menu).display!=='none'&&getComputedStyle(menu).visibility!=='hidden'&&Boolean(menuBox?.width&&menuBox?.height),
                 chromeOverlap:Boolean(menuBox&&logoBox&&callBox&&(menuBox.right>logoBox.left||logoBox.right>callBox.left)),
+                logoWidth:logoBox?.width||0,effectiveLogoWidth:(logoBox?.width||0)*scale,
+                menuWidth:menuBox?.width||0,effectiveMenuWidth:(menuBox?.width||0)*scale,
                 navDisplay:nav?getComputedStyle(nav).display:'missing',
                 placeholderCount:document.querySelectorAll('[aria-label$="photo unavailable"]').length,
                 photoCount:photos.length,loadedPhotos:photos.filter(i=>i.complete&&i.naturalWidth>0).length,
@@ -201,15 +219,16 @@ jobs:
             });
             if(metrics.cards<5)throw new Error(`${label}_CARDS_${metrics.cards}`);
             if(metrics.photoCount<5||metrics.loadedPhotos<5)throw new Error(`${label}_REAL_MEDIA_${JSON.stringify(metrics)}`);
-            if(!metrics.photoSources.every(src=>src.includes('/wdcc-recovered-media/')&&!src.startsWith('data:')))throw new Error(`${label}_MEDIA_SOURCE_${JSON.stringify(metrics.photoSources)}`);
+            if(!metrics.photoSources.every(src=>src.includes('/wdcc-mockup-preview/')&&!src.startsWith('data:')))throw new Error(`${label}_MEDIA_SOURCE_${JSON.stringify(metrics.photoSources)}`);
             if(metrics.placeholderCount)throw new Error(`${label}_PLACEHOLDERS_${metrics.placeholderCount}`);
-            if(label.endsWith('Mobile')&&(metrics.h1Font<32||metrics.h1Font>40.5))throw new Error(`${label}_HEADLINE_${metrics.h1Font}`);
-            if(label.endsWith('Mobile')&&(metrics.heroHeight<500||metrics.heroHeight>550))throw new Error(`${label}_HERO_HEIGHT_${metrics.heroHeight}`);
-            if(label.endsWith('Mobile')&&metrics.bannerHeight>36)throw new Error(`${label}_RECOVERY_BANNER_TOO_TALL_${metrics.bannerHeight}`);
+            if(metrics.bannerVisible||metrics.bannerHeight!==0)throw new Error(`${label}_NON_MOCKUP_BANNER_${JSON.stringify(metrics)}`);
+            if(label.endsWith('Mobile')&&(metrics.h1Font<40||metrics.h1Font>44||metrics.h1Top<228||metrics.h1Top>250))throw new Error(`${label}_HEADLINE_${JSON.stringify(metrics)}`);
+            if(label.endsWith('Mobile')&&(metrics.heroHeight<486||metrics.heroHeight>498||metrics.benefitsHeight<176||metrics.benefitsHeight>181||metrics.inventoryTop<740||metrics.inventoryTop>752))throw new Error(`${label}_VERTICAL_GEOMETRY_${JSON.stringify(metrics)}`);
+            if(label.endsWith('Mobile')&&(metrics.logoWidth<105||metrics.logoWidth>120||metrics.menuWidth<48||metrics.menuWidth>58))throw new Error(`${label}_HEADER_SCALE_${JSON.stringify(metrics)}`);
             if(label.endsWith('Mobile')&&metrics.benefitColumns!==2)throw new Error(`${label}_BENEFIT_COLUMNS_${metrics.benefitColumns}`);
             if(label.endsWith('Mobile')&&(metrics.firstCardWidth<108||metrics.firstCardWidth>140))throw new Error(`${label}_CARD_WIDTH_${metrics.firstCardWidth}`);
-            if(label==='androidWide'&&(!metrics.coarsePointer||metrics.screenWidth!==390||!metrics.menuVisible||metrics.chromeOverlap||metrics.navDisplay!=='none'))throw new Error(`ANDROID_CHROME_${JSON.stringify(metrics)}`);
-            if(label==='androidWide'&&(metrics.benefitColumns!==2||metrics.effectiveH1Font<32||metrics.effectiveH1Font>40.5||metrics.effectiveCardWidth<108||metrics.effectiveCardWidth>140||metrics.effectiveHeroHeight<500||metrics.effectiveHeroHeight>550||metrics.heroVwRatio<1.28||metrics.heroVwRatio>1.38||metrics.cardVwRatio<.29||metrics.cardVwRatio>.33))throw new Error(`ANDROID_GEOMETRY_${JSON.stringify(metrics)}`);
+            if(label==='androidWide'&&(!metrics.coarsePointer||!metrics.mobileQueryMatches||metrics.screenWidth!==390||!metrics.menuVisible||metrics.chromeOverlap||metrics.navDisplay!=='none'))throw new Error(`ANDROID_CHROME_${JSON.stringify(metrics)}`);
+            if(label==='androidWide'&&(metrics.benefitColumns!==2||metrics.effectiveH1Font<40||metrics.effectiveH1Font>44||metrics.effectiveH1Top<228||metrics.effectiveH1Top>250||metrics.effectiveCardWidth<108||metrics.effectiveCardWidth>140||metrics.effectiveHeroHeight<486||metrics.effectiveHeroHeight>498||metrics.effectiveBenefitsHeight<176||metrics.effectiveBenefitsHeight>181||metrics.effectiveInventoryTop<740||metrics.effectiveInventoryTop>752||metrics.heroVwRatio<1.24||metrics.heroVwRatio>1.28||metrics.cardVwRatio<.29||metrics.cardVwRatio>.33||metrics.effectiveLogoWidth<105||metrics.effectiveLogoWidth>120||metrics.effectiveMenuWidth<48||metrics.effectiveMenuWidth>58))throw new Error(`ANDROID_GEOMETRY_${JSON.stringify(metrics)}`);
             if(metrics.documentWidth>metrics.viewportWidth+1)throw new Error(`${label}_HORIZONTAL_OVERFLOW_${metrics.documentWidth}`);
             if(label==='desktop'&&metrics.visibleCards<5)throw new Error(`DESKTOP_DENSITY_${metrics.visibleCards}`);
             await page.screenshot({path:`${out}/${label}-02-home.png`,fullPage:true});
@@ -223,7 +242,7 @@ jobs:
               await page.waitForFunction(()=>getComputedStyle(document.querySelector('.rh-nav')).display==='none',null,{timeout:3000});
             }
             if(inventoryProof){
-              r=await page.goto(`${process.env.REMOTE_URL}/inventory?owner-review=1&visual-fixture=verified-real&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
+              r=await page.goto(`${process.env.REMOTE_URL}/inventory?owner-review=0&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
               if(!r||r.status()!==200)throw new Error(`${label}_INVENTORY_HTTP_${r?.status()||0}`);
               await page.waitForTimeout(900);
               await page.screenshot({path:`${out}/${label}-03-inventory.png`,fullPage:true});
@@ -260,10 +279,10 @@ jobs:
             await page.locator('[data-wizard-stage="photos"] textarea').fill('Clean title. Runs and drives great. Well maintained inside and out.');
             await page.locator('input[type="file"][multiple]').setInputFiles([
               'public/wdcc-hero-v2.webp',
-              'public/wdcc-recovered-media/2004-nissan-350z.webp',
-              'public/wdcc-recovered-media/2016-ford-f150.webp',
-              'public/wdcc-recovered-media/2019-honda-pilot.webp',
-              'public/wdcc-recovered-media/2019-kia-sportage.webp'
+              'public/wdcc-dealer-proof/challenger-front-secondary.webp',
+              'public/wdcc-dealer-proof/challenger-interior.webp',
+              'public/wdcc-dealer-proof/challenger-rear.webp',
+              'public/wdcc-dealer-proof/challenger-rear-secondary.webp'
             ]);
             await page.waitForFunction(()=>[...document.querySelectorAll('.photosStage .thumb img')].filter(img=>img.complete&&img.naturalWidth>0).length===5,null,{timeout:5000});
             const metrics=await page.evaluate(()=>{
@@ -302,10 +321,10 @@ jobs:
             return metrics;
           }
           try{
-            report.ownerMobile=await run({viewport:{width:390,height:844},label:'ownerMobile',query:'owner-review=1&intro=1',isMobile:true,hasTouch:true,userAgent:androidUA,inventoryProof:true,captureIntro:true});
+            report.ownerMobile=await run({viewport:{width:390,height:844},label:'ownerMobile',query:'owner-review=0&intro=1',isMobile:true,hasTouch:true,userAgent:androidUA,inventoryProof:true,captureIntro:true});
             report.plainMobile=await run({viewport:{width:390,height:844},label:'plainMobile',query:'owner-review=0',isMobile:true,hasTouch:true,userAgent:androidUA});
             report.androidWide=await run({viewport:{width:980,height:1740},label:'androidWide',query:'owner-review=0',isMobile:true,hasTouch:true,userAgent:androidUA});
-            report.desktop=await run({viewport:{width:1440,height:1000},label:'desktop',query:'owner-review=1&intro=1',inventoryProof:true,captureIntro:true});
+            report.desktop=await run({viewport:{width:1440,height:1000},label:'desktop',query:'owner-review=0&intro=1',inventoryProof:true,captureIntro:true});
             report.dealerDesktop=await runDealer({viewport:{width:1440,height:1000},label:'dealerDesktop'});
             report.dealerMobile=await runDealer({viewport:{width:390,height:844},label:'dealerMobile',isMobile:true});
             if(report.writes.length)throw new Error(`DEALER_WRITE_REQUESTS_${JSON.stringify(report.writes)}`);

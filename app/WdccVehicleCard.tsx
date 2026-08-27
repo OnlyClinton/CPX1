@@ -20,6 +20,8 @@ export type WdccVehicle={
   drivetrain?:string;
   bodyStyle?:string;
   body_style?:string;
+  engine?:string;
+  cylinders?:string;
   primaryPhotoPathname?:string;
   primary_image_url?:string;
   image?:string;
@@ -36,7 +38,9 @@ export default function WdccVehicleCard({vehicle,featured=false}:{vehicle:WdccVe
   useEffect(()=>setPhotoFailed(false),[src]);
   const price=Number(v.price||v.cashPrice||0);
   const down=v.downPayment??v.down_payment;
-  const tags=[Number(v.mileage||0)>0?`${Number(v.mileage).toLocaleString()} MILES`:null,v.transmission,v.drivetrain||v.bodyStyle||v.body_style].filter(Boolean).slice(0,3);
+  const mileage=Number(v.mileage||0);
+  const mileageTag=mileage>0?featured?`${Math.round(mileage/1000)}K MILES`:`${mileage.toLocaleString()} MILES`:null;
+  const tags=(featured?[mileageTag,v.engine||v.cylinders||v.transmission]:[mileageTag,v.transmission,v.drivetrain||v.bodyStyle||v.body_style]).filter(Boolean).slice(0,3);
   const title=`${v.year||""} ${v.make||""} ${v.model||""}`.trim();
   const showPhoto=Boolean(src)&&!photoFailed;
 

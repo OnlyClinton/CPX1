@@ -21,6 +21,7 @@ export default function InventoryGrid(){
   const[items,setItems]=useState<Vehicle[]>([]);
   const[state,setState]=useState<InventoryState>("loading");
   const[fixtureMode,setFixtureMode]=useState(false);
+  const[designMode,setDesignMode]=useState(false);
   const[recoveryMode,setRecoveryMode]=useState(false);
   const[query,setQuery]=useState("");
   const[make,setMake]=useState("all");
@@ -31,6 +32,7 @@ export default function InventoryGrid(){
     let live=true;
     if(isWdccVisualReviewFixture()){
       setFixtureMode(true);
+      setDesignMode(false);
       setRecoveryMode(false);
       setItems(WDCC_VISUAL_REVIEW_INVENTORY as Vehicle[]);
       setState("ready");
@@ -40,16 +42,18 @@ export default function InventoryGrid(){
       .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body?.error||`Inventory ${r.status}`);return body})
       .then(body=>{
         if(!live)return;
+        const designPreview=body?.mockupPreview===true||body?.inventorySource==="r31-r25-design-reference";
         const visualFixture=body?.previewFallback===true||body?.inventorySource==="last-known-good-real-proof";
-        const recovery=body?.recoveryFallback===true||body?.inventorySource==="verified-recovery-readonly"||body?.live===false;
+        const recovery=body?.recoveryFallback===true||body?.inventorySource==="verified-recovery-readonly"||(body?.live===false&&!designPreview);
         const source=Array.isArray(body?.items)?body.items:Array.isArray(body?.inventory)?body.inventory:[];
         const vehicles=source.filter(customerVisible);
         setFixtureMode(visualFixture);
-        setRecoveryMode(!visualFixture&&recovery);
+        setDesignMode(designPreview);
+        setRecoveryMode(!visualFixture&&!designPreview&&recovery);
         setItems(vehicles);
         setState(vehicles.length?"ready":"empty");
       })
-      .catch(()=>{if(live){setItems([]);setFixtureMode(false);setRecoveryMode(false);setState("error")}});
+      .catch(()=>{if(live){setItems([]);setFixtureMode(false);setDesignMode(false);setRecoveryMode(false);setState("error")}});
     return()=>{live=false};
   },[]);
 
@@ -81,7 +85,7 @@ export default function InventoryGrid(){
       <select value={maxPrice} onChange={e=>setMaxPrice(e.target.value)} aria-label="Maximum price"><option value="all">Max Price</option><option value="10000">$10,000</option><option value="15000">$15,000</option><option value="20000">$20,000</option><option value="25000">$25,000</option><option value="30000">$30,000</option></select>
       <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort inventory"><option value="featured">Featured</option><option value="price-asc">Price: Low to High</option><option value="price-desc">Price: High to Low</option><option value="year-desc">Newest Year</option></select>
     </div>
-    <div className="publicInventoryMeta"><strong>{filtered.length} VEHICLE{filtered.length===1?"":"S"} FOUND</strong><span>REAL VEHICLE DATA</span></div>
+    <div className="publicInventoryMeta"><strong>{filtered.length} VEHICLE{filtered.length===1?"":"S"} FOUND</strong><span>{designMode?"DESIGN PREVIEW · NOT LIVE":"REAL VEHICLE DATA"}</span></div>
     <div className="inventoryGrid wdccVehicleGrid">{filtered.map(v=><WdccVehicleCard key={String(v.id||v.slug)} vehicle={v}/>)}</div>
   </>;
 }
