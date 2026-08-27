@@ -53,6 +53,22 @@ async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible")
   return {visible,verified,expected,verification,vehicleId:id,attempts};
 }
 
+async function rollbackUnverifiedPublish({id,user,rid,priorStatus,expectedUpdatedAt}:{id:string;user:any;rid:string;priorStatus:string;expectedUpdatedAt:string}){
+  return mutateState(state=>{
+    const index=state.vehicles.findIndex(vehicle=>vehicle.id===id);
+    if(index<0)throw mutationError("publish_rollback_vehicle_missing",404);
+    const current:any={...state.vehicles[index]};
+    if(!canEdit(user,current))throw mutationError("publish_rollback_forbidden",403);
+    if(String(current.status||"").toLowerCase()!=="published")return {item:current,rolledBack:false,reason:"status_already_changed"};
+    if(String(current.updatedAt||"")!==String(expectedUpdatedAt||""))throw mutationError("publish_state_changed_before_rollback",409);
+    current.status=priorStatus||"draft";
+    current.updatedAt=new Date().toISOString();
+    state.vehicles[index]=current;
+    state.audit.push({id:crypto.randomUUID(),at:current.updatedAt,action:"vehicle.publish_rollback",actor:user.id,actorRole:user.role,vehicleId:id,requestId:rid,year:current.year,make:current.make,model:current.model,mileage:current.mileage,stock:current.stock,status:current.status,photoCount:Array.isArray(current.photoPathnames)?current.photoPathnames.length:0,detail:"storefront_verification_failed"});
+    return {item:current,rolledBack:true,reason:"storefront_verification_failed"};
+  });
+}
+
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
   const{id}=await params;
   if(!isDealerRuntime(request))return proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
@@ -153,8 +169,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
       return {next,current,photoChanged,statusChanged,action};
     });
 
-    const {next,action}=mutation.result;
-    await recordVehicleAudit({action,outcome:"ok",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`revision:${mutation.state.revision};attempt:${mutation.attempt}`});
+    const {next,current,action,statusChanged}=mutation.result;
+    await recordVehicleAudit({action,outcome:"ok",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`revision:${mutation.state.revision};attempt:${mutation.attempt}${publishingRequested?";storefront_verification_pending":""}`});
 
     let storefront:any=undefined;
     if(publishingRequested){
@@ -163,7 +179,19 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
       const lastAttempt=Array.isArray(storefront.attempts)&&storefront.attempts.length?storefront.attempts[storefront.attempts.length-1]:null;
       await recordVehicleAudit({action:"vehicle.storefront_verify",outcome:storefront.verified?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${storefront.verification};expected:${expected}:${JSON.stringify(lastAttempt||{})}`});
       if(!storefront.verified){
-        return json({ok:false,error:"storefront_verification_failed",item:next,revision:mutation.state.revision,requestId:rid,storefront,mutationAttempt:mutation.attempt},409,rid,{"X-WDCC-Storefront-Verified":"0","X-WDCC-Storefront-Expected":expected});
+        let rollback:any={performed:false,reason:statusChanged?"pending":"not_required_existing_published",item:next};
+        if(statusChanged&&String(next.status||"").toLowerCase()==="published"){
+          try{
+            const reverted=await rollbackUnverifiedPublish({id,user,rid,priorStatus:String(current.status||"draft"),expectedUpdatedAt:String(next.updatedAt||"")});
+            rollback={performed:reverted.result.rolledBack,reason:reverted.result.reason,item:reverted.result.item,revision:reverted.state.revision,attempt:reverted.attempt};
+            await recordVehicleAudit({action:"vehicle.publish_rollback",outcome:reverted.result.rolledBack?"ok":"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:reverted.result.item?.status||null,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`${reverted.result.reason};revision:${reverted.state.revision};attempt:${reverted.attempt}`});
+          }catch(rollbackError){
+            const rollbackDetail=rollbackError instanceof Error?rollbackError.message:"publish_rollback_failed";
+            await recordVehicleAudit({action:"vehicle.publish_rollback",outcome:"failed",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:rollbackDetail});
+            return json({ok:false,error:"storefront_verification_failed_rollback_unconfirmed",item:next,revision:mutation.state.revision,requestId:rid,storefront,rollback:{performed:false,reason:rollbackDetail},mutationAttempt:mutation.attempt},503,rid,{"X-WDCC-Storefront-Verified":"0","X-WDCC-Storefront-Expected":expected,"X-WDCC-Publish-Rollback":"unconfirmed"});
+          }
+        }
+        return json({ok:false,error:"storefront_verification_failed",item:rollback.item,revision:rollback.revision||mutation.state.revision,requestId:rid,storefront,rollback,mutationAttempt:mutation.attempt},409,rid,{"X-WDCC-Storefront-Verified":"0","X-WDCC-Storefront-Expected":expected,"X-WDCC-Publish-Rollback":rollback.performed?"1":"0"});
       }
     }
     return json({ok:true,item:next,revision:mutation.state.revision,requestId:rid,storefront,mutationAttempt:mutation.attempt},200,rid,storefront?{"X-WDCC-Storefront-Verified":"1","X-WDCC-Storefront-Expected":storefront.expected}:{});
