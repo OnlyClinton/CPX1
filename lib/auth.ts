@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
-import {cookies,headers} from "next/headers";
+import {cookies} from "next/headers";
 import {readState,type User} from "./store";
-import {neonRecoveryEnabled,recoverySession} from "./wdccNeonRecovery";
 
 const COOKIE="__Host-wdcc_session";
 
@@ -44,13 +43,6 @@ function parse(value?:string|null){
   }catch{return null;}
 }
 export async function currentUser(){
-  if(neonRecoveryEnabled()){
-    const h=await headers();
-    const req=new Request("https://wdcc-recovery.internal/session",{headers:h});
-    const recovered=await recoverySession(req);
-    if(!recovered)return null;
-    return {id:String(recovered.user.id),email:String(recovered.user.email||""),username:String(recovered.user.email||""),displayName:String(recovered.user.name||recovered.user.email||"WDCC User"),role:recovered.role,tenantId:"wdcc",status:"active",disabled:false} satisfies User;
-  }
   const jar=await cookies();
   const payload=parse(jar.get(COOKIE)?.value);
   if(!payload)return null;

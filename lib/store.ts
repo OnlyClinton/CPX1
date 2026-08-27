@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
-import {headers} from "next/headers";
 import {get,list,put} from "@vercel/blob";
 import {blobAuthority} from "./wdccAuthority";
 import {previewRecoveryEnabled,previewRecoveryState} from "./wdccPreviewRecoveryState";
-import {recoveryRpc} from "./wdccNeonRecovery";
 
 export type User={
   id:string;
@@ -131,23 +129,7 @@ export async function readState():Promise<State>{
   // Explicit preview-only escape hatch for recovery certification while Vercel Blob
   // is suspended. It is impossible to activate on production because both the
   // VERCEL_ENV and recovery selector must match.
-  if(previewRecoveryEnabled()){
-    const baseline=cloneState(previewRecoveryState());
-    try{
-      const h=await headers();
-      if(String(h.get("cookie")||"").trim()){
-        const request=new Request("https://wdcc-recovery.internal/state",{headers:h});
-        const recovered=await recoveryRpc(request,"wdcc_recovery_dashboard");
-        if(recovered.ok&&recovered.data){
-          const data=recovered.data as any;
-          return normalizeState({...baseline,vehicles:Array.isArray(data.inventory)?data.inventory:baseline.vehicles,leads:Array.isArray(data.leads)?data.leads:baseline.leads,updatedAt:new Date().toISOString()});
-        }
-      }
-    }catch(error){
-      console.warn("WDCC_RECOVERY_NEON_READ_FALLBACK",JSON.stringify({error:errorText(error)}));
-    }
-    return baseline;
-  }
+  if(previewRecoveryEnabled())return cloneState(previewRecoveryState());
 
   const now=Date.now();
   if(readCache&&readCache.expiresAt>now)return cloneState(readCache.state);
