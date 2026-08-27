@@ -22,7 +22,7 @@ async function accessUser(email:string,username:string){
   const roles=admin?new Set(["platform_admin","tenant_admin","admin"]):new Set(["dealer_agent","dealer"]);
   const candidates=state.users.filter(user=>active(user)&&roles.has(String(user.role||"").toLowerCase()));
   const keys=new Set([email.toLowerCase(),username.toLowerCase()]);
-  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||candidates[0]||null;
+  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;
 }
 function copyCookies(upstream:Response,headers:Headers){
   const getter=(upstream.headers as any).getSetCookie;
