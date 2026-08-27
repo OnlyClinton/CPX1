@@ -39,7 +39,7 @@ jobs:
           node-version: '24'
           cache: npm
 
-      - name: Require canonical visual source
+      - name: Require canonical visual source and architecture
         shell: bash
         run: |
           set -euo pipefail
@@ -54,8 +54,19 @@ jobs:
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           test -s app/wdcc-system-v2.css
           grep -q 'wdcc-system-v2.css' app/layout.tsx
+          test -s app/wdcc-contract-closeout.css
+          grep -q 'wdcc-contract-closeout.css' app/layout.tsx
+          ! grep -Eq 'import"\./(wdcc-public-chrome-final|storefront-optical-final|wdcc-real-device-scale-final|wdcc-responsive-audit-closeout|wdcc-owner-contract-final)\.css"' app/layout.tsx
           test -s app/WdccVehicleCard.tsx
           test -s app/WdccVehicleCard.module.css
+          for page in app/inventory/page.tsx app/get-approved/page.tsx app/contact/page.tsx app/schedule-test-drive/page.tsx app/privacy/page.tsx app/terms/page.tsx 'app/vehicle/[id]/page.tsx'; do
+            grep -q 'WdccPublicHeader' "$page"
+            grep -q 'WdccPublicFooter' "$page"
+          done
+          grep -q 'previewFallback===true' app/InventoryGrid.tsx
+          grep -q 'inventorySource==="last-known-good-real-proof"' app/InventoryGrid.tsx
+          ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css app/wdcc-owner-contract-final.css
+          echo 'WDCC_ARCHITECTURE_CONTRACT=PASS'
 
       - name: Build exact visual candidate
         shell: bash
@@ -82,6 +93,8 @@ jobs:
           grep -q 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'handleUploadUrl:"/api/upload"' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'method:"PATCH"' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'previewModal' app/dealer/inventory/VehicleEditor.tsx
           echo 'LOCKED_CONTRACT_STATIC_GATE=PASS'
 
       - name: Require Cloudflare preview credentials
@@ -170,7 +183,8 @@ jobs:
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Canonical hero SHA-256: $EXPECTED_HERO_SHA256"
             echo 'SHA-specific preview alias: PASS.'
-            echo 'Shared VehicleCard architecture: PASS.'
+            echo 'Shared public chrome + VehicleCard architecture: PASS.'
+            echo 'Single late-stage visual contract entrypoint: PASS.'
             echo 'Production routes, aliases and domains were not changed.'
             echo 'Owner visual approval is required before any production move.'
           } >> "$GITHUB_STEP_SUMMARY"
