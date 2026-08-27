@@ -51,7 +51,7 @@ jobs:
           grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"' app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"' app/WdccPublicChrome.tsx
+          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"|src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           grep -q 'FINAL LOGO RELIABILITY' app/wdcc-mobile-header-contract-fix.css
           test -s app/wdcc-system-v2.css
@@ -165,7 +165,7 @@ jobs:
           done
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
-          grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="owner-approved"|wdcc-official-logo.webp' /tmp/home.html
+          grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="(owner-approved|horizontal-owner-approved)"|wdcc-official-logo.webp|wdcc-logo-transparent.webp' /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
 
           test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
