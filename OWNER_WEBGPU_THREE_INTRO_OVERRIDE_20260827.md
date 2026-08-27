@@ -10,4 +10,6 @@ Allowed here:
 - GPU smoke/light enhancement
 - seamless handoff into the same canonical storefront hero beneath the intro
 
+Owner review replay: append `?owner-webgpu=1` or `?intro=1` to the isolated preview URL.
+
 Hard boundary remains preview-only: no merge, production deployment, alias/DNS movement, Cloudflare production route change, provider mutation, database mutation, or schema change without explicit owner approval.
