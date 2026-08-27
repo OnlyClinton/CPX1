@@ -6,7 +6,10 @@
 
 html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(3),
 html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(4),
-html body main.reference-home.locked-storefront .rh-nav>a:last-child{
+html body main.reference-home.locked-storefront .rh-nav>a:last-child,
+html body .wdcc-public-utility .rh-utility-inner>span:nth-child(3),
+html body .wdcc-public-utility .rh-utility-inner>span:nth-child(4),
+html body .wdcc-public-header .rh-nav>a:last-child{
   display:none!important;
 }
 
@@ -22,33 +25,41 @@ html body main.reference-home.locked-storefront .rh-phone::before{
 }
 
 @media(min-width:768px){
-  html body main.reference-home.locked-storefront .rh-utility{
+  html body main.reference-home.locked-storefront .rh-utility,
+  html body .wdcc-public-utility{
     height:34px!important;
   }
-  html body main.reference-home.locked-storefront .rh-utility-inner{
+  html body main.reference-home.locked-storefront .rh-utility-inner,
+  html body .wdcc-public-utility .rh-utility-inner{
     width:min(1380px,calc(100% - 56px))!important;
     gap:20px!important;
     font-size:9px!important;
   }
-  html body main.reference-home.locked-storefront .rh-utility-inner>a{
+  html body main.reference-home.locked-storefront .rh-utility-inner>a,
+  html body .wdcc-public-utility .rh-utility-inner>a{
     margin-left:auto!important;
   }
 
-  html body main.reference-home.locked-storefront .rh-header{
+  html body main.reference-home.locked-storefront .rh-header,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{
     height:94px!important;
     min-height:94px!important;
+    top:34px!important;
   }
-  html body main.reference-home.locked-storefront .rh-header-inner{
+  html body main.reference-home.locked-storefront .rh-header-inner,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
     width:min(1380px,calc(100% - 56px))!important;
     height:94px!important;
     grid-template-columns:132px minmax(0,1fr) auto!important;
     gap:26px!important;
   }
-  html body main.reference-home.locked-storefront .rh-logo{
+  html body main.reference-home.locked-storefront .rh-logo,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
     width:124px!important;
     height:94px!important;
   }
-  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     width:112px!important;
     min-width:112px!important;
     max-width:112px!important;
@@ -58,15 +69,18 @@ html body main.reference-home.locked-storefront .rh-phone::before{
     object-fit:contain!important;
     filter:drop-shadow(0 7px 18px rgba(0,0,0,.52))!important;
   }
-  html body main.reference-home.locked-storefront .rh-nav{
+  html body main.reference-home.locked-storefront .rh-nav,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{
     justify-content:flex-start!important;
     gap:34px!important;
     font-size:10px!important;
   }
-  html body main.reference-home.locked-storefront .rh-header-actions>a:first-child{
+  html body main.reference-home.locked-storefront .rh-header-actions>a:first-child,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions>a:first-child{
     display:none!important;
   }
-  html body main.reference-home.locked-storefront .rh-header-primary{
+  html body main.reference-home.locked-storefront .rh-header-primary,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-primary{
     min-height:48px!important;
     padding:0 25px!important;
     border-radius:5px!important;
@@ -232,53 +246,61 @@ html body main.reference-home.locked-storefront .rh-phone::before{
 }
 
 @media(max-width:767px){
-  html body main.reference-home.locked-storefront .rh-header{
-    height:86px!important;
-    min-height:86px!important;
-    max-height:86px!important;
+  html body main.reference-home.locked-storefront .rh-header,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
+    top:0!important;
   }
-  html body main.reference-home.locked-storefront .rh-header-inner{
+  html body main.reference-home.locked-storefront .rh-header-inner,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
     width:calc(100% - 24px)!important;
-    height:86px!important;
-    min-height:86px!important;
-    max-height:86px!important;
-    grid-template-columns:48px minmax(0,1fr) 48px!important;
-    grid-template-rows:86px!important;
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
+    grid-template-columns:46px minmax(0,1fr) 46px!important;
+    grid-template-rows:76px!important;
   }
   html body main.reference-home.locked-storefront .rh-menu,
-  html body main.reference-home.locked-storefront .rh-call{
-    width:46px!important;
-    height:46px!important;
-    min-width:46px!important;
-    min-height:46px!important;
-    max-width:46px!important;
-    max-height:46px!important;
+  html body main.reference-home.locked-storefront .rh-call,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    min-height:44px!important;
+    max-width:44px!important;
+    max-height:44px!important;
   }
-  html body main.reference-home.locked-storefront .rh-logo{
-    width:94px!important;
-    min-width:94px!important;
-    max-width:94px!important;
-    height:86px!important;
-    min-height:86px!important;
-    max-height:86px!important;
+  html body main.reference-home.locked-storefront .rh-logo,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
+    width:86px!important;
+    min-width:86px!important;
+    max-width:86px!important;
+    height:76px!important;
+    min-height:76px!important;
+    max-height:76px!important;
   }
-  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
-    width:90px!important;
-    min-width:90px!important;
-    max-width:90px!important;
-    height:90px!important;
-    min-height:90px!important;
-    max-height:90px!important;
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"],
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:82px!important;
+    min-width:82px!important;
+    max-width:82px!important;
+    height:82px!important;
+    min-height:82px!important;
+    max-height:82px!important;
     object-fit:contain!important;
     filter:drop-shadow(0 5px 13px rgba(0,0,0,.5))!important;
   }
-  html body main.reference-home.locked-storefront .rh-nav{
-    top:86px!important;
+  html body main.reference-home.locked-storefront .rh-nav,
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{
+    top:76px!important;
   }
 
   html body main.reference-home.locked-storefront .rh-hero{
-    height:590px!important;
-    min-height:590px!important;
+    height:525px!important;
+    min-height:525px!important;
   }
   html body main.reference-home.locked-storefront .rh-hero-art{
     position:absolute!important;
@@ -298,9 +320,9 @@ html body main.reference-home.locked-storefront .rh-phone::before{
   html body main.reference-home.locked-storefront .rh-hero-inner{
     box-sizing:border-box!important;
     width:100%!important;
-    height:590px!important;
-    min-height:590px!important;
-    padding:0 15px 26px!important;
+    height:525px!important;
+    min-height:525px!important;
+    padding:0 15px 21px!important;
     align-items:flex-end!important;
   }
   html body main.reference-home.locked-storefront .rh-copy{
@@ -339,9 +361,12 @@ html body main.reference-home.locked-storefront .rh-phone::before{
     font-size:9px!important;
   }
 
+  html body main.reference-home.locked-storefront .rh-benefits{
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
   html body main.reference-home.locked-storefront .rh-benefit{
-    min-height:102px!important;
-    padding:12px 5px!important;
+    min-height:84px!important;
+    padding:9px 4px!important;
   }
   html body main.reference-home.locked-storefront .rh-icon{
     width:31px!important;
@@ -357,7 +382,7 @@ html body main.reference-home.locked-storefront .rh-phone::before{
   }
 
   html body main.reference-home.locked-storefront .rh-inventory{
-    padding:31px 0 36px!important;
+    padding:22px 0 34px!important;
   }
   html body main.reference-home.locked-storefront .rh-section-head{
     margin-bottom:11px!important;
