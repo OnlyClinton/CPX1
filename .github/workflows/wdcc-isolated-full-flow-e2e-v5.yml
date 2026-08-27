@@ -86,6 +86,7 @@ jobs:
             "page.getByLabel('Vehicle of interest')":"page.locator('input[name=\"vehicleInterest\"]')",
             "page.getByLabel('Preferred date or time')":"page.locator('input[name=\"preferredTime\"]')",
             "page.getByLabel('Message')":"page.locator('textarea[name=\"message\"]')",
+            "publicPage.getByText('2021 Toyota Camry',{exact:false}).first()":"publicPage.getByRole('link',{name:'View 2021 Toyota Camry'}).first()",
           }
           for old,new in replacements.items(): s=s.replace(old,new)
           p.write_text(s)
