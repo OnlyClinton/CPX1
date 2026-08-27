@@ -11,6 +11,8 @@ import {pathToFileURL} from 'node:url';
     - phone Add/Edit: one full-width readable field column at 390px
   It also corrects drawer visibility semantics: the off-canvas sidebar does not
   need to be visible while closed; the top dealer brand must remain visible.
+  This wrapper is also a shared exact-SHA trigger for Responsive + Real Snapshot
+  acceptance after proof-harness-only corrections; the executable contract below is unchanged.
 */
 const source='scripts/wdcc-verified-real-snapshot-visual-stress.mjs';
 const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
