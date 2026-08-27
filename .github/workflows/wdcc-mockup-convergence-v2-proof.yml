@@ -41,7 +41,18 @@ jobs:
           test -s app/recoveredVisualMedia/hondaPilot.ts
           test -s app/recoveredVisualMedia/kiaSportage.ts
           test -s app/recoveredVisualMedia/toyotaRav4.ts
+          test -s public/wdcc-recovered-media/2004-nissan-350z.webp
+          test -s public/wdcc-recovered-media/2016-ford-f150.webp
+          test -s public/wdcc-recovered-media/2019-honda-pilot.webp
+          test -s public/wdcc-recovered-media/2019-kia-sportage.webp
+          test -s public/wdcc-recovered-media/2019-toyota-rav4.webp
+          test -s app/dealer-editor-r31-convergence.css
+          test -s app/favicon.ico
           grep -q 'RECOVERED FIRST-PARTY MEDIA' app/wdccVisualReviewInventory.ts
+          grep -q 'withWdccRecoveredReviewMedia' app/ReferenceCloneHome.tsx
+          grep -q 'pointer:coarse' app/wdcc-r31-owner-convergence.css
+          grep -q 'wizardStep3' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'WDCC_VISUAL_PROOF_FALLBACK' app/api/inventory/route.ts
           grep -q 'data-wdcc-cinematic-intro="owner-v3"' app/LockedIntro.tsx
           grep -q 'wdcc-owner-board-convergence-v2.css' app/layout.tsx
 
@@ -67,6 +78,7 @@ jobs:
           c.name=`wdcc-v2-${process.env.GITHUB_SHA.slice(0,12)}`;
           c.workers_dev=true;
           c.preview_urls=true;
+          c.vars={...(c.vars||{}),WDCC_VISUAL_PROOF_FALLBACK:"1"};
           delete c.route;
           delete c.routes;
           fs.writeFileSync('wrangler.mockup-v2.jsonc',JSON.stringify(c,null,2)+'\n');
@@ -108,7 +120,18 @@ jobs:
           done
           [ "$hero_code" = 200 ]
           [ "$(sha256sum /tmp/hero.webp|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp|awk '{print $1}')" ]
-          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\nhero_http=%s\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" "$hero_code" > mockup-v2-integrity.txt
+          for asset in public/wdcc-recovered-media/*.webp; do
+            remote_asset="${asset#public/}"
+            curl --http1.1 -fsSL "$REMOTE_URL/$remote_asset?asset-proof=$GITHUB_SHA" -o "/tmp/$(basename "$asset")"
+            [ "$(sha256sum "/tmp/$(basename "$asset")"|awk '{print $1}')" = "$(sha256sum "$asset"|awk '{print $1}')" ]
+          done
+          curl --http1.1 -fsSL "$REMOTE_URL/favicon.ico?asset-proof=$GITHUB_SHA" -o /tmp/favicon.ico
+          [ "$(sha256sum /tmp/favicon.ico|awk '{print $1}')" = "$(sha256sum app/favicon.ico|awk '{print $1}')" ]
+          inventory_code="$(curl --http1.1 -sS -D /tmp/inventory.headers -o /tmp/inventory.json -w '%{http_code}' "$REMOTE_URL/api/inventory")"
+          [ "$inventory_code" = 200 ]
+          grep -qi '^x-wdcc-visual-proof-mode: forced' /tmp/inventory.headers
+          jq -e '.previewFallback == true and (.items|length) == 5 and ([.items[].primary_image_url|startswith("/wdcc-recovered-media/")]|all)' /tmp/inventory.json >/dev/null
+          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\nhero_http=%s\ninventory_http=%s\ninventory_mode=forced-preview-fallback\nrecovered_media=5/5\nfavicon=verified\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" "$hero_code" "$inventory_code" > mockup-v2-integrity.txt
 
       - name: Render owner-board proof and fail on regressions
         shell: bash
@@ -121,45 +144,174 @@ jobs:
           import {chromium} from 'playwright';
           const out='mockup-v2-proof'; fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
-          const report={sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,consoleErrors:[],mobile:null,desktop:null};
-          async function run(viewport,label){
-            const context=await browser.newContext({viewport,deviceScaleFactor:1,isMobile:label==='mobile',hasTouch:label==='mobile',reducedMotion:'no-preference'});
+          const report={sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,consoleErrors:[],failedRequests:[],httpErrors:[],writes:[],ownerMobile:null,plainMobile:null,androidWide:null,desktop:null,dealerDesktop:null,dealerMobile:null};
+          const androidUA='Mozilla/5.0 (Linux; Android 14; SM-S918U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36';
+          async function run({viewport,label,query,isMobile=false,hasTouch=false,userAgent,inventoryProof=false,captureIntro=false}){
+            const context=await browser.newContext({viewport,screen:isMobile?{width:390,height:844}:viewport,deviceScaleFactor:1,isMobile,hasTouch,userAgent,reducedMotion:'no-preference'});
             const page=await context.newPage();
-            page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(`${label}: ${m.text()}`)});
+            page.on('console',m=>{if(m.type()==='error'){const at=m.location();report.consoleErrors.push(`${label}: ${m.text()}${at.url?` @ ${at.url}:${at.lineNumber||0}`:''}`)}});
             page.on('pageerror',e=>report.consoleErrors.push(`${label}: ${String(e)}`));
-            let r=await page.goto(`${process.env.REMOTE_URL}/?owner-review=1&intro=1&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
+            page.on('requestfailed',r=>{const failure=r.failure()?.errorText||'';if(!/ERR_ABORTED|NS_BINDING_ABORTED/i.test(failure))report.failedRequests.push(`${label}: ${r.url()} ${failure}`)});
+            page.on('response',r=>{if(r.status()>=400&&new URL(r.url()).origin===new URL(process.env.REMOTE_URL).origin)report.httpErrors.push(`${label}: ${r.status()} ${r.url()}`)});
+            let r=await page.goto(`${process.env.REMOTE_URL}/?${query}&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
             if(!r||r.status()!==200)throw new Error(`${label}_ROOT_HTTP_${r?.status()||0}`);
-            await page.locator('.li').waitFor({state:'visible',timeout:7000});
-            await page.waitForTimeout(650);
-            await page.screenshot({path:`${out}/${label}-01-intro.png`,fullPage:false});
+            const intro=page.locator('.li');
+            if(await intro.count())await intro.waitFor({state:'visible',timeout:7000});
+            if(captureIntro){await page.waitForTimeout(650);await page.screenshot({path:`${out}/${label}-01-intro.png`,fullPage:false})}
             const skip=page.locator('.li-skip');
             if(await skip.count())await skip.click({force:true});
-            await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:3500});
+            await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:4000});
             await page.waitForFunction(()=>document.querySelectorAll('.rh-grid article').length>=5,null,{timeout:7000});
-            await page.waitForTimeout(250);
+            await page.waitForFunction(()=>[...document.querySelectorAll('.rh-grid article img')].filter(i=>i.complete&&i.naturalWidth>0).length>=5,null,{timeout:7000});
+            await page.waitForTimeout(200);
             const metrics=await page.evaluate(()=>{
               const h1=document.querySelector('.rh-copy h1');
               const banner=document.querySelector('.wdccRecoveryInventoryBanner,.wdccOwnerReviewBanner');
               const cards=[...document.querySelectorAll('.rh-grid article')];
               const photos=cards.map(c=>c.querySelector('a:first-child img')).filter(Boolean);
               const visible=cards.filter(c=>{const b=c.getBoundingClientRect();return b.right>0&&b.left<innerWidth&&b.bottom>0&&b.top<innerHeight}).length;
-              return {h1Font:h1?parseFloat(getComputedStyle(h1).fontSize):0,heroHeight:document.querySelector('.rh-hero')?.getBoundingClientRect().height||0,bannerHeight:banner?.getBoundingClientRect().height||0,cards:cards.length,visibleCards:visible,photoCount:photos.length,loadedPhotos:photos.filter(i=>i.complete&&i.naturalWidth>0).length,photoSources:photos.map(i=>i.getAttribute('src')?.slice(0,22)||'')};
+              const benefits=document.querySelector('.rh-benefits');
+              const menu=document.querySelector('.rh-menu');
+              const logo=document.querySelector('.rh-logo');
+              const call=document.querySelector('.rh-call');
+              const nav=document.querySelector('.rh-nav');
+              const heroHeight=document.querySelector('.rh-hero')?.getBoundingClientRect().height||0;
+              const firstCardWidth=cards[0]?.getBoundingClientRect().width||0;
+              const menuBox=menu?.getBoundingClientRect();
+              const logoBox=logo?.getBoundingClientRect();
+              const callBox=call?.getBoundingClientRect();
+              const scale=innerWidth>767?390/innerWidth:1;
+              return {
+                viewportWidth:innerWidth,screenWidth:screen.width,documentWidth:document.documentElement.scrollWidth,
+                coarsePointer:matchMedia('(pointer:coarse)').matches,
+                h1Font:h1?parseFloat(getComputedStyle(h1).fontSize):0,
+                effectiveH1Font:(h1?parseFloat(getComputedStyle(h1).fontSize):0)*scale,
+                heroHeight,effectiveHeroHeight:heroHeight*scale,heroVwRatio:heroHeight/innerWidth,
+                bannerHeight:banner?.getBoundingClientRect().height||0,
+                bannerText:banner?.textContent||'',cards:cards.length,visibleCards:visible,
+                firstCardWidth,effectiveCardWidth:firstCardWidth*scale,cardVwRatio:firstCardWidth/innerWidth,
+                benefitColumns:benefits?getComputedStyle(benefits).gridTemplateColumns.split(' ').filter(Boolean).length:0,
+                menuVisible:Boolean(menu)&&getComputedStyle(menu).display!=='none',
+                chromeOverlap:Boolean(menuBox&&logoBox&&callBox&&(menuBox.right>logoBox.left||logoBox.right>callBox.left)),
+                navDisplay:nav?getComputedStyle(nav).display:'missing',
+                placeholderCount:document.querySelectorAll('[aria-label$="photo unavailable"]').length,
+                photoCount:photos.length,loadedPhotos:photos.filter(i=>i.complete&&i.naturalWidth>0).length,
+                photoSources:photos.map(i=>i.currentSrc||i.getAttribute('src')||'')
+              };
             });
             if(metrics.cards<5)throw new Error(`${label}_CARDS_${metrics.cards}`);
             if(metrics.photoCount<5||metrics.loadedPhotos<5)throw new Error(`${label}_REAL_MEDIA_${JSON.stringify(metrics)}`);
-            if(label==='mobile'&&metrics.h1Font>40.5)throw new Error(`MOBILE_HEADLINE_TOO_LARGE_${metrics.h1Font}`);
-            if(label==='mobile'&&metrics.visibleCards<3)throw new Error(`MOBILE_DENSITY_${metrics.visibleCards}`);
-            if(label==='mobile'&&metrics.bannerHeight>36)throw new Error(`MOBILE_RECOVERY_BANNER_TOO_TALL_${metrics.bannerHeight}`);
+            if(!metrics.photoSources.every(src=>src.includes('/wdcc-recovered-media/')&&!src.startsWith('data:')))throw new Error(`${label}_MEDIA_SOURCE_${JSON.stringify(metrics.photoSources)}`);
+            if(metrics.placeholderCount)throw new Error(`${label}_PLACEHOLDERS_${metrics.placeholderCount}`);
+            if(label.endsWith('Mobile')&&(metrics.h1Font<32||metrics.h1Font>40.5))throw new Error(`${label}_HEADLINE_${metrics.h1Font}`);
+            if(label.endsWith('Mobile')&&(metrics.heroHeight<500||metrics.heroHeight>550))throw new Error(`${label}_HERO_HEIGHT_${metrics.heroHeight}`);
+            if(label.endsWith('Mobile')&&metrics.bannerHeight>36)throw new Error(`${label}_RECOVERY_BANNER_TOO_TALL_${metrics.bannerHeight}`);
+            if(label.endsWith('Mobile')&&metrics.benefitColumns!==2)throw new Error(`${label}_BENEFIT_COLUMNS_${metrics.benefitColumns}`);
+            if(label.endsWith('Mobile')&&(metrics.firstCardWidth<108||metrics.firstCardWidth>140))throw new Error(`${label}_CARD_WIDTH_${metrics.firstCardWidth}`);
+            if(label==='androidWide'&&(!metrics.coarsePointer||metrics.screenWidth!==390||!metrics.menuVisible||metrics.chromeOverlap||metrics.navDisplay!=='none'))throw new Error(`ANDROID_CHROME_${JSON.stringify(metrics)}`);
+            if(label==='androidWide'&&(metrics.benefitColumns!==2||metrics.effectiveH1Font<32||metrics.effectiveH1Font>40.5||metrics.effectiveCardWidth<108||metrics.effectiveCardWidth>140||metrics.effectiveHeroHeight<500||metrics.effectiveHeroHeight>550||metrics.heroVwRatio<1.28||metrics.heroVwRatio>1.38||metrics.cardVwRatio<.29||metrics.cardVwRatio>.33))throw new Error(`ANDROID_GEOMETRY_${JSON.stringify(metrics)}`);
+            if(metrics.documentWidth>metrics.viewportWidth+1)throw new Error(`${label}_HORIZONTAL_OVERFLOW_${metrics.documentWidth}`);
             if(label==='desktop'&&metrics.visibleCards<5)throw new Error(`DESKTOP_DENSITY_${metrics.visibleCards}`);
             await page.screenshot({path:`${out}/${label}-02-home.png`,fullPage:true});
-            r=await page.goto(`${process.env.REMOTE_URL}/inventory?owner-review=1&visual-fixture=verified-real&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
-            if(!r||r.status()!==200)throw new Error(`${label}_INVENTORY_HTTP_${r?.status()||0}`);
-            await page.waitForTimeout(900);
-            await page.screenshot({path:`${out}/${label}-03-inventory.png`,fullPage:true});
+            if(isMobile){
+              const menuButton=page.locator('.rh-menu');
+              const mobileNav=page.locator('.rh-nav');
+              await menuButton.click();
+              await mobileNav.waitFor({state:'visible',timeout:3000});
+              if(await menuButton.getAttribute('aria-expanded')!=='true')throw new Error(`${label}_MENU_DID_NOT_OPEN`);
+              await menuButton.click();
+              await page.waitForFunction(()=>getComputedStyle(document.querySelector('.rh-nav')).display==='none',null,{timeout:3000});
+            }
+            if(inventoryProof){
+              r=await page.goto(`${process.env.REMOTE_URL}/inventory?owner-review=1&visual-fixture=verified-real&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
+              if(!r||r.status()!==200)throw new Error(`${label}_INVENTORY_HTTP_${r?.status()||0}`);
+              await page.waitForTimeout(900);
+              await page.screenshot({path:`${out}/${label}-03-inventory.png`,fullPage:true});
+            }
             await context.close();
             return metrics;
           }
-          try{report.mobile=await run({width:390,height:844},'mobile');report.desktop=await run({width:1440,height:1000},'desktop');fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(report,null,2)+'\n')}catch(e){report.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(report,null,2)+'\n');throw e}finally{await browser.close()}
+
+          async function runDealer({viewport,label,isMobile=false}){
+            const context=await browser.newContext({viewport,screen:viewport,deviceScaleFactor:1,isMobile,hasTouch:isMobile});
+            const page=await context.newPage();
+            const writes=[];
+            page.on('console',m=>{if(m.type()==='error'){const at=m.location();report.consoleErrors.push(`${label}: ${m.text()}${at.url?` @ ${at.url}:${at.lineNumber||0}`:''}`)}});
+            page.on('pageerror',e=>report.consoleErrors.push(`${label}: ${String(e)}`));
+            page.on('requestfailed',r=>{const failure=r.failure()?.errorText||'';if(!/ERR_ABORTED|NS_BINDING_ABORTED/i.test(failure))report.failedRequests.push(`${label}: ${r.url()} ${failure}`)});
+            page.on('response',r=>{if(r.status()>=400&&new URL(r.url()).origin===new URL(process.env.REMOTE_URL).origin)report.httpErrors.push(`${label}: ${r.status()} ${r.url()}`)});
+            await page.route('**/api/**',async route=>{
+              const request=route.request();
+              if(['POST','PUT','PATCH','DELETE'].includes(request.method())){
+                const write={label,method:request.method(),url:request.url()};writes.push(write);report.writes.push(write);
+                return route.fulfill({status:405,contentType:'application/json',body:'{"ok":false,"error":"VISUAL_PROOF_READ_ONLY"}'});
+              }
+              return route.continue();
+            });
+            const session={authenticated:true,name:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc',user:{id:'visual-only',displayName:'WDCC Visual QA',role:'dealer_agent',tenantId:'wdcc'}};
+            await page.route('**/api/auth/session**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
+            const response=await page.goto(`${process.env.REMOTE_URL}/dealer/inventory/new?visual-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:25000});
+            if(!response||response.status()!==200)throw new Error(`${label}_HTTP_${response?.status()||0}`);
+            await page.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
+            await page.locator('.stepper > button').nth(2).click();
+            await page.locator('.wizardStep3 [data-wizard-stage="photos"]').waitFor({state:'visible',timeout:5000});
+            const fields={year:'2020',make:'Dodge',model:'Challenger',trim:'SXT',price:'24995',downPayment:'2000',mileage:'41000',stock:'WDCC-2020-001',vin:'2C3CDZAG2LH123456'};
+            for(const[name,value]of Object.entries(fields))await page.locator(`[data-wizard-stage="photos"] [name="${name}"]`).fill(value);
+            await page.locator('[data-wizard-stage="photos"] textarea').fill('Clean title. Runs and drives great. Well maintained inside and out.');
+            await page.locator('input[type="file"][multiple]').setInputFiles([
+              'public/wdcc-hero-v2.webp',
+              'public/wdcc-recovered-media/2004-nissan-350z.webp',
+              'public/wdcc-recovered-media/2016-ford-f150.webp',
+              'public/wdcc-recovered-media/2019-honda-pilot.webp',
+              'public/wdcc-recovered-media/2019-kia-sportage.webp'
+            ]);
+            await page.waitForFunction(()=>[...document.querySelectorAll('.photosStage .thumb img')].filter(img=>img.complete&&img.naturalWidth>0).length===5,null,{timeout:5000});
+            const metrics=await page.evaluate(()=>{
+              const visible=el=>{if(!el)return false;const style=getComputedStyle(el),box=el.getBoundingClientRect();return style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0};
+              const tracks=selector=>{const el=document.querySelector(selector);if(!el)return 0;const value=getComputedStyle(el).gridTemplateColumns;return value==='none'?0:value.split(/\s+/).filter(Boolean).length};
+              const header=document.querySelector('.editTop'),brand=document.querySelector('.topBrand'),phone=document.querySelector('.editTop > a'),menu=document.querySelector('.editMenu'),manager=document.querySelector('.editTop > span'),signOut=document.querySelector('.editTop > button:not(.editMenu)');
+              const brandBox=brand?.getBoundingClientRect(),phoneBox=phone?.getBoundingClientRect(),menuBox=menu?.getBoundingClientRect();
+              const actionGroups=[...document.querySelectorAll('.photoStageActions')].filter(visible);
+              const actionButtons=actionGroups[0]?[...actionGroups[0].querySelectorAll('button')].map(button=>{const b=button.getBoundingClientRect();return{x:b.x,y:b.y,width:b.width,height:b.height}}):[];
+              const readinessItems=[...document.querySelectorAll('.editRight .readinessCard li,.mobileReadiness li')].filter(visible).length;
+              const rightPreview=document.querySelector('.editRight .vehiclePreview');
+              return {
+                rootTracks:tracks('.editVehicleApp'),layoutTracks:tracks('.editLayout'),fieldTracks:tracks('.photosStage .fieldGrid'),
+                fieldCount:document.querySelectorAll('.photosStage .fieldGrid > label').length,toolTracks:tracks('.photosStage .photoTools'),toolCount:document.querySelectorAll('.photosStage .photoTools > button').length,
+                thumbTracks:tracks('.photosStage .thumbGrid'),thumbChildren:document.querySelectorAll('.photosStage .thumbGrid > *').length,loadedThumbs:[...document.querySelectorAll('.photosStage .thumb img')].filter(img=>img.complete&&img.naturalWidth>0).length,primaryThumbs:document.querySelectorAll('.photosStage .thumb.primary').length,
+                steps:document.querySelectorAll('.stepper > button').length,activeStep:document.querySelector('.stepper > button[aria-current="step"]')?.textContent||'',wizardNavCount:document.querySelectorAll('.wizardNav').length,
+                sideVisible:visible(document.querySelector('.editSide')),sideRight:document.querySelector('.editSide')?.getBoundingClientRect().right||0,rightVisible:visible(document.querySelector('.editRight')),rightReadinessVisible:visible(document.querySelector('.editRight .readinessCard')),rightPreviewVisible:visible(rightPreview),
+                rightPreviewNoteVisible:visible(rightPreview?.querySelector('.previewReadinessNote')),rightPreviewDetailsVisible:Boolean(rightPreview&&[rightPreview.querySelector('.previewSpecs'),rightPreview.querySelector('h4'),rightPreview.querySelector(':scope > p'),rightPreview.querySelector('.previewActions')].some(visible)),
+                mobileReadinessVisible:visible(document.querySelector('.mobileReadiness')),readinessItems,readinessText:[...document.querySelectorAll('.readinessCard > strong,.mobileReadiness > strong')].find(visible)?.textContent||'',
+                headerHeight:header?.getBoundingClientRect().height||0,brandVisible:visible(brand),phoneVisible:visible(phone),menuVisible:visible(menu),managerVisible:visible(manager),signOutVisible:visible(signOut),
+                headerOverlap:Boolean(brandBox&&phoneBox&&menuBox&&(brandBox.right>phoneBox.left||phoneBox.right>menuBox.left)),visibleActionGroups:actionGroups.length,actionButtons,
+                viewportWidth:innerWidth,documentWidth:document.documentElement.scrollWidth
+              };
+            });
+            if(metrics.steps!==5||!metrics.activeStep.includes('Photos')||metrics.wizardNavCount!==0)throw new Error(`${label}_STEPPER_${JSON.stringify(metrics)}`);
+            if(metrics.fieldTracks!==4||metrics.fieldCount!==17||metrics.toolTracks!==3||metrics.toolCount!==3||metrics.loadedThumbs!==5||metrics.primaryThumbs!==1||metrics.thumbChildren!==6||metrics.visibleActionGroups!==1||metrics.readinessItems!==4||!metrics.readinessText.includes('100')||metrics.documentWidth>metrics.viewportWidth+1)throw new Error(`${label}_STRUCTURE_${JSON.stringify(metrics)}`);
+            if(isMobile){
+              const[save,preview,publish]=metrics.actionButtons;
+              if(metrics.layoutTracks>1||metrics.thumbTracks!==4||metrics.sideRight>0||metrics.rightVisible||!metrics.mobileReadinessVisible||metrics.headerHeight<64||metrics.headerHeight>68||!metrics.brandVisible||!metrics.phoneVisible||!metrics.menuVisible||metrics.managerVisible||metrics.signOutVisible||metrics.headerOverlap||!save||!preview||!publish||Math.abs(save.y-preview.y)>3||publish.y<=Math.max(save.y,preview.y)||Math.abs(publish.width-(save.width+preview.width+6))>4)throw new Error(`${label}_MOBILE_${JSON.stringify(metrics)}`);
+            }else if(metrics.rootTracks!==2||metrics.layoutTracks!==2||metrics.thumbTracks!==5||!metrics.sideVisible||!metrics.rightVisible||!metrics.rightReadinessVisible||!metrics.rightPreviewVisible||!metrics.rightPreviewNoteVisible||metrics.rightPreviewDetailsVisible||metrics.mobileReadinessVisible){
+              throw new Error(`${label}_DESKTOP_${JSON.stringify(metrics)}`);
+            }
+            if(writes.length)throw new Error(`${label}_WRITE_REQUESTS_${JSON.stringify(writes)}`);
+            await page.screenshot({path:`${out}/${label}-dealer-step3.png`,fullPage:true});
+            await context.close();
+            return metrics;
+          }
+          try{
+            report.ownerMobile=await run({viewport:{width:390,height:844},label:'ownerMobile',query:'owner-review=1&intro=1',isMobile:true,hasTouch:true,userAgent:androidUA,inventoryProof:true,captureIntro:true});
+            report.plainMobile=await run({viewport:{width:390,height:844},label:'plainMobile',query:'owner-review=0',isMobile:true,hasTouch:true,userAgent:androidUA});
+            report.androidWide=await run({viewport:{width:980,height:1740},label:'androidWide',query:'owner-review=0',isMobile:true,hasTouch:true,userAgent:androidUA});
+            report.desktop=await run({viewport:{width:1440,height:1000},label:'desktop',query:'owner-review=1&intro=1',inventoryProof:true,captureIntro:true});
+            report.dealerDesktop=await runDealer({viewport:{width:1440,height:1000},label:'dealerDesktop'});
+            report.dealerMobile=await runDealer({viewport:{width:390,height:844},label:'dealerMobile',isMobile:true});
+            if(report.writes.length)throw new Error(`DEALER_WRITE_REQUESTS_${JSON.stringify(report.writes)}`);
+            if(report.consoleErrors.length||report.failedRequests.length||report.httpErrors.length)throw new Error(`BROWSER_SURFACE_ERRORS_${JSON.stringify({consoleErrors:report.consoleErrors,failedRequests:report.failedRequests,httpErrors:report.httpErrors})}`);
+            fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(report,null,2)+'\n');
+          }catch(e){report.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(report,null,2)+'\n');throw e}finally{await browser.close()}
           NODE
 
       - name: Summary

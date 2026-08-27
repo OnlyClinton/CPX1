@@ -42,6 +42,9 @@ async function proxyPublicInventory(request:Request){
   // Never retry 500 here: quota/storage faults can make each retry consume more provider work.
   const retryable=new Set([502,503,504]);
   const isolatedPreview=isIsolatedWorkersDevRequest(request);
+  if(isolatedPreview&&process.env.WDCC_VISUAL_PROOF_FALLBACK==="1"){
+    return NextResponse.json(visualProofInventoryFallback(503),{status:200,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"visual-proof-lkg","X-WDCC-Upstream-Status":"503","X-WDCC-Public-Inventory-Attempts":"0","X-WDCC-Visual-Proof-Mode":"forced"}});
+  }
   const maxAttempts=isolatedPreview?1:3;
   for(let attempt=0;attempt<maxAttempts;attempt++){
     upstream=await proxyDealer(request,"/api/inventory");

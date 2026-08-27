@@ -30,7 +30,7 @@ export function WdccPublicHeader(){
           <Link href="/get-approved?source=nav-financing" onClick={close}>Financing</Link>
           <Link href="/#how-it-works" onClick={close}>How It Works</Link>
           <Link href="/#reviews" onClick={close}>Reviews</Link>
-          <Link href="/about" onClick={close}>About Us</Link>
+          <Link href="/#about" onClick={close}>About Us</Link>
           <Link href="/contact?source=nav-contact" onClick={close}>Contact</Link>
         </nav>
         <div className={`rh-header-actions ${styles.actions}`}>

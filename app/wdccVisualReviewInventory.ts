@@ -1,8 +1,6 @@
-import nissan350zImage from "./recoveredVisualMedia/nissan350z";
-import fordF150Image from "./recoveredVisualMedia/fordF150";
-import hondaPilotImage from "./recoveredVisualMedia/hondaPilot";
-import kiaSportageImage from "./recoveredVisualMedia/kiaSportage";
-import toyotaRav4Image from "./recoveredVisualMedia/toyotaRav4";
+import {WDCC_RECOVERED_MEDIA_PATHS} from "../lib/wdccRecoveredMediaPaths";
+
+const {nissan350z:nissan350zImage,fordF150:fordF150Image,hondaPilot:hondaPilotImage,kiaSportage:kiaSportageImage,toyotaRav4:toyotaRav4Image}=WDCC_RECOVERED_MEDIA_PATHS;
 
 export type WdccVisualReviewVehicle={
   id:string;
@@ -34,6 +32,32 @@ export const WDCC_VISUAL_REVIEW_INVENTORY:WdccVisualReviewVehicle[]=[
   {id:"real-2019-kia-sportage",year:2019,make:"Kia",model:"Sportage",price:6500,downPayment:2500,mileage:127000,stock:"WDCC-SPORTAGE-2019",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"FWD",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:kiaSportageImage},
   {id:"real-2019-toyota-rav4",year:2019,make:"Toyota",model:"RAV4",price:10500,downPayment:4500,mileage:240000,stock:"WDCC-RAV4-2019",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"AWD",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:toyotaRav4Image}
 ];
+
+type WdccRecoveredMediaCandidate={
+  id?:string|null;
+  primaryPhotoPathname?:string|null;
+  primary_image_url?:string|null;
+  image?:string|null;
+};
+
+const WDCC_RECOVERED_MEDIA_BY_FALLBACK_ID:Record<string,string>={
+  "visual-lkg-2004-nissan-350z":nissan350zImage,
+  "visual-lkg-2016-ford-f150":fordF150Image,
+  "visual-lkg-2019-honda-pilot":hondaPilotImage,
+  "visual-lkg-2019-kia-sportage":kiaSportageImage,
+  "visual-lkg-2019-toyota-rav4":toyotaRav4Image
+};
+
+/**
+ * Restores recovered first-party photos only for the five immutable visual
+ * last-known-good records. Live/provider inventory is never passed here.
+ */
+export function withWdccRecoveredReviewMedia<T extends WdccRecoveredMediaCandidate>(items:T[]):T[]{
+  return items.map(item=>{
+    const recovered=WDCC_RECOVERED_MEDIA_BY_FALLBACK_ID[String(item.id||"")];
+    return recovered?{...item,primaryPhotoPathname:null,primary_image_url:recovered}:item;
+  });
+}
 
 const REVIEW_KEY="wdcc-owner-review-fixture-v2-real-media";
 

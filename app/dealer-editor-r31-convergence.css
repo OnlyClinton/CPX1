@@ -1,0 +1,370 @@
+/* R31 dealer editor convergence. UI-only overrides for the real VehicleEditor.
+   This file is intentionally loaded after the older dealer authorities. */
+
+html body .editVehicleApp.wizardStep3 .photoVehicleInfo {
+  margin-bottom: 20px !important;
+  padding-bottom: 18px !important;
+  border-bottom: 1px solid #e2e7eb !important;
+}
+html body .editVehicleApp.wizardStep3 .photoVehicleInfo > p {
+  margin: 0 0 14px !important;
+  color: #68747e !important;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+html body .editVehicleApp .stepper > button {
+  appearance: none !important;
+  position: relative !important;
+  z-index: 1 !important;
+  display: grid !important;
+  justify-items: center !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #6d7882 !important;
+  font:
+    700 8px/1.2 Inter,
+    system-ui,
+    sans-serif !important;
+  cursor: pointer !important;
+}
+html body .editVehicleApp .stepper > button.active {
+  color: #d91e2d !important;
+}
+html body .editVehicleApp .stepper > button.done b {
+  border-color: #e91f2f !important;
+  color: #e91f2f !important;
+}
+html body .editVehicleApp.wizardStep3 .wizardNav {
+  display: none !important;
+}
+html body .editVehicleApp.wizardStep3 .readinessCard li:last-child,
+html body .editVehicleApp.wizardStep3 .mobileReadiness li:last-child {
+  display: none !important;
+}
+html body .editVehicleApp.wizardStep3 .previewReadinessNote {
+  display: none !important;
+}
+
+@media (min-width: 901px) {
+  html body .editVehicleApp.wizardStep3 .editLayout {
+    grid-template-columns: minmax(0, 1fr) 300px !important;
+    width: min(1290px, calc(100% - 30px)) !important;
+    gap: 12px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editMain {
+    padding: 18px 20px 22px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editRight {
+    display: grid !important;
+    gap: 12px !important;
+    position: sticky !important;
+    top: 94px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editRight .readinessCard {
+    display: block !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editRight .vehiclePreview .previewSpecs,
+  html body .editVehicleApp.wizardStep3 .editRight .vehiclePreview > h4,
+  html body .editVehicleApp.wizardStep3 .editRight .vehiclePreview > p,
+  html body .editVehicleApp.wizardStep3 .editRight .vehiclePreview .previewActions {
+    display: none !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editRight .vehiclePreview .previewReadinessNote {
+    display: block !important;
+    margin-top: 6px !important;
+    color: #596670 !important;
+    font-size: 9px !important;
+    line-height: 1.35 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 9px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid .description {
+    grid-column: 1/-1 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid textarea {
+    min-height: 62px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoTools {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoDrop {
+    min-height: 112px !important;
+    padding: 9px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .thumbGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobileReadiness,
+  html body .editVehicleApp.wizardStep3 .mobilePreview {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  html body .editVehicleApp.wizardStep3 {
+    background: #f3f5f7 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop {
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    padding: 6px 10px !important;
+    gap: 8px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop .topBrand {
+    display: flex !important;
+    order: 1 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    gap: 7px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop .topBrand img {
+    width: 45px !important;
+    min-width: 45px !important;
+    height: 45px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop .topBrand b {
+    overflow: hidden !important;
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop .topBrand span {
+    display: block !important;
+    margin-top: 3px !important;
+    color: #b8c5ce !important;
+    font-size: 7.5px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop > a {
+    box-sizing: border-box !important;
+    display: flex !important;
+    order: 2 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    min-height: 38px !important;
+    padding: 0 10px !important;
+    border: 1px solid #976422 !important;
+    border-radius: 6px !important;
+    color: #fff !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    white-space: nowrap !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop .editMenu {
+    display: grid !important;
+    order: 3 !important;
+    flex: 0 0 38px !important;
+    width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    color: #fff !important;
+    font-size: 20px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop > span,
+  html body .editVehicleApp.wizardStep3 .editTop > button:not(.editMenu) {
+    display: none !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editLayout {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editMain {
+    padding: 14px 12px 18px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editHead {
+    margin-bottom: 13px !important;
+    padding-bottom: 13px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editHead h1 {
+    font-size: 21px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .stepper {
+    margin-top: 13px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .stepper > button {
+    font-size: 7px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .stepper b {
+    width: 25px !important;
+    height: 25px !important;
+    margin: 0 auto 3px !important;
+    font-size: 8.5px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .stepper:before {
+    top: 12px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photoVehicleInfo {
+    margin-bottom: 14px !important;
+    padding-bottom: 13px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage h2 {
+    font-size: 16px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photoVehicleInfo > p,
+  html body .editVehicleApp.wizardStep3 .photosStage > p {
+    font-size: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid > label {
+    display: grid !important;
+    grid-column: auto !important;
+    gap: 3px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  html
+    body
+    .editVehicleApp.wizardStep3
+    .photosStage
+    .fieldGrid
+    > label.description {
+    grid-column: 1/-1 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid label > span {
+    overflow: hidden !important;
+    font-size: 6.5px !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+  }
+  html
+    body
+    .editVehicleApp.wizardStep3
+    .photosStage
+    .fieldGrid
+    input:not([type="checkbox"]),
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid select {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 33px !important;
+    height: 33px !important;
+    padding: 0 6px !important;
+    border-radius: 5px !important;
+    font-size: 9px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid textarea {
+    width: 100% !important;
+    min-height: 52px !important;
+    padding: 7px !important;
+    font-size: 9px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoTools {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-auto-flow: column !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoTools > button {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    padding: 6px 3px !important;
+    gap: 2px !important;
+    text-align: center !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoTools > button b {
+    font-size: 8px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoTools > button span {
+    font-size: 6.5px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .photoDrop {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin-top: 8px !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .thumbGrid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .thumb,
+  html body .editVehicleApp.wizardStep3 .photosStage .addPhoto {
+    aspect-ratio: 1.3 !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobileReadiness {
+    display: block !important;
+    margin-top: 13px !important;
+    padding: 12px 0 0 !important;
+    border: 0 !important;
+    border-top: 1px solid #e1e6ea !important;
+    box-shadow: none !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobileReadiness > strong {
+    font-size: 22px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobileReadiness li {
+    padding: 4px 0 !important;
+    font-size: 8px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobileReadiness .photoStageActions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+    margin-top: 10px !important;
+  }
+  html
+    body
+    .editVehicleApp.wizardStep3
+    .mobileReadiness
+    .photoStageActions
+    button {
+    min-height: 38px !important;
+    font-size: 9px !important;
+  }
+  html
+    body
+    .editVehicleApp.wizardStep3
+    .mobileReadiness
+    .photoStageActions
+    .publish {
+    grid-column: 1/-1 !important;
+    min-height: 42px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .mobilePreview,
+  html body .editVehicleApp.wizardStep3 .editRight {
+    display: none !important;
+  }
+}
+
+@media (max-width: 375px) {
+  html body .editVehicleApp.wizardStep3 .editTop .topBrand b {
+    font-size: 8.5px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .editTop > a {
+    padding: 0 7px !important;
+    font-size: 8px !important;
+  }
+  html body .editVehicleApp.wizardStep3 .photosStage .fieldGrid {
+    gap: 5px !important;
+  }
+}
