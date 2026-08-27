@@ -100,9 +100,15 @@ jobs:
           [ "$code" = 200 ]
           build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$build" /tmp/root.html
-          curl --http1.1 -fsSL "$REMOTE_URL/wdcc-hero-v2.webp" -o /tmp/hero.webp
+          hero_code=000
+          for i in $(seq 1 18); do
+            hero_code="$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$REMOTE_URL/wdcc-hero-v2.webp?asset-proof=$i" || true)"
+            [ "$hero_code" = 200 ] && break
+            sleep 2
+          done
+          [ "$hero_code" = 200 ]
           [ "$(sha256sum /tmp/hero.webp|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp|awk '{print $1}')" ]
-          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" > mockup-v2-integrity.txt
+          printf 'url=%s\nsha=%s\nbuild=%s\nhttp=%s\nhero_http=%s\n' "$REMOTE_URL" "$GITHUB_SHA" "$build" "$code" "$hero_code" > mockup-v2-integrity.txt
 
       - name: Render owner-board proof and fail on regressions
         shell: bash
