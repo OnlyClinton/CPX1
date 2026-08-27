@@ -2,15 +2,16 @@
    Mobile uses one header only; there is no separate utility strip above it.
    Preview branch visual-only correction. */
 @media (max-width:767px){
-  html body main.reference-home.locked-storefront .rh-utility{
+  html body [data-wdcc-public-chrome="utility"]{
     display:none!important;
     height:0!important;
     min-height:0!important;
+    max-height:0!important;
   }
-  html body main.reference-home.locked-storefront .rh-header{
+  html body [data-wdcc-public-chrome="header"]{
     top:0!important;
   }
   html body .approvalBoard .approvalFieldGrid label{
-    font-size:10.5px!important;
+    font-size:11px!important;
   }
 }
