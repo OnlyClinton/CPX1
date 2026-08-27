@@ -1,5 +1,6 @@
 /* WDCC launch readability floor.
-   Typography minimums only; no layout, breakpoint, routing, auth, data, or production behavior changes. */
+   Typography/accessibility minimums and duplicate-brand suppression only;
+   no breakpoint, routing, auth, data, provider, schema, DNS or production behavior changes. */
 
 @media (min-width:768px){
   html body form label,
@@ -21,6 +22,10 @@
     font-size:11.5px!important;
     line-height:1.2!important;
   }
+
+  /* Latest Add/Edit board uses the top-bar portal identity; do not duplicate it
+     inside the desktop sidebar. Mobile drawer branding remains unchanged. */
+  html body .editVehicleApp .editSide>.editBrand{display:none!important}
 }
 
 @media (max-width:767px){
