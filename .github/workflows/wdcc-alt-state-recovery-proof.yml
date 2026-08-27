@@ -1,0 +1,111 @@
+name: WDCC Alternate State Recovery Proof
+
+on:
+  push:
+    branches: [fix/wdcc-blob-quota-hardening-20260826]
+    paths:
+      - '.github/workflows/wdcc-alt-state-recovery-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install read-only clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci >/dev/null
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Compare known state copies without exposing contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-alt-state-proof.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {get,list} from '@vercel/blob';
+
+          const canonical=[
+            ['wdcc-clean-20260819-173749','store_vVJ5kU6x76yZVkGs'],
+            ['wdcc-rescue-20260819-172412','store_KopvAQeMcatdS5DS'],
+            ['wdcc-private-20260801005157','store_LdMSV1550BRgc0SP']
+          ];
+          const backupStore=['wdcc-v10-20260819-194257','store_cNUyQRVlXtyvZQ5N'];
+          const oidc=process.env.VERCEL_OIDC_TOKEN||'';
+          const options=storeId=>({access:'private',useCache:false,storeId,oidcToken:oidc||undefined});
+          const read=async(path,storeId)=>{
+            const r=await get(path,options(storeId));
+            if(!r||r.statusCode!==200||!r.stream)throw new Error('READ_FAILED');
+            const chunks=[];for await(const c of r.stream)chunks.push(c);
+            const raw=Buffer.concat(chunks);
+            const j=JSON.parse(raw.toString('utf8'));
+            const arrays=['tenants','users','vehicles','leads','audit'];
+            return {
+              revision:Number(j.revision||0),
+              updatedAt:String(j.updatedAt||''),
+              counts:Object.fromEntries(arrays.map(k=>[k,Array.isArray(j[k])?j[k].length:null])),
+              shapeOk:arrays.every(k=>Array.isArray(j[k])),
+              sha256:crypto.createHash('sha256').update(raw).digest('hex')
+            };
+          };
+
+          const out=[];
+          for(const [name,storeId] of canonical){
+            try{out.push({name,storeId,source:'canonical',ok:true,...await read('private/state/platform-v3.json',storeId)});}
+            catch(e){out.push({name,storeId,source:'canonical',ok:false,error:String(e?.message||e)});}
+          }
+
+          try{
+            const [name,storeId]=backupStore;
+            const r=await list({prefix:'private/state/backups/',limit:1000,storeId,oidcToken:oidc||undefined});
+            const blobs=[...(r.blobs||[])].sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));
+            const latest=blobs[0];
+            if(latest){out.push({name,storeId,source:'latest-backup',pathname:latest.pathname,uploadedAt:latest.uploadedAt,ok:true,...await read(latest.pathname,storeId)});}
+            else out.push({name,storeId,source:'latest-backup',ok:false,error:'NO_BACKUPS'});
+          }catch(e){out.push({name:backupStore[0],storeId:backupStore[1],source:'latest-backup',ok:false,error:String(e?.message||e)});}
+
+          const healthy=out.filter(x=>x.ok&&x.shapeOk).sort((a,b)=>(b.revision-a.revision)||String(b.updatedAt).localeCompare(String(a.updatedAt)));
+          const winner=healthy[0]||null;
+          const safe={
+            generatedAt:new Date().toISOString(),
+            oidcPresent:Boolean(oidc),
+            results:out,
+            recommended:winner?{name:winner.name,storeId:winner.storeId,source:winner.source,revision:winner.revision,updatedAt:winner.updatedAt,sha256:winner.sha256}:null
+          };
+          console.log(JSON.stringify(safe,null,2));
+          require('node:fs').writeFileSync('/tmp/wdcc-alt-state-proof.json',JSON.stringify(safe,null,2)+'\n');
+          if(!winner)process.exitCode=2;
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-alt-state-proof.mjs
+      - name: Report metadata-only recovery proof
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/wdcc-alt-state-proof.json || echo '{"results":[],"recommended":null}' > /tmp/wdcc-alt-state-proof.json
+          body=$(printf 'Read-only alternate-state recovery proof. No Blob writes, env changes, deployments, aliases, DNS, routes, or production mutations.\n\n```json\n%s\n```' "$(cat /tmp/wdcc-alt-state-proof.json)")
+          gh issue comment 508 --repo "$GITHUB_REPOSITORY" --body "$body"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-alt-state-recovery-proof-${{ github.sha }}
+          path: /tmp/wdcc-alt-state-proof.json
+          retention-days: 3
