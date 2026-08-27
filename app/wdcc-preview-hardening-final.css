@@ -8,6 +8,26 @@ html body main.dcPage.inventoryContract .actionCell small{font-size:8.5px!import
 html body main.dcPage.inventoryContract .inventoryFooter{font-size:8.5px!important;line-height:1.2!important}
 html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important;line-height:1!important}
 
+/* Dealer editor: the real component root is editVehicleApp, not vehicleEditor. */
+html body main.editVehicleApp .photoTools b{font-size:10px!important;line-height:1.1!important}
+html body main.editVehicleApp .photoTools span{font-size:8.5px!important;line-height:1.2!important}
+html body main.editVehicleApp .thumb em{font-size:8.5px!important;line-height:1!important}
+html body main.editVehicleApp .thumbGrid .addPhoto span{font-size:8.5px!important;line-height:1.1!important}
+html body main.editVehicleApp .readinessCard li,
+html body main.editVehicleApp .mobileReadiness li{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .readinessCard small,
+html body main.editVehicleApp .mobileReadiness small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .reviewGrid span{font-size:8.5px!important;line-height:1.1!important}
+html body main.editVehicleApp .reviewGrid small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .internalToggle small{font-size:8.5px!important;line-height:1.25!important}
+html body main.editVehicleApp .vehiclePreview .previewImage small{font-size:8.5px!important;line-height:1!important}
+html body main.editVehicleApp .vehiclePreview .previewPrice b{font-size:8.5px!important;line-height:1!important}
+html body main.editVehicleApp .vehiclePreview .previewSpecs span{font-size:8.5px!important;line-height:1.2!important}
+html body main.editVehicleApp .vehiclePreview h4{font-size:9px!important;line-height:1.15!important}
+html body main.editVehicleApp .vehiclePreview p{font-size:8.5px!important;line-height:1.35!important}
+html body main.editVehicleApp .vehiclePreview .previewActions a{font-size:8.5px!important;line-height:1!important;min-height:40px!important}
+html body main.editVehicleApp .photoStageActions button{font-size:9px!important;min-height:40px!important}
+
 @media(max-width:767px){
   html body main.dcPage.inventoryContract .visibilityTags i{font-size:8.5px!important;min-height:20px!important;display:inline-flex!important;align-items:center!important}
   html body main.dcPage.inventoryContract .statusCell b{font-size:8.5px!important;min-height:22px!important;display:inline-flex!important;align-items:center!important}
@@ -15,4 +35,24 @@ html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px
   html body main.dcPage.inventoryContract .actionCell a{min-width:54px!important;min-height:44px!important}
   html body main.dcPage.inventoryContract .actionCell small{font-size:8.5px!important}
   html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important}
+
+  html body main.editVehicleApp .photoTools button{min-height:72px!important}
+  html body main.editVehicleApp .photoTools b{font-size:10px!important}
+  html body main.editVehicleApp .photoTools span{font-size:8.5px!important}
+  html body main.editVehicleApp .thumb em,
+  html body main.editVehicleApp .thumbGrid .addPhoto span{font-size:8.5px!important}
+  html body main.editVehicleApp .readinessCard li,
+  html body main.editVehicleApp .mobileReadiness li,
+  html body main.editVehicleApp .readinessCard small,
+  html body main.editVehicleApp .mobileReadiness small{font-size:8.5px!important}
+  html body main.editVehicleApp .reviewGrid span,
+  html body main.editVehicleApp .reviewGrid small,
+  html body main.editVehicleApp .internalToggle small{font-size:8.5px!important}
+  html body main.editVehicleApp .vehiclePreview .previewImage small,
+  html body main.editVehicleApp .vehiclePreview .previewPrice b,
+  html body main.editVehicleApp .vehiclePreview .previewSpecs span,
+  html body main.editVehicleApp .vehiclePreview p,
+  html body main.editVehicleApp .vehiclePreview .previewActions a{font-size:8.5px!important}
+  html body main.editVehicleApp .vehiclePreview .previewActions a{min-height:44px!important}
+  html body main.editVehicleApp .photoStageActions button{font-size:9px!important;min-height:44px!important}
 }
