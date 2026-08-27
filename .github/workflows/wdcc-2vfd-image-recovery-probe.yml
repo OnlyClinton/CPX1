@@ -1,0 +1,58 @@
+name: WDCC 2vfD Image Recovery Probe
+
+on:
+  push:
+    branches:
+      - emergency/wdcc-cloudflare-r2-20260827
+    paths:
+      - .github/workflows/wdcc-2vfd-image-recovery-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      DPL: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+    steps:
+      - name: Probe immutable deployment output files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          for version in v7 v6; do
+            url="https://api.vercel.com/$version/deployments/$DPL/files?teamId=$TEAM_ID"
+            code="$(curl -sS -o "/tmp/files-$version.json" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "$url" || true)"
+            echo "$version HTTP=$code"
+            if [ "$code" = 200 ]; then
+              cp "/tmp/files-$version.json" /tmp/files.json
+              break
+            fi
+            head -c 600 "/tmp/files-$version.json" || true
+            echo
+          done
+          test -s /tmp/files.json
+          jq -r '.. | objects | select((.name? // .path? // .file? // "") | test("assets/cars|wdcc-hero";"i")) | [.name // .path // .file // "", .uid // .id // .sha // "", .size // ""] | @tsv' /tmp/files.json | sort -u | tee /tmp/matches.tsv
+          test -s /tmp/matches.tsv
+          for f in 2004-nissan-350z-1.webp 2016-ford-f150-limited-1.webp 2019-honda-pilot-1.webp 2019-kia-sportage-1.webp 2019-toyota-rav4-1.webp; do
+            grep -F "$f" /tmp/matches.tsv >/dev/null
+          done
+
+      - name: Report exact donor inventory
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s /tmp/matches.tsv ]; then
+            compact="$(awk -F '\t' '{printf "%s(size=%s) ",$1,$3}' /tmp/matches.tsv | head -c 3500)"
+            gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "2vfD immutable deployment-file probe run $GITHUB_RUN_ID located the donor image output entries: $compact. No deployment, route, DNS, Blob, or state mutation was performed." || true
+          else
+            gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "2vfD immutable deployment-file probe run $GITHUB_RUN_ID could not enumerate donor image files. No deployment, route, DNS, Blob, or state mutation was performed." || true
+          fi
