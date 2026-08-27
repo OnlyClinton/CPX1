@@ -80,6 +80,26 @@ html body main.reference-home.locked-storefront .rh-benefit small{
   line-height:1.42!important;
 }
 
+/* Dealer dashboard must use one real image element, never a pseudo-image replacement. */
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{
+  display:block!important;
+  width:58px!important;
+  min-width:58px!important;
+  height:58px!important;
+  min-height:58px!important;
+  object-fit:contain!important;
+  border-radius:50%!important;
+  clip-path:circle(49% at 50% 50%)!important;
+  background:transparent!important;
+  border:2px solid rgba(255,255,255,.78)!important;
+  box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
+}
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::before,
+html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{
+  content:none!important;
+  display:none!important;
+}
+
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
   html body .leadPage .leadGrid .consent,
   html body main.wdcc-public-page .leadGrid .consent,
@@ -135,5 +155,12 @@ html body main.reference-home.locked-storefront .rh-benefit small{
   html body main.reference-home.locked-storefront .rh-benefit small{
     font-size:11px!important;
     line-height:1.42!important;
+  }
+
+  html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand > img{
+    width:50px!important;
+    min-width:50px!important;
+    height:50px!important;
+    min-height:50px!important;
   }
 }
