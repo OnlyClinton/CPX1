@@ -28,6 +28,60 @@ html body main.inventoryContract .statusCell b,
 html body main.inventoryContract .readyCell span{font-size:9.5px!important}
 html body main.inventoryContract .inventoryFooter{font-size:10px!important}
 
+/* 50869/50873 dashboard optical contract: dark operating canvas, red active rail,
+   low-glare navy cards and compact analytics. Add/Edit and VDP remain separately scoped. */
+html body main.dcPage.dealerDashboardLocked{background:#06111a!important;color:#eef4f8!important}
+html body main.dcPage.dealerDashboardLocked>.dcTop{background:#02080d!important;border-bottom:1px solid #1b3040!important;color:#fff!important}
+html body main.dcPage.dealerDashboardLocked .dcSide{background:#071522!important;border-right:1px solid #173247!important;color:#b9c5ce!important}
+html body main.dcPage.dealerDashboardLocked .dcSide nav strong{color:#758b9b!important}
+html body main.dcPage.dealerDashboardLocked .dcSide nav a{color:#c4d0d8!important}
+html body main.dcPage.dealerDashboardLocked .dcSide nav a.active{background:#ef1f2f!important;color:#fff!important;box-shadow:0 8px 20px rgba(239,31,47,.18)!important}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{background:#07121c!important;color:#edf3f7!important}
+html body main.dcPage.dealerDashboardLocked .dcTitle h1{color:#fff!important;text-shadow:none!important}
+html body main.dcPage.dealerDashboardLocked .dcTitle p{color:#8fa0ad!important}
+html body main.dcPage.dealerDashboardLocked .dcTitle .dcButton{background:#0b1c29!important;color:#eaf1f5!important;border:1px solid #294052!important;box-shadow:none!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article,
+html body main.dcPage.dealerDashboardLocked .dashboardGridLocked>.dcCard,
+html body main.dcPage.dealerDashboardLocked .opsCards>.dcCard,
+html body main.dcPage.dealerDashboardLocked .activityLocked.dcCard{background:#0a1b28!important;color:#eef4f8!important;border:1px solid #1a3447!important;box-shadow:0 10px 24px rgba(0,0,0,.16)!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article>span{color:#8fa1af!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article>b{color:#fff!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article>b.green{color:#58d381!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article>b.red{color:#ff3c4b!important}
+html body main.dcPage.dealerDashboardLocked .dashMetrics>article>b.blue{color:#48a1ff!important}
+html body main.dcPage.dealerDashboardLocked .dcCard>header>b,
+html body main.dcPage.dealerDashboardLocked .recentVehicles b,
+html body main.dcPage.dealerDashboardLocked .activityLocked span b,
+html body main.dcPage.dealerDashboardLocked .opsCards article>div b,
+html body main.dcPage.dealerDashboardLocked .opsCards article>div span{color:#f4f8fb!important}
+html body main.dcPage.dealerDashboardLocked .dcCard>header>a{color:#62aef1!important}
+html body main.dcPage.dealerDashboardLocked .legend p,
+html body main.dcPage.dealerDashboardLocked .recentVehicles>a,
+html body main.dcPage.dealerDashboardLocked .recentVehicles small,
+html body main.dcPage.dealerDashboardLocked .activityLocked>a,
+html body main.dcPage.dealerDashboardLocked .activityLocked small,
+html body main.dcPage.dealerDashboardLocked .opsCards article>small,
+html body main.dcPage.dealerDashboardLocked .emptyDash{color:#91a2ae!important}
+html body main.dcPage.dealerDashboardLocked .recentVehicles>a,
+html body main.dcPage.dealerDashboardLocked .activityLocked>a{border-color:#173247!important}
+html body main.dcPage.dealerDashboardLocked .recentVehicles>a:hover,
+html body main.dcPage.dealerDashboardLocked .activityLocked>a:hover{background:#0d2231!important}
+html body main.dcPage.dealerDashboardLocked .miniThumb{background:#06111a!important;color:#fff!important;border:1px solid #1b3548!important}
+html body main.dcPage.dealerDashboardLocked .donutLocked i{background:#0a1b28!important;box-shadow:0 0 0 1px #1a3447 inset!important}
+html body main.dcPage.dealerDashboardLocked .opsCards article>a{background:#0b2130!important;color:#edf4f8!important;border-color:#294257!important}
+html body main.dcPage.dealerDashboardLocked .dashMobileNav{background:#06111a!important;color:#9fb0bc!important;border-top:1px solid #21384a!important;box-shadow:0 -8px 24px rgba(0,0,0,.24)!important}
+html body main.dcPage.dealerDashboardLocked .dashMobileNav .active{color:#ff3343!important}
+html body main.dcPage.dealerDashboardLocked .dashMobileNav .add{background:#ef1f2f!important;color:#fff!important;box-shadow:0 8px 22px rgba(239,31,47,.28)!important}
+
+@media(min-width:768px){
+  html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{padding:20px!important;max-width:1380px!important}
+  html body main.dcPage.dealerDashboardLocked .dashMetrics{gap:10px!important;margin-bottom:12px!important}
+  html body main.dcPage.dealerDashboardLocked .dashMetrics>article{min-height:76px!important;padding:12px 14px!important;border-radius:7px!important}
+  html body main.dcPage.dealerDashboardLocked .dashboardGridLocked{gap:10px!important}
+  html body main.dcPage.dealerDashboardLocked .opsCards{gap:10px!important;margin-top:10px!important}
+  html body main.dcPage.dealerDashboardLocked .activityLocked{margin-top:10px!important}
+}
+
 @media(max-width:767px){
   html body main.dcPage>.dcTop{height:68px!important;min-height:68px!important;padding:0 12px!important}
   html body main.dcPage>.dcTop>.brand{gap:9px!important;max-width:calc(100% - 88px)!important}
@@ -49,4 +103,12 @@ html body main.inventoryContract .inventoryFooter{font-size:10px!important}
   html body main.inventoryContract .inventoryRow{font-size:11.5px!important}
   html body main.inventoryContract .vehicleCell strong{font-size:12.5px!important}
   html body main.inventoryContract .vehicleCell small{font-size:10px!important}
+  html body main.dcPage.dealerDashboardLocked{background:#06111a!important;padding-bottom:76px!important}
+  html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{background:#07121c!important;padding:14px 12px 88px!important}
+  html body main.dcPage.dealerDashboardLocked .dcTitle h1{font-size:29px!important;color:#fff!important}
+  html body main.dcPage.dealerDashboardLocked .dcTitle p{font-size:10px!important;color:#91a2ae!important}
+  html body main.dcPage.dealerDashboardLocked .dashMetrics{gap:8px!important}
+  html body main.dcPage.dealerDashboardLocked .dashMetrics>article{min-height:76px!important;padding:12px!important;border-radius:8px!important}
+  html body main.dcPage.dealerDashboardLocked .dashboardGridLocked{gap:9px!important}
+  html body main.dcPage.dealerDashboardLocked .opsCards{gap:8px!important}
 }
