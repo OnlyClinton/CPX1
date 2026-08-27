@@ -1,0 +1,74 @@
+name: WDCC Blob Authority Discovery Read-Only
+
+on:
+  push:
+    branches: [proof/wdcc-blob-recovery-20260827]
+    paths:
+      - '.github/workflows/wdcc-blob-authority-discovery-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PHOENIX_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      DEALER_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      STOREFRONT_PROJECT: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Probe existing project credentials without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-authority-probe.mjs <<'NODE'
+          import {get,list} from '@vercel/blob';
+          const path='private/state/platform-v3.json';
+          const token=String(process.env.BLOB_READ_WRITE_TOKEN||'').trim();
+          if(!token)throw Error('TOKEN_MISSING');
+          const r=await get(path,{access:'private',useCache:false,token});
+          if(!r||r.statusCode!==200||!r.stream)throw Error(`STATE_GET_${r?.statusCode||0}`);
+          const bytes=Buffer.from(await new Response(r.stream).arrayBuffer());
+          const s=JSON.parse(bytes.toString('utf8'));
+          const counts={};for(const k of ['users','vehicles','inventory','leads','events','media','audit']){const v=s?.[k];if(Array.isArray(v))counts[k]=v.length;else if(v&&typeof v==='object')counts[k]=Object.keys(v).length}
+          let backupCount=0,maxPathRevision=0;
+          try{let cursor;for(let i=0;i<20;i++){const x=await list({prefix:'private/state/backups/',limit:200,cursor,token});backupCount+=(x.blobs||[]).length;for(const b of x.blobs||[]){const m=String(b.pathname).match(/(?:^|-)r(\d+)(?:-|\.|$)/i);maxPathRevision=Math.max(maxPathRevision,Number(m?.[1]||0))}if(!x.hasMore||!x.cursor)break;cursor=x.cursor}}catch{}
+          console.log(JSON.stringify({ok:true,revision:Number(s.revision||0),updatedAt:s.updatedAt||null,counts,bytes:bytes.length,backupCount,maxPathRevision}));
+          NODE
+          results='[]'
+          for pair in "phoenix:$PHOENIX_PROJECT" "dealer:$DEALER_PROJECT" "storefront:$STOREFRONT_PROJECT"; do
+            name="${pair%%:*}"; p="${pair#*:}"; d="/tmp/auth-$name"; rm -rf "$d"; mkdir -p "$d/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$p" > "$d/.vercel/project.json"
+            if ! (cd "$d" && vercel env pull "$d/env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
+              results="$(jq -c --arg n "$name" --arg p "$p" '.+[{name:$n,project:$p,envPull:false,ok:false}]' <<<"$results")"; continue
+            fi
+            present=false; grep -q '^BLOB_READ_WRITE_TOKEN=' "$d/env" && present=true
+            if [ "$present" != true ]; then results="$(jq -c --arg n "$name" --arg p "$p" '.+[{name:$n,project:$p,envPull:true,tokenPresent:false,ok:false}]' <<<"$results")"; continue; fi
+            if probe="$(set -a; . "$d/env"; set +a; node "$GITHUB_WORKSPACE/.wdcc-authority-probe.mjs" 2>/tmp/probe-$name.err)"; then
+              results="$(jq -c --arg n "$name" --arg p "$p" --argjson q "$probe" '.+[{name:$n,project:$p,envPull:true,tokenPresent:true,ok:true,probe:$q}]' <<<"$results")"
+            else
+              err="$(tail -1 /tmp/probe-$name.err | sed 's/[[:space:]]\+/ /g' | cut -c1-180)"
+              results="$(jq -c --arg n "$name" --arg p "$p" --arg e "$err" '.+[{name:$n,project:$p,envPull:true,tokenPresent:true,ok:false,error:$e}]' <<<"$results")"
+            fi
+          done
+          jq . <<<"$results" | tee wdcc-blob-authority-discovery.json
+          jq -e 'map(select(.ok==true))|length>0' <<<"$results" >/dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-blob-authority-discovery-${{ github.sha }}
+          path: wdcc-blob-authority-discovery.json
+          if-no-files-found: warn
+          retention-days: 3
+
+# READ-ONLY: env pull + private get/list only. No Blob writes and no deployments.
