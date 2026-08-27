@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: wdcc-preview-blocker-repair
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   VERCEL_CLI_VERSION: '59.3.0'
@@ -34,6 +34,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Verify exact checked-out SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Verify isolated Vercel build and recovery guard
         run: |
           set -euo pipefail
@@ -50,6 +52,7 @@ jobs:
           npm run build
 
   repair-preview:
+    if: github.event_name == 'workflow_dispatch'
     needs: build-safety
     runs-on: ubuntu-latest
     timeout-minutes: 20
