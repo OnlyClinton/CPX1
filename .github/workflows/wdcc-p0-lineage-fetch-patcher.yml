@@ -25,20 +25,17 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('.github/workflows/wdcc-owner-approved-p0-dealer-upload.yml')
-          s=p.read_text()
-          needle="""      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.P0_SHA }}
-          fetch-depth: 1
-"""
-          repl="""      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.P0_SHA }}
-          fetch-depth: 0
-"""
-          if s.count(needle)!=1:
-              raise SystemExit(f'expected one exact P0 checkout, found {s.count(needle)}')
-          p.write_text(s.replace(needle,repl,1))
+          lines=p.read_text().splitlines()
+          hits=[]
+          for i,line in enumerate(lines[:-1]):
+              if line.strip().startswith('ref:') and 'P0_SHA' in line and lines[i+1].strip()=='fetch-depth: 1':
+                  hits.append(i+1)
+          if len(hits)!=1:
+              raise SystemExit(f'expected one P0 shallow checkout, found {len(hits)}')
+          i=hits[0]
+          indent=lines[i][:-len(lines[i].lstrip())]
+          lines[i]=indent+'fetch-depth: 0'
+          p.write_text('\n'.join(lines)+'\n')
           PY
           rm .github/workflows/wdcc-p0-lineage-fetch-patcher.yml
           git diff --check
