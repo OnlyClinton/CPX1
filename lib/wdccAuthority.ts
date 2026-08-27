@@ -1,4 +1,4 @@
-// Cloudflare dealer front door and customer lead facade use this authority map while Phoenix remains the canonical data backend.
+// Cloudflare dealer front door and customer lead facade use this authority map while Phoenix remains a rollback backend.
 export const WDCC_CANONICAL_BACKEND_DEFAULT="https://wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app";
 export const WDCC_DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 export const WDCC_PHOENIX_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
@@ -9,6 +9,10 @@ export function canonicalDealerBackend(){
 }
 
 export function blobAuthority(){
+  const stateServiceUrl=(process.env.WDCC_STATE_SERVICE_URL||"").trim().replace(/\/$/,"");
+  const stateServiceToken=(process.env.WDCC_STATE_SERVICE_TOKEN||"").trim();
+  if(stateServiceUrl&&stateServiceToken)return {mode:"cloudflare-r2" as const,options:{stateServiceUrl,stateServiceToken}};
+
   const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
   if(token)return {mode:"token" as const,options:{token}};
   const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
