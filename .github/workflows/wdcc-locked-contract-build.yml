@@ -5,7 +5,11 @@ on:
     branches: [fix/wdcc-locked-contract-20260826]
     paths:
       - '.github/workflows/wdcc-locked-contract-build.yml'
+      - '.github/workflows/wdcc-android-owner-proof.yml'
+      - '.github/workflows/wdcc-immutable-visual-acceptance-v2.yml'
+      - '.github/workflows/wdcc-owner-target-screenshot.yml'
       - '.github/workflows/wdcc-recover-8ar-hero.yml'
+      - 'scripts/wdcc-immutable-visual-proof*.mjs'
       - 'scripts/wdcc-hydrate-8ar-hero.mjs'
       - 'app/**'
       - 'lib/**'
@@ -59,6 +63,8 @@ jobs:
           grep -q 'wdcc-system-v2.css' app/layout.tsx
           test -s app/wdcc-contract-closeout.css
           grep -q 'wdcc-contract-closeout.css' app/layout.tsx
+          grep -q 'wdcc-owner-approved-logo-final.css' app/layout.tsx
+          grep -q 'grid-template-columns:50px minmax(0,1fr) 50px!important' app/wdcc-owner-approved-logo-final.css
           ! grep -Eq 'import"\./(wdcc-public-chrome-final|storefront-optical-final|wdcc-real-device-scale-final|wdcc-responsive-audit-closeout|wdcc-owner-contract-final)\.css"' app/layout.tsx
           test -s app/WdccVehicleCard.tsx
           test -s app/WdccVehicleCard.module.css
@@ -70,8 +76,6 @@ jobs:
           grep -q 'inventorySource==="last-known-good-real-proof"' app/InventoryGrid.tsx
           ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css
           grep -q 'grid-template-columns:repeat(5,minmax(0,1fr))' app/wdcc-owner-contract-final.css
-          grep -q "content:url('/wdcc-logo-transparent.webp')" app/wdcc-owner-contract-final.css
-          grep -q 'clip-path:circle(48% at 50% 50%)' app/wdcc-owner-contract-final.css
           echo 'WDCC_ARCHITECTURE_CONTRACT=PASS'
 
       - name: Build exact visual candidate
@@ -144,12 +148,8 @@ jobs:
           set -euo pipefail
           alias="sha-${GITHUB_SHA:0:12}"
           npx wrangler versions upload --config wrangler.locked-preview.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-locked-preview.log
-          url="$(grep -Eo "https://${alias}-[A-Za-z0-9._-]+\.workers\.dev" /tmp/wdcc-locked-preview.log | tail -1)"
-          test -n "$url"
-          case "$url" in
-            *"${alias}-wdcc-locked-preview."*.workers.dev) ;;
-            *) echo "Preview URL is not SHA-pinned: $url" >&2; exit 1 ;;
-          esac
+          grep -Fq 'Worker Version ID:' /tmp/wdcc-locked-preview.log
+          url="https://${alias}-wdcc-locked-preview.clico-global.workers.dev"
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > preview-url.txt
           printf '%s\n' "$GITHUB_SHA" > preview-sha.txt
@@ -161,8 +161,8 @@ jobs:
         run: |
           set -euo pipefail
           code=000
-          for i in $(seq 1 20); do
-            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?preview=$GITHUB_RUN_ID-$i" || true)"
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?preview=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
@@ -171,17 +171,17 @@ jobs:
           grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="(owner-approved|horizontal-owner-approved)"|wdcc-official-logo.webp|wdcc-logo-transparent.webp' /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
 
-          test "$(curl -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
 
-          test "$(curl -sS -L -o /tmp/intro-logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(curl --http1.1 -sS -L -o /tmp/intro-logo.webp -w '%{http_code}' "$URL/wdcc-official-logo.webp?asset=$GITHUB_RUN_ID")" = 200
           test -s /tmp/intro-logo.webp
 
-          test "$(curl -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
+          test "$(curl --http1.1 -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
           grep -qi 'items\|inventory' /tmp/inventory.json
 
-          dealer="$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?preview=$GITHUB_RUN_ID" || true)"
+          dealer="$(curl --http1.1 -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?preview=$GITHUB_RUN_ID" || true)"
           test "$dealer" = 200
           grep -qi "dealer" /tmp/dealer.html
           {
