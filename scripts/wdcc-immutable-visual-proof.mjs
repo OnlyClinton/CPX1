@@ -6,17 +6,8 @@ const base=process.env.URL;
 if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
 const sourcePath=new URL('./wdcc-immutable-visual-proof-base.mjs',import.meta.url);
 const alignedPath=new URL('./.wdcc-immutable-visual-proof-aligned.mjs',import.meta.url);
-let source=fs.readFileSync(sourcePath,'utf8');
-const replacements=[
-  ["(mobileHome.logoW||0)<90","(mobileHome.logoW||0)<82||(mobileHome.logoW||0)>90"],
-  ["desktopHome.logoW<100","desktopHome.logoW<64||desktopHome.logoW>84"],
-  ["/* DESKTOP STOREFRONT — five featured cards per supplied 3294 reference. */","/* DESKTOP STOREFRONT — locked three-column featured inventory contract. */"],
-  ["g.tracks!==5","g.tracks!==3"]
-];
-for(const [from,to] of replacements){
-  if(!source.includes(from))throw new Error(`PROOF_ALIGNMENT_SOURCE_DRIFT_${from}`);
-  source=source.replace(from,to);
-}
+const source=fs.readFileSync(sourcePath,'utf8');
+// The base proof is the controlling owner contract: horizontal public wordmark and five wide featured cards.
 fs.writeFileSync(alignedPath,source);
 try{await import(`${pathToFileURL(alignedPath.pathname).href}?aligned=${Date.now()}`)}finally{fs.rmSync(alignedPath,{force:true})}
 

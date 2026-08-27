@@ -95,18 +95,18 @@ jobs:
                 const header=headers[0],logo=header?.querySelector('.rh-logo img'),call=header?.querySelector('.rh-call');
                 const callStyle=call?getComputedStyle(call):null;
                 const legacyDock=[...document.querySelectorAll('.stickyCtaBar')].filter(visible).length;
-                return{utilityCount:utility.length,headerCount:headers.length,utility:rect(utility[0]),header:rect(header),logo:rect(logo),logoCount:header?[...header.querySelectorAll('img')].filter(visible).length:0,call:rect(call),callRadius:callStyle?.borderTopLeftRadius||'',legacyDock};
+                return{utilityCount:utility.length,headerCount:headers.length,utility:rect(utility[0]),header:rect(header),logo:rect(logo),logoSrc:logo?.getAttribute('src')||'',logoCount:header?[...header.querySelectorAll('img')].filter(visible).length:0,call:rect(call),callRadius:callStyle?.borderTopLeftRadius||'',legacyDock};
               });
               if(chrome.utilityCount!==1||chrome.headerCount!==1)fail(name,'PUBLIC_CHROME_COUNT',chrome);
-              const u=chrome.utility?.h||0,h=chrome.header?.h||0,lw=chrome.logo?.w||0,lh=chrome.logo?.h||0;
+              const u=chrome.utility?.h||0,h=chrome.header?.h||0,lw=chrome.logo?.w||0,lh=chrome.logo?.h||0,ratio=lw/Math.max(lh,1);
               if(isMobile){
                 if(u<26||u>31||h<74||h>82)fail(name,'MOBILE_CHROME_HEIGHT',chrome);
-                if(lw<70||lw>90||lh<70||lh>90||Math.abs(lw-lh)>4)fail(name,'MOBILE_LOGO_GEOMETRY',chrome);
+                if(lw<120||lw>170||lh<34||lh>58||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'MOBILE_LOGO_GEOMETRY',chrome);
                 if(!chrome.call||chrome.call.w<44||chrome.call.w>54||Math.abs(chrome.call.w-chrome.call.h)>2)fail(name,'MOBILE_CALL_GEOMETRY',chrome);
                 const radius=parseFloat(chrome.callRadius)||0;if(radius<chrome.call.w*.42&&!chrome.callRadius.includes('%'))fail(name,'MOBILE_CALL_NOT_ROUND',chrome);
               }else{
                 if(u<27||u>34||h<70||h>82)fail(name,'DESKTOP_CHROME_HEIGHT',chrome);
-                if(lw<64||lw>84||lh<64||lh>84||Math.abs(lw-lh)>4)fail(name,'DESKTOP_LOGO_GEOMETRY',chrome);
+                if(lw<120||lw>180||lh<34||lh>60||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'DESKTOP_LOGO_GEOMETRY',chrome);
               }
               if(chrome.logoCount!==1||chrome.legacyDock!==0)fail(name,'PUBLIC_CHROME_DUPLICATE',chrome);
               return chrome;

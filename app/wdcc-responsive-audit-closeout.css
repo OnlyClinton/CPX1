@@ -22,6 +22,26 @@ html body main.targetLeadShell .targetLeadMobile a span{font-size:9.5px!importan
 html body [data-wdcc-public-chrome="utility"].rh-utility{display:block!important;visibility:visible!important;opacity:1!important}
 html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{display:flex!important;visibility:visible!important;opacity:1!important}
 
+/* Newest owner public-header contract: horizontal wordmark. Intro and dealer retain the round badge. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:164px minmax(0,1fr) auto!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo{width:160px!important;height:78px!important;overflow:visible!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo img{
+  content:url('/wdcc-logo-transparent.webp')!important;
+  display:block!important;
+  width:148px!important;
+  min-width:0!important;
+  max-width:148px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:50px!important;
+  object-fit:contain!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
 /* Benefit/security rail. */
 html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:42px!important;min-width:42px!important;height:42px!important;min-height:42px!important;border-radius:50%!important;display:grid!important;place-items:center!important;font-size:22px!important;line-height:1!important}
 html body main.reference-home.locked-storefront .rh-benefit strong{font-size:13px!important;line-height:1.2!important}
@@ -53,6 +73,21 @@ html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{content:no
   html body [data-wdcc-public-chrome="utility"].rh-utility{display:block!important;visibility:visible!important;opacity:1!important;height:28px!important;min-height:28px!important;max-height:28px!important}
   html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{display:flex!important;visibility:visible!important;opacity:1!important;height:28px!important;min-height:28px!important;font-size:9px!important;line-height:1!important}
   html body [data-wdcc-public-chrome="header"].rh-header{top:28px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:50px minmax(0,1fr) 50px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:150px!important;height:78px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo img{
+    content:url('/wdcc-logo-transparent.webp')!important;
+    width:142px!important;
+    min-width:0!important;
+    max-width:142px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:48px!important;
+    border:0!important;
+    border-radius:0!important;
+    clip-path:none!important;
+    box-shadow:none!important;
+  }
 
   html body main.reference-home.locked-storefront .rh-benefit{grid-template-columns:40px minmax(0,1fr)!important;gap:11px!important}
   html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;font-size:19px!important}
@@ -63,4 +98,9 @@ html body main.dcPage.dealerDashboardLocked > .dcTop > a.brand::after{content:no
 
   /* Mobile drawer keeps its own identity because the desktop sidebar brand is hidden above. */
   html body .editVehicleApp .editSide>.editBrand{display:flex!important}
+}
+
+@media(max-width:420px){
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:138px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo img{width:132px!important;max-width:132px!important;max-height:44px!important}
 }
