@@ -1,0 +1,143 @@
+name: WDCC P0 Neon Native Session Proof
+
+on:
+  push:
+    branches: [proof/wdcc-p0-neon-session-8798f970]
+    paths:
+      - '.github/workflows/wdcc-p0-neon-session-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: 8798f9708d37796bcccb2b20cd179fa722f5d546
+      STATE_WORKER: wdcc-neon-session-proof-state
+      APP_WORKER: wdcc-neon-session-proof-app
+      STATE_URL: https://wdcc-neon-session-proof-state.clico-global.workers.dev
+      APP_URL: https://wdcc-neon-session-proof-app.clico-global.workers.dev
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Validate exact app source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          test "$(git merge-base HEAD "$SOURCE_SHA")" = "$SOURCE_SHA"
+          test -z "$(git diff --name-only "$SOURCE_SHA..HEAD" -- app lib public package.json package-lock.json next.config.ts tsconfig.json)"
+          grep -Fq 'return neonCurrentUser();' lib/auth.ts
+          ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
+          echo 'NEON_NATIVE_SOURCE=PASS'
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 >/dev/null
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+      - name: Create no-route proof configs and internal token
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          openssl rand -hex 32 > /tmp/state.token
+          node - <<'NODE'
+          const fs=require('fs');
+          const common={compatibility_date:'2026-08-25',compatibility_flags:['nodejs_compat'],workers_dev:true,preview_urls:true,observability:{enabled:true}};
+          fs.writeFileSync('wrangler.neon-proof-state.jsonc',JSON.stringify({...common,name:process.env.STATE_WORKER,main:'cloudflare/wdcc-state-worker.mjs',durable_objects:{bindings:[{name:'WDCC_STATE',class_name:'WDCCState'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']}]},null,2)+'\n');
+          fs.writeFileSync('wrangler.neon-proof-app.jsonc',JSON.stringify({...common,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL}},null,2)+'\n');
+          NODE
+          ! grep -Eq '"routes?"|"custom_domains?"' wrangler.neon-proof-state.jsonc
+          ! grep -Eq '"routes?"|"custom_domains?"' wrangler.neon-proof-app.jsonc
+      - name: Deploy isolated state and seed bridge users
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.neon-proof-state.jsonc 2>&1 | tee /tmp/state-deploy.log
+          grep -Fq "$STATE_URL" /tmp/state-deploy.log
+          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$STATE_WORKER" >/dev/null
+          cat > /tmp/proof-state.json <<'JSON'
+          {"revision":1,"tenants":[{"id":"wdcc","name":"We Don’t Care Cars","status":"active"}],"users":[{"id":"wdcc-admin-neon-bridge","tenantId":"wdcc","email":"admin@internal.wedontcarecars.com","username":"admin","loginAlias":"admin","aliases":["admin"],"displayName":"WDCC Admin","role":"platform_admin","status":"active"},{"id":"wdcc-dealer-neon-bridge","tenantId":"wdcc","email":"dealer@internal.wedontcarecars.com","username":"dealer","loginAlias":"dealer","aliases":["dealer"],"displayName":"WDCC Dealer","role":"dealer_agent","status":"active"}],"vehicles":[],"leads":[],"audit":[]}
+          JSON
+          token="$(cat /tmp/state.token)"
+          test "$(curl --http1.1 -sS -X PUT -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data-binary @/tmp/proof-state.json -o /tmp/state-put.json -w '%{http_code}' "$STATE_URL/state")" = 200
+          jq -e '.ok==true' /tmp/state-put.json >/dev/null
+      - name: Deploy isolated app with no SESSION_SECRET
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.neon-proof-app.jsonc 2>&1 | tee /tmp/app-deploy.log
+          grep -Fq "$APP_URL" /tmp/app-deploy.log
+          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
+          ok=0
+          for i in $(seq 1 20); do
+            code="$(curl --http1.1 -sS -o /tmp/health.json -w '%{http_code}' "$APP_URL/api/health?neon-proof=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/health.json >/dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+      - name: Prove real Neon login session and protected mutation without local signer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          state_token="$(cat /tmp/state.token)"; qa_id=''
+          cleanup(){
+            set +e
+            if [ -n "$qa_id" ]; then
+              curl --http1.1 -sS -H "Authorization: Bearer $state_token" "$STATE_URL/state" -o /tmp/cleanup-state.json
+              QA_ID="$qa_id" node - <<'NODE'
+              const fs=require('fs');const s=JSON.parse(fs.readFileSync('/tmp/cleanup-state.json','utf8'));const id=process.env.QA_ID;
+              s.vehicles=(s.vehicles||[]).filter(v=>String(v?.id)!==id);s.audit=(s.audit||[]).filter(a=>String(a?.vehicleId||'')!==id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();fs.writeFileSync('/tmp/cleanup-next.json',JSON.stringify(s));
+              NODE
+              curl --http1.1 -sS -X PUT -H "Authorization: Bearer $state_token" -H 'Content-Type: application/json' --data-binary @/tmp/cleanup-next.json "$STATE_URL/state" -o /tmp/cleanup-put.json
+            fi
+          }
+          trap cleanup EXIT INT TERM ERR
+
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/login-body.json
+          login_code="$(curl --http1.1 -sS -c /tmp/dealer.jar -D /tmp/login.headers -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o /tmp/login.json -w '%{http_code}' "$APP_URL/api/auth/login")"
+          test "$login_code" = 200
+          jq -e '.ok==true and (.role=="dealer_agent" or .role=="dealer")' /tmp/login.json >/dev/null
+          test -s /tmp/dealer.jar
+
+          test "$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/session.json -w '%{http_code}' "$APP_URL/api/auth/session")" = 200
+          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/session.json >/dev/null
+
+          stock="WDCC-QA-NEON-SESSION-$GITHUB_RUN_ID"
+          payload="$(jq -nc --arg stock "$stock" '{year:2021,make:"WDCC",model:"Neon Session Proof",price:19999,downPayment:1000,mileage:111,stock:$stock,internalOnly:true,description:"temporary isolated neon session proof"}')"
+          test "$(curl --http1.1 -sS -b /tmp/dealer.jar -X POST -H 'Content-Type: application/json' --data "$payload" -o /tmp/create.json -w '%{http_code}' "$APP_URL/api/inventory")" = 201
+          qa_id="$(jq -r '.item.id // empty' /tmp/create.json)"; test -n "$qa_id"
+          test "$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/readback.json -w '%{http_code}' "$APP_URL/api/inventory/$qa_id")" = 200
+          jq -e --arg id "$qa_id" '.ok==true and .item.id==$id' /tmp/readback.json >/dev/null
+          cleanup; qa_id=''; trap - EXIT INT TERM ERR
+          echo 'NEON_NATIVE_SESSION_MUTATION=PASS'
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## WDCC P0 Neon-native session proof'
+            echo "- Source SHA: $SOURCE_SHA"
+            echo '- Production routes/DNS/aliases touched: NO'
+            echo '- SESSION_SECRET injected: NO'
+            echo '- Real Neon dealer login required: YES'
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f /tmp/state.token /tmp/login-body.json /tmp/dealer.jar
