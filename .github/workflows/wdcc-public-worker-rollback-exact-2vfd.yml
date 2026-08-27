@@ -1,0 +1,142 @@
+name: WDCC Restore Exact 2vfD Behind Cloudflare DNS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-public-worker-rollback-exact-2vfd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-public-worker-rollback-exact-2vfd
+  cancel-in-progress: false
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  DONOR_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
+  VERCEL_SCOPE: cpxagency
+  APEX_HOST: wedontcarecars.com
+  WWW_HOST: www.wedontcarecars.com
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Require authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}"
+          test -n "${VERCEL_TOKEN:-}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+
+      - name: Fingerprint immutable 2vfD before production move
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor.html
+          grep -qi "we don.t care" /tmp/donor.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
+          donor_css="$(grep -Eo '/_next/static/chunks/[^" ]+\.css' /tmp/donor.html | head -1)"
+          test -n "$donor_css"
+          printf '%s\n' "$donor_css" >/tmp/donor-css.txt
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-logo-transparent.webp --deployment "$DONOR_HOST" > /tmp/donor-logo.webp
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-hero-v2.webp --deployment "$DONOR_HOST" > /tmp/donor-hero.webp
+          test -s /tmp/donor-logo.webp
+          test -s /tmp/donor-hero.webp
+          car_count="$(grep -Eo '/assets/cars/[^" ]+\.webp' /tmp/donor.html | sort -u | wc -l)"
+          test "$car_count" -ge 5
+          echo "DONOR_CSS=$donor_css" >> "$GITHUB_STEP_SUMMARY"
+          echo "DONOR_PACKAGED_CAR_ASSETS=$car_count" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin customer aliases to exact immutable 2vfD
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR_HOST" "$APEX_HOST" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$DONOR_HOST" "$WWW_HOST" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Remove only the broken public Worker routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" \
+            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' > /tmp/routes-before.json
+          jq -e '.success==true' /tmp/routes-before.json >/dev/null
+          # Dealer must exist before any public-route mutation.
+          jq -e '.result[] | select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-before.json >/dev/null
+          for pattern in 'wedontcarecars.com/*' 'www.wedontcarecars.com/*'; do
+            ids="$(jq -r --arg p "$pattern" '.result[]|select(.pattern==$p and .script=="wdcc-reference-root")|.id' /tmp/routes-before.json)"
+            for id in $ids; do
+              curl -fsS -X DELETE "$CF_API/zones/$ZONE_ID/workers/routes/$id" \
+                -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' > /tmp/delete.json
+              jq -e '.success==true' /tmp/delete.json >/dev/null
+            done
+          done
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" \
+            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' > /tmp/routes-after.json
+          jq -e '.success==true' /tmp/routes-after.json >/dev/null
+          test "$(jq '[.result[]|select(.pattern=="wedontcarecars.com/*" or .pattern=="www.wedontcarecars.com/*")]|length' /tmp/routes-after.json)" = 0
+          jq -e '.result[] | select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' /tmp/routes-after.json >/dev/null
+
+      - name: Prove live storefront equals immutable donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          donor_css="$(cat /tmp/donor-css.txt)"
+          donor_logo="$(sha256sum /tmp/donor-logo.webp | awk '{print $1}')"
+          donor_hero="$(sha256sum /tmp/donor-hero.webp | awk '{print $1}')"
+          for host in "$APEX_HOST" "$WWW_HOST"; do
+            ok=0
+            for i in $(seq 1 45); do
+              code="$(curl -sS -D /tmp/live.h -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "https://$host/?restore=$GITHUB_RUN_ID-$i" || true)"
+              live_css="$(grep -Eo '/_next/static/chunks/[^" ]+\.css' /tmp/live.html 2>/dev/null | head -1 || true)"
+              if [ "$code" = 200 ] && [ "$live_css" = "$donor_css" ] && ! grep -qi '^x-wdcc-cloudflare-worker:' /tmp/live.h; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            test "$ok" = 1
+            grep -qi 'we don.t care' /tmp/live.html
+            grep -q 'wdcc-logo-transparent.webp' /tmp/live.html
+            grep -q 'wdcc-hero-v2.webp' /tmp/live.html
+            live_car_count="$(grep -Eo '/assets/cars/[^" ]+\.webp' /tmp/live.html | sort -u | wc -l)"
+            test "$live_car_count" -ge 5
+            curl -fsS "https://$host/wdcc-logo-transparent.webp?restore=$GITHUB_RUN_ID" -o /tmp/live-logo.webp
+            curl -fsS "https://$host/wdcc-hero-v2.webp?restore=$GITHUB_RUN_ID" -o /tmp/live-hero.webp
+            test "$(sha256sum /tmp/live-logo.webp | awk '{print $1}')" = "$donor_logo"
+            test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$donor_hero"
+            css_code="$(curl -sS -D /tmp/live-css.h --max-time 25 -o /tmp/live.css -w '%{http_code}' "https://$host$donor_css")"
+            test "$css_code" = 200
+            grep -qi '^content-type: text/css' /tmp/live-css.h
+            test "$(wc -c </tmp/live.css)" -gt 5000
+          done
+
+      - name: Confirm dealer Cloudflare route remains online
+        shell: bash
+        run: |
+          set -euo pipefail
+          dealer_code="$(curl -sS -D /tmp/dealer.h -L --max-time 25 -o /tmp/dealer.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer || true)"
+          echo "$dealer_code" | grep -Eq '^(200|302|307|308)$'
+          grep -qi 'dealer sign in\|dealer portal' /tmp/dealer.html
+          grep -qi '^x-wdcc-edge: cloudflare-dealer-target-v3' /tmp/dealer.h || true
+          echo 'PUBLIC_BROKEN_WORKER_ROUTES_REMOVED=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'EXACT_2VFD_HTML_CSS_HERO_LOGO_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'EXACT_2VFD_FIVE_CAR_PACKAGED_ASSETS=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DEALER_CLOUDFLARE_ROUTE_PRESERVED=PASS' >> "$GITHUB_STEP_SUMMARY"
