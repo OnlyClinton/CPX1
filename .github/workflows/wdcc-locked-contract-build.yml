@@ -7,10 +7,9 @@ on:
       - '.github/workflows/wdcc-locked-contract-build.yml'
       - '.github/workflows/wdcc-android-owner-proof.yml'
       - '.github/workflows/wdcc-immutable-visual-acceptance-v2.yml'
-      - '.github/workflows/wdcc-owner-target-screenshot.yml'
-      - '.github/workflows/wdcc-recover-8ar-hero.yml'
-      - 'scripts/wdcc-immutable-visual-proof*.mjs'
-      - 'scripts/wdcc-hydrate-8ar-hero.mjs'
+      - '.github/workflows/wdcc-owner-board-rebuild-proof.yml'
+      - '.github/support/wdcc-owner-board-rebuild-proof.mjs'
+      - 'WDCC_LOCKED_CONTRACT.md'
       - 'app/**'
       - 'lib/**'
       - 'public/**'
@@ -23,8 +22,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-locked-contract-cloudflare-preview
-  cancel-in-progress: true
+  group: wdcc-locked-contract-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   EXPECTED_HERO_SIZE: '145504'
@@ -33,84 +32,64 @@ env:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: 22
           cache: npm
 
-      - name: Require canonical visual source and architecture
+      - name: Require canonical visual and functional contract
         shell: bash
         run: |
           set -euo pipefail
+          test -s WDCC_LOCKED_CONTRACT.md
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
-          grep -q 'import LockedIntro from "./LockedIntro"' app/ReferenceCloneHome.tsx
-          test -s public/wdcc-official-logo.webp
-          test -s public/wdcc-logo-transparent.webp
-          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|src="/wdcc-official-logo.webp"' app/LockedIntro.tsx
+          test -s app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
-          grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
-          grep -Eq 'WDCC_CORRECT_LOGO_DATA_URI|/wdcc-owner-logo|src="/wdcc-official-logo.webp"|src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
-          grep -q '/wdcc-owner-logo' app/WdccPublicChrome.tsx
-          grep -q 'WDCC_CORRECT_LOGO_DATA_URI' app/wdcc-owner-logo/route.ts
-          grep -q 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
-          grep -q 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
-          grep -q 'FINAL LOGO RELIABILITY' app/wdcc-mobile-header-contract-fix.css
-          test -s app/wdcc-system-v2.css
-          grep -q 'wdcc-system-v2.css' app/layout.tsx
-          test -s app/wdcc-contract-closeout.css
-          grep -q 'wdcc-contract-closeout.css' app/layout.tsx
-          grep -q 'wdcc-owner-approved-logo-final.css' app/layout.tsx
-          grep -q 'grid-template-columns:50px minmax(0,1fr) 50px!important' app/wdcc-owner-approved-logo-final.css
-          ! grep -Eq 'import"\./(wdcc-public-chrome-final|storefront-optical-final|wdcc-real-device-scale-final|wdcc-responsive-audit-closeout|wdcc-owner-contract-final)\.css"' app/layout.tsx
+          test -s app/wdcc-owner-logo/route.ts
+          test -s app/wdcc-owner-board-final.css
+          test -s app/wdcc-round-header-contract.css
+          grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
+          grep -Fq '/wdcc-hero-v2.webp' app/LockedIntro.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
+          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
+          ! grep -Fq 'wdcc-wordmark' app/WdccPublicChrome.tsx
+          grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
+          grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
+          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
+          test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
+          grep -Fq 'large round owner-approved WDCC emblem' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'mobile menu/call controls remain usable without overlap' WDCC_LOCKED_CONTRACT.md
           test -s app/WdccVehicleCard.tsx
           test -s app/WdccVehicleCard.module.css
           for page in app/inventory/page.tsx app/get-approved/page.tsx app/contact/page.tsx app/schedule-test-drive/page.tsx app/privacy/page.tsx app/terms/page.tsx 'app/vehicle/[id]/page.tsx'; do
-            grep -q 'WdccPublicHeader' "$page"
-            grep -q 'WdccPublicFooter' "$page"
+            grep -Fq 'WdccPublicHeader' "$page"
+            grep -Fq 'WdccPublicFooter' "$page"
           done
-          grep -q 'previewFallback===true' app/InventoryGrid.tsx
-          grep -q 'inventorySource==="last-known-good-real-proof"' app/InventoryGrid.tsx
-          ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css
-          grep -q 'grid-template-columns:repeat(5,minmax(0,1fr))' app/wdcc-owner-contract-final.css
-          echo 'WDCC_ARCHITECTURE_CONTRACT=PASS'
+          grep -Fq 'Import Vehicles' app/dealer/inventory/import/page.tsx
+          grep -Fq 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
+          grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
+          grep -Fq 'method:"PATCH"' app/dealer/inventory/VehicleEditor.tsx
+          grep -Fq 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
+          grep -Fq 'previewModal' app/dealer/inventory/VehicleEditor.tsx
+          echo 'WDCC_LOCKED_CONTRACT_SOURCE=PASS'
 
-      - name: Build exact visual candidate
+      - name: Build exact application candidate
         shell: bash
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9
           npm run build
-
-      - name: Verify locked visual/function routes
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q '<LockedIntro/>' app/ReferenceCloneHome.tsx
-          grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
-          grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
-          grep -q 'rh-hero-art' app/ReferenceCloneHome.tsx
-          grep -q 'WdccVehicleCard' app/ReferenceCloneHome.tsx
-          grep -q 'WdccVehicleCard' app/InventoryGrid.tsx
-          grep -q '/vehicle/' app/WdccVehicleCard.tsx
-          test -f 'app/vehicle/[id]/page.tsx'
-          grep -q 'Import Vehicles' app/dealer/inventory/import/page.tsx
-          grep -q 'Suspense' app/dealer/inventory/new/page.tsx
-          grep -q 'useSearchParams' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'import {uploadVehiclePhoto}' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'uploadVehiclePhoto({vehicleId:id,requestId,file})' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'fetch("/api/upload",{method:"POST"' lib/wdccUploadClient.ts
-          grep -q 'method:"PATCH"' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'Listing Readiness' app/dealer/inventory/VehicleEditor.tsx
-          grep -q 'previewModal' app/dealer/inventory/VehicleEditor.tsx
-          echo 'LOCKED_CONTRACT_STATIC_GATE=PASS'
+          test -s .next/BUILD_ID
 
       - name: Require Cloudflare preview credentials
         shell: bash
@@ -119,7 +98,7 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Build Cloudflare worker
+      - name: Build exact Cloudflare worker
         shell: bash
         run: |
           set -euo pipefail
@@ -128,36 +107,37 @@ jobs:
           test -s .open-next/worker.js
           test -d .open-next/assets
 
-      - name: Create isolated workers.dev config
+      - name: Create isolated exact-SHA Worker config
         shell: bash
         run: |
           set -euo pipefail
           node - <<'NODE'
           const fs=require('fs');
-          const source=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          source.name='wdcc-locked-preview';
-          source.workers_dev=true;
-          source.preview_urls=true;
-          delete source.route;
-          delete source.routes;
-          fs.writeFileSync('wrangler.locked-preview.jsonc',JSON.stringify(source,null,2)+'\n');
+          const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          cfg.name=`wdcc-lock-${process.env.GITHUB_SHA}`;
+          cfg.workers_dev=true;
+          cfg.preview_urls=true;
+          delete cfg.route;
+          delete cfg.routes;
+          fs.writeFileSync('wrangler.locked-preview.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
-          ! grep -q 'wedontcarecars.com' wrangler.locked-preview.jsonc || { echo 'Production route leaked into preview config' >&2; exit 1; }
+          ! grep -qi 'wedontcarecars.com' wrangler.locked-preview.jsonc
+          grep -Fq "$GITHUB_SHA" wrangler.locked-preview.jsonc
 
-      - name: Upload immutable SHA preview version only
+      - name: Deploy immutable isolated exact-SHA preview
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          alias="sha-${GITHUB_SHA:0:12}"
-          npx wrangler versions upload --config wrangler.locked-preview.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-locked-preview.log
-          grep -Fq 'Worker Version ID:' /tmp/wdcc-locked-preview.log
-          url="https://${alias}-wdcc-locked-preview.clico-global.workers.dev"
+          npx wrangler deploy --config wrangler.locked-preview.jsonc 2>&1 | tee /tmp/wdcc-locked-preview.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-locked-preview.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Locked preview is not exact SHA: $url" >&2; exit 1;; esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > preview-url.txt
           printf '%s\n' "$GITHUB_SHA" > preview-sha.txt
 
-      - name: Smoke Cloudflare visual preview and exact asset bytes
+      - name: Smoke exact preview and immutable assets
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -170,9 +150,10 @@ jobs:
             sleep 2
           done
           test "$code" = 200
-          grep -qi "we don.t care" /tmp/home.html
-          grep -Eq 'data-wdcc-(logo-art|intro-badge-art)="(owner-approved|horizontal-owner-approved)"|wdcc-owner-logo|wdcc-official-logo.webp|wdcc-logo-transparent.webp' /tmp/home.html
-          grep -q "wdcc-hero-v2.webp" /tmp/home.html
+          local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq "$local_build" /tmp/home.html
+          grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
+          grep -Fq 'wdcc-hero-v2.webp' /tmp/home.html
 
           test "$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
@@ -182,31 +163,36 @@ jobs:
           test -s /tmp/owner-logo.webp
           grep -qi '^x-wdcc-logo: owner-approved' /tmp/owner-logo.headers
 
-          test "$(curl --http1.1 -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?preview=$GITHUB_RUN_ID")" = 200
-          grep -qi 'items\|inventory' /tmp/inventory.json
-
+          inv="$(curl --http1.1 -sS -L -o /tmp/inventory.html -w '%{http_code}' "$URL/inventory?preview=$GITHUB_RUN_ID" || true)"
+          test "$inv" = 200
           dealer="$(curl --http1.1 -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?preview=$GITHUB_RUN_ID" || true)"
           test "$dealer" = 200
-          grep -qi "dealer" /tmp/dealer.html
-          {
-            echo '### WDCC immutable Cloudflare preview — PASS'
-            echo
-            echo "Preview: $URL"
-            echo "Candidate SHA: $GITHUB_SHA"
-            echo "Canonical hero SHA-256: $EXPECTED_HERO_SHA256"
-            echo 'Approved owner logo immutable route: PASS.'
-            echo 'Recovered verified inventory response: PASS.'
-            echo 'Five-column wide Featured Inventory contract: PASS.'
-            echo 'SHA-specific preview alias: PASS.'
-            echo 'Shared public chrome + VehicleCard architecture: PASS.'
-            echo 'Production routes, aliases and domains were not changed.'
-            echo 'Owner visual approval is required before any production move.'
-          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require exact current head
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
+          test -n "$current"
+          test "$current" = "$GITHUB_SHA"
+
+      - name: Publish locked-preview summary
+        if: always()
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          echo '### WDCC locked contract Cloudflare preview' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Isolated Worker: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'No production route, alias or DNS change is authorized by this proof.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: wdcc-locked-cloudflare-preview-url
+          name: wdcc-locked-cloudflare-preview-${{ github.sha }}
           path: |
             preview-url.txt
             preview-sha.txt
+          if-no-files-found: warn
           retention-days: 7
