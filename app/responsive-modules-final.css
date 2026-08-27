@@ -1,0 +1,199 @@
+/* WDCC RESPONSIVE MODULES FINAL
+   Scoped to CRM CSS Modules, customer 360, admin portal, and admin user management.
+   Loaded after owner storefront contract so it cannot alter storefront owner-target geometry. */
+
+/* ---------- AUTOMOTIVE CRM (CSS MODULE) ---------- */
+html body main[class*="crm_shell__"]{grid-template-columns:232px minmax(0,1fr)!important;font-size:14px!important}
+html body main[class*="crm_shell__"] aside[class*="crm_sidebar__"]{padding:24px 12px!important}
+html body main[class*="crm_shell__"] [class*="crm_brand__"] b{font-size:20px!important}
+html body main[class*="crm_shell__"] [class*="crm_brand__"] span{font-size:10px!important}
+html body main[class*="crm_shell__"] aside[class*="crm_sidebar__"] nav a{min-height:44px!important;padding:0 12px!important;font-size:12.5px!important}
+html body main[class*="crm_shell__"] section[class*="crm_main__"]{padding:28px 30px 56px!important}
+html body main[class*="crm_shell__"] [class*="crm_kicker__"]{font-size:10.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_topbar__"] h1{font-size:44px!important;line-height:1!important}
+html body main[class*="crm_shell__"] [class*="crm_topbar__"] p{font-size:13px!important;line-height:1.45!important}
+html body main[class*="crm_shell__"] [class*="crm_search__"]{height:48px!important}
+html body main[class*="crm_shell__"] [class*="crm_search__"] input{font-size:14px!important}
+html body main[class*="crm_shell__"] [class*="crm_kpis__"]{gap:12px!important}
+html body main[class*="crm_shell__"] [class*="crm_kpis__"] article{min-height:120px!important;padding:18px!important}
+html body main[class*="crm_shell__"] [class*="crm_kpis__"] span{font-size:10.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_kpis__"] strong{font-size:34px!important}
+html body main[class*="crm_shell__"] [class*="crm_kpis__"] small{font-size:11px!important}
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"]{min-height:72px!important;padding:15px 18px!important}
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"]>div>span{font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"] h2{font-size:21px!important}
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"]>a,
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"]>b,
+html body main[class*="crm_shell__"] [class*="crm_panelHead__"]>small{font-size:10.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_priorityCard__"]{min-height:104px!important;padding:13px 2px!important}
+html body main[class*="crm_shell__"] [class*="crm_rank__"]{width:34px!important;height:34px!important;font-size:12px!important}
+html body main[class*="crm_shell__"] [class*="crm_personTop__"] strong{font-size:14px!important}
+html body main[class*="crm_shell__"] [class*="crm_personTop__"] span{font-size:9px!important}
+html body main[class*="crm_shell__"] [class*="crm_person__"] p{font-size:12px!important}
+html body main[class*="crm_shell__"] [class*="crm_person__"] small{font-size:10px!important}
+html body main[class*="crm_shell__"] [class*="crm_action__"]>b{font-size:12px!important}
+html body main[class*="crm_shell__"] [class*="crm_action__"]>small{font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_action__"] a{min-height:36px!important;padding:0 11px!important;font-size:10px!important}
+html body main[class*="crm_shell__"] [class*="crm_pipeline__"]>div>div{font-size:10.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_momentum__"] span{font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_momentum__"] strong{font-size:20px!important}
+html body main[class*="crm_shell__"] [class*="crm_momentum__"] small{font-size:10.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_tableHead__"]{min-height:44px!important;font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_row__"]{min-height:70px!important;font-size:11px!important}
+html body main[class*="crm_shell__"] [class*="crm_row__"]>div strong{font-size:12.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_row__"]>div small{font-size:10px!important}
+html body main[class*="crm_shell__"] [class*="crm_stage__"]{font-size:9.5px!important;padding:6px 9px!important}
+html body main[class*="crm_shell__"] [class*="crm_row__"]>a{font-size:10px!important}
+html body main[class*="crm_shell__"] [class*="crm_cars__"] small{font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_cars__"] strong{font-size:13.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_cars__"] b{font-size:19px!important}
+html body main[class*="crm_shell__"] [class*="crm_cars__"] span{font-size:9.5px!important}
+html body main[class*="crm_shell__"] [class*="crm_cars__"] article>a{font-size:10px!important}
+html body main[class*="crm_shell__"] [class*="crm_empty__"]{font-size:12.5px!important;line-height:1.45!important}
+
+/* ---------- CUSTOMER 360 (CSS MODULE) ---------- */
+html body main[class*="customer_page__"]{padding:28px clamp(18px,3vw,44px) 64px!important;font-size:14px!important}
+html body main[class*="customer_page__"] [class*="customer_header__"]>a{font-size:11.5px!important}
+html body main[class*="customer_page__"] [class*="customer_header__"]>div>span,
+html body main[class*="customer_page__"] [class*="customer_kicker__"],
+html body main[class*="customer_page__"] [class*="customer_label__"]{font-size:10px!important}
+html body main[class*="customer_page__"] [class*="customer_header__"] h1{font-size:44px!important;line-height:1!important}
+html body main[class*="customer_page__"] [class*="customer_header__"]>b{font-size:10.5px!important}
+html body main[class*="customer_page__"] [class*="customer_hero__"]{padding:26px!important}
+html body main[class*="customer_page__"] [class*="customer_hero__"] h2{font-size:38px!important}
+html body main[class*="customer_page__"] [class*="customer_hero__"] p{font-size:13px!important;line-height:1.5!important}
+html body main[class*="customer_page__"] [class*="customer_actions__"] a{min-height:42px!important;padding:0 14px!important;font-size:10.5px!important}
+html body main[class*="customer_page__"] [class*="customer_score__"] span{font-size:9.5px!important}
+html body main[class*="customer_page__"] [class*="customer_score__"] small{font-size:10px!important}
+html body main[class*="customer_page__"] [class*="customer_panel__"]{padding:21px!important}
+html body main[class*="customer_page__"] [class*="customer_panel__"] dt{font-size:10.5px!important}
+html body main[class*="customer_page__"] [class*="customer_panel__"] dd{font-size:11.5px!important}
+html body main[class*="customer_page__"] [class*="customer_sectionHead__"] h2{font-size:24px!important}
+html body main[class*="customer_page__"] [class*="customer_sectionHead__"]>a{font-size:10px!important}
+html body main[class*="customer_page__"] [class*="customer_cars__"] small{font-size:9.5px!important}
+html body main[class*="customer_page__"] [class*="customer_cars__"] strong{font-size:14px!important}
+html body main[class*="customer_page__"] [class*="customer_cars__"] b{font-size:21px!important}
+html body main[class*="customer_page__"] [class*="customer_cars__"] span{font-size:9.5px!important}
+html body main[class*="customer_page__"] [class*="customer_cars__"] article>a{font-size:10px!important}
+html body main[class*="customer_page__"] [class*="customer_timeline__"] strong{font-size:11.5px!important}
+html body main[class*="customer_page__"] [class*="customer_timeline__"] span{font-size:10.5px!important}
+
+/* ---------- ADMIN / PORTAL EXPERIENCE ---------- */
+html body .portalApp{grid-template-columns:232px minmax(0,1fr)!important;font-size:14px!important}
+html body .portalSide{padding:16px 12px!important}
+html body .portalBrand b{font-size:13px!important}
+html body .portalBrand span{font-size:9.5px!important}
+html body .portalSide nav strong{font-size:10px!important;padding:16px 10px 7px!important}
+html body .portalSide nav a{min-height:44px!important;padding:0 11px!important;font-size:12px!important;display:flex!important;align-items:center!important}
+html body .portalPromo>b{font-size:12px!important}
+html body .portalPromo>strong{font-size:13px!important}
+html body .portalPromo a{min-height:38px!important;font-size:10.5px!important;display:grid!important;place-items:center!important}
+html body .portalTop{height:76px!important;min-height:76px!important;padding-inline:20px!important}
+html body .portalTop b{font-size:13px!important}
+html body .portalTop span{font-size:10.5px!important}
+html body .portalTop>a{font-size:11.5px!important}
+html body .portalTop>button{min-height:42px!important;font-size:11.5px!important;padding:0 13px!important}
+html body .dashboardWrap{padding:26px!important}
+html body .dashboardTitle h1{font-size:36px!important;line-height:1!important}
+html body .dashboardTitle button{min-height:44px!important;font-size:11.5px!important}
+html body .metricGrid{gap:12px!important}
+html body .metric{min-height:104px!important;padding:17px!important}
+html body .metric span{font-size:11px!important}
+html body .metric strong{font-size:31px!important}
+html body .metric em{font-size:10px!important}
+html body .dashCard{padding:18px!important}
+html body .cardHead b{font-size:13px!important}
+html body .cardHead span,
+html body .cardHead a{font-size:10.5px!important}
+html body .sourceList span,
+html body .sourceList b,
+html body .vehicleRows,
+html body .activityRows{font-size:11px!important}
+html body .vehicleRows small,
+html body .activityRows small{font-size:10px!important}
+html body .quickActions a{min-height:46px!important;font-size:11px!important}
+html body .portalLoginPage .loginCard label{font-size:12px!important}
+html body .portalLoginPage .loginCard input{min-height:56px!important;height:56px!important;font-size:17px!important}
+html body .portalLoginPage .loginCard button{min-height:56px!important;height:56px!important;font-size:15px!important}
+html body .portalLoginPage .loginMessage{font-size:13px!important}
+html body .portalLoginPage .loginCard>small{font-size:11.5px!important}
+
+/* ---------- ADMIN USER MANAGEMENT ---------- */
+html body main.adminUsersPage{font-size:14px!important}
+html body main.adminUsersPage h1{font-size:36px!important;line-height:1!important;margin-bottom:20px!important}
+html body main.adminUsersPage form{gap:12px!important;padding:20px!important}
+html body main.adminUsersPage form input,
+html body main.adminUsersPage form select{min-height:48px!important;height:48px!important;padding:0 13px!important;font-size:14px!important}
+html body main.adminUsersPage form button{min-height:48px!important;font-size:12px!important}
+html body main.adminUsersPage table{font-size:12px!important}
+html body main.adminUsersPage th,
+html body main.adminUsersPage td{padding:12px 10px!important}
+html body main.adminUsersPage td button{min-height:36px!important;padding:0 10px!important;font-size:10.5px!important}
+
+@media(max-width:900px),(hover:none) and (pointer:coarse){
+  html body main[class*="crm_shell__"]{display:block!important;padding-bottom:88px!important}
+  html body main[class*="crm_shell__"] aside[class*="crm_sidebar__"]{height:auto!important;min-height:66px!important;padding:7px 10px!important}
+  html body main[class*="crm_shell__"] [class*="crm_topbar__"] h1{font-size:34px!important}
+  html body main[class*="crm_shell__"] [class*="crm_topbar__"] p{font-size:12px!important}
+  html body main[class*="crm_shell__"] [class*="crm_search__"]{height:50px!important;width:100%!important}
+  html body main[class*="crm_shell__"] [class*="crm_search__"] input{font-size:16px!important}
+  html body main[class*="crm_shell__"] [class*="crm_kpis__"] article{min-height:104px!important;padding:15px!important}
+  html body main[class*="crm_shell__"] [class*="crm_kpis__"] span{font-size:10px!important}
+  html body main[class*="crm_shell__"] [class*="crm_kpis__"] small{font-size:10.5px!important}
+  html body main[class*="crm_shell__"] [class*="crm_panelHead__"] h2{font-size:18px!important}
+  html body main[class*="crm_shell__"] [class*="crm_priorityCard__"]{padding:13px 0!important}
+  html body main[class*="crm_shell__"] [class*="crm_action__"] a{min-height:42px!important;font-size:10px!important}
+  html body main[class*="crm_shell__"] [class*="crm_table__"]{overflow-x:auto!important}
+  html body main[class*="crm_shell__"] [class*="crm_row__"]{font-size:10.5px!important}
+  html body main[class*="crm_shell__"] [class*="crm_cars__"] article{min-width:82%!important}
+
+  html body main[class*="customer_page__"]{padding:16px 11px 48px!important}
+  html body main[class*="customer_page__"] [class*="customer_header__"] h1{font-size:34px!important}
+  html body main[class*="customer_page__"] [class*="customer_header__"]>a{font-size:10.5px!important}
+  html body main[class*="customer_page__"] [class*="customer_hero__"]{padding:19px!important}
+  html body main[class*="customer_page__"] [class*="customer_hero__"] h2{font-size:31px!important}
+  html body main[class*="customer_page__"] [class*="customer_hero__"] p{font-size:12.5px!important}
+  html body main[class*="customer_page__"] [class*="customer_actions__"] a{min-height:46px!important;font-size:10.5px!important}
+  html body main[class*="customer_page__"] [class*="customer_panel__"] dt{font-size:10.5px!important}
+  html body main[class*="customer_page__"] [class*="customer_panel__"] dd{font-size:11.5px!important}
+  html body main[class*="customer_page__"] [class*="customer_timeline__"]{font-size:11px!important}
+
+  html body .portalApp{display:block!important;padding-bottom:88px!important}
+  html body .portalSide{display:none!important}
+  html body .portalTop{height:70px!important;min-height:70px!important;padding:0 12px!important}
+  html body .portalTop>a,
+  html body .portalTop>span{display:none!important}
+  html body .portalTop b{font-size:12px!important}
+  html body .portalTop .topIdentity span{font-size:9.5px!important}
+  html body .portalTop>button{min-height:42px!important;font-size:10.5px!important}
+  html body .dashboardWrap{padding:18px 12px 98px!important}
+  html body .dashboardTitle h1{font-size:31px!important}
+  html body .metricGrid{grid-template-columns:1fr 1fr!important;gap:9px!important}
+  html body .metric{min-height:96px!important;padding:14px!important}
+  html body .metric span{font-size:10.5px!important}
+  html body .metric strong{font-size:29px!important}
+  html body .dashboardGrid{grid-template-columns:1fr!important;gap:10px!important}
+  html body .dashCard{padding:15px!important}
+  html body .quickActions{grid-template-columns:1fr 1fr!important;gap:9px!important}
+  html body .quickActions a{min-height:50px!important;font-size:10.5px!important}
+  html body .portalBottom{min-height:82px!important;height:auto!important;padding:8px 4px max(12px,env(safe-area-inset-bottom))!important}
+  html body .portalBottom a{min-height:54px!important;font-size:19px!important;gap:4px!important}
+  html body .portalBottom a span{font-size:9.5px!important;position:static!important;margin:0!important;transform:none!important}
+  html body .portalBottom .bigAdd{width:58px!important;height:58px!important;margin:-27px 0 0!important;overflow:visible!important}
+  html body .portalBottom .bigAdd span{position:absolute!important;top:64px!important;left:50%!important;transform:translateX(-50%)!important;white-space:nowrap!important}
+  html body .portalLoginPage{padding:16px!important}
+  html body .portalLoginPage .loginCard{padding:25px 20px!important;border-radius:16px!important}
+  html body .portalLoginPage .loginCard h1{font-size:34px!important}
+  html body .portalLoginPage .loginCard>p{font-size:15px!important}
+  html body .portalLoginPage .loginCard label{font-size:11.5px!important}
+  html body .portalLoginPage .loginCard input{height:52px!important;min-height:52px!important;font-size:16px!important}
+  html body .portalLoginPage .loginCard button{height:52px!important;min-height:52px!important;font-size:14px!important}
+
+  html body main.adminUsersPage{padding:18px 12px 48px!important}
+  html body main.adminUsersPage h1{font-size:30px!important}
+  html body main.adminUsersPage form{grid-template-columns:1fr!important;padding:16px!important}
+  html body main.adminUsersPage form input,
+  html body main.adminUsersPage form select{height:50px!important;min-height:50px!important;font-size:16px!important}
+  html body main.adminUsersPage form button{min-height:50px!important;font-size:12px!important}
+  html body main.adminUsersPage table{min-width:760px!important;font-size:11.5px!important}
+}
