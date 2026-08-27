@@ -1,0 +1,9 @@
+/* Owner logo source lock. Loaded last. Preserve static visual contract. */
+html body main.reference-home.locked-storefront .rh-header .rh-header-inner .rh-logo.logoBrand img{
+  content:url('/wdcc-logo-transparent.webp')!important;
+  background:transparent!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  clip-path:none!important;
+  border-radius:50%!important;
+}

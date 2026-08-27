@@ -52,7 +52,7 @@ export default function LockedIntro(){
     `}</style>
     <div className="li-scene" aria-hidden="true"><img src="/wdcc-hero-v2.webp" alt="" width="1672" height="941" fetchPriority="high"/></div>
     <div className="li-smoke" aria-hidden="true"/>
-    <div className="li-badge"><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></div>
+    <div className="li-badge"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></div>
     <p className="li-tag">We Don't Care Cars · Tampa Bay</p>
     <button className="li-skip" type="button" onClick={finish}>Skip intro</button>
   </div>
