@@ -1,0 +1,83 @@
+name: WDCC P0 Worker Reuse Patcher
+
+on:
+  push:
+    branches: [fix/wdcc-p0-reuse-unrouted-workers-20260827]
+    paths:
+      - '.github/workflows/wdcc-p0-worker-reuse-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-p0-reuse-unrouted-workers-20260827
+          fetch-depth: 1
+      - name: Pin P0 to three existing unattached worker slots
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-owner-approved-p0-dealer-upload.yml')
+          s=p.read_text()
+          repl={
+            '  STATE_WORKER: wdcc-p0-state\n':'  STATE_WORKER: wdcc-v53-1-staging\n',
+            '  MEDIA_WORKER: wdcc-p0-media\n':'  MEDIA_WORKER: wdcc-v53-staging\n',
+            '  APP_WORKER: wdcc-p0-dealer-app\n':'  APP_WORKER: wdcc-proof-04c5d526\n',
+            '  STATE_URL: https://wdcc-p0-state.clico-global.workers.dev\n':'  STATE_URL: https://wdcc-v53-1-staging.clico-global.workers.dev\n',
+            '  MEDIA_URL: https://wdcc-p0-media.clico-global.workers.dev\n':'  MEDIA_URL: https://wdcc-v53-staging.clico-global.workers.dev\n',
+            '  APP_URL: https://wdcc-p0-dealer-app.clico-global.workers.dev\n':'  APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev\n',
+            "      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-NEON-E3332FEA'\n":"      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-E3332FEA'\n",
+          }
+          for old,new in repl.items():
+              if s.count(old)!=1: raise SystemExit(f'expected one match: {old!r}, got {s.count(old)}')
+              s=s.replace(old,new,1)
+          marker='      - name: Deploy isolated state and media authorities\n'
+          if s.count(marker)!=1: raise SystemExit(f'deploy marker count={s.count(marker)}')
+          preflight=r'''      - name: Fail closed unless exact reuse workers exist and are unattached
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=("$STATE_WORKER" "$MEDIA_WORKER" "$APP_WORKER")
+          test "$STATE_WORKER" = 'wdcc-v53-1-staging'
+          test "$MEDIA_WORKER" = 'wdcc-v53-staging'
+          test "$APP_WORKER" = 'wdcc-proof-04c5d526'
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/reuse-scripts.json
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/reuse-zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/reuse-zones.json)"; test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/reuse-routes.json
+          set +e
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/reuse-domains.json
+          domain_rc=$?
+          set -e
+          if [ "$domain_rc" -ne 0 ] || ! jq -e '.success==true' /tmp/reuse-domains.json >/dev/null 2>&1; then
+            echo '::error::Cannot prove custom-domain absence for reuse workers; refusing overwrite.' >&2
+            exit 38
+          fi
+          for name in "${targets[@]}"; do
+            jq -e --arg n "$name" 'any(.result[]?; ((.id // .name // .script // "") == $n))' /tmp/reuse-scripts.json >/dev/null
+            jq -e --arg n "$name" 'all(.result[]?; ((.script // .script_name // "") != $n))' /tmp/reuse-routes.json >/dev/null
+            jq -e --arg n "$name" 'all(.result[]?; ((.service // .script // .script_name // "") != $n))' /tmp/reuse-domains.json >/dev/null
+          done
+          echo 'P0_EXACT_UNROUTED_REUSE_PREFLIGHT=PASS'
+
+'''
+          s=s.replace(marker,preflight+marker,1)
+          if 'wdcc-p0-state' in s or 'wdcc-p0-media' in s or 'wdcc-p0-dealer-app' in s: raise SystemExit('new-worker names remain')
+          if 'PROMOTE-WDCC-P0-DEALER-UPLOAD-NEON-E3332FEA' in s: raise SystemExit('old trigger remains')
+          p.write_text(s)
+          PY
+          rm .github/workflows/wdcc-p0-worker-reuse-patcher.yml
+          git diff --check
+          git config user.name 'WDCC Control Proof Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(wdcc): reuse exact unattached Cloudflare slots for P0'
+          git push origin HEAD:fix/wdcc-p0-reuse-unrouted-workers-20260827
