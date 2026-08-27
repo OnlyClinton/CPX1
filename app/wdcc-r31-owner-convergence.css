@@ -1,0 +1,417 @@
+/*
+  R31 owner-board convergence — preview lane only.
+  Visual geometry and presentation only: no route, provider, auth, schema,
+  persistence, inventory, or production-control behavior is changed here.
+*/
+
+html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(3),
+html body main.reference-home.locked-storefront .rh-utility-inner>span:nth-child(4),
+html body main.reference-home.locked-storefront .rh-nav>a:last-child{
+  display:none!important;
+}
+
+html body main.reference-home.locked-storefront .rh-btn::after{
+  content:" →";
+  margin-left:7px;
+}
+
+html body main.reference-home.locked-storefront .rh-phone::before{
+  content:"☎";
+  color:#ef202f;
+  font-size:14px;
+}
+
+@media(min-width:768px){
+  html body main.reference-home.locked-storefront .rh-utility{
+    height:34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-utility-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    gap:20px!important;
+    font-size:9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-utility-inner>a{
+    margin-left:auto!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-header{
+    height:94px!important;
+    min-height:94px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    height:94px!important;
+    grid-template-columns:132px minmax(0,1fr) auto!important;
+    gap:26px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo{
+    width:124px!important;
+    height:94px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:112px!important;
+    min-width:112px!important;
+    max-width:112px!important;
+    height:112px!important;
+    min-height:112px!important;
+    max-height:112px!important;
+    object-fit:contain!important;
+    filter:drop-shadow(0 7px 18px rgba(0,0,0,.52))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav{
+    justify-content:flex-start!important;
+    gap:34px!important;
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-actions>a:first-child{
+    display:none!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-primary{
+    min-height:48px!important;
+    padding:0 25px!important;
+    border-radius:5px!important;
+    font-size:10px!important;
+    box-shadow:0 9px 22px rgba(239,31,47,.24)!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-hero{
+    height:650px!important;
+    min-height:650px!important;
+    overflow:hidden!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    object-fit:cover!important;
+    object-position:60% 49%!important;
+    filter:saturate(1.1) contrast(1.045) brightness(1.035)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    height:100%!important;
+    background:linear-gradient(90deg,rgba(2,8,13,.97) 0%,rgba(2,8,13,.88) 27%,rgba(2,8,13,.45) 49%,rgba(2,8,13,.06) 72%,rgba(2,8,13,.1) 100%),linear-gradient(180deg,rgba(2,8,13,.03),rgba(2,8,13,.07) 58%,rgba(2,8,13,.5) 100%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    width:min(1380px,calc(100% - 56px))!important;
+    height:650px!important;
+    min-height:650px!important;
+    margin:0 auto!important;
+    padding:0!important;
+    align-items:center!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    width:min(590px,46vw)!important;
+    max-width:590px!important;
+    padding:34px 0 38px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{
+    margin-bottom:13px!important;
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    max-width:590px!important;
+    font-size:clamp(64px,5.65vw,82px)!important;
+    line-height:.88!important;
+    letter-spacing:-.057em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-proof-copy{
+    max-width:450px!important;
+    margin-top:17px!important;
+    font-size:15px!important;
+    line-height:1.38!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    margin-top:23px!important;
+    gap:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-btn{
+    min-height:49px!important;
+    padding:0 24px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-phone{
+    margin-top:15px!important;
+    font-size:11px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-benefit-wrap{
+    margin-top:-28px!important;
+    padding:0 26px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefits{
+    width:min(1360px,100%)!important;
+    border-radius:10px!important;
+    box-shadow:0 16px 36px rgba(10,25,38,.15)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:108px!important;
+    padding:18px 22px!important;
+    grid-template-columns:42px minmax(0,1fr)!important;
+    gap:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:38px!important;
+    height:38px!important;
+    font-size:17px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:48px max(28px,calc((100vw - 1360px)/2)) 54px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    margin-bottom:16px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:34px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head p{
+    font-size:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    width:min(1360px,100%)!important;
+    gap:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{
+    aspect-ratio:1.33!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div{
+    padding:12px 13px 14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{
+    min-height:35px!important;
+    font-size:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{
+    font-size:23px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:48px 28px 52px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-finance-inner,
+  html body main.reference-home.locked-storefront .rh-trust-grid{
+    width:min(1360px,100%)!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:31px!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading p{
+    font-size:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step{
+    min-height:132px!important;
+    padding:18px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step>b{
+    width:34px!important;
+    height:34px!important;
+    font-size:13px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust{
+    padding:0 28px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid article{
+    min-height:88px!important;
+    padding:15px 18px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer{
+    padding:30px 28px!important;
+  }
+}
+
+@media(max-width:767px){
+  html body main.reference-home.locked-storefront .rh-header{
+    height:86px!important;
+    min-height:86px!important;
+    max-height:86px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-header-inner{
+    width:calc(100% - 24px)!important;
+    height:86px!important;
+    min-height:86px!important;
+    max-height:86px!important;
+    grid-template-columns:48px minmax(0,1fr) 48px!important;
+    grid-template-rows:86px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-menu,
+  html body main.reference-home.locked-storefront .rh-call{
+    width:46px!important;
+    height:46px!important;
+    min-width:46px!important;
+    min-height:46px!important;
+    max-width:46px!important;
+    max-height:46px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo{
+    width:94px!important;
+    min-width:94px!important;
+    max-width:94px!important;
+    height:86px!important;
+    min-height:86px!important;
+    max-height:86px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    width:90px!important;
+    min-width:90px!important;
+    max-width:90px!important;
+    height:90px!important;
+    min-height:90px!important;
+    max-height:90px!important;
+    object-fit:contain!important;
+    filter:drop-shadow(0 5px 13px rgba(0,0,0,.5))!important;
+  }
+  html body main.reference-home.locked-storefront .rh-nav{
+    top:86px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-hero{
+    height:590px!important;
+    min-height:590px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-art{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+    object-position:64% 48%!important;
+    filter:saturate(1.14) contrast(1.04) brightness(1.06)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-shade{
+    position:absolute!important;
+    inset:0!important;
+    height:100%!important;
+    background:linear-gradient(180deg,rgba(2,8,13,.05) 0%,rgba(2,8,13,.14) 34%,rgba(2,8,13,.58) 58%,rgba(2,8,13,.96) 78%,#02080d 100%),linear-gradient(90deg,rgba(2,8,13,.45),rgba(2,8,13,.04) 76%)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-inner{
+    box-sizing:border-box!important;
+    width:100%!important;
+    height:590px!important;
+    min-height:590px!important;
+    padding:0 15px 26px!important;
+    align-items:flex-end!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy{
+    width:100%!important;
+    max-width:370px!important;
+    padding:0!important;
+    background:transparent!important;
+  }
+  html body main.reference-home.locked-storefront .rh-kicker{
+    margin-bottom:8px!important;
+    font-size:8.5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    max-width:360px!important;
+    font-size:39px!important;
+    line-height:.9!important;
+    white-space:nowrap!important;
+  }
+  html body main.reference-home.locked-storefront .rh-proof-copy{
+    max-width:330px!important;
+    margin-top:11px!important;
+    font-size:11.5px!important;
+    line-height:1.34!important;
+  }
+  html body main.reference-home.locked-storefront .rh-hero-actions{
+    margin-top:15px!important;
+    gap:8px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-btn{
+    min-height:47px!important;
+    font-size:9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-phone{
+    display:flex!important;
+    margin-top:11px!important;
+    font-size:9px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-benefit{
+    min-height:102px!important;
+    padding:12px 5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-icon{
+    width:31px!important;
+    height:31px!important;
+    font-size:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit strong{
+    font-size:7px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit small{
+    font-size:6px!important;
+    line-height:1.18!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-inventory{
+    padding:31px 0 36px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head{
+    margin-bottom:11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-section-head h2{
+    font-size:27px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid{
+    gap:7px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 31.5vw!important;
+    width:31.5vw!important;
+    min-width:118px!important;
+    max-width:140px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{
+    aspect-ratio:1.16!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div{
+    padding:7px 7px 9px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>a{
+    min-height:21px!important;
+    font-size:9.5px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{
+    font-size:16px!important;
+  }
+
+  html body main.reference-home.locked-storefront .rh-finance{
+    padding:34px 14px 39px!important;
+  }
+  html body main.reference-home.locked-storefront .finance-heading h2{
+    font-size:27px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-step{
+    min-height:82px!important;
+    padding:12px 11px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid{
+    width:100%!important;
+  }
+  html body main.reference-home.locked-storefront .rh-trust-grid article{
+    min-height:94px!important;
+    padding:12px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer{
+    padding:31px 20px 34px!important;
+  }
+}
+
+@media(max-width:390px){
+  html body main.reference-home.locked-storefront .rh-copy h1{
+    font-size:36px!important;
+  }
+}
