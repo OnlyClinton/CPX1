@@ -94,9 +94,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     transform:translate(-50%,-50%)!important;
   }
 
-  /* Mobile owner chrome: preserve the 10px visual gutters but center the
-     symmetric grid itself in the viewport. This removes the historical 10px
-     left drift without moving either control or changing emblem scale. */
+  /* Mobile owner chrome: symmetric controls and center track. */
   html body [data-wdcc-public-chrome="header"]{
     position:sticky!important;
     top:0!important;
@@ -128,6 +126,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     justify-self:start!important;
     align-self:center!important;
   }
+
+  /* wdcc-system-v2 has a higher-specificity home rule that historically kept
+     this wrapper as a 116px flex row. Match that specificity so the 96px
+     approved emblem is centered inside the grid track rather than flex-started
+     10px left of viewport center. */
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo,
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:static!important;
     left:auto!important;
@@ -138,10 +142,17 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     grid-row:1!important;
     justify-self:center!important;
     align-self:center!important;
+    display:grid!important;
+    place-items:center!important;
+    place-content:center!important;
     width:104px!important;
     min-width:104px!important;
+    max-width:104px!important;
     height:78px!important;
+    min-height:78px!important;
+    max-height:78px!important;
     margin:0!important;
+    padding:0!important;
     z-index:3!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-call{
@@ -173,6 +184,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     min-width:236px!important;
     max-width:270px!important;
   }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo,
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:static!important;
     left:auto!important;
@@ -182,8 +194,11 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     grid-column:2!important;
     grid-row:1!important;
     justify-self:center!important;
+    display:grid!important;
+    place-items:center!important;
     width:104px!important;
     min-width:104px!important;
+    max-width:104px!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
     content:normal!important;
