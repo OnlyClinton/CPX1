@@ -3,6 +3,7 @@
 import Link from"next/link";
 import{useEffect,useState}from"react";
 import{WdccPublicFooter,WdccPublicHeader}from"../../WdccPublicChrome";
+import{isWdccVisualReviewFixture,wdccVisualReviewVehicle,WDCC_VISUAL_REVIEW_LABEL}from"../../wdccVisualReviewInventory";
 
 type LoadState="loading"|"ready"|"error";
 type VehicleRecord=Record<string,any>;
@@ -20,10 +21,17 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const[id,setId]=useState("");
   const[vehicle,setVehicle]=useState<VehicleRecord|null>(null);
   const[state,setState]=useState<LoadState>("loading");
+  const[fixtureMode,setFixtureMode]=useState(false);
 
   useEffect(()=>{let live=true;params.then(x=>{if(live)setId(String(x?.id||""))}).catch(()=>{if(live)setState("error")});return()=>{live=false}},[params]);
   useEffect(()=>{
     if(!id)return;
+    if(isWdccVisualReviewFixture()){
+      setFixtureMode(true);
+      const item=wdccVisualReviewVehicle(id);
+      if(item){setVehicle(item);setState("ready")}else{setVehicle(null);setState("error")}
+      return;
+    }
     const controller=new AbortController();
     let live=true;
     setState("loading");
@@ -45,11 +53,12 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
     <main className="vehiclePage wdcc-public-page">
       <section className="inventoryTop vehicleTop"><div className="wrap"><div className="eyebrow">CURRENT VEHICLE DETAILS</div><h1>{title}</h1><p className="lede">Real published inventory only. Clear pricing, direct answers, and no demo vehicle substitutions.</p></div></section>
       <section className="section light vehicleSection"><div className="wrap">
+        {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
         {state==="loading"&&<div className="vehicleStatus" role="status"><span className="vehicleStatusBadge">WDCC</span><div><h2>Loading current vehicle details…</h2><p>Checking the live published inventory record.</p></div></div>}
         {state==="error"&&<section className="vehicleUnavailable" role="status"><div className="eyebrow muted">LIVE INVENTORY STATUS</div><h2>Vehicle details are temporarily unavailable.</h2><p>We are not substituting a demo vehicle or made-up listing. Call Sean for current availability, or return to the published inventory page.</p><div className="vehicleActions"><Link className="cta red" href="/inventory">BROWSE INVENTORY</Link><Link className="cta" href="/get-approved?source=vehicle-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>}
         {state==="ready"&&v&&<div className="vehicleLayout">
-          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing"><img src="/wdcc-official-logo.webp" alt=""/><span>PHOTOS COMING SOON</span></div>}</div><p>Photos shown are attached to this published vehicle record.</p></section>
-          <section className="vehicleSummary"><div className="eyebrow muted">AVAILABLE VEHICLE</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><Link className="cta" href={`/get-approved${q}`}>GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>
+          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing"><img src="/wdcc-official-logo.webp" alt=""/><span>PHOTOS COMING SOON</span></div>}</div><p>{fixtureMode?"Historical record photo is not being substituted while media storage is blocked.":"Photos shown are attached to this published vehicle record."}</p></section>
+          <section className="vehicleSummary"><div className="eyebrow muted">{fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><Link className="cta" href={`/get-approved${q}`}>GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>
         </div>}
       </div></section>
     </main>
