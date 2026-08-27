@@ -95,7 +95,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
 
   /* Mobile owner chrome: controls stay in the inset grid, while the emblem is
-     positioned against the full sticky header so wrapper gutters cannot shift it. */
+     pinned to the viewport center so wrapper gutters cannot shift it. */
   html body [data-wdcc-public-chrome="header"]{
     position:sticky!important;
     top:0!important;
@@ -124,7 +124,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:absolute!important;
-    left:50%!important;
+    left:50vw!important;
     top:50%!important;
     transform:translate(-50%,-50%)!important;
     grid-column:auto!important;
@@ -168,7 +168,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   }
   html body [data-wdcc-public-chrome="header"] .rh-logo{
     position:absolute!important;
-    left:50%!important;
+    left:50vw!important;
     top:50%!important;
     transform:translate(-50%,-50%)!important;
     grid-column:auto!important;
