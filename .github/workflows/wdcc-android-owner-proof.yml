@@ -30,7 +30,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Lock exact owner-emblem source
+      - name: Lock exact owner-emblem and current board source
         shell: bash
         run: |
           set -euo pipefail
@@ -45,15 +45,17 @@ jobs:
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq 'wdcc-owner-approved-logo-final.css' app/layout.tsx
-          last_owner_css="$(grep -o 'wdcc-owner-[^"]*\.css' app/layout.tsx | tail -1)"
-          test "$last_owner_css" = 'wdcc-owner-approved-logo-final.css'
-          grep -Fq 'grid-template-columns:50px minmax(0,1fr) 50px!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'position:static!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'grid-column:2!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'justify-self:center!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'img.rh-logo-art[data-wdcc-logo-art="owner-approved"]' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'width:96px!important' app/wdcc-owner-approved-logo-final.css
-          grep -Fq 'content:normal!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'wdcc-acceptance-closeout.css' app/layout.tsx
+          last_wdcc_css="$(grep -o 'wdcc-[^"]*\.css' app/layout.tsx | tail -1)"
+          test "$last_wdcc_css" = 'wdcc-acceptance-closeout.css'
+          grep -Fq 'position:static!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'grid-column:2!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'justify-self:center!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'grid-template-columns:44px minmax(0,1fr) 44px!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'width:62px!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'flex:0 0 29.5vw!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-acceptance-closeout.css
+          grep -Fq 'content:normal!important' app/wdcc-acceptance-closeout.css
           ! grep -Fq 'content:url(' app/wdcc-owner-screenshot-switch.css
 
       - name: Build exact Cloudflare candidate
@@ -120,7 +122,7 @@ jobs:
           test -s /tmp/owner-logo.webp
           grep -qi '^x-wdcc-logo: owner-approved' /tmp/owner-logo.headers
 
-      - name: Prove Android-rendered owner contract
+      - name: Prove Android-rendered current owner contract
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
@@ -151,20 +153,20 @@ jobs:
             await page.locator('.li').waitFor({state:'detached',timeout:5000});
             const headerArt=page.locator('[data-wdcc-public-chrome="header"] img[data-wdcc-logo-art="owner-approved"]');
             await headerArt.waitFor({state:'visible',timeout:10000});
-            const header=await page.evaluate(()=>{const h=document.querySelector('[data-wdcc-public-chrome="header"]'),a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]'),r=a.getBoundingClientRect(),s=getComputedStyle(a);return{winW:innerWidth,logo:{w:r.width,h:r.height,cx:r.x+r.width/2,opacity:Number(s.opacity),content:s.content,clipPath:s.clipPath,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}}});
-            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<90||header.logo.h>100||header.logo.w<90||header.logo.w>100||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||header.logo.src!=='/wdcc-owner-logo'||header.logo.naturalWidth<20||header.logo.naturalHeight<20)throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
+            const header=await page.evaluate(()=>{const h=document.querySelector('[data-wdcc-public-chrome="header"]'),a=h.querySelector('img[data-wdcc-logo-art="owner-approved"]'),hr=h.getBoundingClientRect(),r=a.getBoundingClientRect(),s=getComputedStyle(a);return{winW:innerWidth,headerH:hr.height,logo:{w:r.width,h:r.height,cx:r.x+r.width/2,opacity:Number(s.opacity),content:s.content,clipPath:s.clipPath,src:a.getAttribute('src')||'',naturalWidth:a.naturalWidth,naturalHeight:a.naturalHeight}}});
+            if(header.headerH<60||header.headerH>68||Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<58||header.logo.h>66||header.logo.w<58||header.logo.w>66||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||header.logo.src!=='/wdcc-owner-logo'||header.logo.naturalWidth<20||header.logo.naturalHeight<20)throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
             await page.locator('[data-wdcc-public-chrome="header"]').screenshot({path:`${out}/android-header.png`});
             response=await page.goto(`${base}/?owner-review=1&android-owner=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
             if(!response||response.status()!==200)throw new Error(`ANDROID_OWNER_REVIEW_HTTP_${response?.status()||0}`);
             const skip=page.getByRole('button',{name:/skip intro/i});if(await skip.count())await skip.click().catch(()=>{});
             await page.locator('.wdccOwnerReviewBanner').waitFor({state:'visible',timeout:10000});
             await page.locator('.rh-grid > article').first().waitFor({state:'visible',timeout:10000});
-            const inventory=await page.evaluate(()=>{const g=document.querySelector('.rh-grid'),s=getComputedStyle(g),kids=[...g.children].map(x=>x.getBoundingClientRect());return{label:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),count:kids.length,overflowX:s.overflowX,firstW:kids[0]?.width||0,secondX:kids[1]?.x||9999}});
-            if(!/NOT LIVE/i.test(inventory.label)||inventory.count!==5||!['auto','scroll'].includes(inventory.overflowX)||inventory.firstW<250||inventory.firstW>360||inventory.secondX>=390)throw new Error(`ANDROID_OWNER_INVENTORY_BAD_${JSON.stringify(inventory)}`);
+            const inventory=await page.evaluate(()=>{const g=document.querySelector('.rh-grid'),s=getComputedStyle(g),kids=[...g.children].map(x=>x.getBoundingClientRect());return{label:(document.querySelector('.wdccOwnerReviewBanner')?.textContent||'').trim(),count:kids.length,overflowX:s.overflowX,firstW:kids[0]?.width||0,secondX:kids[1]?.x||9999,thirdX:kids[2]?.x||9999,fourthX:kids[3]?.x||9999}});
+            if(!/NOT LIVE/i.test(inventory.label)||inventory.count!==5||!['auto','scroll'].includes(inventory.overflowX)||inventory.firstW<100||inventory.firstW>130||inventory.secondX>=170||inventory.thirdX>=390||inventory.fourthX<350||inventory.fourthX>430)throw new Error(`ANDROID_OWNER_INVENTORY_BAD_${JSON.stringify(inventory)}`);
             await page.screenshot({path:`${out}/android-owner-home.png`,fullPage:true});
             if(writes.length)throw new Error(`ANDROID_OWNER_WRITE_REQUESTS_${JSON.stringify(writes)}`);
             fs.writeFileSync(`${out}/result.json`,JSON.stringify({sha:process.env.GITHUB_SHA,url:base,userAgent:ua,intro,header,inventory,writes,pass:true},null,2)+'\n');
-            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({headerCenter:header.logo.cx,expected:header.winW/2,cards:inventory.count,writes:writes.length}));
+            console.log('WDCC_ANDROID_OWNER_VISUAL_PASS',JSON.stringify({headerCenter:header.logo.cx,expected:header.winW/2,headerH:header.headerH,cards:inventory.count,writes:writes.length}));
           } finally {await ctx.close();await browser.close()}
           NODE
 
@@ -188,8 +190,8 @@ jobs:
           if [ -s android-owner-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./android-owner-proof/result.json');
-          console.log(`Header emblem: ${r.header.logo.w.toFixed(1)} × ${r.header.logo.h.toFixed(1)} px · center ${r.header.logo.cx.toFixed(1)} / ${(r.header.winW/2).toFixed(1)} px`);
-          console.log(`Owner-review cards: ${r.inventory.count} · ${r.inventory.label}`);
+          console.log(`Header: ${r.header.headerH.toFixed(1)} px · emblem ${r.header.logo.w.toFixed(1)} × ${r.header.logo.h.toFixed(1)} px · center ${r.header.logo.cx.toFixed(1)} / ${(r.header.winW/2).toFixed(1)} px`);
+          console.log(`Owner-review cards: ${r.inventory.count} · compact card ${r.inventory.firstW.toFixed(1)} px · ${r.inventory.label}`);
           console.log(`Browser writes: ${r.writes.length}`);
           NODE
           else
