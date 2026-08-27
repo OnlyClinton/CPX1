@@ -1,0 +1,167 @@
+name: WDCC Blob Recovery Read-Only
+
+on:
+  push:
+    branches: [proof/wdcc-blob-recovery-20260827]
+    paths:
+      - '.github/workflows/wdcc-blob-recovery-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Link frozen Phoenix project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Compare canonical copies and newest primary backups
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-blob-recovery-readonly.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {list} from '@vercel/blob';
+
+          const oidc=String(process.env.VERCEL_OIDC_TOKEN||'').trim();
+          if(!oidc) throw new Error('VERCEL_OIDC_TOKEN_MISSING');
+
+          const primary={name:'wdcc-v10-20260819-194257',storeId:'store_cNUyQRVlXtyvZQ5N'};
+          const canonicals=[
+            {name:'wdcc-clean-20260819-173749',storeId:'store_vVJ5kU6x76yZVkGs'},
+            {name:'wdcc-rescue-20260819-172412',storeId:'store_KopvAQeMcatdS5DS'},
+            {name:'wdcc-private-20260801005157',storeId:'store_LdMSV1550BRgc0SP'},
+          ];
+
+          async function listAll(storeId,prefix){
+            let cursor;
+            const out=[];
+            for(let page=0;page<20;page++){
+              const r=await list({prefix,limit:200,cursor,oidcToken:oidc,storeId});
+              out.push(...(r.blobs||[]));
+              if(!r.hasMore||!r.cursor)break;
+              cursor=r.cursor;
+            }
+            return out;
+          }
+
+          async function fetchBlob(blob){
+            const r=await fetch(blob.url,{headers:{Authorization:`Bearer ${oidc}`},cache:'no-store'});
+            if(!r.ok)throw new Error(`BLOB_FETCH_${r.status}_${blob.pathname}`);
+            const bytes=Buffer.from(await r.arrayBuffer());
+            const hash=crypto.createHash('sha256').update(bytes).digest('hex');
+            let doc;
+            try{doc=JSON.parse(bytes.toString('utf8'))}catch{throw new Error(`JSON_PARSE_FAILED_${blob.pathname}`)}
+            return {bytes,hash,doc};
+          }
+
+          function safeMeta(doc){
+            const roots=[doc,doc?._meta,doc?.meta,doc?.metadata].filter(x=>x&&typeof x==='object'&&!Array.isArray(x));
+            const allow=['revision','ledgerRevision','version','schemaVersion','updatedAt','createdAt','timestamp','release'];
+            const meta={};
+            for(const root of roots)for(const key of allow){
+              const value=root[key];
+              if((typeof value==='string'||typeof value==='number')&&meta[key]===undefined)meta[key]=value;
+            }
+            return meta;
+          }
+
+          function safeCounts(doc){
+            const keys=['users','inventory','vehicles','leads','events','media','sessions','audit','logs','customers','appointments','applications','messages'];
+            const counts={};
+            for(const key of keys){
+              const value=doc?.[key];
+              if(Array.isArray(value))counts[key]=value.length;
+              else if(value&&typeof value==='object')counts[key]=Object.keys(value).length;
+            }
+            return counts;
+          }
+
+          function pathRevision(pathname){
+            const m=String(pathname||'').match(/(?:^|-)r(\d+)(?:-|\.|$)/i);
+            return m?Number(m[1]):null;
+          }
+
+          async function summarize(blob,store){
+            const {bytes,hash,doc}=await fetchBlob(blob);
+            return {
+              store:store.name,
+              storeId:store.storeId,
+              pathname:blob.pathname,
+              uploadedAt:blob.uploadedAt||null,
+              size:blob.size??bytes.length,
+              sha256:hash,
+              pathRevision:pathRevision(blob.pathname),
+              meta:safeMeta(doc),
+              counts:safeCounts(doc),
+              validJson:true,
+            };
+          }
+
+          const result={mode:'READ_ONLY',oidcPresent:true,canonicalCopies:[],primaryBackups:[],errors:[]};
+
+          for(const store of canonicals){
+            try{
+              const blobs=await listAll(store.storeId,'private/state/platform-v3.json');
+              const blob=blobs.find(b=>b.pathname==='private/state/platform-v3.json');
+              if(!blob)throw new Error('CANONICAL_NOT_FOUND');
+              result.canonicalCopies.push(await summarize(blob,store));
+            }catch(e){result.errors.push({store:store.name,storeId:store.storeId,error:String(e?.message||e)})}
+          }
+
+          try{
+            const backups=await listAll(primary.storeId,'private/state/backups/');
+            backups.sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')) || (pathRevision(b.pathname)||0)-(pathRevision(a.pathname)||0));
+            for(const blob of backups.slice(0,8)){
+              try{result.primaryBackups.push(await summarize(blob,primary))}
+              catch(e){result.errors.push({store:primary.name,pathname:blob.pathname,error:String(e?.message||e)})}
+            }
+            result.primaryBackupCount=backups.length;
+            result.primaryMaxPathRevision=Math.max(0,...backups.map(b=>pathRevision(b.pathname)||0));
+          }catch(e){result.errors.push({store:primary.name,storeId:primary.storeId,error:String(e?.message||e)})}
+
+          const candidates=[...result.canonicalCopies,...result.primaryBackups];
+          candidates.sort((a,b)=>{
+            const ar=Number(a.meta?.revision??a.meta?.ledgerRevision??a.pathRevision??-1);
+            const br=Number(b.meta?.revision??b.meta?.ledgerRevision??b.pathRevision??-1);
+            if(Number.isFinite(ar)&&Number.isFinite(br)&&ar!==br)return br-ar;
+            return String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||''));
+          });
+          result.recommended=candidates[0]?{
+            store:candidates[0].store,storeId:candidates[0].storeId,pathname:candidates[0].pathname,
+            uploadedAt:candidates[0].uploadedAt,sha256:candidates[0].sha256,
+            meta:candidates[0].meta,counts:candidates[0].counts,
+            reason:'highest safe revision signal, then newest upload timestamp'
+          }:null;
+
+          fs.writeFileSync('wdcc-blob-recovery-readonly.json',JSON.stringify(result,null,2)+'\n');
+          console.log(JSON.stringify(result,null,2));
+          if(!result.canonicalCopies.length&&!result.primaryBackups.length)process.exit(2);
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-blob-recovery-readonly.mjs
+      - name: Upload redacted recovery summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-blob-recovery-readonly-${{ github.sha }}
+          path: wdcc-blob-recovery-readonly.json
+          retention-days: 3
+
+# READ-ONLY: list + authenticated GET only. No put/copy/del/store/env/deploy operations.
