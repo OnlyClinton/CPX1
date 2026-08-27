@@ -1,0 +1,525 @@
+/* WDCC interior funnel final — inventory + approval only.
+   Loaded after all legacy visual layers. Preview branch only; no routing/provider changes. */
+
+body:has(.inventoryTop),
+body:has(.leadPage){
+  --if-red:#f2263d;
+  --if-ink:#02090f;
+  --if-navy:#071522;
+  --if-paper:#f3f0e9;
+  --if-line:#d9dee3;
+  --if-muted:#65717d;
+  background:var(--if-paper);
+}
+
+/* Keep the older customer Header component visually aligned with the approved storefront. */
+body:has(.inventoryTop) .commandStrip,
+body:has(.leadPage) .commandStrip{
+  position:sticky!important;
+  top:0!important;
+  z-index:4101!important;
+  height:28px!important;
+  min-height:28px!important;
+  background:#050b10!important;
+  border-bottom:1px solid rgba(255,255,255,.09)!important;
+}
+body:has(.inventoryTop) .commandStrip .wrap,
+body:has(.leadPage) .commandStrip .wrap{
+  height:28px!important;
+  min-height:28px!important;
+  width:min(1180px,100% - 28px)!important;
+  padding:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:16px!important;
+  color:#f1f4f6!important;
+  font-size:9.5px!important;
+  line-height:1!important;
+  letter-spacing:.075em!important;
+  white-space:nowrap!important;
+}
+body:has(.inventoryTop) .premiumHeader,
+body:has(.leadPage) .premiumHeader{
+  position:sticky!important;
+  top:28px!important;
+  z-index:4100!important;
+  height:82px!important;
+  min-height:82px!important;
+  background:#02090ff7!important;
+  border-bottom:1px solid rgba(255,255,255,.10)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.20)!important;
+  backdrop-filter:blur(15px)!important;
+  -webkit-backdrop-filter:blur(15px)!important;
+}
+body:has(.inventoryTop) .premiumHeader .nav,
+body:has(.leadPage) .premiumHeader .nav{
+  height:82px!important;
+  min-height:82px!important;
+  border:0!important;
+}
+body:has(.inventoryTop) .premiumHeader .logoBrand img,
+body:has(.leadPage) .premiumHeader .logoBrand img{
+  content:url('/wdcc-official-logo.webp')!important;
+  object-fit:contain!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+}
+
+/* Inventory: compact branded masthead, then inventory immediately. */
+body:has(.inventoryTop) main{
+  background:var(--if-paper)!important;
+}
+body:has(.inventoryTop) .inventoryTop{
+  position:relative!important;
+  isolation:isolate!important;
+  min-height:300px!important;
+  padding:64px 0 50px!important;
+  display:flex!important;
+  align-items:flex-end!important;
+  overflow:hidden!important;
+  background:#08141f!important;
+  color:#fff!important;
+}
+body:has(.inventoryTop) .inventoryTop:before{
+  content:"";
+  position:absolute;
+  z-index:-2;
+  inset:0;
+  background-image:url('/wdcc-hero-v2.webp');
+  background-repeat:no-repeat;
+  background-size:58% auto;
+  background-position:100% 58%;
+  filter:saturate(1.24) contrast(1.07) brightness(1.13);
+}
+body:has(.inventoryTop) .inventoryTop:after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  inset:0;
+  background:linear-gradient(90deg,#071522 0%,#071522f5 42%,#071522a8 63%,#07152224 100%),linear-gradient(0deg,#071522 0%,transparent 42%);
+}
+body:has(.inventoryTop) .inventoryTop .wrap{
+  width:min(1180px,100% - 32px)!important;
+  margin:0 auto!important;
+}
+body:has(.inventoryTop) .inventoryTop .eyebrow{
+  margin:0 0 14px!important;
+  color:#a9b4bd!important;
+  font-size:11px!important;
+  line-height:1!important;
+  letter-spacing:.20em!important;
+}
+body:has(.inventoryTop) .inventoryTop h1{
+  max-width:720px!important;
+  margin:0 0 18px!important;
+  color:#fff!important;
+  font-size:clamp(56px,7vw,92px)!important;
+  line-height:.88!important;
+  letter-spacing:-.06em!important;
+  text-wrap:balance!important;
+}
+body:has(.inventoryTop) .inventoryTop .lede{
+  max-width:600px!important;
+  margin:0!important;
+  color:#d9e0e6!important;
+  font-size:16px!important;
+  line-height:1.5!important;
+}
+body:has(.inventoryTop) .section.light{
+  padding:32px 0 92px!important;
+  background:var(--if-paper)!important;
+}
+body:has(.inventoryTop) .section.light>.wrap{
+  width:min(1180px,100% - 32px)!important;
+}
+body:has(.inventoryTop) .grid{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:18px!important;
+}
+body:has(.inventoryTop) .card{
+  overflow:hidden!important;
+  background:#fff!important;
+  border:1px solid #d9dee3!important;
+  border-radius:15px!important;
+  box-shadow:0 10px 28px rgba(20,31,42,.08)!important;
+}
+body:has(.inventoryTop) .photo{
+  position:relative!important;
+  aspect-ratio:16/9!important;
+  min-height:0!important;
+  background:radial-gradient(circle at 50% 42%,#303b45 0,#171e25 42%,#0d1217 100%)!important;
+  color:#aeb7bf!important;
+  font-size:12px!important;
+  letter-spacing:.08em!important;
+}
+body:has(.inventoryTop) .photo:not(:has(img)):before{
+  content:"";
+  width:72px;
+  height:72px;
+  margin-right:13px;
+  flex:0 0 72px;
+  background:url('/wdcc-official-logo.webp') center/contain no-repeat;
+  opacity:.32;
+  border-radius:50%;
+}
+body:has(.inventoryTop) .cardBody{padding:17px 18px 19px!important}
+body:has(.inventoryTop) .carTitle{font-size:20px!important;line-height:1.14!important}
+body:has(.inventoryTop) .price{font-size:30px!important;letter-spacing:-.035em!important}
+body:has(.inventoryTop) .facts{margin:10px 0!important;font-size:10px!important}
+body:has(.inventoryTop) .cardButtons{gap:8px!important;margin-top:14px!important}
+body:has(.inventoryTop) .cardButtons span{min-height:43px!important;border-radius:7px!important;font-size:9.5px!important}
+body:has(.inventoryTop) .emptyInventory{
+  grid-column:1/-1!important;
+  padding:32px!important;
+  background:#fff!important;
+  border:1px solid #d9dee3!important;
+  border-radius:15px!important;
+  color:#111820!important;
+  box-shadow:0 10px 28px rgba(20,31,42,.07)!important;
+}
+
+/* Approval: one deliberate conversion surface instead of a blank page plus giant form. */
+body:has(.leadPage) main.section.light{
+  padding:34px 0 98px!important;
+  background:linear-gradient(180deg,#e9edf0 0%,var(--if-paper) 46%,#eeeae1 100%)!important;
+}
+body:has(.leadPage) .leadPage{
+  width:min(1120px,100% - 32px)!important;
+  margin:0 auto!important;
+  padding:44px!important;
+  display:grid!important;
+  grid-template-columns:minmax(260px,.76fr) minmax(480px,1.24fr)!important;
+  grid-template-rows:auto auto 1fr!important;
+  column-gap:48px!important;
+  row-gap:0!important;
+  align-items:start!important;
+  overflow:hidden!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  border-radius:24px!important;
+  background:radial-gradient(circle at 10% 15%,rgba(33,110,170,.22),transparent 35%),linear-gradient(145deg,#071522 0%,#06111c 58%,#02090f 100%)!important;
+  box-shadow:0 22px 56px rgba(7,21,34,.20)!important;
+}
+body:has(.leadPage) .leadPage>.eyebrow{
+  grid-column:1!important;
+  grid-row:1!important;
+  margin:4px 0 18px!important;
+  color:#9eabb6!important;
+  font-size:11px!important;
+  line-height:1!important;
+  letter-spacing:.19em!important;
+}
+body:has(.leadPage) .leadPage>h1{
+  grid-column:1!important;
+  grid-row:2!important;
+  margin:0 0 18px!important;
+  color:#fff!important;
+  font-size:clamp(48px,5.4vw,72px)!important;
+  line-height:.92!important;
+  letter-spacing:-.055em!important;
+}
+body:has(.leadPage) .leadPage>p{
+  grid-column:1!important;
+  grid-row:3!important;
+  max-width:360px!important;
+  margin:0!important;
+  color:#d0d9e0!important;
+  font-size:16px!important;
+  line-height:1.55!important;
+}
+body:has(.leadPage) .leadForm{
+  grid-column:2!important;
+  grid-row:1 / span 3!important;
+  margin:0!important;
+  padding:24px!important;
+  background:#fff!important;
+  color:#111820!important;
+  border:1px solid #dce1e5!important;
+  border-radius:17px!important;
+  box-shadow:0 18px 44px rgba(0,0,0,.22)!important;
+}
+body:has(.leadPage) .leadGrid{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:15px!important;
+}
+body:has(.leadPage) .leadGrid label{
+  display:grid!important;
+  gap:7px!important;
+  color:#18212a!important;
+  font-size:10.5px!important;
+  font-weight:900!important;
+  line-height:1.2!important;
+  letter-spacing:.055em!important;
+  text-transform:uppercase!important;
+}
+body:has(.leadPage) .leadGrid label.wide{grid-column:1/-1!important}
+body:has(.leadPage) .leadGrid input:not([type="checkbox"]),
+body:has(.leadPage) .leadGrid textarea{
+  width:100%!important;
+  min-height:50px!important;
+  padding:12px 13px!important;
+  color:#111820!important;
+  background:#f7f8f9!important;
+  border:1px solid #cfd5da!important;
+  border-radius:8px!important;
+  outline:0!important;
+  font:600 15px/1.25 Inter,system-ui,-apple-system,Segoe UI,sans-serif!important;
+  box-shadow:none!important;
+}
+body:has(.leadPage) .leadGrid input:not([type="checkbox"]):focus,
+body:has(.leadPage) .leadGrid textarea:focus{
+  border-color:#768b9d!important;
+  box-shadow:0 0 0 3px rgba(24,138,244,.10)!important;
+}
+body:has(.leadPage) .leadGrid textarea{min-height:96px!important;resize:vertical!important}
+body:has(.leadPage) .leadGrid .consent{
+  grid-template-columns:20px minmax(0,1fr)!important;
+  align-items:start!important;
+  gap:9px!important;
+  color:#65717d!important;
+  font-size:9.5px!important;
+  line-height:1.45!important;
+  letter-spacing:0!important;
+  text-transform:none!important;
+  font-weight:650!important;
+}
+body:has(.leadPage) .leadGrid .consent input{
+  width:18px!important;
+  height:18px!important;
+  margin:1px 0 0!important;
+}
+body:has(.leadPage) .leadForm>.cta.red{
+  width:100%!important;
+  min-height:52px!important;
+  margin-top:17px!important;
+  border:0!important;
+  border-radius:8px!important;
+  background:var(--if-red)!important;
+  color:#fff!important;
+  font-size:11px!important;
+  letter-spacing:.045em!important;
+}
+body:has(.leadPage) .leadMessage{margin-top:12px!important;font-size:12px!important;line-height:1.4!important}
+
+/* Floating action dock: conversion help without consuming a full mobile row of content. */
+@media(max-width:900px){
+  body:has(.inventoryTop) .commandStrip,
+  body:has(.leadPage) .commandStrip{height:27px!important;min-height:27px!important}
+  body:has(.inventoryTop) .commandStrip .wrap,
+  body:has(.leadPage) .commandStrip .wrap{
+    height:27px!important;
+    min-height:27px!important;
+    width:100%!important;
+    padding:0 11px!important;
+    gap:7px!important;
+    font-size:8px!important;
+    letter-spacing:.045em!important;
+  }
+  body:has(.inventoryTop) .premiumHeader,
+  body:has(.leadPage) .premiumHeader{
+    top:27px!important;
+    height:78px!important;
+    min-height:78px!important;
+  }
+  body:has(.inventoryTop) .premiumHeader .nav,
+  body:has(.leadPage) .premiumHeader .nav{
+    width:100%!important;
+    max-width:none!important;
+    height:78px!important;
+    min-height:78px!important;
+    padding:0 13px!important;
+    display:grid!important;
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+    gap:6px!important;
+    align-items:center!important;
+  }
+  body:has(.inventoryTop) .mobileMenuButton,
+  body:has(.leadPage) .mobileMenuButton{
+    display:grid!important;
+    grid-column:1!important;
+    grid-row:1!important;
+    place-items:center!important;
+    justify-self:start!important;
+    width:46px!important;
+    height:46px!important;
+    min-width:46px!important;
+    min-height:46px!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:transparent!important;
+    color:#fff!important;
+  }
+  body:has(.inventoryTop) .mobileMenuButton:before,
+  body:has(.leadPage) .mobileMenuButton:before{font-size:28px!important}
+  body:has(.inventoryTop) .logoBrand,
+  body:has(.leadPage) .logoBrand{
+    display:grid!important;
+    grid-column:2!important;
+    grid-row:1!important;
+    place-items:center!important;
+    justify-self:center!important;
+    width:88px!important;
+    height:78px!important;
+  }
+  body:has(.inventoryTop) .logoBrand img,
+  body:has(.leadPage) .logoBrand img{
+    width:86px!important;
+    height:86px!important;
+    max-width:none!important;
+    filter:drop-shadow(0 5px 12px rgba(0,0,0,.45))!important;
+  }
+  body:has(.inventoryTop) .mobileCallButton,
+  body:has(.leadPage) .mobileCallButton{
+    display:grid!important;
+    grid-column:3!important;
+    grid-row:1!important;
+    place-items:center!important;
+    justify-self:end!important;
+    width:46px!important;
+    min-width:46px!important;
+    max-width:46px!important;
+    height:46px!important;
+    min-height:46px!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:50%!important;
+    background:var(--if-red)!important;
+    color:#fff!important;
+    font-size:20px!important;
+  }
+  body:has(.inventoryTop) .mobileHeaderMenu,
+  body:has(.leadPage) .mobileHeaderMenu{top:78px!important}
+
+  body:has(.inventoryTop) .stickyCtaBar,
+  body:has(.leadPage) .stickyCtaBar{
+    position:fixed!important;
+    z-index:5000!important;
+    left:10px!important;
+    right:10px!important;
+    bottom:max(8px,env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    min-height:50px!important;
+    padding:0!important;
+    display:grid!important;
+    grid-template-columns:1fr 1.05fr .78fr!important;
+    overflow:hidden!important;
+    border:1px solid rgba(255,255,255,.12)!important;
+    border-radius:13px!important;
+    background:#071522f7!important;
+    box-shadow:0 12px 35px rgba(0,0,0,.40)!important;
+    backdrop-filter:blur(14px)!important;
+    -webkit-backdrop-filter:blur(14px)!important;
+  }
+  body:has(.inventoryTop) .stickyCtaBar a,
+  body:has(.leadPage) .stickyCtaBar a{
+    min-height:50px!important;
+    padding:0 8px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    border-right:1px solid rgba(255,255,255,.10)!important;
+    background:transparent!important;
+    color:#fff!important;
+    font-size:8.5px!important;
+    line-height:1!important;
+    letter-spacing:.02em!important;
+    white-space:nowrap!important;
+  }
+  body:has(.inventoryTop) .stickyCtaBar .stickyContact,
+  body:has(.leadPage) .stickyCtaBar .stickyContact{background:var(--if-red)!important;border-right:0!important}
+  body:has(.leadPage) .stickyCtaBar{grid-template-columns:1fr .72fr!important}
+  body:has(.leadPage) .stickyCtaBar .stickySecondary{display:none!important}
+
+  body:has(.inventoryTop) .inventoryTop{
+    min-height:0!important;
+    padding:154px 0 30px!important;
+    display:block!important;
+  }
+  body:has(.inventoryTop) .inventoryTop:before{
+    inset:0 0 auto 0!important;
+    height:138px!important;
+    background-size:cover!important;
+    background-position:70% 60%!important;
+    filter:saturate(1.30) contrast(1.08) brightness(1.22)!important;
+  }
+  body:has(.inventoryTop) .inventoryTop:after{
+    background:linear-gradient(180deg,transparent 0,rgba(7,21,34,.08) 72px,#071522 138px,#071522 100%)!important;
+  }
+  body:has(.inventoryTop) .inventoryTop .wrap{width:calc(100% - 34px)!important}
+  body:has(.inventoryTop) .inventoryTop .eyebrow{margin-bottom:11px!important;font-size:10px!important}
+  body:has(.inventoryTop) .inventoryTop h1{
+    max-width:100%!important;
+    margin:0 0 13px!important;
+    font-size:clamp(43px,12.2vw,54px)!important;
+    line-height:.91!important;
+    letter-spacing:-.055em!important;
+  }
+  body:has(.inventoryTop) .inventoryTop .lede{
+    max-width:100%!important;
+    font-size:14.5px!important;
+    line-height:1.45!important;
+  }
+  body:has(.inventoryTop) .section.light{padding:20px 0 82px!important}
+  body:has(.inventoryTop) .section.light>.wrap{width:calc(100% - 24px)!important}
+  body:has(.inventoryTop) .grid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:14px!important;
+    overflow:visible!important;
+    padding:0!important;
+  }
+  body:has(.inventoryTop) .card{width:100%!important;min-width:0!important;max-width:none!important;border-radius:13px!important}
+  body:has(.inventoryTop) .photo{aspect-ratio:16/9!important;font-size:11px!important}
+  body:has(.inventoryTop) .photo:not(:has(img)):before{width:58px;height:58px;flex-basis:58px;margin-right:10px}
+  body:has(.inventoryTop) .cardBody{padding:15px 16px 17px!important}
+  body:has(.inventoryTop) .carTitle{font-size:19px!important}
+  body:has(.inventoryTop) .price{font-size:28px!important}
+
+  body:has(.leadPage) main.section.light{padding:18px 0 82px!important}
+  body:has(.leadPage) .leadPage{
+    width:calc(100% - 20px)!important;
+    padding:25px 15px 15px!important;
+    display:block!important;
+    border-radius:17px!important;
+    background:radial-gradient(circle at 86% 4%,rgba(26,138,244,.19),transparent 29%),linear-gradient(160deg,#071522 0%,#04101a 100%)!important;
+    box-shadow:0 15px 38px rgba(7,21,34,.18)!important;
+  }
+  body:has(.leadPage) .leadPage>.eyebrow{margin:0 0 13px!important;font-size:10px!important}
+  body:has(.leadPage) .leadPage>h1{
+    margin:0 0 13px!important;
+    font-size:clamp(44px,12.5vw,54px)!important;
+    line-height:.92!important;
+  }
+  body:has(.leadPage) .leadPage>p{
+    max-width:100%!important;
+    margin:0!important;
+    font-size:14.5px!important;
+    line-height:1.46!important;
+  }
+  body:has(.leadPage) .leadForm{
+    margin-top:22px!important;
+    padding:17px!important;
+    border-radius:13px!important;
+    box-shadow:0 11px 30px rgba(0,0,0,.19)!important;
+  }
+  body:has(.leadPage) .leadGrid{grid-template-columns:1fr!important;gap:13px!important}
+  body:has(.leadPage) .leadGrid label.wide{grid-column:auto!important}
+  body:has(.leadPage) .leadGrid input:not([type="checkbox"]),
+  body:has(.leadPage) .leadGrid textarea{min-height:48px!important;font-size:16px!important}
+  body:has(.leadPage) .leadGrid textarea{min-height:88px!important}
+  body:has(.leadPage) .leadGrid .consent{grid-template-columns:19px minmax(0,1fr)!important;font-size:9px!important}
+  body:has(.leadPage) .leadForm>.cta.red{min-height:50px!important;margin-top:15px!important}
+  body:has(.leadPage) .premiumFooter,
+  body:has(.inventoryTop) .premiumFooter{padding-bottom:82px!important}
+}
+
+@media(max-width:430px){
+  body:has(.inventoryTop) .commandStrip .wrap,
+  body:has(.leadPage) .commandStrip .wrap{font-size:7.5px!important;gap:5px!important;padding:0 9px!important}
+  body:has(.inventoryTop) .premiumHeader .nav,
+  body:has(.leadPage) .premiumHeader .nav{padding:0 10px!important}
+  body:has(.inventoryTop) .logoBrand img,
+  body:has(.leadPage) .logoBrand img{width:82px!important;height:82px!important}
+}
