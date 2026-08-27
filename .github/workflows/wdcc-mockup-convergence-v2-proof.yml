@@ -183,6 +183,7 @@ jobs:
               const benefits=document.querySelector('.rh-benefits');
               const menu=document.querySelector('.rh-menu');
               const logo=document.querySelector('.rh-logo');
+              const logoImage=document.querySelector('.rh-logo img');
               const call=document.querySelector('.rh-call');
               const nav=document.querySelector('.rh-nav');
               const heroHeight=document.querySelector('.rh-hero')?.getBoundingClientRect().height||0;
@@ -192,6 +193,7 @@ jobs:
               const firstCardWidth=cards[0]?.getBoundingClientRect().width||0;
               const menuBox=menu?.getBoundingClientRect();
               const logoBox=logo?.getBoundingClientRect();
+              const logoImageBox=logoImage?.getBoundingClientRect();
               const callBox=call?.getBoundingClientRect();
               const scale=innerWidth>767?390/innerWidth:1;
               return {
@@ -210,7 +212,9 @@ jobs:
                 menuVisible:Boolean(menu)&&getComputedStyle(menu).display!=='none'&&getComputedStyle(menu).visibility!=='hidden'&&Boolean(menuBox?.width&&menuBox?.height),
                 chromeOverlap:Boolean(menuBox&&logoBox&&callBox&&(menuBox.right>logoBox.left||logoBox.right>callBox.left)),
                 logoWidth:logoBox?.width||0,effectiveLogoWidth:(logoBox?.width||0)*scale,
+                logoImageWidth:logoImageBox?.width||0,effectiveLogoImageWidth:(logoImageBox?.width||0)*scale,
                 menuWidth:menuBox?.width||0,effectiveMenuWidth:(menuBox?.width||0)*scale,
+                benefitsBackground:benefits?getComputedStyle(benefits).backgroundColor:'missing',
                 navDisplay:nav?getComputedStyle(nav).display:'missing',
                 placeholderCount:document.querySelectorAll('[aria-label$="photo unavailable"]').length,
                 photoCount:photos.length,loadedPhotos:photos.filter(i=>i.complete&&i.naturalWidth>0).length,
@@ -224,13 +228,13 @@ jobs:
             if(metrics.bannerVisible||metrics.bannerHeight!==0)throw new Error(`${label}_NON_MOCKUP_BANNER_${JSON.stringify(metrics)}`);
             if(label.endsWith('Mobile')&&(metrics.h1Font<40||metrics.h1Font>44||metrics.h1Top<228||metrics.h1Top>250))throw new Error(`${label}_HEADLINE_${JSON.stringify(metrics)}`);
             if(label.endsWith('Mobile')&&(metrics.heroHeight<486||metrics.heroHeight>498||metrics.benefitsHeight<176||metrics.benefitsHeight>181||metrics.inventoryTop<740||metrics.inventoryTop>752))throw new Error(`${label}_VERTICAL_GEOMETRY_${JSON.stringify(metrics)}`);
-            if(label.endsWith('Mobile')&&(metrics.logoWidth<105||metrics.logoWidth>120||metrics.menuWidth<48||metrics.menuWidth>58))throw new Error(`${label}_HEADER_SCALE_${JSON.stringify(metrics)}`);
+            if(label.endsWith('Mobile')&&(metrics.logoWidth<105||metrics.logoWidth>120||metrics.logoImageWidth<86||metrics.logoImageWidth>98||metrics.menuWidth<48||metrics.menuWidth>58))throw new Error(`${label}_HEADER_SCALE_${JSON.stringify(metrics)}`);
             if(label.endsWith('Mobile')&&metrics.benefitColumns!==2)throw new Error(`${label}_BENEFIT_COLUMNS_${metrics.benefitColumns}`);
             if(label.endsWith('Mobile')&&(metrics.firstCardWidth<108||metrics.firstCardWidth>140))throw new Error(`${label}_CARD_WIDTH_${metrics.firstCardWidth}`);
             if(label==='androidWide'&&(!metrics.coarsePointer||!metrics.mobileQueryMatches||metrics.screenWidth!==390||!metrics.menuVisible||metrics.chromeOverlap||metrics.navDisplay!=='none'))throw new Error(`ANDROID_CHROME_${JSON.stringify(metrics)}`);
-            if(label==='androidWide'&&(metrics.benefitColumns!==2||metrics.effectiveH1Font<40||metrics.effectiveH1Font>44||metrics.effectiveH1Top<228||metrics.effectiveH1Top>250||metrics.effectiveCardWidth<108||metrics.effectiveCardWidth>140||metrics.effectiveHeroHeight<486||metrics.effectiveHeroHeight>498||metrics.effectiveBenefitsHeight<176||metrics.effectiveBenefitsHeight>181||metrics.effectiveInventoryTop<740||metrics.effectiveInventoryTop>752||metrics.heroVwRatio<1.24||metrics.heroVwRatio>1.28||metrics.cardVwRatio<.29||metrics.cardVwRatio>.33||metrics.effectiveLogoWidth<105||metrics.effectiveLogoWidth>120||metrics.effectiveMenuWidth<48||metrics.effectiveMenuWidth>58))throw new Error(`ANDROID_GEOMETRY_${JSON.stringify(metrics)}`);
+            if(label==='androidWide'&&(metrics.benefitColumns!==2||metrics.effectiveH1Font<40||metrics.effectiveH1Font>44||metrics.effectiveH1Top<228||metrics.effectiveH1Top>250||metrics.effectiveCardWidth<108||metrics.effectiveCardWidth>140||metrics.effectiveHeroHeight<486||metrics.effectiveHeroHeight>498||metrics.effectiveBenefitsHeight<176||metrics.effectiveBenefitsHeight>181||metrics.effectiveInventoryTop<740||metrics.effectiveInventoryTop>752||metrics.heroVwRatio<1.24||metrics.heroVwRatio>1.28||metrics.cardVwRatio<.29||metrics.cardVwRatio>.33||metrics.effectiveLogoWidth<105||metrics.effectiveLogoWidth>120||metrics.effectiveLogoImageWidth<86||metrics.effectiveLogoImageWidth>98||metrics.effectiveMenuWidth<48||metrics.effectiveMenuWidth>58))throw new Error(`ANDROID_GEOMETRY_${JSON.stringify(metrics)}`);
             if(metrics.documentWidth>metrics.viewportWidth+1)throw new Error(`${label}_HORIZONTAL_OVERFLOW_${metrics.documentWidth}`);
-            if(label==='desktop'&&metrics.visibleCards<5)throw new Error(`DESKTOP_DENSITY_${metrics.visibleCards}`);
+            if(label==='desktop'&&(metrics.visibleCards<5||metrics.heroHeight<530||metrics.heroHeight>540||metrics.benefitsHeight<108||metrics.benefitsHeight>112||metrics.inventoryTop<768||metrics.inventoryTop>778||metrics.benefitColumns!==4||metrics.logoImageWidth<86||metrics.logoImageWidth>100||metrics.firstCardWidth<250||metrics.firstCardWidth>275||metrics.benefitsBackground!=='rgb(7, 21, 34)'))throw new Error(`DESKTOP_CONVERGENCE_${JSON.stringify(metrics)}`);
             await page.screenshot({path:`${out}/${label}-02-home.png`,fullPage:true});
             if(isMobile){
               const menuButton=page.locator('.rh-menu');
