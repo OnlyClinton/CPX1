@@ -37,6 +37,7 @@ jobs:
           test -s app/wdcc-owner-board-final.css
           test -s app/owner-contract-lock.css
           test -s .github/support/wdcc-owner-final-lock-proof.mjs
+          test -s .github/support/wdcc-owner-final-dashboard-diagnostic.mjs
           grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
           grep -Fq 'owner-contract-lock.css' app/layout.tsx
           grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
@@ -115,6 +116,14 @@ jobs:
             test "$code" = 200
             test -s "/tmp/$id.webp"
           done
+
+      - name: Capture dashboard diagnostic
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/support/wdcc-owner-final-dashboard-diagnostic.mjs
 
       - name: Prove owner final lock
         env:
