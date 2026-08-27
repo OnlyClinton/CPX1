@@ -24,6 +24,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('.github/workflows/wdcc-owner-approved-p0-dealer-upload.yml')
           s=p.read_text()
           def one(old,new):
@@ -35,7 +36,10 @@ jobs:
           one('  P0_SHA: 3e189ee26f55bf7c7eb76a85210e29ddea045c95\n','  P0_SHA: e3332fea49587f41cfd15cb041ebba6eb6db68d4\n')
           one("      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-3E189EE2'\n","      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-NEON-E3332FEA'\n")
           one('  VERCEL_SCOPE: cpxagency\n  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM\n  PHOENIX_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR\n','')
-          one('      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}\n','      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}\n')
+          matches=re.findall(r'^      VERCEL_TOKEN: .*$',s,flags=re.M)
+          if len(matches)!=1: raise SystemExit(f'expected one VERCEL_TOKEN env line, found {len(matches)}')
+          literal='$'+'{{ secrets.WDCC_DEALER_E2E_PASSWORD }}'
+          s=s.replace(matches[0],f'      WDCC_DEALER_E2E_PASSWORD: {literal}',1)
           one('          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID VERCEL_TOKEN; do\n','          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WDCC_DEALER_E2E_PASSWORD; do\n')
           one("          grep -Fq 'sessionCookieHeader' app/api/auth/login/route.ts\n","          grep -Fq 'return neonCurrentUser();' lib/auth.ts\n          grep -Fq 'sessionAuthority()' app/api/health/route.ts\n          ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts\n")
           one('          npm install --global vercel@59.3.0 >/dev/null\n','')
@@ -75,6 +79,7 @@ jobs:
           if 'SESSION_FILE=' in s: raise SystemExit('SESSION_FILE reference remains')
           if 'VERCEL_TOKEN' in s: raise SystemExit('VERCEL_TOKEN reference remains')
           if 'sessionCookieHeader' in s: raise SystemExit('sessionCookieHeader workflow expectation remains')
+          if 'secrets.WDCC_DEALER_E2E_PASSWORD' not in s: raise SystemExit('literal GitHub dealer password secret expression missing')
           p.write_text(s)
           PY
           rm .github/workflows/wdcc-p0-neon-native-workflow-patcher.yml
