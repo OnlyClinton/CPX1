@@ -67,7 +67,7 @@ jobs:
           grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
           test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
-          grep -Fq 'large round owner-approved WDCC emblem' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'owner-approved round WDCC emblem' WDCC_LOCKED_CONTRACT.md
           grep -Fq 'mobile menu/call controls remain usable without overlap' WDCC_LOCKED_CONTRACT.md
           test -s app/WdccVehicleCard.tsx
           test -s app/WdccVehicleCard.module.css
