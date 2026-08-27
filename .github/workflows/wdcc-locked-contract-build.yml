@@ -46,13 +46,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Require canonical visual and functional contract
+      - name: Require supplied-board visual and functional contract
         shell: bash
         run: |
           set -euo pipefail
           test -s WDCC_LOCKED_CONTRACT.md
           test "$(wc -c < public/wdcc-hero-v2.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" public/wdcc-hero-v2.webp | sha256sum -c -
+          test -s public/wdcc-logo-transparent.webp
           test -s app/LockedIntro.tsx
           test -s app/WdccPublicChrome.tsx
           test -s app/wdcc-owner-logo/route.ts
@@ -60,15 +61,16 @@ jobs:
           test -s app/wdcc-round-header-contract.css
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq '/wdcc-hero-v2.webp' app/LockedIntro.tsx
-          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
-          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
-          ! grep -Fq 'wdcc-wordmark' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
           grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
           grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
+          grep -Fq 'Public header = WDCC wordmark' app/wdcc-round-header-contract.css
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
           test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
-          grep -Fq 'owner-approved round WDCC emblem' WDCC_LOCKED_CONTRACT.md
-          grep -Fq 'mobile menu/call controls remain usable without overlap' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'persistent public header uses the compact WDCC wordmark' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'Mobile public header keeps hamburger left, centered WDCC wordmark' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'Add Vehicle is a clean new record' WDCC_LOCKED_CONTRACT.md
           test -s app/WdccVehicleCard.tsx
           test -s app/WdccVehicleCard.module.css
           for page in app/inventory/page.tsx app/get-approved/page.tsx app/contact/page.tsx app/schedule-test-drive/page.tsx app/privacy/page.tsx app/terms/page.tsx 'app/vehicle/[id]/page.tsx'; do
@@ -152,13 +154,18 @@ jobs:
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/home.html
-          grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' /tmp/home.html
           grep -Fq 'wdcc-hero-v2.webp' /tmp/home.html
 
           test "$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset=$GITHUB_RUN_ID")" = 200
           test "$(wc -c < /tmp/hero.webp | tr -d ' ')" = "$EXPECTED_HERO_SIZE"
           printf '%s  %s\n' "$EXPECTED_HERO_SHA256" /tmp/hero.webp | sha256sum -c -
 
+          test "$(curl --http1.1 -sS -L -o /tmp/wordmark.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test -s /tmp/wordmark.webp
+          test "$(sha256sum /tmp/wordmark.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-logo-transparent.webp | awk '{print $1}')"
+
+          # The round badge remains a supporting intro/dealer asset, not public persistent chrome.
           test "$(curl --http1.1 -sS -D /tmp/owner-logo.headers -L -o /tmp/owner-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?asset=$GITHUB_RUN_ID")" = 200
           test -s /tmp/owner-logo.webp
           grep -qi '^x-wdcc-logo: owner-approved' /tmp/owner-logo.headers
@@ -167,6 +174,8 @@ jobs:
           test "$inv" = 200
           dealer="$(curl --http1.1 -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?preview=$GITHUB_RUN_ID" || true)"
           test "$dealer" = 200
+          approval="$(curl --http1.1 -sS -L -o /tmp/approval.html -w '%{http_code}' "$URL/get-approved?preview=$GITHUB_RUN_ID" || true)"
+          test "$approval" = 200
 
       - name: Require exact current head
         shell: bash
@@ -185,6 +194,7 @@ jobs:
           echo '### WDCC locked contract Cloudflare preview' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Isolated Worker: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Supplied-board wordmark chrome + separate round intro badge contract enforced.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No production route, alias or DNS change is authorized by this proof.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
