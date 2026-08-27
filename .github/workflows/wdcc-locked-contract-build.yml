@@ -48,7 +48,9 @@ jobs:
           grep -q 'import LockedIntro from "./LockedIntro"' app/ReferenceCloneHome.tsx
           test -s public/wdcc-official-logo.webp
           grep -Eq 'wdcc-(official-logo|logo-transparent)\.webp' app/LockedIntro.tsx
-          grep -Eq 'wdcc-(official-logo|logo-transparent)\.webp' app/ReferenceCloneHome.tsx
+          test -s app/WdccPublicChrome.tsx
+          grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
+          grep -q 'wdcc-official-logo.webp' app/WdccPublicChrome.tsx
           grep -q 'clip-path:circle' app/LockedIntro.tsx
           test -s app/wdcc-system-v2.css
           grep -q 'wdcc-system-v2.css' app/layout.tsx
