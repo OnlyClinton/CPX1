@@ -5,7 +5,7 @@ import {useState} from "react";
 import TrackedCallLink from "./TrackedCallLink";
 import styles from "./WdccPublicChrome.module.css";
 
-// Shared public chrome is the single storefront header/footer source for exact-head acceptance proof.
+// Shared public chrome is the single storefront header/footer source for exact-head acceptance proof; this comment intentionally triggers the complete exact-SHA audit matrix without changing rendering.
 export function WdccPublicHeader(){
   const[open,setOpen]=useState(false);
   const close=()=>setOpen(false);
