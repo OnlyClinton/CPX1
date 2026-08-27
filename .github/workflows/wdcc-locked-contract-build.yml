@@ -110,16 +110,22 @@ jobs:
           NODE
           ! grep -q 'wedontcarecars.com' wrangler.locked-preview.jsonc || { echo 'Production route leaked into preview config' >&2; exit 1; }
 
-      - name: Deploy Cloudflare preview only
+      - name: Upload immutable SHA preview version only
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.locked-preview.jsonc 2>&1 | tee /tmp/wdcc-locked-preview.log
-          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-locked-preview.log | tail -1)"
+          alias="sha-${GITHUB_SHA:0:12}"
+          npx wrangler versions upload --config wrangler.locked-preview.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-locked-preview.log
+          url="$(grep -Eo "https://${alias}-[A-Za-z0-9._-]+\.workers\.dev" /tmp/wdcc-locked-preview.log | tail -1)"
           test -n "$url"
+          case "$url" in
+            *"${alias}-wdcc-locked-preview."*.workers.dev) ;;
+            *) echo "Preview URL is not SHA-pinned: $url" >&2; exit 1 ;;
+          esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > preview-url.txt
+          printf '%s\n' "$GITHUB_SHA" > preview-sha.txt
 
       - name: Smoke Cloudflare visual preview and exact asset bytes
         env:
@@ -155,11 +161,12 @@ jobs:
           test "$dealer" = 200
           grep -qi "dealer" /tmp/dealer.html
           {
-            echo '### WDCC locked Cloudflare preview — PASS'
+            echo '### WDCC immutable Cloudflare preview — PASS'
             echo
             echo "Preview: $URL"
             echo "Candidate SHA: $GITHUB_SHA"
             echo "Canonical 8AR hero SHA-256: $EXPECTED_HERO_SHA256"
+            echo 'SHA-specific preview alias: PASS.'
             echo 'Canonical hero served by Worker: PASS.'
             echo 'Round badge source/render contract: PASS.'
             echo 'Inventory media fallback: PASS.'
@@ -171,5 +178,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wdcc-locked-cloudflare-preview-url
-          path: preview-url.txt
+          path: |
+            preview-url.txt
+            preview-sha.txt
           retention-days: 7
