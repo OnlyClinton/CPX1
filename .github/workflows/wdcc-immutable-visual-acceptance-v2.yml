@@ -111,7 +111,7 @@ jobs:
           [ -n "$local_build" ] || fail REMOTE_LOCAL_BUILD_ID_EMPTY
 
           code=000
-          for i in $(seq 1 15); do
+          for i in $(seq 1 30); do
             code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-root.html -w '%{http_code}' "$REMOTE_URL/?visual-mobile=warm-$GITHUB_SHA-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
@@ -122,25 +122,41 @@ jobs:
           grep -Fq -- "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
           grep -Fq '/wdcc-owner-logo' /tmp/wdcc-remote-root.html || fail REMOTE_OWNER_LOGO_REFERENCE_MISSING
 
-          dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA" || true)"
+          dealer_code=000
+          for i in $(seq 1 30); do
+            dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA-$i" || true)"
+            [ "$dealer_code" = 200 ] && break
+            sleep 2
+          done
           [ "$dealer_code" = 200 ] || fail "REMOTE_DEALER_HTTP_$dealer_code"
           dealer_bytes="$(wc -c < /tmp/wdcc-remote-dealer.html | tr -d ' ')"
           [ "$dealer_bytes" -gt 1000 ] || fail "REMOTE_DEALER_TOO_SMALL_$dealer_bytes"
           grep -Fq -- "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
 
-          curl --http1.1 -fsSL "$REMOTE_URL/wdcc-hero-v2.webp" -o /tmp/remote-wdcc-hero-v2.webp || fail REMOTE_ASSET_FETCH_wdcc-hero-v2.webp
+          hero_code=000
+          for i in $(seq 1 30); do
+            hero_code="$(curl --http1.1 -sS -L -o /tmp/remote-wdcc-hero-v2.webp -w '%{http_code}' "$REMOTE_URL/wdcc-hero-v2.webp?integrity=$GITHUB_SHA-$i" || true)"
+            [ "$hero_code" = 200 ] && break
+            sleep 2
+          done
+          [ "$hero_code" = 200 ] || fail "REMOTE_ASSET_HTTP_wdcc-hero-v2.webp_$hero_code"
           remote_hero_sha="$(sha256sum /tmp/remote-wdcc-hero-v2.webp | awk '{print $1}')"
           local_hero_sha="$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
           [ "$remote_hero_sha" = "$local_hero_sha" ] || fail REMOTE_ASSET_HASH_MISMATCH_wdcc-hero-v2.webp
 
-          owner_code="$(curl --http1.1 -sS -D /tmp/remote-owner-logo.headers -L -o /tmp/remote-owner-logo.webp -w '%{http_code}' "$REMOTE_URL/wdcc-owner-logo?integrity=$GITHUB_SHA" || true)"
+          owner_code=000
+          for i in $(seq 1 30); do
+            owner_code="$(curl --http1.1 -sS -D /tmp/remote-owner-logo.headers -L -o /tmp/remote-owner-logo.webp -w '%{http_code}' "$REMOTE_URL/wdcc-owner-logo?integrity=$GITHUB_SHA-$i" || true)"
+            [ "$owner_code" = 200 ] && break
+            sleep 2
+          done
           [ "$owner_code" = 200 ] || fail "REMOTE_OWNER_LOGO_HTTP_$owner_code"
           [ -s /tmp/remote-owner-logo.webp ] || fail REMOTE_OWNER_LOGO_EMPTY
           owner_bytes="$(wc -c < /tmp/remote-owner-logo.webp | tr -d ' ')"
           [ "$owner_bytes" -gt 500 ] || fail "REMOTE_OWNER_LOGO_TOO_SMALL_$owner_bytes"
           grep -qi '^x-wdcc-logo: owner-approved' /tmp/remote-owner-logo.headers || fail REMOTE_OWNER_LOGO_MARKER_MISSING
 
-          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" "owner_logo_http=$owner_code" "owner_logo_bytes=$owner_bytes" > immutable-remote-integrity.txt
+          printf '%s\n' "remote_url=$REMOTE_URL" "build_id=$local_build" "root_http=$code" "root_bytes=$root_bytes" "dealer_http=$dealer_code" "dealer_bytes=$dealer_bytes" "hero_http=$hero_code" "owner_logo_http=$owner_code" "owner_logo_bytes=$owner_bytes" > immutable-remote-integrity.txt
           echo "build_id=$local_build" >> "$GITHUB_OUTPUT"
 
       - name: Start exact-build browser harness
