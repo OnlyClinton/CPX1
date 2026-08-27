@@ -1,0 +1,40 @@
+/* Final mockup geometry lock. This intentionally outranks every older mobile selector. */
+@media(max-width:760px){
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-art.rh-hero-art{
+    height:304px!important;min-height:304px!important;max-height:304px!important;object-position:70% 40%!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-shade.rh-hero-shade{
+    height:304px!important;min-height:304px!important;max-height:304px!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap.rh-benefit-wrap .rh-benefits.rh-benefits{
+    display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;width:100%!important;background:#06121c!important;border-radius:0!important;box-shadow:none!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap.rh-benefit-wrap .rh-benefits.rh-benefits .rh-benefit.rh-benefit{
+    height:70px!important;min-height:70px!important;max-height:70px!important;padding:6px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;text-align:center!important;background:#06121c!important;border:0!important;border-right:1px solid #203548!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap .rh-benefit:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap .rh-icon.rh-icon{width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;font-size:9px!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap .rh-benefit strong{font-size:7.5px!important;line-height:1.02!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefit-wrap .rh-benefit small{display:none!important}
+
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-section-head.rh-section-head h2{font-size:28px!important;line-height:.98!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance .finance-heading.finance-heading h2{font-size:26px!important;line-height:1!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance .rh-steps.rh-steps .rh-step.rh-step{
+    height:76px!important;min-height:76px!important;max-height:76px!important;padding:6px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;text-align:center!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance .rh-step b{width:25px!important;height:25px!important;min-width:25px!important;min-height:25px!important;font-size:9px!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance .rh-step strong{font-size:7px!important;line-height:1!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance .rh-step small{display:none!important}
+
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust.rh-trust .rh-trust-grid.rh-trust-grid{
+    display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;background:#06121c!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust.rh-trust .rh-trust-grid.rh-trust-grid article{
+    height:60px!important;min-height:60px!important;max-height:60px!important;padding:5px 2px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;text-align:center!important;background:#06121c!important;border:0!important;border-right:1px solid #203548!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust .rh-trust-grid article:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust .rh-trust-grid .trust-symbol,
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust .rh-trust-grid .trust-avatar{width:22px!important;height:22px!important;min-width:22px!important;min-height:22px!important;font-size:7px!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust .rh-trust-grid b{font-size:6.8px!important;line-height:1!important;margin:0!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust .rh-trust-grid article div>span{display:none!important}
+}
