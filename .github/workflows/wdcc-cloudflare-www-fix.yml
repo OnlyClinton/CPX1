@@ -19,18 +19,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      CF_WORKER_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Require Cloudflare authority
         run: |
           set -euo pipefail
-          test -n "${CF_TOKEN:-}"
+          test -n "${CF_ZONE_TOKEN:-}"
+          test -n "${CF_WORKER_TOKEN:-}"
       - name: Inspect and proxy www DNS
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?name=www.wedontcarecars.com" \
-            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' > /tmp/www.json
+            -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' > /tmp/www.json
           jq -e '.success==true' /tmp/www.json >/dev/null
           count="$(jq '.result|length' /tmp/www.json)"
           test "$count" -ge 1
@@ -41,8 +43,8 @@ jobs:
           ttl="$(jq -r '.result[0].ttl' /tmp/www.json)"
           comment="$(jq -r '.result[0].comment // empty' /tmp/www.json)"
           jq -n --arg type "$type" --arg name 'www.wedontcarecars.com' --arg content "$content" --argjson ttl "$ttl" --arg comment "$comment" '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:true,comment:$comment}' > /tmp/update.json
-          curl -fsS -X PUT "$CF_API/zones/$ZONE_ID/dns_records/$id" \
-            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' \
+          curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dns_records/$id" \
+            -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' \
             --data-binary @/tmp/update.json > /tmp/updated.json
           jq -e '.success==true and .result.proxied==true' /tmp/updated.json >/dev/null
       - name: Verify www crosses the WDCC Worker
