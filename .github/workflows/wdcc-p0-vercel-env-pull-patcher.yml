@@ -1,0 +1,42 @@
+name: WDCC P0 Vercel Env Pull Patcher
+
+on:
+  push:
+    branches: [fix/wdcc-p0-vercel-env-pull-20260827]
+    paths:
+      - '.github/workflows/wdcc-p0-vercel-env-pull-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-p0-vercel-env-pull-20260827
+          fetch-depth: 1
+      - name: Apply exact Vercel project binding and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-owner-approved-p0-dealer-upload.yml')
+          s=p.read_text()
+          old='(cd /tmp/wdcc-phoenix && vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)'
+          new='(cd /tmp/wdcc-phoenix && VERCEL_PROJECT_ID="$PHOENIX_PROJECT_ID" vercel env pull /tmp/phoenix.env --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)'
+          if s.count(old)!=1:
+              raise SystemExit(f'expected one env-pull command, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1))
+          PY
+          rm .github/workflows/wdcc-p0-vercel-env-pull-patcher.yml
+          git diff --check
+          test "$(git diff --numstat .github/workflows/wdcc-owner-approved-p0-dealer-upload.yml | awk '{print $1":"$2}')" = '1:1'
+          git config user.name 'WDCC Control Proof Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(wdcc): bind Phoenix project for Vercel env pull'
+          git push origin HEAD:fix/wdcc-p0-vercel-env-pull-20260827
