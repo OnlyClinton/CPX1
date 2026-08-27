@@ -1,105 +1,37 @@
-/* Exact-SHA WDCC acceptance closeout.
-   Loaded after the visual board layer. Geometry/readability only; no routing,
-   provider, auth, persistence, DNS, alias, or production behavior changes. */
+/* WDCC OWNER-BOARD ACCEPTANCE CLOSEOUT.
+   Loaded last. This file exists only to prevent later acceptance CSS from
+   overriding the latest owner-supplied 9194/50869/10702/10668/10667/51074 geometry. */
 
 @media(max-width:767px){
-  /* Owner contract: one mobile header, physically centered 96px approved emblem. */
-  html body [data-wdcc-public-chrome="header"]{
-    height:78px!important;
-    min-height:78px!important;
-    max-height:78px!important;
-    top:0!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-    box-sizing:border-box!important;
-    width:calc(100% - 20px)!important;
-    max-width:none!important;
-    height:78px!important;
-    min-height:78px!important;
-    margin:0 auto!important;
-    padding:0!important;
-    display:grid!important;
-    grid-template-columns:50px minmax(0,1fr) 50px!important;
-    grid-template-rows:78px!important;
-    column-gap:8px!important;
-    row-gap:0!important;
-    align-items:center!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{
-    position:static!important;
-    left:auto!important;
-    right:auto!important;
-    top:auto!important;
-    transform:none!important;
-    grid-column:2!important;
-    grid-row:1!important;
-    justify-self:center!important;
-    align-self:center!important;
-    display:grid!important;
-    place-items:center!important;
-    width:104px!important;
-    min-width:104px!important;
-    max-width:104px!important;
-    height:78px!important;
-    min-height:78px!important;
-    max-height:78px!important;
-    margin:0!important;
-    padding:0!important;
-    overflow:visible!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
-    content:normal!important;
-    display:block!important;
-    visibility:visible!important;
-    opacity:1!important;
-    width:96px!important;
-    min-width:96px!important;
-    max-width:96px!important;
-    height:96px!important;
-    min-height:96px!important;
-    max-height:96px!important;
-    object-fit:contain!important;
-    object-position:center!important;
-    clip-path:none!important;
-    transform:none!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-nav{top:78px!important}
+  /* Compact owner header from the supplied mobile boards. */
+  html body [data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{box-sizing:border-box!important;width:calc(100% - 20px)!important;max-width:none!important;height:64px!important;min-height:64px!important;margin:0 auto!important;padding:0!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;gap:8px!important;align-items:center!important}
+  html body [data-wdcc-public-chrome="header"] .rh-menu,html body [data-wdcc-public-chrome="header"] .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{position:static!important;left:auto!important;right:auto!important;top:auto!important;transform:none!important;grid-column:2!important;grid-row:1!important;justify-self:center!important;align-self:center!important;display:grid!important;place-items:center!important;width:66px!important;min-width:66px!important;max-width:66px!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0!important;padding:0!important;overflow:visible!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{content:normal!important;display:block!important;visibility:visible!important;opacity:1!important;width:62px!important;min-width:62px!important;max-width:62px!important;height:62px!important;min-height:62px!important;max-height:62px!important;object-fit:contain!important;object-position:center!important;clip-path:none!important;transform:none!important;filter:drop-shadow(0 3px 8px rgba(0,0,0,.42))!important}
+  html body [data-wdcc-public-chrome="header"] .rh-nav{top:64px!important}
 
-  /* Controlling storefront contract: readable swipe card plus controlled next-card peek. */
-  html body .reference-home.locked-storefront .rh-grid{
-    display:flex!important;
-    grid-template-columns:none!important;
-    overflow-x:auto!important;
-    scroll-snap-type:x mandatory!important;
-    scroll-padding-inline:14px!important;
-    padding:0 14px 4px!important;
-    gap:9px!important;
-    width:100%!important;
-  }
-  html body .reference-home.locked-storefront .rh-grid>article{
-    flex:0 0 min(82vw,332px)!important;
-    width:min(82vw,332px)!important;
-    min-width:min(82vw,332px)!important;
-    max-width:min(82vw,332px)!important;
-    scroll-snap-align:start!important;
-  }
-  html body .reference-home.locked-storefront .rh-grid>article>a{
-    aspect-ratio:1.58!important;
-  }
-  html body .reference-home.locked-storefront .rh-grid>article>div{
-    padding:10px 10px 12px!important;
-  }
-  html body .reference-home.locked-storefront .rh-grid>article>div>p:first-child{font-size:8.5px!important}
-  html body .reference-home.locked-storefront .rh-grid>article>div>a{font-size:14px!important;line-height:1.18!important;min-height:auto!important}
-  html body .reference-home.locked-storefront .rh-grid>article>div>strong{font-size:22px!important;margin-top:8px!important}
-  html body .reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){font-size:9.5px!important;margin-top:4px!important}
-  html body .reference-home.locked-storefront .rh-grid>article>div>div>span{font-size:8px!important;min-height:20px!important;padding:0 5px!important}
+  /* Public hero conversion controls stack like the latest mobile board. */
+  html body .reference-home.locked-storefront .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:7px!important}
+  html body .reference-home.locked-storefront .rh-btn{width:100%!important;min-width:0!important}
 
-  /* Full responsive audit floor for customer-entered approval controls. */
-  html body .approvalBoard .approvalFieldGrid input,
-  html body .approvalBoard .approvalFieldGrid select{
-    height:50px!important;
-    min-height:50px!important;
-    font-size:16px!important;
-  }
+  /* Four compact benefits across mobile. */
+  html body .reference-home.locked-storefront .rh-benefits{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+
+  /* Dense three-card mobile featured strip from 9194/50869. */
+  html body .reference-home.locked-storefront .rh-grid{display:flex!important;grid-template-columns:none!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:10px!important;padding:0 10px 3px!important;gap:7px!important;width:100%!important}
+  html body .reference-home.locked-storefront .rh-grid>article{flex:0 0 29.5vw!important;width:29.5vw!important;min-width:108px!important;max-width:124px!important;scroll-snap-align:start!important}
+  html body .reference-home.locked-storefront .rh-grid>article>a{aspect-ratio:1.18!important;min-height:0!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div{padding:7px 7px 8px!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>p:first-child{font-size:6px!important;margin:0!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>a{font-size:9.5px!important;line-height:1.08!important;min-height:20px!important;display:block!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>strong{font-size:15px!important;margin-top:5px!important;display:block!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){font-size:6.5px!important;margin:3px 0 0!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>div{gap:2px!important;margin-top:5px!important}
+  html body .reference-home.locked-storefront .rh-grid>article>div>div>span{font-size:5.5px!important;min-height:16px!important;padding:0 3px!important}
+
+  /* Customer form controls remain comfortably tappable. */
+  html body .approvalBoard .approvalFieldGrid input,html body .approvalBoard .approvalFieldGrid select{height:50px!important;min-height:50px!important;font-size:16px!important}
 }
+
+@media(max-width:360px){html body .reference-home.locked-storefront .rh-grid>article{flex-basis:30vw!important;width:30vw!important;min-width:102px!important}}
