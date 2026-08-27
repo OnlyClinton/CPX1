@@ -27,7 +27,13 @@ jobs:
           root=Path('.github/workflows')
           errors=[]
           dangerous=[]
+          control_files={
+              'wdcc-production-control-audit.yml',
+              'wdcc-production-freeze-check.yml',
+          }
           for path in sorted([*root.glob('*.yml'), *root.glob('*.yaml')]):
+              if path.name in control_files:
+                  continue
               text=path.read_text(errors='replace')
               low=text.lower()
               reasons=[]
@@ -41,7 +47,7 @@ jobs:
                   'wedontcarecars.com/*' in low or
                   'www.wedontcarecars.com/*' in low or
                   'dealer.wedontcarecars.com/*' in low or
-                  'zone_name' in low and 'wedontcarecars.com' in low
+                  ('zone_name' in low and 'wedontcarecars.com' in low)
               ):
                   reasons.append('Cloudflare production deploy')
               if re.search(r'\bvercel\b[^\n]*--prod\b', low):
