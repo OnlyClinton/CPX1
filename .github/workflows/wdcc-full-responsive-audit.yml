@@ -12,6 +12,7 @@ on:
       - 'scripts/wdcc-full-responsive-audit.mjs'
       - 'scripts/wdcc-vehicle-page-audit.mjs'
       - 'scripts/wdcc-verified-real-snapshot-visual-stress.mjs'
+      - 'scripts/wdcc-verified-real-snapshot-owner-contract.mjs'
       - '.github/workflows/wdcc-full-responsive-audit.yml'
       - '.github/workflows/wdcc-verified-real-snapshot-visual-stress.yml'
   workflow_dispatch:
