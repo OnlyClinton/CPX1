@@ -1,0 +1,58 @@
+name: WDCC Storage Capability Preview
+
+on:
+  push:
+    branches:
+      - fix/wdcc-preview-provider-recovery-20260827
+    paths:
+      - '.github/workflows/wdcc-storage-capability-preview.yml'
+      - 'app/api/storage-env/route.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-storage-capability-preview
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  VERCEL_SCOPE: cpxagency
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Link project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Deploy preview
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          log=/tmp/deploy.log
+          npx --yes vercel@59.5.0 deploy --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" --env WDCC_PREVIEW_RECOVERY_STATE=drive-r6-20260822 --build-env WDCC_PREVIEW_RECOVERY_STATE=drive-r6-20260822 2>&1 | tee "$log"
+          url="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Probe storage flags only
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$URL/api/storage-env" | tee /tmp/storage-env.json
+          jq -e '.ok==true' /tmp/storage-env.json >/dev/null
