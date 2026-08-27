@@ -1,0 +1,133 @@
+name: WDCC Owner Approved Temporary Storefront
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-STOREFRONT-3D255FA8'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APPROVED_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
+      PROD_ROOT: https://wedontcarecars.com
+      PROD_WWW: https://www.wedontcarecars.com
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Fail-closed release-control gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Policy-equivalent gate to wdcc-production-freeze-check.yml, narrowed to the owner-approved temporary exception.
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/issue205.json
+          body="$(jq -r '.body // ""' /tmp/issue205.json)"
+          grep -Fq 'TEMPORARY OWNER-APPROVED STOREFRONT VISUAL GO' <<<"$body"
+          grep -Fq "EXACT SHA: \`$APPROVED_SHA\`" <<<"$body"
+          grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
+          grep -Fq 'no DNS or Cloudflare route/domain mutation' <<<"$body"
+          echo 'RELEASE_CONTROL_TEMPORARY_STOREFRONT_GO=PASS'
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Build exact approved storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+
+      - name: Upload approved Worker version without touching routes
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler versions upload --config wrangler.jsonc --message "WDCC owner-approved temporary storefront $APPROVED_SHA" 2>&1 | tee /tmp/wdcc-prod-upload.log
+          version="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/wdcc-prod-upload.log | tail -1 | awk '{print $4}')"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$version" > /tmp/new-version.txt
+
+      - name: Promote exact version, verify live, auto-rollback on failure
+        shell: bash
+        env:
+          NEW_VERSION: ${{ steps.upload.outputs.version }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$NEW_VERSION"
+          promoted=0
+          rollback(){
+            rc=$?
+            if [ "$promoted" = 1 ]; then
+              echo "Live verification failed; rolling wdcc-storefront back immediately." >&2
+              npx wrangler rollback --name wdcc-storefront --message "AUTO-ROLLBACK failed temporary storefront $APPROVED_SHA" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR
+
+          npx wrangler versions deploy "$NEW_VERSION@100%" --name wdcc-storefront -y --message "Owner-approved temporary storefront $APPROVED_SHA"
+          promoted=1
+
+          build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -L -o /tmp/live-home.html -w '%{http_code}' "$PROD_ROOT/?release=$APPROVED_SHA-$i" || true)"
+            if [ "$code" = 200 ] && grep -Fq "$build" /tmp/live-home.html; then break; fi
+            sleep 2
+          done
+          test "$code" = 200
+          grep -Fq "$build" /tmp/live-home.html
+          grep -qi "we don.t care" /tmp/live-home.html
+
+          inv="$(curl --http1.1 -sS -L -o /tmp/live-inventory.html -w '%{http_code}' "$PROD_ROOT/inventory?release=$APPROVED_SHA" || true)"
+          test "$inv" = 200
+          grep -Fq "$build" /tmp/live-inventory.html
+          grep -Eqi 'SHOP[[:space:]]+INVENTORY|inventoryPage' /tmp/live-inventory.html
+
+          www="$(curl --http1.1 -sS -L -o /tmp/live-www.html -w '%{http_code}' "$PROD_WWW/?release=$APPROVED_SHA" || true)"
+          test "$www" = 200
+
+          curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-v2.webp?release=$APPROVED_SHA" -o /tmp/live-hero.webp
+          test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
+
+          health="$(curl --http1.1 -sS -L -o /tmp/live-health.json -w '%{http_code}' "$PROD_ROOT/api/health?release=$APPROVED_SHA" || true)"
+          echo "Known backend/data-plane health HTTP after visual promotion: $health"
+
+          trap - ERR
+          {
+            echo '### WDCC TEMPORARY STOREFRONT PROMOTION — PASS'
+            echo "Approved SHA: $APPROVED_SHA"
+            echo "Cloudflare Worker version: $NEW_VERSION"
+            echo "Live root: $PROD_ROOT"
+            echo "Live inventory: $PROD_ROOT/inventory"
+            echo "Backend health HTTP (informational, not promoted): $health"
+            echo 'DNS/routes/provider/database: unchanged'
+          } >> "$GITHUB_STEP_SUMMARY"
