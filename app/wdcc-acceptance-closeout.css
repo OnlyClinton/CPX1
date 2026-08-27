@@ -7,7 +7,7 @@
 
 @media(max-width:767px){
   /* Compact owner header from the supplied mobile boards. */
-  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{box-sizing:border-box!important;height:64px!important;min-height:64px!important;max-height:64px!important;padding:0!important;top:0!important}
   html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{box-sizing:border-box!important;width:calc(100% - 20px)!important;max-width:none!important;height:64px!important;min-height:64px!important;max-height:64px!important;margin:0 auto!important;padding:0!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;gap:8px!important;align-items:center!important}
   html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
   html body header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;max-width:42px!important;max-height:42px!important}
@@ -45,4 +45,21 @@
 
 @media(max-width:360px){
   html body main.reference-home.locked-storefront .rh-grid>article{flex-basis:30vw!important;width:30vw!important;min-width:102px!important}
+}
+
+/* 10668 desktop: the shell stays dark, but the operational canvas is decisively light. */
+@media(min-width:761px){
+  html body main.dcPage.dealerDashboardLocked>.dcShell{background:#f6f7f9!important}
+  html body main.dcPage.dealerDashboardLocked>.dcShell>.dcSide{background:#071522!important}
+  html body main.dcPage.dealerDashboardLocked>.dcShell>.dcContent.dashboardContent{box-sizing:border-box!important;background:#f6f7f9!important;color:#172129!important;min-height:calc(100vh - 70px)!important}
+}
+
+/* 51073 Photos step: compact real actions beside Listing Readiness, not just on Review. */
+html body .editVehicleApp .photoStageActions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:12px!important}
+html body .editVehicleApp .photoStageActions button{min-height:42px!important;border:1px solid #cfd7de!important;border-radius:5px!important;background:#fff!important;color:#172129!important;font-size:10px!important;font-weight:900!important;padding:0 10px!important}
+html body .editVehicleApp .photoStageActions button.publish{grid-column:1/-1!important;background:#ef1f2f!important;border-color:#ef1f2f!important;color:#fff!important}
+@media(min-width:768px){html body .editVehicleApp .mobileReadiness .photoStageActions{display:none!important}}
+@media(max-width:767px){
+  html body .editVehicleApp .mobileReadiness .photoStageActions{display:grid!important}
+  html body .editVehicleApp .mobileReadiness .photoStageActions button{min-height:46px!important;font-size:11px!important}
 }
