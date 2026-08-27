@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false playwright@1.55.0
+          npm install --no-save --package-lock=false three@0.185.1 playwright@1.55.0
           npm run build
           npx playwright install --with-deps chromium >/dev/null
 
