@@ -1,0 +1,79 @@
+name: WDCC Isolated Full Flow E2E V3
+
+on:
+  push:
+    branches:
+      - qa/wdcc-full-flow-e2e-20260827-1637833
+    paths:
+      - '.github/workflows/wdcc-isolated-full-flow-e2e-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-isolated-full-flow-e2e-v3-1637833
+  cancel-in-progress: true
+
+jobs:
+  full-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: 1637833a1ec7b7a4942faad240d02c1706a8bf04
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prove exact PR application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          test "$(git merge-base HEAD "$SOURCE_SHA")" = "$SOURCE_SHA"
+          test -z "$(git diff --name-only "$SOURCE_SHA..HEAD" -- app lib public package.json package-lock.json next.config.ts tsconfig.json)"
+          echo "Application code is byte-identical to PR #494 exact head $SOURCE_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          npm run build
+      - name: Run full isolated transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${WDCC_DEALER_E2E_PASSWORD:-}" ]; then printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/wdcc-isolated-full-flow-e2e-v2.mjs')
+          s=p.read_text()
+          old="await page.getByLabel('Email').fill(`${kind}-${tag}@wdcc-e2e.test`);"
+          new="await page.locator('input[name=\"email\"]').fill(`${kind}-${tag}@wdcc-e2e.test`);"
+          if old not in s: raise SystemExit('email selector source not found')
+          p.write_text(s.replace(old,new))
+          PY
+          node scripts/wdcc-isolated-full-flow-e2e-v2.mjs
+      - name: Result summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/wdcc-full-flow-e2e-v2/result.json ]; then
+            cat /tmp/wdcc-full-flow-e2e-v2/result.json
+            { echo '## WDCC isolated full-flow E2E V3'; echo '```json'; jq '{ok,sourceSha,credentialSource,leads,routing,vehicle,dashboard,pages,productionWrites,error}' /tmp/wdcc-full-flow-e2e-v2/result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-isolated-full-flow-v3-${{ github.run_id }}
+          path: /tmp/wdcc-full-flow-e2e-v2
+          if-no-files-found: warn
+          retention-days: 7
