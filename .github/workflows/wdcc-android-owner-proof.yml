@@ -46,6 +46,7 @@ jobs:
           last_owner_css="$(grep -o 'wdcc-owner-[^"]*\.css' app/layout.tsx | tail -1)"
           test "$last_owner_css" = 'wdcc-owner-approved-logo-final.css'
           grep -Fq 'left:50%!important' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'left:50vw!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'transform:translate(-50%,-50%)!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'img.rh-logo-art[data-wdcc-logo-art="owner-approved"]' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'width:96px!important' app/wdcc-owner-approved-logo-final.css
@@ -73,7 +74,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          cfg.name=`wdcc-android-${process.env.GITHUB_SHA}`;
+          cfg.name='wdcc-android-owner-proof';
           cfg.workers_dev=true;
           cfg.preview_urls=true;
           delete cfg.route;
@@ -81,17 +82,21 @@ jobs:
           fs.writeFileSync('wrangler.android-owner.jsonc',JSON.stringify(cfg,null,2)+'\n');
           NODE
           ! grep -qi 'wedontcarecars.com' wrangler.android-owner.jsonc
-          grep -Fq "$GITHUB_SHA" wrangler.android-owner.jsonc
+          grep -Fq '"name": "wdcc-android-owner-proof"' wrangler.android-owner.jsonc
 
-      - name: Deploy isolated Android review Worker
+      - name: Upload immutable Android review version only
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler deploy --config wrangler.android-owner.jsonc 2>&1 | tee /tmp/wdcc-android-owner.log
-          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/wdcc-android-owner.log | tail -1)"
+          alias="android-${GITHUB_SHA:0:12}"
+          npx wrangler versions upload --config wrangler.android-owner.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-android-owner.log
+          url="$(grep -Eo "https://${alias}-[A-Za-z0-9._-]+\.workers\.dev" /tmp/wdcc-android-owner.log | tail -1)"
           test -n "$url"
-          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "Not exact SHA: $url" >&2; exit 1;; esac
+          case "$url" in
+            *"${alias}-wdcc-android-owner-proof."*.workers.dev) ;;
+            *) echo "Android preview is not immutable SHA alias: $url" >&2; exit 1 ;;
+          esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > android-owner-preview-url.txt
 
@@ -103,8 +108,8 @@ jobs:
           set -euo pipefail
           mkdir -p android-owner-proof
           code=000
-          for i in $(seq 1 20); do
-            code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?android-warm=$i" || true)"
+          for i in $(seq 1 30); do
+            code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?android-warm=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
           done
@@ -113,8 +118,8 @@ jobs:
           grep -Fq -- "$local_build" /tmp/home.html
           grep -Fq 'data-wdcc-logo-art="owner-approved"' /tmp/home.html
           hero_code=000
-          for i in $(seq 1 20); do
-            hero_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-hero-v2.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?android-asset=$GITHUB_RUN_ID-$i" || true)"
+          for i in $(seq 1 30); do
+            hero_code="$(curl -sS -L -o /tmp/wdcc-hero-v2.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?android-asset=$GITHUB_RUN_ID-$i" || true)"
             [ "$hero_code" = 200 ] && break
             sleep 2
           done
