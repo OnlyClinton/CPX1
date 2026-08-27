@@ -40,11 +40,17 @@ jobs:
           test -s public/wdcc-official-logo.webp
           test -s app/LockedIntro.tsx
           test -s app/ReferenceCloneHome.tsx
-          test -s app/owner-device-final.css
+          test -s app/WdccPublicChrome.tsx
+          test -s app/WdccVehicleCard.tsx
+          test -s app/WdccVehicleCard.module.css
+          test -s app/wdcc-system-v2.css
           test -s scripts/wdcc-immutable-visual-proof.mjs
           grep -q 'href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED<' app/ReferenceCloneHome.tsx
           grep -q 'href="/inventory" aria-label="BROWSE INVENTORY">BROWSE INVENTORY<' app/ReferenceCloneHome.tsx
-          grep -q 'owner-device-final.css' app/layout.tsx
+          grep -q 'WdccPublicHeader' app/ReferenceCloneHome.tsx
+          grep -q 'WdccVehicleCard' app/ReferenceCloneHome.tsx
+          grep -q 'WdccVehicleCard' app/InventoryGrid.tsx
+          grep -q 'wdcc-system-v2.css' app/layout.tsx
           grep -q 'li-smoke' app/LockedIntro.tsx
           grep -q '@keyframes liSmokeClear' app/LockedIntro.tsx
           ! grep -q 'li-dock' app/LockedIntro.tsx
