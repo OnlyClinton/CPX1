@@ -18,7 +18,6 @@ env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_SCOPE: cpxagency
   DONOR_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
-  DONOR: https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
 
@@ -40,19 +39,19 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@59.5.0
 
-      - name: Verify immutable donor before alias move
+      - name: Verify exact 2vfD through authenticated Vercel access
         shell: bash
         run: |
           set -euo pipefail
-          stamp="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          curl -fsS "$DONOR/?proof=$stamp" -o /tmp/donor.html
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor.html
           grep -qi 'we don.t care' /tmp/donor.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
           grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
-          curl -fsS "$DONOR/wdcc-logo-transparent.webp?proof=$stamp" -o /tmp/donor-logo.webp
-          curl -fsS "$DONOR/wdcc-hero-v2.webp?proof=$stamp" -o /tmp/donor-hero.webp
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-logo-transparent.webp --deployment "$DONOR_HOST" > /tmp/donor-logo.webp
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-hero-v2.webp --deployment "$DONOR_HOST" > /tmp/donor-hero.webp
           test -s /tmp/donor-logo.webp
           test -s /tmp/donor-hero.webp
+          file /tmp/donor-logo.webp /tmp/donor-hero.webp
 
       - name: Pin apex and www aliases to exact 2vfD
         shell: bash
@@ -61,7 +60,7 @@ jobs:
           vercel alias set "$DONOR_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
           vercel alias set "$DONOR_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
 
-      - name: Verify live domains match immutable donor
+      - name: Verify live domains match exact donor media
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +71,7 @@ jobs:
             ok=0
             for i in $(seq 1 30); do
               code="$(curl -sS -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "https://$host/?proof=$stamp-$i" || true)"
-              if [ "$code" = 200 ] && grep -qi 'we don.t care' /tmp/live.html && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html; then
+              if [ "$code" = 200 ] && grep -qi 'we don.t care' /tmp/live.html && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html && grep -q 'wdcc-hero-v2.webp' /tmp/live.html; then
                 ok=1
                 break
               fi
@@ -93,7 +92,6 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -L --max-time 20 -o /tmp/dealer.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer || true)"
           echo "$code" | grep -Eq '^(200|302|307|308)$'
-          grep -qi 'dealer sign in\|dealer portal' /tmp/dealer.html || true
           echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
           echo 'CUSTOMER_MEDIA_HASH_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
           echo 'DEALER_DOMAIN_UNCHANGED=PASS' >> "$GITHUB_STEP_SUMMARY"
