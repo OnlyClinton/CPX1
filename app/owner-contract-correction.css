@@ -95,4 +95,32 @@ html body main.owner-target-home .rh-logo img{
     scroll-snap-align:center!important;
     scroll-snap-stop:always!important;
   }
+
+  /* Interior customer pages already have page-specific actions and a round call button.
+     Remove the repeated fixed three-button rail so forms/cards are never obscured. */
+  html body:has(.inventoryTop) .stickyCtaBar,
+  html body:has(.leadPage) .stickyCtaBar,
+  html body:has(.loginShell) .stickyCtaBar,
+  html body:has(.vehiclePage) .stickyCtaBar{
+    display:none!important;
+  }
+  html body:has(.inventoryTop) .premiumFooter,
+  html body:has(.leadPage) .premiumFooter,
+  html body:has(.vehiclePage) .premiumFooter{
+    padding-bottom:calc(30px + env(safe-area-inset-bottom))!important;
+  }
+}
+
+/* Dealer/admin light workspaces should end light, not expose the site's dark body underneath. */
+html body:has(main.dealerDashboardLocked),
+html body:has(main.inventoryContract),
+html body:has(.editVehicleApp),
+html body:has(.adminUsersPage){
+  background:#f3f5f7!important;
+}
+html body main.dealerDashboardLocked,
+html body main.inventoryContract,
+html body .editVehicleApp,
+html body .adminUsersPage{
+  min-height:100svh!important;
 }
