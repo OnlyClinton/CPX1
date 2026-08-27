@@ -52,7 +52,7 @@ export default function AdminUsers(){
           onChange={e=>setField(k,e.target.value)}
           style={{padding:12,borderRadius:8}}/>)}
         <select value={form.role}
-          onChange={e=>setForm({...form,role:e.target.value})
+          onChange={e=>setForm({...form,role:e.target.value})}
           style={{padding:12,borderRadius:8}}>
           <option value="dealer_agent">Dealer Agent</option>
           <option value="tenant_admin">Dealer Admin</option>
