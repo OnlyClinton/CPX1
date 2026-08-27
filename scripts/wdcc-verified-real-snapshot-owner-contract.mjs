@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
     - desktop Featured Inventory: five compact columns
     - phone Featured Inventory: one dominant readable card plus controlled next-card peek
     - full /inventory: three columns desktop, one column mobile
-    - phone Add/Edit: two readable columns at 390px
+    - phone Add/Edit: one full-width readable field column at 390px
   It also corrects drawer visibility semantics: the off-canvas sidebar does not
   need to be visible while closed; the top dealer brand must remain visible.
 */
@@ -17,7 +17,7 @@ const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
 let code=fs.readFileSync(source,'utf8');
 
 const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
-const editorTo="if(spec.mobile){if(fields.tracks!==2||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
 
