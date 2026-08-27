@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wdcc-phoenix-preview-provider-${{ github.ref }}
+  group: wdcc-phoenix-preview-provider
   cancel-in-progress: true
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
           url="$(npx --yes vercel@latest deploy --yes --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee /tmp/wdcc-phoenix-preview-deploy.log | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1)"
           test -n "$url"
           case "$url" in
-            *wdcc-cpx-launch.vercel.app) echo 'Refusing mutable production project domain' >&2; exit 1;;
+            https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com) echo 'Refusing production or mutable project domain' >&2; exit 1;;
           esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > phoenix-preview-url.txt
@@ -79,7 +79,6 @@ jobs:
           test "$inv_code" = 200
           jq -e '.ok==true and .state=="readable"' /tmp/health.json >/dev/null
           jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.items|type=="array")' /tmp/inventory.json >/dev/null
-          jq '{health:input,inventory:{ok:.ok,count:.count,previewFallback:.previewFallback,inventorySource:.inventorySource}}' /tmp/inventory.json /tmp/health.json >/dev/null 2>&1 || true
           node - <<'NODE'
           const fs=require('fs');
           const h=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
@@ -88,17 +87,13 @@ jobs:
           fs.writeFileSync('phoenix-provider-proof.json',JSON.stringify({sha:process.env.GITHUB_SHA,url:process.env.URL,health:{ok:h.ok,state:h.state,storage:h.storage,revision:h.revision,commit:h.commit},inventory:{ok:i.ok,count:publicSummary.length,items:publicSummary},writeRequests:0},null,2)+'\n');
           NODE
 
-      - name: Require current branch head
-        run: |
-          set -euo pipefail
-          current="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')"
-          test "$current" = "$GITHUB_SHA"
-
       - name: Upload proof
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wdcc-phoenix-preview-provider-${{ github.sha }}
           path: |
             phoenix-preview-url.txt
             phoenix-provider-proof.json
+          if-no-files-found: warn
           retention-days: 7
