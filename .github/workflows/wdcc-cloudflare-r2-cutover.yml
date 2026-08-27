@@ -63,17 +63,13 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/wdcc-r2
           set +e
-          npx wrangler r2 bucket list --json >/tmp/r2-buckets.json 2>/tmp/r2-list.err
-          list_rc=$?
+          npx wrangler r2 bucket info "$R2_BUCKET" --json >/tmp/r2-info.json 2>/tmp/r2-info.err
+          info_rc=$?
           set -e
-          if [ "$list_rc" -ne 0 ]; then
-            cat /tmp/r2-list.err >&2 || true
-            echo "::error::R2 bucket listing failed before any mutation. The Cloudflare token must be able to read R2 for account $CLOUDFLARE_ACCOUNT_ID." >&2
-            exit "$list_rc"
-          fi
-          if node -e 'const fs=require("fs");const b=process.argv[1];const raw=JSON.parse(fs.readFileSync("/tmp/r2-buckets.json","utf8"));const a=Array.isArray(raw)?raw:(Array.isArray(raw?.buckets)?raw.buckets:(Array.isArray(raw?.result)?raw.result:[]));process.exit(a.some(x=>String(x?.name||x?.bucket_name||"")===b)?0:1)' "$R2_BUCKET"; then
+          if [ "$info_rc" -eq 0 ]; then
+            node -e 'const fs=require("fs");const x=JSON.parse(fs.readFileSync("/tmp/r2-info.json","utf8"));if(String(x?.name||x?.bucket?.name||"")!==process.argv[1])process.exit(1)' "$R2_BUCKET"
             echo "R2_BUCKET_READY=$R2_BUCKET (existing)"
-          else
+          elif grep -Eqi 'not found|does not exist|no such bucket|could not find|10006|10007' /tmp/r2-info.err; then
             set +e
             npx wrangler r2 bucket create "$R2_BUCKET" 2>&1 | tee /tmp/r2-create.log
             create_rc=${PIPESTATUS[0]}
@@ -83,6 +79,10 @@ jobs:
               exit "$create_rc"
             fi
             echo "R2_BUCKET_READY=$R2_BUCKET (created)"
+          else
+            cat /tmp/r2-info.err >&2 || true
+            echo "::error::R2 bucket inspection failed before any mutation. The Cloudflare token must have R2 bucket read access for this account." >&2
+            exit "$info_rc"
           fi
 
       - name: Detect existing canonical R2 state
@@ -325,8 +325,8 @@ jobs:
             /tmp/cutover-proof.json
             /tmp/wdcc-seed/meta.json
             /tmp/wdcc-seed/missing-media.json
-            /tmp/r2-buckets.json
-            /tmp/r2-list.err
+            /tmp/r2-info.json
+            /tmp/r2-info.err
             /tmp/r2-create.log
           if-no-files-found: ignore
           retention-days: 7
