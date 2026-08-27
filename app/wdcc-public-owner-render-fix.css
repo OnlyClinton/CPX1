@@ -10,21 +10,62 @@
   html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important}
 }
 
-/* Android Chrome "Desktop site" uses a wide CSS viewport but still reports a coarse pointer.
-   Treat it as one coherent compact-desktop shell; never mix mobile logo placement with desktop nav/actions. */
+/* Android Chrome "Desktop site" uses a wide CSS viewport while touch media queries remain coarse.
+   Use the SAME desktop chrome geometry as the real desktop board. These selectors intentionally
+   outrank older coarse-pointer/mobile compatibility layers. */
 @media(min-width:768px) and (max-width:1180px) and (hover:none) and (pointer:coarse){
-  html body [data-wdcc-public-chrome="utility"]{display:block!important;visibility:visible!important;opacity:1!important;height:30px!important;min-height:30px!important;max-height:30px!important;position:sticky!important;top:0!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{display:block!important;height:86px!important;min-height:86px!important;max-height:86px!important;position:sticky!important;top:30px!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{width:calc(100% - 28px)!important;height:86px!important;min-height:86px!important;max-height:86px!important;display:grid!important;grid-template-columns:94px minmax(0,1fr) auto!important;grid-template-rows:86px!important;gap:12px!important;align-items:center!important;margin:0 auto!important;padding:0!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{position:static!important;grid-column:1!important;grid-row:1!important;justify-self:start!important;width:88px!important;min-width:88px!important;max-width:88px!important;height:86px!important;min-height:86px!important;max-height:86px!important;transform:none!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{width:84px!important;min-width:84px!important;max-width:84px!important;height:84px!important;min-height:84px!important;max-height:84px!important;object-fit:contain!important;transform:none!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{display:none!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{position:static!important;grid-column:2!important;grid-row:1!important;display:flex!important;justify-content:center!important;align-items:center!important;gap:clamp(10px,1.3vw,18px)!important;width:auto!important;padding:0!important;margin:0!important;background:transparent!important;border:0!important;box-shadow:none!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav a{min-height:0!important;padding:0!important;border:0!important;font-size:10px!important;line-height:1!important;white-space:nowrap!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions{position:static!important;grid-column:3!important;grid-row:1!important;display:flex!important;justify-self:end!important;align-items:center!important;width:auto!important;margin:0!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions>a:first-child{display:none!important}
-  html body header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-primary{min-height:44px!important;padding:0 16px!important;font-size:9.5px!important}
+  html body main.reference-home.locked-storefront div.rh-utility.wdcc-public-utility[data-wdcc-public-chrome="utility"]{
+    display:block!important;visibility:visible!important;opacity:1!important;
+    position:sticky!important;top:0!important;
+    width:100%!important;height:28px!important;min-height:28px!important;max-height:28px!important;
+  }
+  html body main.reference-home.locked-storefront div.rh-utility.wdcc-public-utility[data-wdcc-public-chrome="utility"] .rh-utility-inner{
+    display:flex!important;visibility:visible!important;opacity:1!important;
+    width:calc(100% - 24px)!important;height:28px!important;min-height:28px!important;max-height:28px!important;
+    margin:0 auto!important;align-items:center!important;gap:12px!important;font-size:8.5px!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"]{
+    display:block!important;visibility:visible!important;opacity:1!important;
+    position:sticky!important;top:28px!important;
+    width:100%!important;height:76px!important;min-height:76px!important;max-height:76px!important;padding:0!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner{
+    box-sizing:border-box!important;width:calc(100% - 24px)!important;max-width:none!important;
+    height:76px!important;min-height:76px!important;max-height:76px!important;margin:0 auto!important;padding:0!important;
+    display:grid!important;grid-template-columns:76px minmax(0,1fr) auto!important;grid-template-rows:76px!important;
+    gap:10px!important;align-items:center!important;position:relative!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
+    position:static!important;left:auto!important;right:auto!important;top:auto!important;transform:none!important;
+    grid-column:1!important;grid-row:1!important;justify-self:start!important;align-self:center!important;
+    display:grid!important;place-items:center!important;width:74px!important;min-width:74px!important;max-width:74px!important;
+    height:76px!important;min-height:76px!important;max-height:76px!important;margin:0!important;padding:0!important;overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    display:block!important;visibility:visible!important;opacity:1!important;position:static!important;
+    width:72px!important;min-width:72px!important;max-width:72px!important;height:72px!important;min-height:72px!important;max-height:72px!important;
+    object-fit:contain!important;object-position:center!important;clip-path:none!important;border-radius:0!important;transform:none!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-menu,
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-call{display:none!important}
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav{
+    position:static!important;left:auto!important;right:auto!important;top:auto!important;
+    grid-column:2!important;grid-row:1!important;display:flex!important;align-items:center!important;justify-content:center!important;
+    gap:clamp(7px,1vw,12px)!important;width:auto!important;min-width:0!important;padding:0!important;margin:0!important;
+    background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-nav a{
+    min-height:0!important;padding:0!important;border:0!important;font-size:8.5px!important;line-height:1!important;white-space:nowrap!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions{
+    position:static!important;left:auto!important;right:auto!important;top:auto!important;
+    grid-column:3!important;grid-row:1!important;display:flex!important;align-items:center!important;justify-self:end!important;
+    gap:8px!important;width:auto!important;min-width:0!important;margin:0!important;
+  }
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-actions>a:first-child{display:none!important}
+  html body main.reference-home.locked-storefront header.rh-header.rh-header.wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-primary{
+    min-height:40px!important;padding:0 12px!important;font-size:9px!important;
+  }
   html body main.reference-home.locked-storefront .rh-hero{height:505px!important;min-height:505px!important}
   html body main.reference-home.locked-storefront .rh-hero-inner{height:505px!important;min-height:505px!important;width:calc(100% - 36px)!important}
   html body main.reference-home.locked-storefront .rh-copy{width:min(500px,50vw)!important;max-width:500px!important}
