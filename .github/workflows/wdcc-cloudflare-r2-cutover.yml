@@ -1,0 +1,314 @@
+name: WDCC Cloudflare R2 Cutover Proof
+
+on:
+  push:
+    branches: [fix/wdcc-cloudflare-provider-cutover-20260827]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-r2-cutover.yml'
+      - 'app/**'
+      - 'lib/**'
+      - 'next.config.ts'
+      - 'wrangler.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-cloudflare-r2-cutover-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  R2_BUCKET: wdcc-data
+  R2_STATE_KEY: private/state/platform-v3.json
+  VERCEL_SCOPE: cpxagency
+  PHOENIX_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+
+jobs:
+  seed-build-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install exact build and migration tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npm install --global vercel@59.3.0 >/dev/null
+
+      - name: Require Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Create or verify private R2 authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npx wrangler r2 bucket create "$R2_BUCKET" 2>&1 | tee /tmp/r2-create.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ] && ! grep -Eqi 'already exists|already been taken|exists' /tmp/r2-create.log; then
+            exit "$rc"
+          fi
+          echo "R2_BUCKET_READY=$R2_BUCKET"
+
+      - name: Detect existing canonical R2 state
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-r2
+          if npx wrangler r2 object get "$R2_BUCKET/$R2_STATE_KEY" --remote --file /tmp/wdcc-r2/existing-state.json >/tmp/r2-get.log 2>&1; then
+            node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const raw=fs.readFileSync('/tmp/wdcc-r2/existing-state.json');
+          const s=JSON.parse(raw);
+          if(!Number.isFinite(Number(s.revision))||!Array.isArray(s.users)||!Array.isArray(s.vehicles)||!Array.isArray(s.leads)||!Array.isArray(s.audit))throw Error('R2_CANONICAL_STATE_INVALID');
+          const hash=crypto.createHash('sha256').update(raw).digest('hex');
+          console.log(JSON.stringify({authority:'existing-r2',revision:Number(s.revision),vehicles:s.vehicles.length,leads:s.leads.length,hash}));
+          NODE
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'R2 canonical state absent; one-time seed required.'
+          fi
+
+      - name: Select safest canonical recovery source and stage referenced media
+        if: steps.existing.outputs.present != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p .vercel /tmp/wdcc-seed/media
+          printf '{"orgId":"team_G6jmETRRl8fV3KfivPOdj8JM","projectId":"%s"}\n' "$PHOENIX_PROJECT_ID" > .vercel/project.json
+          cat > /tmp/wdcc-seed.mjs <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import crypto from 'node:crypto';
+          import {get} from '@vercel/blob';
+
+          const STATE='private/state/platform-v3.json';
+          const candidates=[
+            {name:'wdcc-clean-20260819-173749',storeId:'store_vVJ5kU6x76yZVkGs'},
+            {name:'wdcc-rescue-20260819-172412',storeId:'store_KopvAQeMcatdS5DS'},
+            {name:'wdcc-private-20260801005157',storeId:'store_LdMSV1550BRgc0SP'}
+          ];
+          const oidc=String(process.env.VERCEL_OIDC_TOKEN||'');
+          if(!oidc)throw Error('VERCEL_OIDC_TOKEN_MISSING_FOR_ONE_TIME_RECOVERY');
+          const readBuffer=async(response)=>{const chunks=[];for await(const c of response.stream)chunks.push(c);return Buffer.concat(chunks)};
+          const validState=s=>Number.isFinite(Number(s?.revision))&&Array.isArray(s?.users)&&Array.isArray(s?.vehicles)&&Array.isArray(s?.leads)&&Array.isArray(s?.audit);
+          const results=[];
+          for(const c of candidates){
+            try{
+              const r=await get(STATE,{access:'private',useCache:false,oidcToken:oidc,storeId:c.storeId});
+              if(!r||r.statusCode!==200||!r.stream)throw Error(`HTTP_${r?.statusCode||0}`);
+              const raw=await readBuffer(r),state=JSON.parse(raw.toString('utf8'));
+              if(!validState(state))throw Error('INVALID_CANONICAL_SCHEMA');
+              results.push({...c,ok:true,raw,state,revision:Number(state.revision),hash:crypto.createHash('sha256').update(raw).digest('hex')});
+            }catch(e){results.push({...c,ok:false,error:String(e?.message||e)});}
+          }
+          const valid=results.filter(x=>x.ok);
+          if(!valid.length)throw Error(`NO_ACCESSIBLE_CANONICAL_RECOVERY_SOURCE ${JSON.stringify(results.map(({name,storeId,ok,error})=>({name,storeId,ok,error})))}`);
+          const groups=new Map();
+          for(const x of valid){const a=groups.get(x.hash)||[];a.push(x);groups.set(x.hash,a)}
+          const ranked=[...groups.values()].sort((a,b)=>b.length-a.length||Math.max(...b.map(x=>x.revision))-Math.max(...a.map(x=>x.revision)));
+          let chosen;
+          let selectionReason;
+          if(ranked[0]?.length>=2){chosen=[...ranked[0]].sort((a,b)=>b.revision-a.revision)[0];selectionReason=`matching-majority-${ranked[0].length}`}
+          else{chosen=[...valid].sort((a,b)=>b.revision-a.revision)[0];selectionReason='highest-valid-canonical-revision'}
+          fs.writeFileSync('/tmp/wdcc-seed/state.json',chosen.raw);
+
+          const mediaPaths=[...new Set(chosen.state.vehicles.flatMap(v=>[
+            ...(Array.isArray(v.photoPathnames)?v.photoPathnames:[]),
+            v.primaryPhotoPathname
+          ]).filter(p=>typeof p==='string'&&p.startsWith('media/wdcc/')))];
+          const sources=[chosen,...valid.filter(x=>x.storeId!==chosen.storeId)];
+          const manifest=[];const missing=[];
+          for(let i=0;i<mediaPaths.length;i++){
+            const pathname=mediaPaths[i];let saved=false;let lastError='';
+            for(const source of sources){
+              try{
+                const r=await get(pathname,{access:'private',useCache:false,oidcToken:oidc,storeId:source.storeId});
+                if(!r||r.statusCode!==200||!r.stream)throw Error(`HTTP_${r?.statusCode||0}`);
+                const raw=await readBuffer(r),file=`/tmp/wdcc-seed/media/${String(i).padStart(4,'0')}.bin`;
+                fs.writeFileSync(file,raw);
+                manifest.push({pathname,file,contentType:r.blob?.contentType||'application/octet-stream',bytes:raw.length,source:source.name});
+                saved=true;break;
+              }catch(e){lastError=String(e?.message||e)}
+            }
+            if(!saved)missing.push({pathname,error:lastError});
+          }
+          const meta={selectionReason,source:chosen.name,storeId:chosen.storeId,revision:chosen.revision,hash:chosen.hash,users:chosen.state.users.length,vehicles:chosen.state.vehicles.length,leads:chosen.state.leads.length,audit:chosen.state.audit.length,canonicalCandidates:valid.map(x=>({name:x.name,storeId:x.storeId,revision:x.revision,hash:x.hash})),referencedMedia:mediaPaths.length,migratedMedia:manifest.length,missingMedia:missing.length};
+          fs.writeFileSync('/tmp/wdcc-seed/meta.json',JSON.stringify(meta,null,2));
+          fs.writeFileSync('/tmp/wdcc-seed/media.json',JSON.stringify(manifest,null,2));
+          fs.writeFileSync('/tmp/wdcc-seed/missing-media.json',JSON.stringify(missing,null,2));
+          console.log('SEED_SELECTION='+JSON.stringify(meta));
+          if(missing.length)throw Error(`REFERENCED_MEDIA_RECOVERY_INCOMPLETE count=${missing.length}`);
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" -- node /tmp/wdcc-seed.mjs
+
+      - name: Seed R2 exactly once
+        if: steps.existing.outputs.present != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/wdcc-seed/state.json
+          # Re-check immediately before the first canonical write to avoid an accidental overwrite race.
+          if npx wrangler r2 object get "$R2_BUCKET/$R2_STATE_KEY" --remote --file /tmp/wdcc-r2/race-check.json >/dev/null 2>&1; then
+            echo 'R2 canonical state appeared during seed; refusing to overwrite.' >&2
+            exit 1
+          fi
+          npx wrangler r2 object put "$R2_BUCKET/$R2_STATE_KEY" --remote --file /tmp/wdcc-seed/state.json --content-type application/json
+          node - <<'NODE'
+          const fs=require('fs'),cp=require('child_process');
+          const items=JSON.parse(fs.readFileSync('/tmp/wdcc-seed/media.json','utf8'));
+          for(const item of items){
+            const target=`${process.env.R2_BUCKET}/${item.pathname}`;
+            let exists=false;
+            try{cp.execFileSync('npx',['wrangler','r2','object','get',target,'--remote','--file','/tmp/wdcc-r2/media-check.bin'],{stdio:'ignore'});exists=true}catch{}
+            if(exists)continue;
+            cp.execFileSync('npx',['wrangler','r2','object','put',target,'--remote','--file',item.file,'--content-type',item.contentType],{stdio:'inherit'});
+          }
+          NODE
+
+      - name: Verify canonical R2 state bytes
+        id: r2verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler r2 object get "$R2_BUCKET/$R2_STATE_KEY" --remote --file /tmp/wdcc-r2/verified-state.json
+          node - <<'NODE' | tee /tmp/r2-verify.json
+          const fs=require('fs'),crypto=require('crypto');
+          const raw=fs.readFileSync('/tmp/wdcc-r2/verified-state.json'),s=JSON.parse(raw);
+          if(!Number.isFinite(Number(s.revision))||!Array.isArray(s.users)||!Array.isArray(s.vehicles)||!Array.isArray(s.leads)||!Array.isArray(s.audit))throw Error('R2_STATE_VERIFY_SCHEMA_FAILED');
+          const publicVehicles=s.vehicles.filter(v=>String(v.status||'').toLowerCase()==='published'&&v.internalOnly!==true&&!['internal','dealer_only'].includes(String(v.visibility||'').toLowerCase()));
+          const out={revision:Number(s.revision),hash:crypto.createHash('sha256').update(raw).digest('hex'),users:s.users.length,vehicles:s.vehicles.length,publicVehicles:publicVehicles.length,leads:s.leads.length,audit:s.audit.length};
+          console.log(JSON.stringify(out));
+          if(out.vehicles<1)throw Error('R2_STATE_HAS_NO_VEHICLES');
+          NODE
+
+      - name: Build Cloudflare canonical candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+
+      - name: Create isolated SHA-specific Cloudflare config
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PREVIEW_SESSION_SECRET="$(openssl rand -hex 32)"
+          node - <<'NODE'
+          const fs=require('fs');
+          const source=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          source.name='wdcc-cloudflare-cutover';
+          source.workers_dev=true;
+          source.preview_urls=true;
+          delete source.route;delete source.routes;
+          source.vars={...(source.vars||{}),WDCC_RUNTIME_ROLE:'canonical',WDCC_STORAGE_PROVIDER:'cloudflare-r2',WDCC_RELEASE_SHA:process.env.GITHUB_SHA,SESSION_SECRET:process.env.PREVIEW_SESSION_SECRET};
+          fs.writeFileSync('wrangler.cutover-preview.jsonc',JSON.stringify(source,null,2)+'\n');
+          NODE
+          ! grep -q 'wedontcarecars.com' wrangler.cutover-preview.jsonc || { echo 'Production route leaked into cutover preview config' >&2; exit 1; }
+          grep -q '"binding": "WDCC_DATA"' wrangler.cutover-preview.jsonc
+          grep -q '"bucket_name": "wdcc-data"' wrangler.cutover-preview.jsonc
+
+      - name: Upload isolated Cloudflare version only
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          alias="sha-${GITHUB_SHA:0:12}"
+          npx wrangler versions upload --config wrangler.cutover-preview.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/wdcc-cloudflare-cutover.log
+          url="$(grep -Eo "https://${alias}-wdcc-cloudflare-cutover\.[A-Za-z0-9._-]+\.workers\.dev" /tmp/wdcc-cloudflare-cutover.log | tail -1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > /tmp/cutover-preview-url.txt
+          printf '%s\n' "$GITHUB_SHA" > /tmp/cutover-preview-sha.txt
+
+      - name: Prove R2 health inventory auth and media on exact Worker
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          health=000
+          for i in $(seq 1 30); do
+            health="$(curl --http1.1 -sS -L -o /tmp/health.json -w '%{http_code}' "$URL/api/health?cutover=$GITHUB_RUN_ID-$i" || true)"
+            [ "$health" = 200 ] && jq -e '.ok==true and .storage=="cloudflare-r2" and .provider=="cloudflare" and .state=="readable"' /tmp/health.json >/dev/null && break
+            sleep 2
+          done
+          test "$health" = 200
+          jq -e '.ok==true and .storage=="cloudflare-r2" and .provider=="cloudflare" and .state=="readable"' /tmp/health.json
+
+          code="$(curl --http1.1 -sS -L -o /tmp/inventory.json -w '%{http_code}' "$URL/api/inventory?cutover=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e '(.items // .inventory // []) | length > 0' /tmp/inventory.json
+
+          code="$(curl --http1.1 -sS -L -o /tmp/inventory.html -w '%{http_code}' "$URL/inventory?cutover=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          grep -Eqi 'inventory|vehicle' /tmp/inventory.html
+
+          code="$(curl --http1.1 -sS -L -o /tmp/session.json -w '%{http_code}' "$URL/api/auth/session?cutover=$GITHUB_RUN_ID")"
+          test "$code" = 200
+          jq -e 'has("authenticated")' /tmp/session.json
+
+          code="$(curl --http1.1 -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer/login?cutover=$GITHUB_RUN_ID")"
+          test "$code" = 200
+
+          media="$(jq -r '(.items // .inventory // []) | map(.primaryPhotoPathname // (.photoPathnames[0] // empty)) | map(select(type=="string" and startswith("media/wdcc/"))) | .[0] // empty' /tmp/inventory.json)"
+          if [ -n "$media" ]; then
+            code="$(curl --http1.1 -sS -L -o /tmp/media.bin -w '%{http_code}' --get --data-urlencode "p=$media" "$URL/api/media")"
+            test "$code" = 200
+            test -s /tmp/media.bin
+          fi
+
+          jq -n --arg url "$URL" --arg sha "$GITHUB_SHA" --slurpfile health /tmp/health.json --slurpfile inventory /tmp/inventory.json '{ok:true,url:$url,sha:$sha,health:$health[0],inventoryCount:(($inventory[0].items // $inventory[0].inventory // [])|length)}' | tee /tmp/cutover-proof.json
+
+      - name: Publish proof summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## WDCC Cloudflare R2 cutover proof'
+            echo
+            echo "- SHA: $GITHUB_SHA"
+            [ -f /tmp/cutover-preview-url.txt ] && echo "- Isolated Worker: $(cat /tmp/cutover-preview-url.txt)"
+            [ -f /tmp/r2-verify.json ] && echo "- R2 state: $(cat /tmp/r2-verify.json | tail -1)"
+            [ -f /tmp/cutover-proof.json ] && echo "- Runtime proof: $(cat /tmp/cutover-proof.json | tr -d '\n')"
+            echo '- Production routes changed: NO'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-cloudflare-r2-cutover-${{ github.sha }}
+          path: |
+            /tmp/cutover-preview-url.txt
+            /tmp/cutover-preview-sha.txt
+            /tmp/r2-verify.json
+            /tmp/cutover-proof.json
+            /tmp/wdcc-seed/meta.json
+            /tmp/wdcc-seed/missing-media.json
+          if-no-files-found: ignore
+          retention-days: 7
