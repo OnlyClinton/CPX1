@@ -1,0 +1,219 @@
+/* WDCC V5 mockup-convergence authority. Preview branch only. Loaded last. */
+
+/* ---------- Shared ---------- */
+html body main.reference-home.locked-storefront.locked-storefront.locked-storefront{
+  --mc-ink:#02070c;
+  --mc-navy:#071522;
+  --mc-navy2:#0b1c2a;
+  --mc-red:#ef2438;
+  --mc-blue:#168cf2;
+  --mc-paper:#f4f7f9;
+  background:var(--mc-ink)!important;
+}
+html body main.reference-home.locked-storefront .rh-section-head small,
+html body main.reference-home.locked-storefront .rh-kicker{
+  letter-spacing:.14em!important;text-transform:uppercase!important;font-weight:950!important;
+}
+html body main.reference-home.locked-storefront .rh-btn{border-radius:4px!important;text-transform:uppercase!important;font-weight:950!important;letter-spacing:.015em!important}
+
+/* ---------- Desktop: reproduce the mockup composition ---------- */
+@media(min-width:1101px){
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>.rh-utility.rh-utility{
+    height:24px!important;min-height:24px!important;max-height:24px!important;background:#06121c!important;border-bottom:1px solid rgba(255,255,255,.08)!important;
+  }
+  html body main.reference-home.locked-storefront .rh-utility-inner{
+    width:min(1280px,100% - 44px)!important;height:24px!important;margin:auto!important;padding:0!important;
+    display:flex!important;justify-content:space-between!important;align-items:center!important;font-size:9px!important;letter-spacing:.07em!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header{
+    top:24px!important;height:74px!important;min-height:74px!important;max-height:74px!important;background:rgba(2,8,13,.985)!important;border-bottom:1px solid #183044!important;box-shadow:none!important;
+  }
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header>.rh-header-inner.rh-header-inner{
+    width:min(1280px,100% - 44px)!important;height:74px!important;min-height:74px!important;max-height:74px!important;margin:auto!important;
+    display:grid!important;grid-template-columns:156px minmax(0,1fr) auto!important;gap:22px!important;padding:0!important;
+  }
+  html body main.reference-home.locked-storefront .rh-logo.rh-logo{width:132px!important;height:74px!important;justify-self:start!important}
+  html body main.reference-home.locked-storefront .rh-logo.rh-logo img{width:104px!important;height:104px!important;max-width:none!important;filter:drop-shadow(0 6px 12px rgba(0,0,0,.52))!important}
+  html body main.reference-home.locked-storefront .rh-nav.rh-nav{display:flex!important;justify-self:center!important;align-items:center!important;gap:34px!important;font-size:11px!important;text-transform:uppercase!important;font-weight:900!important;letter-spacing:.025em!important}
+  html body main.reference-home.locked-storefront .rh-header-phone{display:flex!important;align-items:center!important;justify-content:center!important;min-height:38px!important;padding:0 16px!important;border:1px solid #5d7182!important;border-radius:4px!important;font-size:10px!important;font-weight:900!important}
+
+  /* One integrated hero: copy left, Challenger right, skyline behind both. */
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero{
+    position:relative!important;height:520px!important;min-height:520px!important;max-height:520px!important;padding:0!important;overflow:hidden!important;background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero>.rh-hero-art.rh-hero-art{
+    position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:59% 43%!important;
+    filter:saturate(1.3) contrast(1.06) brightness(1.18)!important;transform:scale(1.015)!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero>.rh-hero-shade.rh-hero-shade{
+    position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-height:none!important;
+    background:linear-gradient(90deg,rgba(2,7,12,.96) 0%,rgba(2,7,12,.88) 20%,rgba(2,7,12,.63) 38%,rgba(2,7,12,.20) 56%,rgba(2,7,12,.02) 74%),linear-gradient(180deg,rgba(2,7,12,.04),rgba(2,7,12,.08) 64%,rgba(2,7,12,.62) 100%)!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero:after{display:none!important;content:none!important}
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero>.rh-hero-inner.rh-hero-inner{
+    position:relative!important;z-index:3!important;width:min(1280px,100% - 88px)!important;height:520px!important;min-height:520px!important;margin:auto!important;
+    display:flex!important;align-items:center!important;justify-content:flex-start!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy{
+    width:470px!important;max-width:470px!important;margin:0!important;padding:6px 0 0!important;background:transparent!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero .rh-kicker.rh-kicker{margin:0 0 10px!important;font-size:10px!important;color:#f5b931!important}
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy h1{
+    margin:0 0 14px!important;width:520px!important;max-width:520px!important;font-size:64px!important;line-height:.86!important;letter-spacing:-.055em!important;text-shadow:0 4px 26px rgba(0,0,0,.68)!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1 .red{color:#f12c40!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1 .blue{color:#168cf2!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1 .white{color:#fff!important;transform:none!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-lead.rh-lead{
+    margin:0!important;max-width:420px!important;font-size:15px!important;line-height:1.38!important;font-weight:680!important;color:#e9eef2!important;text-shadow:0 2px 12px #000!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions.rh-hero-actions{display:flex!important;gap:10px!important;margin-top:18px!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-btn.rh-btn{min-width:176px!important;min-height:46px!important;padding:0 16px!important;font-size:10px!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-phone.rh-phone{display:inline-flex!important;margin-top:10px!important;font-size:10px!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+
+  /* Compact dark benefit rail, not floating white cards. */
+  html body main.reference-home.locked-storefront .rh-benefit-wrap.rh-benefit-wrap{background:#06121c!important;border-top:1px solid #173043!important;border-bottom:1px solid #173043!important;padding:0!important}
+  html body main.reference-home.locked-storefront .rh-benefits.rh-benefits{
+    width:min(1280px,100% - 44px)!important;margin:auto!important;display:grid!important;grid-template-columns:repeat(4,1fr)!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit.rh-benefit{
+    min-height:72px!important;padding:12px 20px!important;background:transparent!important;border:0!important;border-right:1px solid #203548!important;color:#fff!important;grid-template-columns:38px 1fr!important;gap:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-benefit:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront .rh-icon.rh-icon{width:34px!important;height:34px!important;border:2px solid var(--mc-red)!important;color:var(--mc-red)!important;background:transparent!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:11px!important;text-transform:uppercase!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:9px!important;line-height:1.25!important;color:#9eafbd!important}
+
+  /* Five-across inventory like the mockup. */
+  html body main.reference-home.locked-storefront .rh-inventory.rh-inventory{padding:32px 34px 38px!important;background:#f7f8f8!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head.rh-section-head{width:min(1280px,100%)!important;margin:0 auto 18px!important;display:flex!important;align-items:end!important;justify-content:space-between!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head small{font-size:9px!important;color:#168cf2!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head h2{margin:3px 0 0!important;font-size:34px!important;line-height:1!important;letter-spacing:-.035em!important;color:#07121c!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head p{display:none!important}
+  html body main.reference-home.locked-storefront .rh-view-all{font-size:9px!important;color:#07121c!important;text-transform:uppercase!important;font-weight:950!important}
+  html body main.reference-home.locked-storefront .rh-grid.rh-grid{
+    width:min(1280px,100%)!important;margin:auto!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important;padding:0!important;overflow:visible!important;
+  }
+  html body main.reference-home.locked-storefront .rh-card.rh-card{min-width:0!important;max-width:none!important;border-radius:7px!important;border:1px solid #dfe4e8!important;box-shadow:0 7px 18px rgba(15,35,50,.08)!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront .rh-photo.rh-photo{aspect-ratio:1.55!important;background:#0a1824!important}
+  html body main.reference-home.locked-storefront .rh-photo-placeholder{min-height:100%!important;background:radial-gradient(circle at 50% 40%,rgba(25,64,88,.36),transparent 42%),linear-gradient(145deg,#0b1b28,#07121c)!important}
+  html body main.reference-home.locked-storefront .rh-badge.rh-badge{top:8px!important;left:8px!important;padding:4px 7px!important;border-radius:3px!important;font-size:7px!important;background:#20a85a!important}
+  html body main.reference-home.locked-storefront .rh-card-body.rh-card-body{padding:10px 11px 12px!important}
+  html body main.reference-home.locked-storefront .rh-eyebrow.rh-eyebrow{font-size:7px!important;color:#687784!important;margin-bottom:2px!important}
+  html body main.reference-home.locked-storefront .rh-title.rh-title{font-size:14px!important;line-height:1.04!important;margin-bottom:7px!important;color:#101820!important}
+  html body main.reference-home.locked-storefront .rh-price.rh-price{font-size:24px!important;line-height:1!important;color:#1657bd!important}
+  html body main.reference-home.locked-storefront .rh-payment.rh-payment{font-size:9px!important;margin:4px 0 0!important;color:#242c34!important;font-weight:850!important}
+  html body main.reference-home.locked-storefront .rh-pills{display:none!important}
+
+  /* Financing: compact four-step rail. */
+  html body main.reference-home.locked-storefront .rh-finance.rh-finance{padding:28px 34px 30px!important;background:#06121c!important;border-top:1px solid #173043!important}
+  html body main.reference-home.locked-storefront .rh-finance-inner{width:min(1280px,100%)!important;margin:auto!important}
+  html body main.reference-home.locked-storefront .finance-heading{margin-bottom:14px!important}
+  html body main.reference-home.locked-storefront .finance-heading h2{margin:0!important;font-size:30px!important;line-height:1!important;color:#fff!important;text-transform:uppercase!important;font-style:italic!important}
+  html body main.reference-home.locked-storefront .finance-heading h2 span{color:var(--mc-red)!important}
+  html body main.reference-home.locked-storefront .finance-heading p{display:none!important}
+  html body main.reference-home.locked-storefront .rh-steps.rh-steps{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:10px!important}
+  html body main.reference-home.locked-storefront .rh-step.rh-step{min-height:82px!important;padding:12px 14px!important;display:grid!important;grid-template-columns:34px 1fr!important;grid-template-rows:auto auto!important;column-gap:10px!important;align-content:center!important;background:#081a28!important;border:1px solid #244155!important;border-radius:7px!important}
+  html body main.reference-home.locked-storefront .rh-step b{grid-row:1/3!important;width:30px!important;height:30px!important;font-size:12px!important;background:var(--mc-red)!important}
+  html body main.reference-home.locked-storefront .rh-step strong{font-size:10px!important;text-transform:uppercase!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-step small{font-size:8px!important;line-height:1.3!important;color:#a9b8c4!important}
+
+  /* Trust becomes a compact credibility band. */
+  html body main.reference-home.locked-storefront .rh-trust.rh-trust{padding:0 34px 18px!important;background:#06121c!important;border-top:1px solid #173043!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid.rh-trust-grid{width:min(1280px,100%)!important;margin:auto!important;display:grid!important;grid-template-columns:repeat(4,1fr)!important;background:transparent!important;border:0!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article{min-height:62px!important;padding:10px 14px!important;background:transparent!important;border:0!important;border-right:1px solid #203548!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:10px!important;text-transform:uppercase!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:8px!important;color:#9eafbd!important}
+  html body main.reference-home.locked-storefront .rh-trust:after{
+    content:"GOOGLE ★★★★★     FACEBOOK ★★★★★     CARS.COM     CARGURUS     BBB A+"!important;display:block!important;width:min(1280px,100%)!important;margin:14px auto 0!important;padding-top:14px!important;border-top:1px solid #203548!important;color:#e9eef2!important;text-align:center!important;font:900 14px/1.2 system-ui,sans-serif!important;word-spacing:16px!important;letter-spacing:.02em!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer.rh-footer{padding:14px 34px 18px!important;background:#02070c!important;border-top:1px solid #172a38!important}
+}
+
+/* ---------- Mobile: match the compact mockup ---------- */
+@media(max-width:760px){
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>.rh-utility.rh-utility{height:22px!important;min-height:22px!important;max-height:22px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>.rh-utility>.rh-utility-inner{height:22px!important;min-height:22px!important;font-size:8px!important;justify-content:space-between!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header{top:22px!important;height:66px!important;min-height:66px!important;max-height:66px!important;background:#02070c!important;border-bottom:1px solid #183044!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header>.rh-header-inner.rh-header-inner{height:66px!important;min-height:66px!important;max-height:66px!important;grid-template-columns:44px minmax(0,1fr) 82px!important;padding:0 10px!important}
+  html body main.reference-home.locked-storefront header.rh-header .rh-logo.rh-logo{width:102px!important;height:66px!important}
+  html body main.reference-home.locked-storefront header.rh-header .rh-logo.rh-logo img{width:88px!important;height:88px!important;max-width:none!important}
+  html body main.reference-home.locked-storefront header.rh-header .rh-menu.rh-menu{width:38px!important;height:38px!important;font-size:22px!important}
+  html body main.reference-home.locked-storefront header.rh-header .rh-call.rh-call{width:78px!important;min-width:78px!important;height:36px!important;font-size:9.5px!important}
+  html body main.reference-home.locked-storefront .rh-nav.rh-nav{top:88px!important}
+
+  /* Mobile hero keeps the mockup's image-first composition but compresses vertical waste. */
+  html body main.reference-home.locked-storefront section.rh-hero.rh-hero{padding:0!important;height:auto!important;min-height:0!important;background:#02070c!important}
+  html body main.reference-home.locked-storefront section.rh-hero>.rh-hero-art.rh-hero-art{position:relative!important;inset:auto!important;display:block!important;width:100%!important;height:310px!important;max-height:310px!important;object-fit:cover!important;object-position:70% 40%!important;filter:saturate(1.32) contrast(1.07) brightness(1.22)!important}
+  html body main.reference-home.locked-storefront section.rh-hero>.rh-hero-shade.rh-hero-shade{position:absolute!important;inset:0 0 auto!important;height:310px!important;max-height:310px!important;background:linear-gradient(180deg,transparent 0%,rgba(2,7,12,.03) 58%,rgba(2,7,12,.46) 84%,#02070c 100%)!important}
+  html body main.reference-home.locked-storefront section.rh-hero>.rh-hero-inner.rh-hero-inner{display:block!important;width:100%!important;height:auto!important;min-height:0!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy.rh-copy{width:100%!important;max-width:none!important;padding:14px 14px 18px!important;background:#02070c!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-kicker{margin:0 0 7px!important;font-size:9px!important;color:#f5b931!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1{margin:0 0 9px!important;max-width:360px!important;font-size:41px!important;line-height:.88!important;letter-spacing:-.05em!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-lead{margin:0!important;max-width:350px!important;font-size:13px!important;line-height:1.34!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:6px!important;margin-top:12px!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-btn{min-height:42px!important;font-size:9.5px!important}
+  html body main.reference-home.locked-storefront section.rh-hero .rh-phone{display:none!important}
+
+  /* One compact four-icon row, matching the reference instead of 2x2 white cards. */
+  html body main.reference-home.locked-storefront .rh-benefit-wrap{background:#06121c!important;border-top:1px solid #173043!important;border-bottom:1px solid #173043!important}
+  html body main.reference-home.locked-storefront .rh-benefits.rh-benefits{display:grid!important;grid-template-columns:repeat(4,1fr)!important;width:100%!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+  html body main.reference-home.locked-storefront .rh-benefit.rh-benefit{min-height:70px!important;padding:8px 3px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important;text-align:center!important;background:transparent!important;border:0!important;border-right:1px solid #203548!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-benefit:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront .rh-icon.rh-icon{width:27px!important;height:27px!important;font-size:10px!important;border:1.5px solid var(--mc-red)!important;color:var(--mc-red)!important;background:transparent!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:8px!important;line-height:1.05!important;text-transform:uppercase!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{display:none!important}
+
+  html body main.reference-home.locked-storefront .rh-inventory.rh-inventory{padding:18px 0 20px!important;background:#f7f8f8!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head{display:flex!important;align-items:end!important;justify-content:space-between!important;gap:10px!important;padding:0 12px!important;margin:0 0 10px!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head>div{min-width:0!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head small{font-size:8px!important;color:#168cf2!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head h2{margin:2px 0 0!important;font-size:28px!important;line-height:.98!important;color:#07121c!important}
+  html body main.reference-home.locked-storefront .rh-inventory .rh-section-head p{display:none!important}
+  html body main.reference-home.locked-storefront .rh-view-all{flex:none!important;margin:0 0 3px!important;font-size:8px!important;text-transform:uppercase!important;color:#07121c!important}
+  html body main.reference-home.locked-storefront .rh-grid.rh-grid{display:flex!important;gap:10px!important;padding:0 11vw 5px!important;scroll-padding-inline:11vw!important}
+  html body main.reference-home.locked-storefront .rh-card.rh-card{flex:0 0 78vw!important;min-width:78vw!important;max-width:78vw!important;border-radius:7px!important}
+  html body main.reference-home.locked-storefront .rh-photo.rh-photo{aspect-ratio:1.62!important}
+  html body main.reference-home.locked-storefront .rh-card-body.rh-card-body{padding:10px 11px 11px!important}
+  html body main.reference-home.locked-storefront .rh-eyebrow{font-size:7px!important}
+  html body main.reference-home.locked-storefront .rh-title{font-size:15px!important;margin-bottom:5px!important}
+  html body main.reference-home.locked-storefront .rh-price{font-size:25px!important;color:#1657bd!important}
+  html body main.reference-home.locked-storefront .rh-payment{font-size:9px!important;margin:3px 0 0!important}
+  html body main.reference-home.locked-storefront .rh-pills{display:none!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots{margin-top:7px!important;gap:5px!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots button{width:5px!important;height:5px!important}
+  html body main.reference-home.locked-storefront .rh-mobile-dots button.active{width:14px!important}
+
+  /* Compact horizontal-feeling financing journey. */
+  html body main.reference-home.locked-storefront .rh-finance.rh-finance{padding:18px 10px 20px!important;background:#06121c!important}
+  html body main.reference-home.locked-storefront .finance-heading{margin:0 0 10px!important}
+  html body main.reference-home.locked-storefront .finance-heading h2{margin:0!important;font-size:26px!important;line-height:1!important;text-transform:uppercase!important;font-style:italic!important}
+  html body main.reference-home.locked-storefront .finance-heading p{display:none!important}
+  html body main.reference-home.locked-storefront .rh-steps.rh-steps{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:4px!important}
+  html body main.reference-home.locked-storefront .rh-step.rh-step{min-height:76px!important;padding:7px 3px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:5px!important;text-align:center!important;background:#081a28!important;border:1px solid #244155!important;border-radius:6px!important}
+  html body main.reference-home.locked-storefront .rh-step b{width:26px!important;height:26px!important;font-size:10px!important;flex:none!important}
+  html body main.reference-home.locked-storefront .rh-step strong{font-size:7px!important;line-height:1.05!important;text-transform:uppercase!important}
+  html body main.reference-home.locked-storefront .rh-step small{display:none!important}
+
+  /* Credibility rail + Sean callout, closer to mobile mockup. */
+  html body main.reference-home.locked-storefront .rh-trust.rh-trust{padding:0!important;background:#f7f8f8!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid.rh-trust-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;background:#06121c!important;border:0!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article{min-height:60px!important;padding:7px 3px!important;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;text-align:center!important;gap:4px!important;background:transparent!important;border:0!important;border-right:1px solid #203548!important;color:#fff!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article:last-child{border-right:0!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid .trust-symbol,
+  html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{width:24px!important;height:24px!important;font-size:8px!important;margin:0!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid b{font-size:7px!important;line-height:1.05!important;text-transform:uppercase!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid article div>span{display:none!important}
+  html body main.reference-home.locked-storefront .rh-trust:after{
+    content:"‘WE SAY YES WHEN OTHERS SAY NO.’\A SEAN · OWNER\A CALL OR TEXT (813) 516-4752"!important;display:block!important;padding:18px 14px!important;background:#fff!important;color:#101820!important;text-align:center!important;white-space:pre-line!important;font:900 13px/1.45 system-ui,sans-serif!important;border-bottom:1px solid #dfe4e8!important;
+  }
+  html body main.reference-home.locked-storefront .rh-footer.rh-footer{padding:14px 12px 68px!important;background:#02070c!important}
+  html body main.reference-home.locked-storefront .rh-footer-inner{font-size:9px!important;line-height:1.35!important}
+
+  /* Fixed mockup-style action bar. */
+  html body .mockup-quickbar{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:2147482000!important;height:54px!important;display:grid!important;grid-template-columns:.8fr .8fr 1.4fr!important;background:#02070c!important;border-top:1px solid #24394a!important;box-shadow:0 -8px 20px rgba(0,0,0,.32)!important}
+  html body .mockup-quickbar a{display:flex!important;align-items:center!important;justify-content:center!important;min-height:54px!important;color:#fff!important;font-size:9px!important;font-weight:950!important;letter-spacing:.025em!important;text-transform:uppercase!important;border-right:1px solid #24394a!important}
+  html body .mockup-quickbar a:last-child{border-right:0!important;background:var(--mc-red)!important}
+}
+@media(min-width:761px){html body .mockup-quickbar{display:none!important}}
