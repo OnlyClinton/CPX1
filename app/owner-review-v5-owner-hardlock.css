@@ -1,0 +1,68 @@
+/* Owner V5 cascade hard-lock. Intentionally outranks all legacy visual selectors. */
+
+@keyframes wdccV5BadgePopOwnerHardMobile{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.46) rotate(-7deg);filter:blur(6px)}
+  24%{opacity:1;transform:translate(-50%,-50%) scale(1.15) rotate(2deg);filter:blur(0)}
+  48%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-.5deg)}
+  78%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  88%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  100%{opacity:1;transform:translate(-50%,calc(-50% - 34vh)) scale(.36) rotate(0)}
+}
+@keyframes wdccV5BadgePopOwnerHardDesktop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.44) rotate(-7deg);filter:blur(7px)}
+  24%{opacity:1;transform:translate(-50%,-50%) scale(1.14) rotate(2deg);filter:blur(0)}
+  48%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-.5deg)}
+  78%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  88%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}
+  100%{opacity:1;transform:translate(calc(-50% - 43vw),calc(-50% - 32vh)) scale(.36) rotate(0)}
+}
+html body .li.li-show.li-show .li-badge.li-badge{
+  width:min(66vw,258px)!important;top:39.5%!important;
+  animation:wdccV5BadgePopOwnerHardMobile 1.66s cubic-bezier(.16,.84,.18,1) both!important;
+  box-shadow:0 24px 62px rgba(0,0,0,.6),0 0 0 3px rgba(255,255,255,.95),0 0 46px rgba(255,255,255,.2)!important;
+}
+html body .li.li-show.li-show .li-tag.li-tag{top:62%!important;font-size:12px!important;letter-spacing:.09em!important}
+@media(min-width:761px){
+  html body .li.li-show.li-show .li-badge.li-badge{width:min(24vw,310px)!important;top:40%!important;animation-name:wdccV5BadgePopOwnerHardDesktop!important}
+  html body .li.li-show.li-show .li-tag.li-tag{top:62%!important;font-size:13px!important}
+}
+
+@media(max-width:760px){
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>.rh-utility.rh-utility{height:24px!important;min-height:24px!important;max-height:24px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>.rh-utility.rh-utility>.rh-utility-inner.rh-utility-inner{height:24px!important;min-height:24px!important;font-size:9.25px!important;padding:0 10px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header{top:24px!important;height:72px!important;min-height:72px!important;max-height:72px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header>.rh-header-inner.rh-header-inner{height:72px!important;min-height:72px!important;max-height:72px!important;grid-template-columns:48px minmax(0,1fr) 88px!important;padding:0 10px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront header.rh-header.rh-header .rh-logo.rh-logo{width:104px!important;height:72px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront header.rh-header.rh-header .rh-logo.rh-logo img{width:90px!important;height:90px!important;max-width:none!important;transform:none!important;filter:drop-shadow(0 5px 12px rgba(0,0,0,.52))!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront header.rh-header.rh-header .rh-menu.rh-menu{width:42px!important;height:42px!important;font-size:25px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront header.rh-header.rh-header .rh-call.rh-call{width:84px!important;min-width:84px!important;height:40px!important;font-size:10.5px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-nav.rh-nav{top:96px!important}
+
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-art.rh-hero-art{height:326px!important;min-height:0!important;max-height:326px!important;filter:saturate(1.28) contrast(1.06) brightness(1.21)!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero>.rh-hero-shade.rh-hero-shade{height:326px!important;max-height:326px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy{padding:21px 16px 28px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-copy.rh-copy h1{font-size:43px!important;line-height:.92!important;margin-bottom:16px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront section.rh-hero.rh-hero .rh-lead.rh-lead{font-size:15px!important;line-height:1.44!important;max-width:355px!important}
+
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefits.rh-benefits .rh-benefit.rh-benefit{min-height:82px!important;padding:12px 11px!important;grid-template-columns:34px minmax(0,1fr)!important;gap:9px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefits.rh-benefits .rh-benefit.rh-benefit strong{font-size:12.25px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-benefits.rh-benefits .rh-benefit.rh-benefit small{font-size:10px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory{padding:35px 0 40px!important;background:linear-gradient(180deg,#eef2f5,#e7edf1)!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-section-head.rh-section-head h2{font-size:31px!important;line-height:1.01!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-card.rh-card{flex-basis:77vw!important;min-width:77vw!important;max-width:77vw!important;border-radius:13px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-card-body.rh-card-body{padding:15px 16px 17px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-title.rh-title{font-size:18px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-price.rh-price{font-size:29px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance{padding:36px 13px 40px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance .finance-heading.finance-heading h2{font-size:30px!important;line-height:1.02!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance .rh-step.rh-step{min-height:80px!important;padding:13px 14px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-trust-grid.rh-trust-grid article{min-height:66px!important;padding:11px 15px!important}
+}
+
+@media(min-width:1101px){
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header{height:94px!important;min-height:94px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront>header.rh-header.rh-header>.rh-header-inner.rh-header-inner{height:94px!important;grid-template-columns:170px minmax(0,1fr) auto!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront header.rh-header.rh-header .rh-logo.rh-logo img{width:112px!important;height:112px!important;max-width:none!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-inventory.rh-inventory .rh-section-head.rh-section-head h2{font-size:44px!important}
+  html body main.reference-home.locked-storefront.locked-storefront.locked-storefront .rh-finance.rh-finance .finance-heading.finance-heading h2{font-size:40px!important}
+}
