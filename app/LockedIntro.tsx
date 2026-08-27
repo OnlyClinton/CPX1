@@ -56,10 +56,11 @@ export default function LockedIntro(){
       @keyframes liFogDrift{0%{opacity:.96;filter:blur(19px);transform:translate3d(-2%,1%,0)}46%{opacity:.60;filter:blur(15px);transform:translate3d(.3%,-.2%,0)}80%{opacity:.18;filter:blur(10px);transform:translate3d(1.5%,-.8%,0)}100%{opacity:0;filter:blur(8px);transform:translate3d(2%,-1%,0)}}
       @keyframes liMistDrift{0%{opacity:.74;transform:translate3d(1.5%,0,0)}50%{opacity:.34;transform:translate3d(0,-.4%,0)}82%{opacity:.10;transform:translate3d(-1%,-.7%,0)}100%{opacity:0;transform:translate3d(-1.5%,-1%,0)}}
 
-      .li-badge{position:absolute;z-index:4;left:50%;top:39%;width:clamp(236px,29vw,292px);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;background:#fff;box-shadow:0 18px 52px rgba(0,0,0,.46),0 0 0 3px rgba(255,255,255,.94);transform:translate(-50%,-50%)!important;animation:none!important;transition:none!important}
+      .li-badge{position:absolute;z-index:4;left:50%;top:39%;width:clamp(236px,29vw,292px);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;background:#fff;box-shadow:0 18px 52px rgba(0,0,0,.46),0 0 0 3px rgba(255,255,255,.94);transform:translate(-50%,-50%)!important;animation:none!important;transition:none!important;overflow:hidden}
       .li-badge:before{content:"";position:absolute;inset:-12px;border-radius:50%;border:1px solid rgba(255,255,255,.52);box-shadow:0 0 0 1px rgba(74,154,230,.18),0 0 34px rgba(74,154,230,.26);opacity:0;animation:liBadgeHalo 1.36s ease-out .22s both;pointer-events:none}
       @keyframes liBadgeHalo{0%{opacity:0;box-shadow:0 0 0 1px rgba(74,154,230,.08),0 0 10px rgba(74,154,230,.08)}42%{opacity:.82;box-shadow:0 0 0 1px rgba(255,255,255,.34),0 0 34px rgba(74,154,230,.28)}100%{opacity:.18;box-shadow:0 0 0 1px rgba(255,255,255,.12),0 0 18px rgba(74,154,230,.10)}}
-      .li-badge img{display:block;width:96%;height:96%;object-fit:contain;border-radius:50%;clip-path:circle(48% at 50% 50%);filter:none!important;transform:none!important;animation:none!important;transition:none!important}
+      .li-badge-art{position:absolute;inset:2%;z-index:1;display:block;border-radius:50%;clip-path:circle(48% at 50% 50%);background:#fff url('/wdcc-official-logo.webp') center/contain no-repeat;filter:none!important;transform:none!important;animation:none!important;transition:none!important;pointer-events:none!important}
+      .li-badge img{position:absolute;inset:2%;z-index:0;display:block;width:96%;height:96%;object-fit:contain;border-radius:50%;clip-path:circle(48% at 50% 50%);opacity:.001!important;filter:none!important;transform:none!important;animation:none!important;transition:none!important}
       .li-tag{position:absolute;z-index:5;left:50%;top:59%;transform:translateX(-50%);margin:0;padding:9px 14px;border:1px solid rgba(255,255,255,.52);border-radius:999px;background:rgba(2,9,15,.78);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);color:#fff!important;white-space:nowrap;font:950 clamp(13px,1.35vw,16px)/1 system-ui,sans-serif;letter-spacing:.085em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,.98),0 0 12px rgba(255,255,255,.18);opacity:0;animation:liTagResolve .74s cubic-bezier(.2,.8,.2,1) .30s forwards}
       @keyframes liTagResolve{from{opacity:0}to{opacity:1}}
       .li-skip{position:absolute;z-index:6;right:max(18px,env(safe-area-inset-right));bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px));min-height:44px;border:1px solid rgba(255,255,255,.46);border-radius:999px;background:rgba(3,9,14,.74);color:#fff;padding:0 18px;font:850 12px/1 system-ui,sans-serif;letter-spacing:.03em;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -75,7 +76,7 @@ export default function LockedIntro(){
     `}</style>
     <div className="li-scene" aria-hidden="true"><img src="/wdcc-hero-v2.webp" alt="" width="1672" height="941" fetchPriority="high"/></div>
     <div className="li-smoke" aria-hidden="true"/>
-    <div className="li-badge"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></div>
+    <div className="li-badge"><span className="li-badge-art" data-wdcc-intro-badge-art="official" aria-hidden="true"/><img src="/wdcc-official-logo.webp" alt="We Don't Care Cars" width="512" height="512"/></div>
     <p className="li-tag">We Don&apos;t Care Cars · Tampa Bay</p>
     <button className="li-skip" type="button" onClick={finish}>Skip intro</button>
   </div>
