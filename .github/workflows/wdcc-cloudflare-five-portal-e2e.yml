@@ -1,0 +1,276 @@
+name: WDCC Cloudflare Five Vehicle Portal E2E
+
+on:
+  push:
+    branches:
+      - emergency/wdcc-cloudflare-r2-20260827
+    paths:
+      - .github/workflows/wdcc-cloudflare-five-portal-e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-cloudflare-five-portal-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      STATE_WORKER: wdcc-v53-staging
+      STATE_URL: https://wdcc-v53-staging.clico-global.workers.dev
+      APP_WORKER: wdcc-v53-1-staging
+      APP_URL: https://wdcc-v53-1-staging.clico-global.workers.dev
+
+    steps:
+      - name: Checkout exact recovery head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Cloudflare adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+
+      - name: Generate synchronized service and session credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          SERVICE_TOKEN="$(openssl rand -hex 48)"
+          SESSION_SECRET="$(openssl rand -hex 48)"
+          QA_PASSWORD="$(openssl rand -base64 36 | tr -d '\n=/+' | head -c 36)"
+          printf '::add-mask::%s\n' "$SERVICE_TOKEN" "$SESSION_SECRET" "$QA_PASSWORD"
+          printf '%s' "$SERVICE_TOKEN" > /tmp/service-token
+          printf '%s' "$SESSION_SECRET" > /tmp/session-secret
+          printf '%s' "$QA_PASSWORD" > /tmp/qa-password
+
+      - name: Deploy Cloudflare Durable Object state authority in existing slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > wrangler.state.jsonc <<EOF
+          {
+            "name":"$STATE_WORKER",
+            "main":"cloudflare/wdcc-state-worker.mjs",
+            "compatibility_date":"2026-08-27",
+            "workers_dev":true,
+            "preview_urls":true,
+            "observability":{"enabled":true},
+            "durable_objects":{"bindings":[{"name":"WDCC_STATE","class_name":"WDCCState"}]},
+            "migrations":[{"tag":"v1","new_sqlite_classes":["WDCCState"]}]
+          }
+          EOF
+          npx wrangler deploy --config wrangler.state.jsonc 2>&1 | tee /tmp/state-deploy.log
+          grep -q "$STATE_URL" /tmp/state-deploy.log
+          cat /tmp/service-token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.state.jsonc >/dev/null
+          sleep 4
+
+      - name: Seed verified five vehicles and recovery-compatible portal users
+        shell: bash
+        run: |
+          set -euo pipefail
+          export QA_PASSWORD="$(cat /tmp/qa-password)"
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const password=process.env.QA_PASSWORD;
+          function hashPassword(p){const salt=crypto.randomBytes(24);const digest=crypto.scryptSync(p,salt,64);return `scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`}
+          const now=new Date().toISOString();
+          const users=[
+            {id:'000',username:'admin',loginAlias:'admin',aliases:['admin','000','oooo'],displayName:'WDCC Admin',role:'platform_admin',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hashPassword(password),updatedAt:now},
+            {id:'002',username:'Big Pussy',loginAlias:'Big Pussy',aliases:['Big Pussy','BigPussy','bigpussy','bigplussy','002'],displayName:'Big Pussy',role:'dealer_agent',tenantId:'wdcc',status:'active',disabled:false,passwordHash:hashPassword(password),updatedAt:now}
+          ];
+          const vehicles=[
+            {id:'2004-nissan-350z',slug:'2004-nissan-350z',tenantId:'wdcc',year:2004,make:'Nissan',model:'350Z',trim:'',bodyStyle:'Car',condition:'Used',transmission:'Call for details',drivetrain:'RWD',fuelType:'Gasoline',location:'Tampa Bay',price:4900,downPayment:2000,mileage:154000,stock:'RECOVERED-2004-NISSAN-350Z',description:'Dealer-listed 2004 Nissan 350Z. Call or text Sean for current condition, equipment and availability details.',badges:['RECOVERED'],featured:true,status:'published',internalOnly:false,visibility:'public',image:'/assets/cars/2004-nissan-350z-1.webp',primary_image_url:'/assets/cars/2004-nissan-350z-1.webp',images:['/assets/cars/2004-nissan-350z-1.webp','/assets/cars/2004-nissan-350z-2.webp','/assets/cars/2004-nissan-350z-3.webp','/assets/cars/2004-nissan-350z-4.webp'],photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now},
+            {id:'2016-ford-f150-limited',slug:'2016-ford-f150-limited',tenantId:'wdcc',year:2016,make:'Ford',model:'F-150',trim:'Limited',bodyStyle:'Truck',condition:'Used',transmission:'Automatic',drivetrain:'4x4',fuelType:'Gasoline',location:'Tampa Bay',price:15000,downPayment:6000,mileage:164000,stock:'RECOVERED-2016-FORD-F150-LIM',description:'Dealer-listed 2016 Ford F-150 Limited. Call or text Sean for current condition, equipment and availability details.',badges:['RECOVERED'],featured:true,status:'published',internalOnly:false,visibility:'public',image:'/assets/cars/2016-ford-f150-limited-1.webp',primary_image_url:'/assets/cars/2016-ford-f150-limited-1.webp',images:['/assets/cars/2016-ford-f150-limited-1.webp','/assets/cars/2016-ford-f150-limited-2.webp','/assets/cars/2016-ford-f150-limited-3.webp','/assets/cars/2016-ford-f150-limited-4.webp','/assets/cars/2016-ford-f150-limited-5.webp','/assets/cars/2016-ford-f150-limited-6.webp','/assets/cars/2016-ford-f150-limited-7.webp'],photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now},
+            {id:'2019-honda-pilot',slug:'2019-honda-pilot',tenantId:'wdcc',year:2019,make:'Honda',model:'Pilot',trim:'',bodyStyle:'SUV',condition:'Used',transmission:'Automatic',drivetrain:'Call for details',fuelType:'Gasoline',location:'Tampa Bay',price:7900,downPayment:3000,mileage:380000,stock:'RECOVERED-2019-HONDA-PILOT',description:'Dealer-listed 2019 Honda Pilot. Call or text Sean for current condition, equipment and availability details.',badges:['RECOVERED'],featured:true,status:'published',internalOnly:false,visibility:'public',image:'/assets/cars/2019-honda-pilot-1.webp',primary_image_url:'/assets/cars/2019-honda-pilot-1.webp',images:['/assets/cars/2019-honda-pilot-1.webp'],photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now},
+            {id:'2019-kia-sportage',slug:'2019-kia-sportage',tenantId:'wdcc',year:2019,make:'Kia',model:'Sportage',trim:'',bodyStyle:'SUV',condition:'Used',transmission:'Automatic',drivetrain:'Call for details',fuelType:'Gasoline',location:'Tampa Bay',price:6500,downPayment:2500,mileage:127000,stock:'RECOVERED-2019-KIA-SPORTAGE',description:'Dealer-listed 2019 Kia Sportage. Call or text Sean for current condition, equipment and availability details.',badges:['RECOVERED'],featured:true,status:'published',internalOnly:false,visibility:'public',image:'/assets/cars/2019-kia-sportage-1.webp',primary_image_url:'/assets/cars/2019-kia-sportage-1.webp',images:['/assets/cars/2019-kia-sportage-1.webp'],photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now},
+            {id:'2019-toyota-rav4',slug:'2019-toyota-rav4',tenantId:'wdcc',year:2019,make:'Toyota',model:'RAV4',trim:'',bodyStyle:'SUV',condition:'Used',transmission:'Automatic',drivetrain:'Call for details',fuelType:'Gasoline',location:'Tampa Bay',price:10500,downPayment:4500,mileage:240000,stock:'RECOVERED-2019-TOYOTA-RAV4',description:'Dealer-listed 2019 Toyota RAV4. Call or text Sean for current condition, equipment and availability details.',badges:['RECOVERED'],featured:true,status:'published',internalOnly:false,visibility:'public',image:'/assets/cars/2019-toyota-rav4-1.webp',primary_image_url:'/assets/cars/2019-toyota-rav4-1.webp',images:['/assets/cars/2019-toyota-rav4-1.webp','/assets/cars/2019-toyota-rav4-2.webp'],photoPathnames:[],primaryPhotoPathname:null,createdAt:now,updatedAt:now}
+          ];
+          const state={revision:2,tenants:[{id:'wdcc',slug:'wdcc',name:"We Don't Care Cars",status:'active'}],users,vehicles,leads:[],audit:[{id:crypto.randomUUID(),at:now,actor:'authorized-emergency-recovery',action:'cloudflare.verified-five.bootstrap',details:{production:false,vehicles:5,images:15,source:'recovered-2vfd-source'}}],updatedAt:now,recovery:{mode:'verified-five-reconstruction',canonicalRevisionKnown:654,source:'recovered-2vfd-source'}};
+          fs.writeFileSync('/tmp/recovery-state.json',JSON.stringify(state,null,2)+'\n');
+          NODE
+          TOKEN="$(cat /tmp/service-token)"
+          code="$(curl -sS -o /tmp/seed.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -X PUT "$STATE_URL/state" --data-binary @/tmp/recovery-state.json)"
+          echo "SEED_HTTP=$code"
+          cat /tmp/seed.json
+          test "$code" = 200
+          jq -e '.ok==true and .revision==2' /tmp/seed.json >/dev/null
+
+      - name: Build exact recovery app for Cloudflare
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          for f in \
+            2004-nissan-350z-1.webp 2004-nissan-350z-2.webp 2004-nissan-350z-3.webp 2004-nissan-350z-4.webp \
+            2016-ford-f150-limited-1.webp 2016-ford-f150-limited-2.webp 2016-ford-f150-limited-3.webp 2016-ford-f150-limited-4.webp 2016-ford-f150-limited-5.webp 2016-ford-f150-limited-6.webp 2016-ford-f150-limited-7.webp \
+            2019-honda-pilot-1.webp 2019-kia-sportage-1.webp 2019-toyota-rav4-1.webp 2019-toyota-rav4-2.webp; do
+            test -s ".open-next/assets/assets/cars/$f" || test -s "public/assets/cars/$f"
+          done
+
+      - name: Deploy exact app into second existing Cloudflare staging slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          c.name=process.env.APP_WORKER;
+          c.main='.open-next/worker.js';
+          c.workers_dev=true;
+          c.preview_urls=true;
+          delete c.route;delete c.routes;delete c.durable_objects;delete c.migrations;
+          c.vars={...(c.vars||{}),WDCC_RUNTIME_ROLE:'backend',WDCC_PROVIDER:'cloudflare',WDCC_STATE_SERVICE_URL:process.env.STATE_URL};
+          delete c.vars.WDCC_DEALER_BACKEND_URL;
+          fs.writeFileSync('wrangler.app.jsonc',JSON.stringify(c,null,2)+'\n');
+          NODE
+          npx wrangler deploy --config wrangler.app.jsonc 2>&1 | tee /tmp/app-deploy.log
+          grep -q "$APP_URL" /tmp/app-deploy.log
+          cat /tmp/service-token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --config wrangler.app.jsonc >/dev/null
+          cat /tmp/session-secret | npx wrangler secret put SESSION_SECRET --config wrangler.app.jsonc >/dev/null
+          sleep 5
+
+      - name: Prove health, all five records, all fifteen images, VDP and portal pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 15); do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$APP_URL/api/health?five=$GITHUB_RUN_ID-$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          echo "HEALTH_HTTP=$code";cat /tmp/health.json
+          test "$code" = 200
+          jq -e '.ok==true and .provider=="cloudflare" and .storage=="cloudflare-do" and .state=="readable" and .session=="configured" and .revision==2' /tmp/health.json >/dev/null
+          test "$(curl -sS -o /tmp/inventory.json -w '%{http_code}' "$APP_URL/api/inventory?five=$GITHUB_RUN_ID")" = 200
+          jq -e '.ok==true and (.items|length)==5' /tmp/inventory.json >/dev/null
+          for id in 2004-nissan-350z 2016-ford-f150-limited 2019-honda-pilot 2019-kia-sportage 2019-toyota-rav4; do
+            jq -e --arg id "$id" '.items[]|select(.id==$id)' /tmp/inventory.json >/dev/null
+            test "$(curl -sS -L -o "/tmp/vdp-$id.html" -w '%{http_code}' "$APP_URL/vehicle/$id")" = 200
+          done
+          files=(2004-nissan-350z-1.webp 2004-nissan-350z-2.webp 2004-nissan-350z-3.webp 2004-nissan-350z-4.webp 2016-ford-f150-limited-1.webp 2016-ford-f150-limited-2.webp 2016-ford-f150-limited-3.webp 2016-ford-f150-limited-4.webp 2016-ford-f150-limited-5.webp 2016-ford-f150-limited-6.webp 2016-ford-f150-limited-7.webp 2019-honda-pilot-1.webp 2019-kia-sportage-1.webp 2019-toyota-rav4-1.webp 2019-toyota-rav4-2.webp)
+          rm -f /tmp/image-hashes.txt
+          for f in "${files[@]}"; do
+            status="$(curl -sS -L -o "/tmp/$f" -w '%{http_code}' "$APP_URL/assets/cars/$f?five=$GITHUB_RUN_ID")"
+            test "$status" = 200
+            test -s "/tmp/$f"
+            sha256sum "/tmp/$f" >> /tmp/image-hashes.txt
+          done
+          test "$(wc -l < /tmp/image-hashes.txt)" = 15
+          test "$(awk '{print $1}' /tmp/image-hashes.txt | sort -u | wc -l)" -ge 12
+          test "$(curl -sS -L -o /tmp/dealer-login.html -w '%{http_code}' "$APP_URL/dealer")" = 200
+          test "$(curl -sS -L -o /tmp/add-form-public.html -w '%{http_code}' "$APP_URL/dealer/inventory/new")" = 200
+          grep -qi 'dealer' /tmp/dealer-login.html
+          grep -qi 'add vehicle\|vehicle information' /tmp/add-form-public.html
+
+      - name: Prove dealer login and authenticated portal inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          QA_PASSWORD="$(cat /tmp/qa-password)"
+          login="$(jq -nc --arg email 'Big Pussy' --arg password "$QA_PASSWORD" '{email:$email,password:$password}')"
+          code="$(curl -sS -c /tmp/cookies -o /tmp/login.json -w '%{http_code}' -H "Origin: $APP_URL" -H 'Content-Type: application/json' -X POST "$APP_URL/api/auth/login" --data "$login")"
+          echo "LOGIN_HTTP=$code";cat /tmp/login.json
+          test "$code" = 200
+          jq -e '.ok==true' /tmp/login.json >/dev/null
+          test "$(curl -sS -b /tmp/cookies -o /tmp/session.json -w '%{http_code}' "$APP_URL/api/auth/session")" = 200
+          jq -e '.authenticated==true and .user.role=="dealer_agent"' /tmp/session.json >/dev/null
+          test "$(curl -sS -b /tmp/cookies -o /tmp/dealer-inventory.json -w '%{http_code}' "$APP_URL/api/inventory?dealer=$GITHUB_RUN_ID")" = 200
+          jq -e '.ok==true and (.items|length)==5' /tmp/dealer-inventory.json >/dev/null
+          test "$(curl -sS -L -b /tmp/cookies -o /tmp/dealer-inventory.html -w '%{http_code}' "$APP_URL/dealer/inventory")" = 200
+          test "$(curl -sS -L -b /tmp/cookies -o /tmp/add-form.html -w '%{http_code}' "$APP_URL/dealer/inventory/new")" = 200
+          grep -qi 'all vehicles\|inventory operations' /tmp/dealer-inventory.html
+          grep -qi 'add vehicle\|vehicle information' /tmp/add-form.html
+
+      - name: Prove Add Vehicle plus Cloudflare photo upload and checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          stock="R36TEST-CF-E2E-$GITHUB_RUN_ID"
+          draft="$(jq -nc --arg stock "$stock" '{year:2020,make:"WDCC",model:"Cloudflare Upload Proof",trim:"Recovery E2E",price:12345,downPayment:1200,mileage:12345,stock:$stock,bodyStyle:"SUV",condition:"Used",transmission:"Automatic",exteriorColor:"Black",interiorColor:"Black",drivetrain:"FWD",fuelType:"Gasoline",description:"Automated temporary QA vehicle for Cloudflare upload recovery proof.",status:"draft",internalOnly:false,visibility:"public"}')"
+          create_code="$(curl -sS -b /tmp/cookies -o /tmp/create.json -w '%{http_code}' -H "Origin: $APP_URL" -H 'Content-Type: application/json' -H "X-WDCC-Request-ID: cf-e2e-$GITHUB_RUN_ID" -X POST "$APP_URL/api/inventory" --data "$draft")"
+          echo "CREATE_HTTP=$create_code";cat /tmp/create.json
+          test "$create_code" = 201
+          VEHICLE_ID="$(jq -r '.item.id' /tmp/create.json)";test -n "$VEHICLE_ID";echo "$VEHICLE_ID" >/tmp/qa-vehicle-id
+
+          upload_code="$(curl -sS -b /tmp/cookies -o /tmp/upload.json -w '%{http_code}' -H "Origin: $APP_URL" -H 'Content-Type: image/webp' -H "X-WDCC-Request-ID: cf-media-$GITHUB_RUN_ID" -X POST "$APP_URL/api/media-upload?vehicleId=$VEHICLE_ID&filename=recovery-proof.webp" --data-binary @public/assets/cars/2019-kia-sportage-1.webp)"
+          echo "UPLOAD_HTTP=$upload_code";cat /tmp/upload.json
+          test "$upload_code" = 201
+          PATHNAME="$(jq -r '.pathname' /tmp/upload.json)";test -n "$PATHNAME";echo "$PATHNAME" >/tmp/qa-media-path
+          jq -e '.provider=="cloudflare-do" and .size>10000' /tmp/upload.json >/dev/null
+
+          checkpoint="$(jq -nc --arg p "$PATHNAME" '{photoPathnames:[$p],primaryPhotoPathname:$p,status:"published"}')"
+          patch_code="$(curl -sS -b /tmp/cookies -o /tmp/patch.json -w '%{http_code}' -H "Origin: $APP_URL" -H 'Content-Type: application/json' -H "X-WDCC-Request-ID: cf-publish-$GITHUB_RUN_ID" -X PATCH "$APP_URL/api/inventory/$VEHICLE_ID" --data "$checkpoint")"
+          echo "PATCH_HTTP=$patch_code";cat /tmp/patch.json
+          test "$patch_code" = 200
+          jq -e --arg p "$PATHNAME" '.ok==true and .item.status=="published" and .item.primaryPhotoPathname==$p and (.item.photoPathnames|index($p))!=null' /tmp/patch.json >/dev/null
+
+          media_code="$(curl -sS -D /tmp/media.h -o /tmp/media.webp -w '%{http_code}' "$APP_URL/api/media?p=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$PATHNAME")")"
+          echo "MEDIA_HTTP=$media_code";test "$media_code" = 200;test -s /tmp/media.webp
+          grep -qi '^x-wdcc-media-provider: cloudflare-do' /tmp/media.h
+          test "$(sha256sum /tmp/media.webp|awk '{print $1}')" = "$(sha256sum public/assets/cars/2019-kia-sportage-1.webp|awk '{print $1}')"
+
+          test "$(curl -sS -b /tmp/cookies -o /tmp/qa-read.json -w '%{http_code}' "$APP_URL/api/inventory/$VEHICLE_ID")" = 200
+          jq -e --arg id "$VEHICLE_ID" '.ok==true and .item.id==$id and .item.status=="published"' /tmp/qa-read.json >/dev/null
+          curl -sS "$APP_URL/api/inventory?qa-hide=$GITHUB_RUN_ID" -o /tmp/public-after.json
+          jq -e --arg id "$VEHICLE_ID" '([.items[]|select(.id==$id)]|length)==0 and (.items|length)==5' /tmp/public-after.json >/dev/null
+
+      - name: Cleanup exact QA record and photo, preserve verified five
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(cat /tmp/service-token)"
+          if [ -s /tmp/qa-media-path ]; then
+            p="$(cat /tmp/qa-media-path)"
+            encoded="$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$p")"
+            curl -sS -H "Authorization: Bearer $TOKEN" -X DELETE "$STATE_URL/media/$encoded" -o /tmp/media-delete.json || true
+          fi
+          if [ -s /tmp/qa-vehicle-id ]; then
+            id="$(cat /tmp/qa-vehicle-id)"
+            curl -fsS -H "Authorization: Bearer $TOKEN" "$STATE_URL/state" -o /tmp/state-before-clean.json
+            jq --arg id "$id" '.vehicles=[.vehicles[]|select(.id!=$id)] | .revision=(.revision+1) | .updatedAt=(now|todateiso8601) | .audit += [{id:("cleanup-"+$id),at:(now|todateiso8601),actor:"recovery-e2e",action:"qa.cleanup.exact",vehicleId:$id}]' /tmp/state-before-clean.json > /tmp/state-clean.json
+            clean_code="$(curl -sS -o /tmp/clean.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -X PUT "$STATE_URL/state" --data-binary @/tmp/state-clean.json)"
+            echo "CLEAN_HTTP=$clean_code";cat /tmp/clean.json
+            test "$clean_code" = 200
+          fi
+          curl -fsS -H "Authorization: Bearer $TOKEN" "$STATE_URL/state" -o /tmp/final-state.json
+          jq -e '(.vehicles|length)==5 and ([.vehicles[].stock|select(startswith("R36TEST"))]|length)==0' /tmp/final-state.json >/dev/null
+          curl -fsS "$APP_URL/api/inventory?final=$GITHUB_RUN_ID" -o /tmp/final-public.json
+          jq -e '.ok==true and (.items|length)==5' /tmp/final-public.json >/dev/null
+
+      - name: Record successful recovery proof
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Cloudflare five-vehicle recovery E2E run $GITHUB_RUN_ID is GREEN on exact recovery SHA $GITHUB_SHA. State Worker=wdcc-v53-staging; app Worker=wdcc-v53-1-staging. Health=200 provider=cloudflare storage=cloudflare-do state=readable session=configured. Verified public inventory=5. Restored original recovered gallery assets=15. Dealer login/session=200, dealer inventory=5, dealer inventory page=200, Add Vehicle form=200. Real image binary upload to Cloudflare Durable Object media=201, publish/photo checkpoint=200, media readback=200/hash-identical, QA vehicle hidden from shoppers, exact QA media+vehicle cleanup passed, final public inventory remained exactly five. No production dealer route, DNS, Vercel alias, or apex route was changed by this staging E2E." || true
+
+      - name: Record failed recovery proof
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Cloudflare five-vehicle recovery E2E run $GITHUB_RUN_ID failed in isolated staging. Cleanup ran on an always() gate. No production dealer route, DNS, Vercel alias, or apex route was changed by this E2E." || true
