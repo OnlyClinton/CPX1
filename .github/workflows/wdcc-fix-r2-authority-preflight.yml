@@ -1,0 +1,105 @@
+name: WDCC Fix R2 Authority Preflight
+
+on:
+  push:
+    branches: [fix/wdcc-cloudflare-provider-cutover-20260827]
+    paths:
+      - '.github/workflows/wdcc-fix-r2-authority-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-fix-r2-authority-preflight
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-cloudflare-provider-cutover-20260827
+          fetch-depth: 0
+      - name: Replace blind R2 create with list-first authority proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-cloudflare-r2-cutover.yml')
+          s=p.read_text()
+          old='''      - name: Create or verify private R2 authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npx wrangler r2 bucket create "$R2_BUCKET" 2>&1 | tee /tmp/r2-create.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ] && ! grep -Eqi 'already exists|already been taken|exists' /tmp/r2-create.log; then
+            exit "$rc"
+          fi
+          echo "R2_BUCKET_READY=$R2_BUCKET"
+'''
+          new='''      - name: Create or verify private R2 authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-r2
+          set +e
+          npx wrangler r2 bucket list --json >/tmp/r2-buckets.json 2>/tmp/r2-list.err
+          list_rc=$?
+          set -e
+          if [ "$list_rc" -ne 0 ]; then
+            cat /tmp/r2-list.err >&2 || true
+            echo "::error::R2 bucket listing failed before any mutation. The Cloudflare token must be able to read R2 for account $CLOUDFLARE_ACCOUNT_ID." >&2
+            exit "$list_rc"
+          fi
+          if node - "$R2_BUCKET" <<'NODE'
+          const fs=require('fs');
+          const bucket=process.argv[2];
+          const raw=JSON.parse(fs.readFileSync('/tmp/r2-buckets.json','utf8'));
+          const list=Array.isArray(raw)?raw:(Array.isArray(raw?.buckets)?raw.buckets:(Array.isArray(raw?.result)?raw.result:[]));
+          process.exit(list.some(x=>String(x?.name||x?.bucket_name||'')===bucket)?0:1);
+          NODE
+          then
+            echo "R2_BUCKET_READY=$R2_BUCKET (existing)"
+          else
+            set +e
+            npx wrangler r2 bucket create "$R2_BUCKET" 2>&1 | tee /tmp/r2-create.log
+            create_rc=${PIPESTATUS[0]}
+            set -e
+            if [ "$create_rc" -ne 0 ]; then
+              echo "::error::R2 bucket $R2_BUCKET is absent and creation failed. See r2-create.log; no state or media was written." >&2
+              exit "$create_rc"
+            fi
+            echo "R2_BUCKET_READY=$R2_BUCKET (created)"
+          fi
+'''
+          if old not in s:
+              raise SystemExit('R2_AUTHORITY_BLOCK_NOT_FOUND')
+          s=s.replace(old,new,1)
+          artifact='''            /tmp/wdcc-seed/missing-media.json\n'''
+          replacement='''            /tmp/wdcc-seed/missing-media.json\n            /tmp/r2-buckets.json\n            /tmp/r2-list.err\n            /tmp/r2-create.log\n'''
+          if artifact in s and '/tmp/r2-buckets.json' not in s.split('name: wdcc-cloudflare-r2-cutover-',1)[-1]:
+              s=s.replace(artifact,replacement,1)
+          p.write_text(s)
+          PY
+          grep -q 'wrangler r2 bucket list --json' .github/workflows/wdcc-cloudflare-r2-cutover.yml
+          git diff --check
+      - name: Commit isolated preflight correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/workflows/wdcc-cloudflare-r2-cutover.yml; then
+            echo 'R2 preflight already corrected.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/wdcc-cloudflare-r2-cutover.yml
+          git commit -m 'fix(wdcc): verify existing R2 bucket before create'
+          git push origin HEAD:fix/wdcc-cloudflare-provider-cutover-20260827
