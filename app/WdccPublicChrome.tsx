@@ -13,8 +13,11 @@ export function WdccPublicHeader(){
     <div className={`rh-utility wdcc-public-utility ${styles.utility}`} data-wdcc-public-chrome="utility">
       <div className={`rh-utility-inner ${styles.utilityInner}`}>
         <span>⌖ TAMPA BAY</span>
-        <span>IN-HOUSE FINANCING</span>
-        <TrackedCallLink source="public-utility-phone" label="Call Sean">SEAN · <b>813-516-4752</b></TrackedCallLink>
+        <span>★ IN-HOUSE FINANCING</span>
+        <span>★ LOW PAYMENTS</span>
+        <span>★ DRIVE TODAY</span>
+        <TrackedCallLink source="public-utility-phone" label="Call Sean">SALES: <b>(813) 516-4752</b></TrackedCallLink>
+        <span className={styles.spanish}>Se Habla Español</span>
       </div>
     </div>
     <header className={`rh-header wdcc-public-header ${styles.header}`} data-wdcc-public-chrome="header">
@@ -26,12 +29,13 @@ export function WdccPublicHeader(){
         <nav id="wdcc-public-nav" className={`rh-nav ${styles.nav}${open?` open ${styles.navOpen}`:""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
           <Link href="/get-approved?source=nav-financing" onClick={close}>Financing</Link>
-          <Link href="/schedule-test-drive?source=nav-test-drive" onClick={close}>Test Drive</Link>
           <Link href="/#how-it-works" onClick={close}>How It Works</Link>
+          <Link href="/#reviews" onClick={close}>Reviews</Link>
+          <Link href="/about" onClick={close}>About Us</Link>
           <Link href="/contact?source=nav-contact" onClick={close}>Contact</Link>
-          <Link href="/dealer/login" onClick={close}>Dealer Portal</Link>
         </nav>
         <div className={`rh-header-actions ${styles.actions}`}>
+          <TrackedCallLink className={styles.desktopPhone} source="public-header-desktop-phone" label="Call Sean">☎ <b>(813) 516-4752</b></TrackedCallLink>
           <Link className={`rh-header-primary ${styles.primary}`} href="/get-approved" aria-label="GET PRE-APPROVED">GET PRE-APPROVED</Link>
         </div>
         <TrackedCallLink className={`rh-call ${styles.call}`} source="public-header-phone" label="Call Sean"><span>Call Sean</span></TrackedCallLink>
