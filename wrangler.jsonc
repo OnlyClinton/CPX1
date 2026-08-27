@@ -3,7 +3,10 @@
   "name": "wdcc-storefront",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-25",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "workers_dev": true,
   "assets": {
     "directory": ".open-next/assets",
@@ -14,7 +17,14 @@
     "enabled": true
   },
   "vars": {
-    "WDCC_RUNTIME_ROLE": "frontend",
-    "WDCC_DEALER_BACKEND_URL": "https://wdcc-cpx-launch-cpxagency.vercel.app"
-  }
+    "WDCC_RUNTIME_ROLE": "canonical",
+    "WDCC_STATE_PROVIDER": "r2",
+    "WDCC_MEDIA_PROVIDER": "r2"
+  },
+  "r2_buckets": [
+    {
+      "binding": "WDCC_DATA",
+      "bucket_name": "wdcc-platform-prod"
+    }
+  ]
 }

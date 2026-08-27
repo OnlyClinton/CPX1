@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {DragEvent,useEffect,useMemo,useRef,useState} from "react";
 import {useRouter,useSearchParams} from "next/navigation";
-import {upload} from "@vercel/blob/client";
 
 const allowedTypes=new Set(["image/jpeg","image/png","image/webp","image/avif"]);
 const money=(v:any)=>Number(v||0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0});
@@ -60,8 +59,14 @@ export default function VehicleEditor(){
       for(let i=0;i<files.length;i++){
         setMessage(`Uploading photo ${i+1} of ${files.length}…`);
         const file=files[i],safe=file.name.replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-120)||`photo-${i+1}.jpg`;
-        const blob=await upload(`media/wdcc/${id}/${crypto.randomUUID()}-${safe}`,file,{access:"private",handleUploadUrl:"/api/upload",clientPayload:JSON.stringify({vehicleId:id,requestId}),contentType:file.type});
-        if(!blob?.pathname)throw Error(`Photo ${i+1} upload failed`);paths.push(blob.pathname);
+        const uploadBody=new FormData();
+        uploadBody.append("file",file,safe);
+        uploadBody.append("vehicleId",id);
+        uploadBody.append("requestId",requestId);
+        const uploadResponse=await fetch("/api/upload",{method:"POST",credentials:"include",headers:{"X-WDCC-Request-ID":requestId},body:uploadBody});
+        const blob=await uploadResponse.json().catch(()=>({}));
+        if(!uploadResponse.ok||!blob?.pathname)throw Error(blob?.error||`Photo ${i+1} upload failed`);
+        paths.push(String(blob.pathname));
       }
       const selected=displayPhotos[primary];let primaryPath=paths[0]||null;
       if(selected?.kind==="existing")primaryPath=selected.path;
