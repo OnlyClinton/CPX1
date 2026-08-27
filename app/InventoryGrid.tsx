@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
 import {isWdccVisualReviewFixture,WDCC_VISUAL_REVIEW_INVENTORY,WDCC_VISUAL_REVIEW_LABEL} from "./wdccVisualReviewInventory";
 
@@ -22,6 +22,10 @@ export default function InventoryGrid(){
   const[state,setState]=useState<InventoryState>("loading");
   const[fixtureMode,setFixtureMode]=useState(false);
   const[recoveryMode,setRecoveryMode]=useState(false);
+  const[query,setQuery]=useState("");
+  const[make,setMake]=useState("all");
+  const[maxPrice,setMaxPrice]=useState("all");
+  const[sort,setSort]=useState("featured");
 
   useEffect(()=>{
     let live=true;
@@ -49,6 +53,21 @@ export default function InventoryGrid(){
     return()=>{live=false};
   },[]);
 
+  const makes=useMemo(()=>Array.from(new Set(items.map(v=>String(v.make||"").trim()).filter(Boolean))).sort(),[items]);
+  const filtered=useMemo(()=>{
+    const q=query.trim().toLowerCase();
+    const ceiling=maxPrice==="all"?Infinity:Number(maxPrice);
+    const list=items.filter(v=>{
+      const hay=`${v.year||""} ${v.make||""} ${v.model||""} ${v.trim||""}`.toLowerCase();
+      return(!q||hay.includes(q))&&(make==="all"||String(v.make||"")===make)&&Number(v.price||v.cashPrice||0)<=ceiling;
+    });
+    const next=[...list];
+    if(sort==="price-asc")next.sort((a,b)=>Number(a.price||a.cashPrice||0)-Number(b.price||b.cashPrice||0));
+    if(sort==="price-desc")next.sort((a,b)=>Number(b.price||b.cashPrice||0)-Number(a.price||a.cashPrice||0));
+    if(sort==="year-desc")next.sort((a,b)=>Number(b.year||0)-Number(a.year||0));
+    return next;
+  },[items,query,make,maxPrice,sort]);
+
   if(state==="loading")return <div className="inventoryGrid wdccVehicleGrid" aria-label="Loading current inventory">{[1,2,3].map(i=><div className="wdccVehicleSkeleton" key={i}><div/><span>Loading current vehicle…</span></div>)}</div>;
   if(state==="error")return <div className="inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Inventory is temporarily unavailable.</h3><p>Call Sean at <a href="tel:+18135164752">813-516-4752</a> for current availability.</p><div className="actions"><Link className="cta red" href="/get-approved?source=inventory-provider-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN</a></div></div></div>;
   if(state==="empty")return <div className="inventoryGrid"><div className="emptyInventory inventoryProviderState" role="status"><h3>Inventory is being updated.</h3><p>There are no customer-visible published vehicles to show right now. Call or text Sean for vehicles being prepared.</p><a className="cta red" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></div>;
@@ -56,6 +75,13 @@ export default function InventoryGrid(){
   return <>
     {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
     {recoveryMode&&<div className="wdccRecoveryInventoryBanner" role="status"><strong>VERIFIED RECOVERY INVENTORY</strong><span>Provider sync is temporarily unavailable. Confirm current availability with Sean · 813-516-4752.</span></div>}
-    <div className="inventoryGrid wdccVehicleGrid">{items.map(v=><WdccVehicleCard key={String(v.id||v.slug)} vehicle={v}/>)}</div>
+    <div className="publicInventoryControls" aria-label="Filter inventory">
+      <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search make, model or year" aria-label="Search inventory"/>
+      <select value={make} onChange={e=>setMake(e.target.value)} aria-label="Filter by make"><option value="all">All Makes</option>{makes.map(m=><option key={m} value={m}>{m}</option>)}</select>
+      <select value={maxPrice} onChange={e=>setMaxPrice(e.target.value)} aria-label="Maximum price"><option value="all">Max Price</option><option value="10000">$10,000</option><option value="15000">$15,000</option><option value="20000">$20,000</option><option value="25000">$25,000</option><option value="30000">$30,000</option></select>
+      <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort inventory"><option value="featured">Featured</option><option value="price-asc">Price: Low to High</option><option value="price-desc">Price: High to Low</option><option value="year-desc">Newest Year</option></select>
+    </div>
+    <div className="publicInventoryMeta"><strong>{filtered.length} VEHICLE{filtered.length===1?"":"S"} FOUND</strong><span>REAL VEHICLE DATA</span></div>
+    <div className="inventoryGrid wdccVehicleGrid">{filtered.map(v=><WdccVehicleCard key={String(v.id||v.slug)} vehicle={v}/>)}</div>
   </>;
 }
