@@ -69,7 +69,7 @@ jobs:
           grep -q 'inventorySource==="last-known-good-real-proof"' app/InventoryGrid.tsx
           ! grep -Eq 'repeat\(5' app/wdcc-public-chrome-final.css app/storefront-optical-final.css
           grep -q 'grid-template-columns:repeat(5,minmax(0,1fr))' app/wdcc-owner-contract-final.css
-          grep -q "content:url('/wdcc-official-logo.webp')" app/wdcc-owner-contract-final.css
+          grep -q "content:url('/wdcc-logo-transparent.webp')" app/wdcc-owner-contract-final.css
           grep -q 'clip-path:circle(48% at 50% 50%)' app/wdcc-owner-contract-final.css
           echo 'WDCC_ARCHITECTURE_CONTRACT=PASS'
 
