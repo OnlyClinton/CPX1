@@ -125,57 +125,45 @@ jobs:
           const out='webgpu-owner-proof'; fs.mkdirSync(out,{recursive:true});
           const browser=await chromium.launch({headless:true});
           const metrics={sha:process.env.GITHUB_SHA,url:process.env.REMOTE_URL,consoleErrors:[]};
+          let ctx=null;
           try{
-            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference'});
+            ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference',recordVideo:{dir:out,size:{width:390,height:844}}});
             const page=await ctx.newPage();
+            const video=page.video();
             page.on('console',m=>{if(m.type()==='error')metrics.consoleErrors.push(m.text())});
             page.on('pageerror',e=>metrics.consoleErrors.push(String(e)));
             const response=await page.goto(`${process.env.REMOTE_URL}/?owner-webgpu=1&proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:20000});
             if(!response||response.status()!==200)throw new Error(`HTTP_${response?.status()||0}`);
             await page.locator('.li').waitFor({state:'visible',timeout:8000});
             await page.waitForFunction(()=>{const x=document.querySelector('.li-scene img');return x&&x.complete&&x.naturalWidth>0},null,{timeout:5000});
-            const root=page.locator('.li'),wheel=page.locator('.li-wheel-front'),sound=page.locator('.li-sound');
+            const initial=await page.evaluate(()=>{const root=document.querySelector('.li'),c=document.createElement('canvas');let webgl=false;try{webgl=!!(c.getContext('webgl2')||c.getContext('webgl'))}catch{};window.__wdccOwnerProof={handoffSeen:false,handoff:null,renderMode:root?.getAttribute('data-three-runtime-mode')||null,introRemoved:false};const tick=()=>{const p=window.__wdccOwnerProof,r=document.querySelector('.li'),ui=document.querySelector('.rh-hero-inner'),m=r?.getAttribute('data-three-runtime-mode');if(m==='webgpu'||m==='webgl')p.renderMode=m;if(document.documentElement.classList.contains('wdcc-intro-handoff')&&!p.handoffSeen){p.handoffSeen=true;p.handoff={rootOpacity:r?Number(getComputedStyle(r).opacity):0,uiOpacity:ui?Number(getComputedStyle(ui).opacity):0,docHandoff:true}};if(r)requestAnimationFrame(tick);else p.introRemoved=true};requestAnimationFrame(tick);return{declaredMode:root?.getAttribute('data-render-mode')||null,capabilities:{webgpuApi:'gpu' in navigator,webgl}}});
+            Object.assign(metrics,initial);
+            const wheel=page.locator('.li-wheel-front'),sound=page.locator('.li-sound');
             await page.waitForTimeout(70);
-            await page.screenshot({path:`${out}/mobile-01-opening.png`});
             const transformA=await wheel.evaluate(el=>getComputedStyle(el).transform);
             await sound.click({force:true});
             const soundPressed=await sound.getAttribute('aria-pressed');
             await page.waitForTimeout(260);
             const transformB=await wheel.evaluate(el=>getComputedStyle(el).transform);
             if(transformA===transformB)throw new Error(`WHEEL_NOT_SPINNING_${transformA}`);
-            await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
-            const capabilities=await page.evaluate(()=>{const c=document.createElement('canvas');let webgl=false;try{webgl=!!(c.getContext('webgl2')||c.getContext('webgl'))}catch{}return{webgpuApi:'gpu' in navigator,webgl}});
-            const declaredMode=await root.getAttribute('data-render-mode');
-            let renderMode=await root.getAttribute('data-three-runtime-mode');
-            if(!renderMode&&capabilities.webgl){
-              await page.waitForFunction(()=>{const m=document.querySelector('.li')?.getAttribute('data-three-runtime-mode');return m==='webgpu'||m==='webgl'},null,{timeout:800});
-              renderMode=await page.evaluate(()=>document.querySelector('.li')?.getAttribute('data-three-runtime-mode')||null);
-            }
-            if(!renderMode){
-              if(declaredMode!=='static')throw new Error(`RENDER_MODE_MISSING_${declaredMode}`);
-              renderMode='static';
-            }
             const wheelBlur=await wheel.evaluate(el=>getComputedStyle(el).filter);
-            await page.waitForTimeout(260);
-            await page.screenshot({path:`${out}/mobile-03-gpu-settle.png`});
-            await page.waitForTimeout(280);
-            await page.screenshot({path:`${out}/mobile-04-logo-clear.png`});
-            await page.waitForFunction(()=>document.documentElement.classList.contains('wdcc-intro-handoff'),null,{timeout:800});
-            await page.waitForTimeout(100);
-            const handoff=await page.evaluate(()=>{const intro=document.querySelector('.li');const ui=document.querySelector('.rh-hero-inner');return{rootOpacity:intro?Number(getComputedStyle(intro).opacity):0,uiOpacity:ui?Number(getComputedStyle(ui).opacity):0,docHandoff:document.documentElement.classList.contains('wdcc-intro-handoff')}});
-            await page.screenshot({path:`${out}/mobile-05-handoff.png`});
-            if(!handoff.docHandoff||handoff.uiOpacity<=0)throw new Error(`HANDOFF_NOT_VISIBLE_${JSON.stringify(handoff)}`);
-            await page.waitForTimeout(600);
-            const introCount=await page.locator('.li').count();
+            await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
+            await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:2500});
+            await page.waitForFunction(()=>{const ui=document.querySelector('.rh-hero-inner');return ui&&Number(getComputedStyle(ui).opacity)>=.95},null,{timeout:1200});
+            const telemetry=await page.evaluate(()=>window.__wdccOwnerProof);
             const finalUi=await page.locator('.rh-hero-inner').evaluate(el=>Number(getComputedStyle(el).opacity));
             await page.screenshot({path:`${out}/mobile-06-site.png`});
-            if(introCount!==0)throw new Error(`INTRO_NOT_DISPOSED_${introCount}`);
+            if(initial.capabilities.webgl&&telemetry.renderMode!=='webgpu'&&telemetry.renderMode!=='webgl')throw new Error(`GPU_RUNTIME_MISSING_${telemetry.renderMode}`);
+            if(!initial.capabilities.webgl&&!telemetry.renderMode&&initial.declaredMode!=='static')throw new Error(`STATIC_FALLBACK_MISSING_${initial.declaredMode}`);
+            if(!telemetry.handoffSeen||!telemetry.handoff||telemetry.handoff.uiOpacity<=0)throw new Error(`HANDOFF_NOT_SEEN_${JSON.stringify(telemetry.handoff)}`);
+            if(!telemetry.introRemoved)throw new Error('INTRO_NOT_DISPOSED');
             if(finalUi<.95)throw new Error(`SITE_UI_NOT_VISIBLE_${finalUi}`);
             if(soundPressed!=='true')throw new Error(`SOUND_NOT_ACTIVATED_${soundPressed}`);
-            Object.assign(metrics,{capabilities,declaredMode,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi});
+            Object.assign(metrics,{renderMode:telemetry.renderMode,transformA,transformB,wheelBlur,soundPressed,handoff:telemetry.handoff,introRemoved:telemetry.introRemoved,finalUi});
+            await ctx.close(); ctx=null;
+            if(video)await video.saveAs(`${out}/mobile-intro-motion.webm`);
             fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');
-            await ctx.close();
-          }catch(e){metrics.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');throw e}finally{await browser.close()}
+          }catch(e){metrics.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');throw e}finally{if(ctx)await ctx.close().catch(()=>{});await browser.close()}
           NODE
 
       - name: Summary
