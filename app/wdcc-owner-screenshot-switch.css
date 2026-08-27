@@ -1,95 +1,9 @@
-/* Owner screenshot switch — FINAL preview-only optical authority.
-   This file is intentionally imported last. It reconciles the supplied storefront mockups
-   with the static-intro contract without changing data, routing, dealer behavior, or production. */
+/* Owner screenshot switch — preview-only storefront optical tuning.
+   IMPORTANT: this layer no longer owns intro or public-logo rendering.
+   app/wdcc-owner-approved-logo-final.css is the sole logo authority and loads last.
+   This file may tune storefront scene/spacing and the explicit NOT LIVE review banner only. */
 
-/* INTRO — static Challenger/Tampa scene, dominant centered official badge, readable Tampa tag. */
-html body .li .li-badge{
-  left:50%!important;
-  top:39%!important;
-  width:clamp(236px,29vw,292px)!important;
-  min-width:236px!important;
-  max-width:292px!important;
-  transform:translate(-50%,-50%)!important;
-  background:#fff!important;
-  border-radius:50%!important;
-  box-shadow:0 18px 52px rgba(0,0,0,.46),0 0 0 3px rgba(255,255,255,.94)!important;
-  overflow:hidden!important;
-}
-html body .li .li-badge-art{display:none!important;visibility:hidden!important;opacity:0!important}
-html body .li .li-badge>img{
-  position:absolute!important;
-  inset:2%!important;
-  z-index:2!important;
-  display:block!important;
-  visibility:visible!important;
-  opacity:1!important;
-  width:96%!important;
-  height:96%!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  border-radius:50%!important;
-  clip-path:circle(48% at 50% 50%)!important;
-  filter:none!important;
-  transform:none!important;
-  animation:none!important;
-  transition:none!important;
-}
-html body .li .li-tag{display:block!important}
-html body .li .li-scene img{
-  object-position:64% 45%!important;
-  filter:saturate(1.24) contrast(1.03) brightness(1.27)!important;
-  transform:none!important;
-  animation:none!important;
-}
-html body .li .li-scene:after{
-  background:linear-gradient(180deg,rgba(2,7,12,.01) 0%,rgba(2,7,12,0) 56%,rgba(2,7,12,.08) 80%,rgba(2,7,12,.24) 100%)!important;
-}
-
-/* PUBLIC STOREFRONT CHROME — use the real owner-approved emblem from the DOM.
-   Never swap the image with content:url(). Desktop keeps it at the left of nav;
-   mobile centers it between hamburger and call button. */
-html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-  grid-template-columns:110px minmax(0,1fr) auto!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo{
-  display:grid!important;
-  place-items:center!important;
-  width:100px!important;
-  min-width:100px!important;
-  height:78px!important;
-  overflow:visible!important;
-  background:none!important;
-  filter:none!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo::before,
-html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art,
-html body [data-wdcc-public-chrome="header"] .rh-logo img{
-  content:normal!important;
-  display:block!important;
-  visibility:visible!important;
-  opacity:1!important;
-  position:relative!important;
-  inset:auto!important;
-  width:92px!important;
-  min-width:92px!important;
-  max-width:92px!important;
-  height:92px!important;
-  min-height:92px!important;
-  max-height:92px!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  transform:none!important;
-  border:0!important;
-  border-radius:50%!important;
-  clip-path:circle(48% at 50% 50%)!important;
-  background:transparent!important;
-  box-shadow:none!important;
-  filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
-  z-index:3!important;
-}
-
-/* STOREFRONT — expose the Challenger and Tampa skyline while retaining the locked message hierarchy. */
+/* Storefront: expose the Challenger and Tampa skyline while retaining message hierarchy. */
 html body main.reference-home.locked-storefront .rh-hero-art{
   filter:saturate(1.22) contrast(1.04) brightness(1.24)!important;
   object-position:64% 42%!important;
@@ -100,7 +14,7 @@ html body main.reference-home.locked-storefront .rh-hero-shade{
 html body main.reference-home.locked-storefront .rh-copy h1{letter-spacing:-.046em!important}
 html body main.reference-home.locked-storefront .rh-benefits{box-shadow:0 9px 24px rgba(0,0,0,.11)!important}
 
-/* Recovered inventory remains visible in preview, but the banner must stay compact and explicit. */
+/* Verified historical review inventory stays visibly and unmistakably NOT LIVE. */
 html body .wdccOwnerReviewBanner{
   box-sizing:border-box!important;
   width:min(1440px,calc(100% - 42px))!important;
@@ -117,29 +31,6 @@ html body .wdccOwnerReviewBanner{
 }
 
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
-  /* Intro stays dominant and centered on actual phones. */
-  html body .li .li-badge{
-    left:50%!important;
-    top:38.5%!important;
-    width:min(70vw,276px)!important;
-    min-width:236px!important;
-    max-width:276px!important;
-    transform:translate(-50%,-50%)!important;
-  }
-  html body .li .li-tag{
-    display:block!important;
-    left:50%!important;
-    top:59%!important;
-    transform:translateX(-50%)!important;
-    font-size:12px!important;
-    letter-spacing:.05em!important;
-  }
-  html body .li .li-scene img{
-    object-position:61% 45%!important;
-    filter:saturate(1.25) contrast(1.03) brightness(1.30)!important;
-  }
-
-  /* One mobile header: hamburger | large official badge | round call button. */
   html body [data-wdcc-public-chrome="utility"],
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="utility"].rh-utility{
     display:none!important;
@@ -156,29 +47,7 @@ html body .wdccOwnerReviewBanner{
     height:78px!important;
     min-height:78px!important;
   }
-  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-    grid-template-columns:50px minmax(0,1fr) 50px!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-logo{
-    width:104px!important;
-    min-width:104px!important;
-    height:78px!important;
-    justify-self:center!important;
-  }
-  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art,
-  html body [data-wdcc-public-chrome="header"] .rh-logo img{
-    content:normal!important;
-    width:92px!important;
-    min-width:92px!important;
-    max-width:92px!important;
-    height:92px!important;
-    min-height:92px!important;
-    max-height:92px!important;
-    border-radius:50%!important;
-    clip-path:circle(48% at 50% 50%)!important;
-  }
 
-  /* Mobile hero follows the reference composition rather than a squeezed desktop layout. */
   html body main.reference-home.locked-storefront .rh-hero{min-height:520px!important;height:auto!important;max-height:none!important}
   html body main.reference-home.locked-storefront .rh-hero-inner{
     min-height:520px!important;
@@ -204,7 +73,6 @@ html body .wdccOwnerReviewBanner{
   html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:9px!important;gap:7px!important}
   html body main.reference-home.locked-storefront .rh-btn{min-height:46px!important;font-size:10.75px!important}
 
-  /* Compact 2x2 benefits and readable carousel cards. */
   html body main.reference-home.locked-storefront .rh-benefit{
     min-height:76px!important;
     padding:9px 8px!important;
