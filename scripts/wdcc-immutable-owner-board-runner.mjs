@@ -5,6 +5,8 @@ import {pathToFileURL} from 'node:url';
   Current-owner-board runner for the immutable visual lane.
   The canonical proof remains unchanged in-repo; this runner patches only
   superseded geometry literals in the temporary executable copy.
+  Keeping this runner under scripts/ also gives the full acceptance matrix one
+  shared exact-SHA trigger after proof-harness corrections, without app changes.
 */
 const sourcePath='scripts/wdcc-immutable-visual-proof.mjs';
 const runtime='scripts/.wdcc-immutable-owner-board.runtime.mjs';
