@@ -1,0 +1,227 @@
+name: WDCC WebGPU Full Owner Review
+
+on:
+  push:
+    branches: [feat/wdcc-webgpu-intro-owner-override-20260827]
+    paths:
+      - '.github/workflows/wdcc-webgpu-full-owner-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-webgpu-full-owner-review-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false three@0.185.1 @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Create SHA-specific no-route review worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          c.name=`wdcc-fullreview-${process.env.GITHUB_SHA}`;
+          c.workers_dev=true;
+          c.preview_urls=true;
+          delete c.route;
+          delete c.routes;
+          fs.writeFileSync('wrangler.fullreview.jsonc',JSON.stringify(c,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.fullreview.jsonc
+
+      - name: Deploy immutable isolated review
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.fullreview.jsonc 2>&1 | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/deploy.log | tail -1)"
+          test -n "$url"
+          case "$url" in *"$GITHUB_SHA"*) ;; *) echo "not immutable: $url" >&2; exit 1;; esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > full-owner-review-url.txt
+
+      - name: Verify remote integrity
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 20); do
+            code="$(curl --http1.1 -sS -L -o /tmp/root.html -w '%{http_code}' "$REMOTE_URL/?owner-review=1&warm=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          [ "$code" = 200 ]
+          build="$(tr -d '\r\n' < .next/BUILD_ID)"
+          grep -Fq "$build" /tmp/root.html
+          curl --http1.1 -fsSL "$REMOTE_URL/wdcc-hero-v2.webp" -o /tmp/hero.webp
+          [ "$(sha256sum /tmp/hero.webp|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp|awk '{print $1}')" ]
+          printf 'remote_url=%s\nbuild_id=%s\nroot_http=%s\n' "$REMOTE_URL" "$build" "$code" > full-owner-review-integrity.txt
+
+      - name: Capture animation car skyline inventory and listing
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          mkdir -p full-owner-review
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {chromium} from 'playwright';
+          const out='full-owner-review';
+          const base=process.env.REMOTE_URL,sha=process.env.GITHUB_SHA;
+          if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA_${base}_${sha}`);
+          const metrics={sha,base,writes:[],consoleErrors:[],pages:{}};
+          const browser=await chromium.launch({headless:true});
+          const watch=(page,label)=>{
+            page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))metrics.writes.push({label,method:r.method(),url:r.url()})});
+            page.on('console',m=>{if(m.type()==='error')metrics.consoleErrors.push({label,text:m.text()})});
+            page.on('pageerror',e=>metrics.consoleErrors.push({label,text:String(e)}));
+          };
+          const geom=async(page)=>page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,innerWidth,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}));
+          const homeData=async(page)=>page.evaluate(()=>{
+            const hero=document.querySelector('.rh-hero'),art=document.querySelector('.rh-hero-art'),grid=document.querySelector('.rh-grid');
+            const hr=hero?.getBoundingClientRect(),ar=art?.getBoundingClientRect(),gs=grid?getComputedStyle(grid):null;
+            const cards=grid?[...grid.children].map(e=>{const r=e.getBoundingClientRect();return{x:r.x,w:r.width}}):[];
+            return{hero:{w:hr?.width||0,h:hr?.height||0},art:{w:ar?.width||0,h:ar?.height||0,naturalWidth:art?.naturalWidth||0,naturalHeight:art?.naturalHeight||0},featured:{count:cards.length,display:gs?.display||'',tracks:(gs?.gridTemplateColumns||'').split(/\s+/).filter(Boolean).length,cards}};
+          });
+          const inventoryData=async(page)=>page.evaluate(()=>{
+            const grid=document.querySelector('.inventoryGrid'),s=grid?getComputedStyle(grid):null,r=grid?.getBoundingClientRect();
+            const cards=grid?[...grid.children].map(e=>{const x=e.getBoundingClientRect();return{w:x.width,h:x.height}}):[];
+            const links=[...document.querySelectorAll('a[href^="/vehicle/"]')].map(a=>a.getAttribute('href')).filter(Boolean);
+            return{count:cards.length,tracks:(s?.gridTemplateColumns||'').split(/\s+/).filter(Boolean).length,display:s?.display||'',w:r?.width||0,cards,firstVehicle:links[0]||null};
+          });
+
+          async function mobileReview(){
+            const ctx=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,reducedMotion:'no-preference',recordVideo:{dir:out,size:{width:390,height:844}}});
+            const page=await ctx.newPage(); watch(page,'mobile-home');
+            const video=page.video();
+            let r=await page.goto(`${base}/?owner-webgpu=1&owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!r||r.status()!==200)throw new Error(`MOBILE_HOME_HTTP_${r?.status()||0}`);
+            await page.locator('.li').waitFor({state:'visible',timeout:8000});
+            await page.waitForTimeout(80);
+            const wheel=page.locator('.li-wheel-front');
+            const t1=await wheel.evaluate(el=>getComputedStyle(el).transform);
+            const sound=page.locator('.li-sound');
+            await sound.click({force:true});
+            const soundPressed=await sound.getAttribute('aria-pressed');
+            await page.waitForTimeout(260);
+            const t2=await wheel.evaluate(el=>getComputedStyle(el).transform);
+            if(t1===t2)throw new Error(`MOBILE_WHEEL_NOT_SPINNING_${t1}`);
+            await page.screenshot({path:`${out}/01-mobile-intro-wheel.png`});
+            await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:3000});
+            await page.waitForTimeout(200);
+            metrics.pages.mobileHome={...(await homeData(page)),...(await geom(page)),soundPressed,wheelTransformA:t1,wheelTransformB:t2};
+            await page.screenshot({path:`${out}/02-mobile-home.png`,fullPage:true});
+
+            r=await page.goto(`${base}/inventory?owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!r||r.status()!==200)throw new Error(`MOBILE_INVENTORY_HTTP_${r?.status()||0}`);
+            await page.locator('.inventoryGrid').waitFor({state:'visible',timeout:10000});
+            await page.waitForTimeout(700);
+            const inv=await inventoryData(page); metrics.pages.mobileInventory={...inv,...(await geom(page))};
+            await page.screenshot({path:`${out}/03-mobile-inventory.png`,fullPage:true});
+            if(inv.tracks!==1)throw new Error(`MOBILE_INVENTORY_TRACKS_${inv.tracks}`);
+            if((await geom(page)).overflow>2)throw new Error('MOBILE_INVENTORY_OVERFLOW');
+            if(inv.firstVehicle){
+              const join=inv.firstVehicle.includes('?')?'&':'?';
+              r=await page.goto(`${base}${inv.firstVehicle}${join}owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              if(!r||r.status()!==200)throw new Error(`MOBILE_LISTING_HTTP_${r?.status()||0}`);
+              await page.waitForTimeout(900);
+              metrics.pages.mobileListing={href:inv.firstVehicle,...(await geom(page))};
+              await page.screenshot({path:`${out}/04-mobile-listing.png`,fullPage:true});
+            }
+            await ctx.close();
+            if(video)await video.saveAs(`${out}/00-mobile-intro-animation.webm`);
+          }
+
+          async function desktopReview(){
+            const ctx=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1,reducedMotion:'no-preference'});
+            const page=await ctx.newPage(); watch(page,'desktop');
+            let r=await page.goto(`${base}/?owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!r||r.status()!==200)throw new Error(`DESKTOP_HOME_HTTP_${r?.status()||0}`);
+            if(await page.locator('.li').count())await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:3000});
+            await page.waitForTimeout(200);
+            const h=await homeData(page); metrics.pages.desktopHome={...h,...(await geom(page))};
+            if(h.featured.count!==5)throw new Error(`DESKTOP_FEATURED_COUNT_${h.featured.count}`);
+            if(h.featured.tracks!==5)throw new Error(`DESKTOP_FEATURED_TRACKS_${h.featured.tracks}`);
+            await page.screenshot({path:`${out}/05-desktop-home.png`,fullPage:true});
+
+            r=await page.goto(`${base}/inventory?owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            if(!r||r.status()!==200)throw new Error(`DESKTOP_INVENTORY_HTTP_${r?.status()||0}`);
+            await page.locator('.inventoryGrid').waitFor({state:'visible',timeout:10000});
+            await page.waitForTimeout(700);
+            const inv=await inventoryData(page); metrics.pages.desktopInventory={...inv,...(await geom(page))};
+            if(inv.tracks!==3)throw new Error(`DESKTOP_INVENTORY_TRACKS_${inv.tracks}`);
+            await page.screenshot({path:`${out}/06-desktop-inventory.png`,fullPage:true});
+            if(inv.firstVehicle){
+              const join=inv.firstVehicle.includes('?')?'&':'?';
+              r=await page.goto(`${base}${inv.firstVehicle}${join}owner-review=1&capture=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+              if(!r||r.status()!==200)throw new Error(`DESKTOP_LISTING_HTTP_${r?.status()||0}`);
+              await page.waitForTimeout(900);
+              metrics.pages.desktopListing={href:inv.firstVehicle,...(await geom(page))};
+              await page.screenshot({path:`${out}/07-desktop-listing.png`,fullPage:true});
+            }
+            await ctx.close();
+          }
+
+          try{
+            await mobileReview();
+            await desktopReview();
+            if(metrics.writes.length)throw new Error(`WRITE_REQUESTS_${JSON.stringify(metrics.writes)}`);
+            fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');
+          }finally{await browser.close()}
+          NODE
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo '### WDCC full owner visual review' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable preview: ${REMOTE_URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Captured: mobile intro video + wheel frame + mobile/desktop home + inventory + first public listing.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Preview only. No production route, alias, DNS, database, schema, or provider mutation.' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-full-owner-review-${{ github.sha }}
+          path: |
+            full-owner-review-url.txt
+            full-owner-review-integrity.txt
+            full-owner-review/
+          if-no-files-found: warn
+          retention-days: 7
