@@ -38,7 +38,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo img{
   filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
 }
 
-/* Newest owner wide storefront contract: five compact Featured Inventory cards. */
+/* Supplied wide storefront contract: five compact Featured Inventory cards. */
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-grid{
     display:grid!important;
@@ -125,6 +125,43 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{
     max-height:50px!important;
     flex-basis:50px!important;
   }
+
+  /* Supplied mobile storefront: several compact Featured cards are visible at once and the rail remains swipeable. */
+  html body main.reference-home.locked-storefront .rh-grid{
+    display:flex!important;
+    gap:8px!important;
+    overflow-x:auto!important;
+    scroll-snap-type:x mandatory!important;
+    scroll-padding-inline:14px!important;
+    padding-left:14px!important;
+    padding-right:14px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 clamp(108px,29.5vw,132px)!important;
+    min-width:clamp(108px,29.5vw,132px)!important;
+    max-width:clamp(108px,29.5vw,132px)!important;
+    scroll-snap-align:start!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{padding:9px 9px 11px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_eyebrow__"]{font-size:8.5px!important;line-height:1.15!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:12.5px!important;line-height:1.14!important;min-height:29px!important;margin-top:3px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:19px!important;line-height:1!important;margin-top:8px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_down__"]{font-size:9px!important;line-height:1.2!important;margin-top:5px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"]{display:none!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_badge__"]{font-size:6.5px!important;padding:4px 5px!important;left:6px!important;top:6px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{aspect-ratio:1.35!important}
+
+  /* Narrow phones: readable two-column operational form, not a desktop form squeezed down. */
+  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
+  html body .editVehicleApp label.description{grid-column:1/-1!important}
+}
+
+/* Wider phone/tablet mockup state: preserve the denser four-column 3293 editor composition. */
+@media(min-width:430px) and (max-width:767px){
+  html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+  html body .editVehicleApp label.description{grid-column:1/-1!important}
+  html body .editVehicleApp input:not([type="checkbox"]),
+  html body .editVehicleApp select{padding-left:7px!important;padding-right:7px!important;font-size:13px!important}
 }
 
 /* Keep the public wordmark materially large on narrow phones; do not collapse it back to a badge-sized asset. */
