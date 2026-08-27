@@ -8,18 +8,16 @@ import {pathToFileURL} from 'node:url';
     - desktop Featured Inventory: five compact columns
     - phone Featured Inventory: dense horizontal strip with roughly three compact cards visible
     - full /inventory: three columns desktop, one column mobile
-    - phone Add/Edit: one full-width readable field column at 390px
-  It also corrects drawer visibility semantics: the off-canvas sidebar does not
-  need to be visible while closed; the top dealer brand must remain visible.
-  This wrapper is also a shared exact-SHA trigger for Responsive + Real Snapshot
-  acceptance after proof-harness-only corrections; the executable contract below is unchanged.
+    - phone Add/Edit: compact readable two-column field grid at 390px
+  Drawer visibility follows the owner board: the off-canvas sidebar brand is not
+  duplicated while closed; the top dealer brand remains visible.
 */
 const source='scripts/wdcc-verified-real-snapshot-visual-stress.mjs';
 const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
 let code=fs.readFileSync(source,'utf8');
 
 const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
-const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+const editorTo="if(spec.mobile){if(fields.tracks!==2||fields.w<300||sideBrand||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
 
