@@ -65,7 +65,9 @@ jobs:
           npx --yes vercel@latest deploy --yes \
             --token="$VERCEL_TOKEN" \
             --scope=cpxagency \
+            --env "BLOB_READ_WRITE_TOKEN=" \
             --env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
+            --build-env "BLOB_READ_WRITE_TOKEN=" \
             --build-env "BLOB_STORE_ID=$WDCC_BLOB_STORE_ID" \
             2>&1 | tee "$log"
           rc=${PIPESTATUS[0]}
