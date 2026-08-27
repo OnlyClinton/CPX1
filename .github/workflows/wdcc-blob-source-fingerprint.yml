@@ -1,0 +1,146 @@
+name: WDCC Blob Source Fingerprint
+
+on:
+  push:
+    branches:
+      - ops/wdcc-blob-source-fingerprint-20260827
+    paths:
+      - .github/workflows/wdcc-blob-source-fingerprint.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wdcc-blob-source-fingerprint
+  cancel-in-progress: true
+
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Link Phoenix for OIDC environment
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Fingerprint canonical copies and newest backups
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-blob-fingerprint.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {get,list} from '@vercel/blob';
+
+          const PATH='private/state/platform-v3.json';
+          const BACKUPS='private/state/backups/';
+          const stores=[
+            ['wdcc-v10-20260819-194257','store_cNUyQRVlXtyvZQ5N',true],
+            ['wdcc-clean-20260819-173749','store_vVJ5kU6x76yZVkGs',false],
+            ['wdcc-rescue-20260819-172412','store_KopvAQeMcatdS5DS',false],
+            ['wdcc-private-20260801005157','store_LdMSV1550BRgc0SP',false]
+          ];
+          const oidc=process.env.VERCEL_OIDC_TOKEN||'';
+          if(!oidc) throw new Error('VERCEL_OIDC_TOKEN_MISSING');
+
+          async function readState(storeId, pathname){
+            const response=await get(pathname,{access:'private',useCache:false,oidcToken:oidc,storeId});
+            if(!response||response.statusCode!==200||!response.stream) throw new Error(`GET_FAILED:${response?.statusCode||'none'}`);
+            const chunks=[];
+            for await(const chunk of response.stream) chunks.push(chunk);
+            const raw=Buffer.concat(chunks).toString('utf8');
+            const parsed=JSON.parse(raw);
+            return {
+              pathname,
+              revision:Number(parsed?.revision||0),
+              updatedAt:String(parsed?.updatedAt||''),
+              tenants:Array.isArray(parsed?.tenants)?parsed.tenants.length:0,
+              users:Array.isArray(parsed?.users)?parsed.users.length:0,
+              vehicles:Array.isArray(parsed?.vehicles)?parsed.vehicles.length:0,
+              leads:Array.isArray(parsed?.leads)?parsed.leads.length:0,
+              audit:Array.isArray(parsed?.audit)?parsed.audit.length:0,
+              bytes:Buffer.byteLength(raw),
+              sha256:crypto.createHash('sha256').update(raw).digest('hex')
+            };
+          }
+
+          const output=[];
+          for(const [name,storeId,scanBackups] of stores){
+            const entry={name,storeId,canonical:null,backups:[],errors:[]};
+            try{entry.canonical=await readState(storeId,PATH);}catch(e){entry.errors.push({scope:'canonical',error:String(e?.message||e)});}
+            if(scanBackups){
+              try{
+                const listed=await list({prefix:BACKUPS,limit:1000,oidcToken:oidc,storeId});
+                const blobs=[...(listed.blobs||[])];
+                const ranked=blobs.map(b=>({
+                  pathname:b.pathname,
+                  uploadedAt:String(b.uploadedAt||''),
+                  revision:Number((String(b.pathname).match(/(?:^|[-_])r(\d+)(?:[-_.]|$)/i)||[])[1]||0)
+                })).sort((a,b)=>b.revision-a.revision||b.uploadedAt.localeCompare(a.uploadedAt));
+                for(const candidate of ranked.slice(0,12)){
+                  try{entry.backups.push(await readState(storeId,candidate.pathname));}
+                  catch(e){entry.errors.push({scope:candidate.pathname,error:String(e?.message||e)});}
+                }
+                entry.backupListCount=blobs.length;
+                entry.backupTop=ranked.slice(0,12);
+              }catch(e){entry.errors.push({scope:'backup-list',error:String(e?.message||e)});}
+            }
+            output.push(entry);
+          }
+
+          const readable=[];
+          for(const e of output){
+            if(e.canonical) readable.push({store:e.name,storeId:e.storeId,kind:'canonical',...e.canonical});
+            for(const b of e.backups||[]) readable.push({store:e.name,storeId:e.storeId,kind:'backup',...b});
+          }
+          readable.sort((a,b)=>b.revision-a.revision||String(b.updatedAt).localeCompare(String(a.updatedAt)));
+          const result={oidcPresent:true,stores:output,best:readable[0]||null,readableCount:readable.length};
+          console.log('FINGERPRINT_RESULT='+JSON.stringify(result));
+          NODE
+
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-blob-fingerprint.mjs | tee /tmp/fingerprint.log
+          grep '^FINGERPRINT_RESULT=' /tmp/fingerprint.log | tail -1 | cut -d= -f2- > /tmp/fingerprint.json
+          jq . /tmp/fingerprint.json
+      - name: Publish fingerprint to recovery control
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f /tmp/fingerprint.json ]; then
+            best="$(jq -c '.best' /tmp/fingerprint.json)"
+            readable="$(jq -r '.readableCount' /tmp/fingerprint.json)"
+            errors="$(jq -c '[.stores[]|{name,errors}]' /tmp/fingerprint.json)"
+            body=$(cat <<EOF
+          ### Read-only Blob source fingerprint — run $GITHUB_RUN_ID
+
+          Readable state candidates: **$readable**
+
+          Best candidate by revision / updatedAt:
+          \`$best\`
+
+          Store errors:
+          \`$errors\`
+
+          No Blob write/delete, deployment, alias, DNS, route, env, provider setting, or production mutation was performed.
+          EOF
+          )
+          else
+            body="Blob source fingerprint run $GITHUB_RUN_ID failed before producing a result. No mutation was performed."
+          fi
+          gh issue comment 501 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+# Read-only recovery source selection. No Blob mutations.
