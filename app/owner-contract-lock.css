@@ -63,4 +63,7 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body main.reference-home.locked-storefront .rh-inventory{padding-top:16px!important;padding-bottom:22px!important}
   html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:7px!important}
   html body main.reference-home.locked-storefront .rh-finance{padding-top:21px!important;padding-bottom:24px!important}
+  html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important;gap:7px!important}
+  html body main.reference-home.locked-storefront .rh-step{min-height:67px!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
