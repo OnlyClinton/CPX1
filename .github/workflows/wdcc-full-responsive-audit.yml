@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/wdcc-locked-contract-20260826
+      - fix/wdcc-owner-board-final-lock-20260827
     paths:
       - 'app/**'
       - 'lib/store.ts'
