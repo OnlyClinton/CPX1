@@ -6,18 +6,9 @@ const base=process.env.URL;
 if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
 const sourcePath=new URL('./wdcc-immutable-visual-proof-base.mjs',import.meta.url);
 const alignedPath=new URL('./.wdcc-immutable-visual-proof-aligned.mjs',import.meta.url);
-let source=fs.readFileSync(sourcePath,'utf8');
-// Keep the base harness reusable, but bind its mutable geometry assertions to the
-// current owner lock: round shared badge and three wide Featured Inventory cards.
-const replacements=[
-  ["desktopHome.logoW<100","desktopHome.logoW<64||desktopHome.logoW>84"],
-  ["/* DESKTOP STOREFRONT — five featured cards per supplied 3294 reference. */","/* DESKTOP STOREFRONT — owner-locked three-column featured inventory contract. */"],
-  ["g.tracks!==5","g.tracks!==3"]
-];
-for(const [from,to] of replacements){
-  if(!source.includes(from))throw new Error(`PROOF_ALIGNMENT_SOURCE_DRIFT_${from}`);
-  source=source.replace(from,to);
-}
+const source=fs.readFileSync(sourcePath,'utf8');
+// The base proof is the controlling newest-owner contract: horizontal public
+// wordmark, five wide Featured Inventory cards, tablet reflow and mobile swipe.
 fs.writeFileSync(alignedPath,source);
 try{await import(`${pathToFileURL(alignedPath.pathname).href}?aligned=${Date.now()}`)}finally{fs.rmSync(alignedPath,{force:true})}
 
