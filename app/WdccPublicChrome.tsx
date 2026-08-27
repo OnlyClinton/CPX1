@@ -4,10 +4,6 @@ import Link from "next/link";
 import {useState} from "react";
 import TrackedCallLink from "./TrackedCallLink";
 
-function WdccWordmark(){
-  return <span className="wdcc-wordmark" aria-hidden="true"><span className="wdcc-wordmark-main"><b>WD</b><em>CC</em></span><small>WE DON&apos;T CARE CARS</small></span>;
-}
-
 export function WdccPublicHeader(){
   const[open,setOpen]=useState(false);
   const close=()=>setOpen(false);
@@ -23,7 +19,9 @@ export function WdccPublicHeader(){
     <header className="rh-header wdcc-public-header" data-wdcc-public-chrome="header">
       <div className="rh-header-inner">
         <button className="rh-menu" type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}><span/><span/><span/></button>
-        <Link className="rh-logo" href="/" aria-label="We Don't Care Cars home" onClick={close}><WdccWordmark/></Link>
+        <Link className="rh-logo" href="/" aria-label="We Don't Care Cars home" onClick={close}>
+          <img className="rh-logo-art" data-wdcc-logo-art="owner-approved" src="/wdcc-owner-logo" alt="We Don't Care Cars" width="84" height="84" fetchPriority="high"/>
+        </Link>
         <nav id="wdcc-public-nav" className={`rh-nav${open?" open":""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
           <Link href="/get-approved?source=nav-financing" onClick={close}>Financing</Link>
