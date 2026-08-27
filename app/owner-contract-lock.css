@@ -1,0 +1,66 @@
+/* WDCC OWNER CONTRACT LOCK — isolated preview lane only.
+   Narrow final authority for owner-supplied 9194 / 50869 / 51074 / 10668 / 10667.
+   Visual-only: no auth, data, provider, persistence, schema, DNS, alias, or production behavior. */
+
+/* Exact owner headline color order. */
+html body main.reference-home.locked-storefront .rh-copy h1 .red{color:var(--wdcc-red)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:var(--wdcc-blue)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
+
+/* Exact owner emblem in persistent public chrome. */
+html body .wdcc-public-header .rh-header-inner{grid-template-columns:126px minmax(0,1fr) auto!important}
+html body .wdcc-public-header .rh-logo{width:112px!important;height:74px!important;display:grid!important;place-items:center!important;overflow:visible!important}
+html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{display:block!important;visibility:visible!important;opacity:1!important;width:102px!important;height:102px!important;max-width:102px!important;max-height:102px!important;object-fit:contain!important;transform:none!important;filter:drop-shadow(0 4px 10px rgba(0,0,0,.34))!important}
+
+/* Trust symbols must not inherit the generic trust-copy span treatment. */
+html body main.reference-home.locked-storefront .rh-trust-grid .trust-symbol,
+html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{margin-top:0!important;width:34px!important;height:34px!important;display:grid!important;place-items:center!important;font-size:10px!important;line-height:1!important}
+
+/* 10668 desktop: three operational panels in one primary row, actions beneath. */
+@media(min-width:1100px){
+  html body main.dealerDashboardLocked .dashboardContent{display:grid!important;grid-template-columns:minmax(245px,.82fr) minmax(420px,1.28fr) minmax(230px,.70fr)!important;grid-template-areas:"title title title" "error error error" "metrics metrics metrics" "inventory vehicles activity" "ops ops ops"!important;gap:10px!important;align-content:start!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dcTitle{grid-area:title!important;margin-bottom:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dcError{grid-area:error!important;margin:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashMetrics{grid-area:metrics!important;margin:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashboardGridLocked{display:contents!important}
+  html body main.dealerDashboardLocked .inventoryOverview{grid-area:inventory!important;min-height:270px!important;padding:14px!important}
+  html body main.dealerDashboardLocked .recentVehicles{grid-area:vehicles!important;min-height:270px!important;padding:14px!important}
+  html body main.dealerDashboardLocked .activityLocked{grid-area:activity!important;min-height:270px!important;margin:0!important;padding:14px!important;overflow:hidden!important}
+  html body main.dealerDashboardLocked .opsCards{grid-area:ops!important;margin:0!important}
+  html body main.dealerDashboardLocked .activityLocked>a{min-height:41px!important;grid-template-columns:18px minmax(0,1fr) auto!important;gap:5px!important}
+}
+
+/* 10667 desktop editor: restore the dealer emblem in the top bar. */
+@media(min-width:768px){
+  html body .editVehicleApp .editTop .topBrand{display:flex!important;align-items:center!important;gap:9px!important;margin-right:auto!important;min-width:235px!important}
+  html body .editVehicleApp .editTop .topBrand>img{display:block!important;width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;max-width:52px!important;max-height:52px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
+  html body .editVehicleApp .editTop .topBrand b{font-size:12px!important;line-height:1.1!important}
+  html body .editVehicleApp .editTop .topBrand span{font-size:8px!important;margin-top:3px!important;color:#aebbc5!important}
+}
+
+/* 9194 mobile: compact 64px chrome and one continuous image-led hero. */
+@media(max-width:767px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body .wdcc-public-header .rh-header-inner{height:64px!important;min-height:64px!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;padding:0 10px!important}
+  html body .wdcc-public-header .rh-logo{grid-column:2!important;justify-self:center!important;width:66px!important;height:64px!important}
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{width:62px!important;height:62px!important;min-width:62px!important;min-height:62px!important;max-width:62px!important;max-height:62px!important}
+  html body .wdcc-public-header .rh-menu,html body .wdcc-public-header .rh-call{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important}
+  html body .wdcc-public-header .rh-nav{top:64px!important}
+
+  html body main.reference-home.locked-storefront .rh-hero{height:500px!important;min-height:500px!important;padding:0!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront .rh-hero-art{height:100%!important;inset:0!important;object-position:64% 48%!important;filter:saturate(1.2) contrast(1.06) brightness(1.06)!important}
+  html body main.reference-home.locked-storefront .rh-hero-shade{height:100%!important;background:linear-gradient(180deg,rgba(2,7,12,.02) 0%,rgba(2,7,12,.12) 28%,rgba(2,7,12,.64) 60%,rgba(2,7,12,.98) 100%),linear-gradient(90deg,rgba(2,7,12,.44),rgba(2,7,12,.05) 78%)!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{height:500px!important;min-height:500px!important;display:flex!important;align-items:flex-end!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding:95px 15px 17px!important;background:transparent!important}
+  html body main.reference-home.locked-storefront .rh-kicker{margin-bottom:6px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:clamp(34px,10vw,40px)!important;line-height:.89!important}
+  html body main.reference-home.locked-storefront .rh-proof-copy{font-size:9.5px!important;line-height:1.28!important;margin:9px 0 0!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:11px!important;gap:6px!important}
+  html body main.reference-home.locked-storefront .rh-btn{min-height:43px!important}
+  html body main.reference-home.locked-storefront .rh-phone{margin-top:8px!important}
+
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:68px!important;padding:6px 3px!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding-top:16px!important;padding-bottom:22px!important}
+  html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:7px!important}
+  html body main.reference-home.locked-storefront .rh-finance{padding-top:21px!important;padding-bottom:24px!important}
+}
