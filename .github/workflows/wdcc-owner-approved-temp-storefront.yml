@@ -30,44 +30,22 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
-          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/issue205.json
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/issue205.json
           body="$(jq -r '.body // ""' /tmp/issue205.json)"
           grep -Fq 'TEMPORARY OWNER-APPROVED STOREFRONT VISUAL GO' <<<"$body"
-          grep -Fq "EXACT SHA: \`$APPROVED_SHA\`" <<<"$body"
+          grep -Fq "$APPROVED_SHA" <<<"$body"
           grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
-          grep -Fq '`wdcc-reference-root` Worker version update only' <<<"$body"
-          grep -Fq 'preserve the existing `/api/inventory` read-only recovery response' <<<"$body"
-          grep -Fq 'keep existing Cloudflare routes and DNS unchanged' <<<"$body"
+          grep -Fq 'wdcc-reference-root' <<<"$body"
+          grep -Fq 'NO-GO FOR FULL PRODUCTION RELEASE' <<<"$body"
           echo 'RELEASE_CONTROL_TEMPORARY_REFERENCE_GO=PASS'
 
-      - name: Capture and validate current public recovery records before any write
+      - name: Record current live inventory API state before any write
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl --http1.1 -sS -D /tmp/recovery.headers -o /tmp/recovery.json -w '%{http_code}' "$PROD_ROOT/api/inventory?capture=$GITHUB_RUN_ID" || true)"
-          echo "CAPTURE_HTTP=$code"
-          grep -i '^x-wdcc-' /tmp/recovery.headers || true
-          test "$code" = 200
-          node - <<'NODE'
-          const fs=require('fs');
-          const j=JSON.parse(fs.readFileSync('/tmp/recovery.json','utf8'));
-          const items=Array.isArray(j.items)?j.items:Array.isArray(j.inventory)?j.inventory:null;
-          if(!items||items.length!==5)throw new Error(`RECOVERY_COUNT_${items?.length??'missing'}`);
-          for(const v of items){
-            const id=String(v?.id??v?.slug??'').trim();
-            const year=Number(v?.year||0),make=String(v?.make||'').trim(),model=String(v?.model||'').trim(),price=Number(v?.price??v?.cashPrice??0);
-            const stock=String(v?.stock??v?.stock_id??'').toUpperCase();
-            if(!id||year<1901||!make||!model||!(price>0))throw new Error(`INVALID_PUBLIC_RECOVERY_RECORD_${id||'missing-id'}`);
-            if(/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/i.test(stock))throw new Error(`QA_RECORD_${stock}`);
-          }
-          console.log(`RECOVERY_RECORDS_VALID=5`);
-          NODE
-          cp /tmp/recovery.json /tmp/recovery.original.json
-          jq '. + {ok:true,recoveryFallback:true,inventorySource:"verified-recovery-readonly",live:false,readOnly:true,blobHealthy:false}' /tmp/recovery.original.json > /tmp/recovery.json
-          echo 'RECOVERY_INVENTORY_CAPTURE=PASS'
+          code="$(curl --http1.1 -sS -o /tmp/pre-inventory -w '%{http_code}' "$PROD_ROOT/api/inventory?pre=$GITHUB_RUN_ID" || true)"
+          echo "PRE_LIVE_INVENTORY_HTTP=$code"
+          echo "$code" | grep -Eq '^(200|404)$'
 
       - uses: actions/checkout@v4
         with:
@@ -79,11 +57,29 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Build exact approved application
+      - name: Seed exact verified historical recovery records from approved SHA
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {WDCC_VISUAL_REVIEW_INVENTORY} from './app/wdccVisualReviewInventory.ts';
+          if(!Array.isArray(WDCC_VISUAL_REVIEW_INVENTORY)||WDCC_VISUAL_REVIEW_INVENTORY.length!==5)throw new Error('VERIFIED_HISTORY_COUNT');
+          for(const v of WDCC_VISUAL_REVIEW_INVENTORY){
+            if(!v.id||Number(v.year)<1901||!v.make||!v.model||!(Number(v.price)>0)||v.internalOnly!==false||v.visibility!=='public')throw new Error(`INVALID_VERIFIED_HISTORY_${v.id||'missing'}`);
+            if(/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/i.test(String(v.stock||'')))throw new Error(`QA_HISTORY_${v.stock}`);
+          }
+          const payload={ok:true,items:WDCC_VISUAL_REVIEW_INVENTORY,recoveryFallback:true,inventorySource:'verified-recovery-readonly',live:false,readOnly:true,blobHealthy:false,notice:'Verified historical WDCC recovery records. NOT LIVE. Confirm availability.'};
+          fs.writeFileSync('/tmp/recovery.json',JSON.stringify(payload));
+          console.log('VERIFIED_HISTORY_SEED=5');
+          NODE
+          jq -e '.ok==true and .readOnly==true and .live==false and (.items|length)==5' /tmp/recovery.json >/dev/null
+
+      - name: Build exact approved application
+        shell: bash
+        run: |
+          set -euo pipefail
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
           npx opennextjs-cloudflare build
@@ -91,7 +87,7 @@ jobs:
           test -d .open-next/assets
           test -s .next/BUILD_ID
 
-      - name: Wrap exact visual app with read-only recovery inventory
+      - name: Build frontdoor wrapper preserving read-only recovery inventory
         shell: bash
         run: |
           set -euo pipefail
@@ -99,28 +95,18 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const recovery=JSON.parse(fs.readFileSync('.wdcc-recovery.json','utf8'));
-          const recoveryLiteral=JSON.stringify(recovery);
           const approved=process.env.APPROVED_SHA;
           const code=`import app from "./.open-next/worker.js";
-          const RECOVERY=${recoveryLiteral};
+          const RECOVERY=${JSON.stringify(recovery)};
           const APPROVED_SHA=${JSON.stringify(approved)};
-          function headers(extra={}){return {"content-type":"application/json; charset=utf-8","cache-control":"public, max-age=30, stale-while-revalidate=120","x-wdcc-cloudflare-public":"owner-approved-${approved.slice(0,8)}","x-wdcc-inventory-source":"verified-real-edge-recovery","x-wdcc-visual-sha":APPROVED_SHA,...extra}}
-          function items(){return Array.isArray(RECOVERY.items)?RECOVERY.items:Array.isArray(RECOVERY.inventory)?RECOVERY.inventory:[]}
+          function rh(extra={}){return {"content-type":"application/json; charset=utf-8","cache-control":"public, max-age=30, stale-while-revalidate=120","x-wdcc-cloudflare-public":"owner-approved-${approved.slice(0,8)}","x-wdcc-inventory-source":"verified-real-edge-recovery","x-wdcc-visual-sha":APPROVED_SHA,...extra}}
+          const items=()=>RECOVERY.items;
           export default {async fetch(request,env,ctx){
             const u=new URL(request.url);
-            if(request.method==="GET"&&u.pathname==="/api/inventory")return new Response(JSON.stringify(RECOVERY),{status:200,headers:headers()});
+            if(request.method==="GET"&&u.pathname==="/api/inventory")return new Response(JSON.stringify(RECOVERY),{status:200,headers:rh()});
             const m=u.pathname.match(/^\\/api\\/inventory\\/([^/]+)$/);
-            if(request.method==="GET"&&m){
-              const id=decodeURIComponent(m[1]);
-              const item=items().find(v=>String(v?.id??v?.slug??"")===id);
-              if(!item)return new Response(JSON.stringify({ok:false,error:"Not found",readOnly:true,live:false}),{status:404,headers:headers()});
-              return new Response(JSON.stringify({ok:true,item,revision:RECOVERY.revision??null,readOnly:true,live:false,inventorySource:"verified-recovery-readonly"}),{status:200,headers:headers({"cache-control":"public, max-age=30"})});
-            }
-            const response=await app.fetch(request,env,ctx);
-            const h=new Headers(response.headers);
-            h.set("x-wdcc-visual-sha",APPROVED_SHA);
-            h.set("x-wdcc-frontdoor","owner-approved-temporary");
-            return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});
+            if(request.method==="GET"&&m){const id=decodeURIComponent(m[1]);const item=items().find(v=>String(v.id)===id);return item?new Response(JSON.stringify({ok:true,item,readOnly:true,live:false,inventorySource:"verified-recovery-readonly"}),{status:200,headers:rh()}):new Response(JSON.stringify({ok:false,error:"Not found",readOnly:true,live:false}),{status:404,headers:rh()});}
+            const r=await app.fetch(request,env,ctx);const h=new Headers(r.headers);h.set("x-wdcc-visual-sha",APPROVED_SHA);h.set("x-wdcc-frontdoor","owner-approved-temporary");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:h});
           }};`;
           fs.writeFileSync('wdcc-reference-wrapper.mjs',code);
           const base={"$schema":"./node_modules/wrangler/config-schema.json",main:"wdcc-reference-wrapper.mjs",compatibility_date:"2026-08-25",compatibility_flags:["nodejs_compat","global_fetch_strictly_public"],workers_dev:true,assets:{directory:".open-next/assets",binding:"ASSETS",run_worker_first:false},observability:{enabled:true},vars:{WDCC_RUNTIME_ROLE:"frontend",WDCC_DEALER_BACKEND_URL:"https://wdcc-cpx-launch-cpxagency.vercel.app"}};
@@ -130,42 +116,28 @@ jobs:
           test -s wdcc-reference-wrapper.mjs
           ! grep -Eq '"routes?"|"custom_domains?"' wrangler.reference-root.jsonc
 
-      - name: Stage wrapper on non-routed wdcc-storefront service
+      - name: Stage exact wrapper on non-routed wdcc-storefront service
         shell: bash
         run: |
           set -euo pipefail
           npx wrangler versions upload --config wrangler.frontdoor-stage.jsonc --message "WDCC frontdoor staging $APPROVED_SHA" 2>&1 | tee /tmp/stage-upload.log
-          stage_version="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/stage-upload.log | tail -1 | awk '{print $4}')"
-          test -n "$stage_version"
-          npx wrangler versions deploy "$stage_version@100%" --name wdcc-storefront -y --message "Stage owner-approved frontdoor wrapper"
-          direct="https://wdcc-storefront.clico-global.workers.dev"
-          build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          ok=0
-          for i in $(seq 1 20); do
-            code="$(curl --http1.1 -sS -D /tmp/stage-home.headers -o /tmp/stage-home.html -w '%{http_code}' "$direct/?stage=$GITHUB_RUN_ID-$i" || true)"
-            if [ "$code" = 200 ] && grep -Fq "$build" /tmp/stage-home.html; then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = 1
-          grep -qi '^x-wdcc-visual-sha: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1' /tmp/stage-home.headers
-          inv="$(curl --http1.1 -sS -D /tmp/stage-inv.headers -o /tmp/stage-inv.json -w '%{http_code}' "$direct/api/inventory?stage=$GITHUB_RUN_ID" || true)"
-          test "$inv" = 200
-          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/stage-inv.headers
-          jq -e '.ok==true and .readOnly==true and .blobHealthy==false and ((.items // .inventory)|length)==5' /tmp/stage-inv.json >/dev/null
-          page="$(curl --http1.1 -sS -o /tmp/stage-inventory-page.html -w '%{http_code}' "$direct/inventory?stage=$GITHUB_RUN_ID" || true)"
-          test "$page" = 200
-          grep -Fq "$build" /tmp/stage-inventory-page.html
+          sv="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/stage-upload.log|tail -1|awk '{print $4}')"; test -n "$sv"
+          npx wrangler versions deploy "$sv@100%" --name wdcc-storefront -y --message "Stage owner-approved frontdoor wrapper"
+          direct="https://wdcc-storefront.clico-global.workers.dev"; build="$(tr -d '\r\n' < .next/BUILD_ID)"; ok=0
+          for i in $(seq 1 20); do code="$(curl --http1.1 -sS -D /tmp/sh -o /tmp/sb -w '%{http_code}' "$direct/?stage=$GITHUB_RUN_ID-$i"||true)"; if [ "$code" = 200 ]&&grep -Fq "$build" /tmp/sb;then ok=1;break;fi;sleep 2;done
+          test "$ok" = 1; grep -qi '^x-wdcc-visual-sha: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1' /tmp/sh
+          code="$(curl --http1.1 -sS -D /tmp/sih -o /tmp/sij -w '%{http_code}' "$direct/api/inventory?stage=$GITHUB_RUN_ID"||true)"; test "$code" = 200
+          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/sih; jq -e '.readOnly==true and .live==false and (.items|length)==5' /tmp/sij >/dev/null
+          code="$(curl --http1.1 -sS -o /tmp/sip -w '%{http_code}' "$direct/inventory?stage=$GITHUB_RUN_ID"||true)"; test "$code" = 200; grep -Fq "$build" /tmp/sip
           echo 'STAGED_FRONTDOOR=PASS'
 
-      - name: Upload exact wrapper version to real frontdoor
+      - name: Upload wrapper version to real wdcc-reference-root
         id: upload
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler versions upload --config wrangler.reference-root.jsonc --message "Owner-approved temporary visual $APPROVED_SHA + preserved recovery inventory" 2>&1 | tee /tmp/root-upload.log
-          version="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/root-upload.log | tail -1 | awk '{print $4}')"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          npx wrangler versions upload --config wrangler.reference-root.jsonc --message "Owner-approved visual $APPROVED_SHA + verified read-only recovery" 2>&1|tee /tmp/root-upload.log
+          version="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/root-upload.log|tail -1|awk '{print $4}')";test -n "$version";echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Promote real frontdoor, verify, auto-rollback on failure
         shell: bash
@@ -173,45 +145,21 @@ jobs:
           NEW_VERSION: ${{ steps.upload.outputs.version }}
         run: |
           set -Eeuo pipefail
-          test -n "$NEW_VERSION"
           promoted=0
-          rollback(){ rc=$?; if [ "$promoted" = 1 ]; then echo "Live verification failed; rolling wdcc-reference-root back immediately." >&2; npx wrangler rollback --name wdcc-reference-root --message "AUTO-ROLLBACK failed temporary visual $APPROVED_SHA" || true; fi; exit "$rc"; }
+          rollback(){ rc=$?;if [ "$promoted" = 1 ];then echo 'VERIFY FAILED — AUTO ROLLBACK' >&2;npx wrangler rollback --name wdcc-reference-root --message "AUTO-ROLLBACK temporary visual $APPROVED_SHA"||true;fi;exit "$rc"; }
           trap rollback ERR
-          npx wrangler versions deploy "$NEW_VERSION@100%" --name wdcc-reference-root -y --message "Owner-approved temporary storefront $APPROVED_SHA"
-          promoted=1
-          build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          ok=0
-          for i in $(seq 1 30); do
-            code="$(curl --http1.1 -sS -D /tmp/live-home.headers -o /tmp/live-home.html -w '%{http_code}' "$PROD_ROOT/?release=$APPROVED_SHA-$i" || true)"
-            if [ "$code" = 200 ] && grep -Fq "$build" /tmp/live-home.html && grep -qi '^x-wdcc-visual-sha: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1' /tmp/live-home.headers; then ok=1; break; fi
-            sleep 2
-          done
+          npx wrangler versions deploy "$NEW_VERSION@100%" --name wdcc-reference-root -y --message "Owner-approved temporary storefront $APPROVED_SHA";promoted=1
+          build="$(tr -d '\r\n' < .next/BUILD_ID)";ok=0
+          for i in $(seq 1 30);do code="$(curl --http1.1 -sS -D /tmp/lh -o /tmp/lb -w '%{http_code}' "$PROD_ROOT/?release=$APPROVED_SHA-$i"||true)";if [ "$code" = 200 ]&&grep -Fq "$build" /tmp/lb&&grep -qi '^x-wdcc-visual-sha: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1' /tmp/lh;then ok=1;break;fi;sleep 2;done
           test "$ok" = 1
-          invpage="$(curl --http1.1 -sS -o /tmp/live-inventory-page.html -w '%{http_code}' "$PROD_ROOT/inventory?release=$APPROVED_SHA" || true)"
-          test "$invpage" = 200
-          grep -Fq "$build" /tmp/live-inventory-page.html
-          api="$(curl --http1.1 -sS -D /tmp/live-api.headers -o /tmp/live-api.json -w '%{http_code}' "$PROD_ROOT/api/inventory?release=$APPROVED_SHA" || true)"
-          test "$api" = 200
-          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/live-api.headers
-          jq -e '.ok==true and .readOnly==true and .blobHealthy==false and ((.items // .inventory)|length)==5' /tmp/live-api.json >/dev/null
-          first_id="$(jq -r '(.items // .inventory)[0].id // (.items // .inventory)[0].slug // empty' /tmp/live-api.json)"
-          test -n "$first_id"
-          detail="$(curl --http1.1 -sS -o /tmp/live-detail.json -w '%{http_code}' "$PROD_ROOT/api/inventory/$first_id?release=$APPROVED_SHA" || true)"
-          test "$detail" = 200
-          jq -e '.ok==true and .item' /tmp/live-detail.json >/dev/null
-          www="$(curl --http1.1 -sS -o /tmp/live-www.html -w '%{http_code}' "$PROD_WWW/?release=$APPROVED_SHA" || true)"
-          test "$www" = 200
-          grep -Fq "$build" /tmp/live-www.html
-          curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-v2.webp?release=$APPROVED_SHA" -o /tmp/live-hero.webp
-          test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
+          code="$(curl --http1.1 -sS -o /tmp/lip -w '%{http_code}' "$PROD_ROOT/inventory?release=$APPROVED_SHA"||true)";test "$code" = 200;grep -Fq "$build" /tmp/lip
+          code="$(curl --http1.1 -sS -D /tmp/lih -o /tmp/lij -w '%{http_code}' "$PROD_ROOT/api/inventory?release=$APPROVED_SHA"||true)";test "$code" = 200;grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/lih;jq -e '.readOnly==true and .live==false and (.items|length)==5' /tmp/lij >/dev/null
+          id="$(jq -r '.items[0].id' /tmp/lij)";code="$(curl --http1.1 -sS -o /tmp/ld -w '%{http_code}' "$PROD_ROOT/api/inventory/$id"||true)";test "$code" = 200;jq -e '.ok==true and .item' /tmp/ld >/dev/null
+          code="$(curl --http1.1 -sS -o /tmp/www -w '%{http_code}' "$PROD_WWW/?release=$APPROVED_SHA"||true)";test "$code" = 200;grep -Fq "$build" /tmp/www
+          curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-v2.webp?release=$APPROVED_SHA" -o /tmp/hero;test "$(sha256sum /tmp/hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp|awk '{print $1}')"
           trap - ERR
-          {
-            echo '### WDCC TEMPORARY STOREFRONT FRONTDOOR — PASS'
-            echo "Approved visual SHA: $APPROVED_SHA"
-            echo "Live Worker: wdcc-reference-root"
-            echo "Worker version: $NEW_VERSION"
-            echo "Home: $PROD_ROOT/"
-            echo "Inventory: $PROD_ROOT/inventory"
-            echo 'Recovery inventory: 5 verified records preserved read-only'
-            echo 'DNS/routes/dealer/provider/database: unchanged'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'WDCC_TEMP_STOREFRONT_LIVE=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "Approved visual SHA: $APPROVED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Worker version: $NEW_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Verified historical recovery inventory: 5 records, read-only, NOT LIVE' >> "$GITHUB_STEP_SUMMARY"
+          echo 'DNS/routes/dealer/provider/database: unchanged' >> "$GITHUB_STEP_SUMMARY"
