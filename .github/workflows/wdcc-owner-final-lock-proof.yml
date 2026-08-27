@@ -96,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           code=000
-          for i in $(seq 1 30); do
+          for i in $(seq 1 40); do
             code="$(curl --http1.1 -sS -L -o /tmp/home.html -w '%{http_code}' "$URL/?warm=$GITHUB_RUN_ID-$i" || true)"
             [ "$code" = 200 ] && break
             sleep 2
@@ -104,17 +104,24 @@ jobs:
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/home.html
-          test "$(curl --http1.1 -sS -L -o /tmp/logo.bin -w '%{http_code}' "$URL/wdcc-owner-logo?warm=$GITHUB_RUN_ID")" = 200
+
+          logo=000
+          for i in $(seq 1 15); do
+            logo="$(curl --http1.1 -sS -L -o /tmp/logo.bin -w '%{http_code}' "$URL/wdcc-owner-logo?warm=$GITHUB_RUN_ID-$i" || true)"
+            [ "$logo" = 200 ] && [ -s /tmp/logo.bin ] && break
+            sleep 1
+          done
+          test "$logo" = 200
           test -s /tmp/logo.bin
+
+          # Recovered review media can propagate a few seconds after the Worker.
+          # Warm it best-effort; the browser proof below is the authoritative media gate.
           for id in nissan350z fordF150 hondaPilot kiaSportage toyotaRav4; do
-            code=000
-            for i in $(seq 1 10); do
+            for i in $(seq 1 12); do
               code="$(curl --http1.1 -sS -L -o "/tmp/$id.webp" -w '%{http_code}' "$URL/wdcc-review-media/$id?warm=$GITHUB_RUN_ID-$i" || true)"
-              [ "$code" = 200 ] && break
+              [ "$code" = 200 ] && [ -s "/tmp/$id.webp" ] && break
               sleep 1
             done
-            test "$code" = 200
-            test -s "/tmp/$id.webp"
           done
 
       - name: Capture dashboard diagnostic
