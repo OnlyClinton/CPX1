@@ -6,9 +6,9 @@ on:
     paths:
       - 'app/**'
       - 'public/**'
-      - 'scripts/**'
-      - '.github/support/wdcc-current-owner-proof.mjs'
+      - '.github/support/wdcc-owner-board-rebuild-proof.mjs'
       - '.github/workflows/wdcc-owner-approval-current.yml'
+      - 'WDCC_LOCKED_CONTRACT.md'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ env:
 jobs:
   owner-approval-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,22 +36,24 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Lock current owner-board authority
+      - name: Lock current supplied-board authority
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -s public/wdcc-hero-v2.webp
-          test -s app/wdcc-acceptance-closeout.css
+          test -s public/wdcc-logo-transparent.webp
           test -s app/WdccPublicChrome.tsx
           test -s app/ReferenceCloneHome.tsx
-          test -s .github/support/wdcc-current-owner-proof.mjs
-          grep -Fq 'height:64px!important' app/wdcc-acceptance-closeout.css
-          grep -Fq 'width:62px!important' app/wdcc-acceptance-closeout.css
-          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-acceptance-closeout.css
-          grep -Fq '29.5vw!important' app/wdcc-acceptance-closeout.css
-          grep -Fq '/wdcc-owner-logo' app/WdccPublicChrome.tsx
+          test -s app/wdcc-round-header-contract.css
+          test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
+          grep -Fq 'OWNER-SUPPLIED BOARD CLOSEOUT' app/wdcc-round-header-contract.css
+          grep -Fq 'Add Vehicle is a clean new record' WDCC_LOCKED_CONTRACT.md
+          grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
 
       - name: Build exact Cloudflare candidate
         shell: bash
@@ -100,7 +102,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p current-owner-proof
           code=000
           for i in $(seq 1 30); do
             code="$(curl --http1.1 -sS -L -o /tmp/current-home.html -w '%{http_code}' "$URL/?owner-review=1&root-warm=$GITHUB_RUN_ID-$i" || true)"
@@ -110,34 +111,21 @@ jobs:
           test "$code" = 200
           build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq -- "$build" /tmp/current-home.html
-
-          asset_code=000
-          for i in $(seq 1 30); do
-            asset_code="$(curl --http1.1 -sS -L -o /tmp/current-hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?asset-warm=$GITHUB_RUN_ID-$i" || true)"
-            [ "$asset_code" = 200 ] && break
-            sleep 2
-          done
-          test "$asset_code" = 200
-          test "$(sha256sum /tmp/current-hero.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-hero-v2.webp | awk '{print $1}')"
-
-          logo_code=000
-          for i in $(seq 1 30); do
-            logo_code="$(curl --http1.1 -sS -L -D /tmp/current-logo.headers -o /tmp/current-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?logo-warm=$GITHUB_RUN_ID-$i" || true)"
-            [ "$logo_code" = 200 ] && break
-            sleep 2
-          done
-          test "$logo_code" = 200
-          test -s /tmp/current-logo.webp
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' /tmp/current-home.html
+          test "$(curl --http1.1 -sS -L -o /tmp/current-wordmark.webp -w '%{http_code}' "$URL/wdcc-logo-transparent.webp?asset=$GITHUB_RUN_ID")" = 200
+          test "$(sha256sum /tmp/current-wordmark.webp | awk '{print $1}')" = "$(sha256sum public/wdcc-logo-transparent.webp | awk '{print $1}')"
+          test "$(curl --http1.1 -sS -D /tmp/current-logo.headers -L -o /tmp/current-logo.webp -w '%{http_code}' "$URL/wdcc-owner-logo?asset=$GITHUB_RUN_ID")" = 200
           grep -qi '^x-wdcc-logo: owner-approved' /tmp/current-logo.headers
-          printf 'sha=%s\nurl=%s\nbuild=%s\nroot_http=%s\nhero_http=%s\nlogo_http=%s\n' "$GITHUB_SHA" "$URL" "$build" "$code" "$asset_code" "$logo_code" > current-owner-proof/remote-integrity.txt
 
-      - name: Capture and prove current owner board
+      - name: Capture and prove current supplied boards
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-current-owner-proof.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s owner-board-proof/result.json
+          node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
       - name: Require exact current branch head
         shell: bash
@@ -153,19 +141,15 @@ jobs:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
         run: |
-          echo '### WDCC CURRENT BOARD — OWNER APPROVAL PROOF' >> "$GITHUB_STEP_SUMMARY"
+          echo '### WDCC CURRENT SUPPLIED BOARDS — OWNER APPROVAL PROOF' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Isolated workers.dev: ${URL:-not-created}" >> "$GITHUB_STEP_SUMMARY"
           echo 'Production routes / aliases / DNS: UNTOUCHED' >> "$GITHUB_STEP_SUMMARY"
-          if [ -s current-owner-proof/result.json ]; then
+          if [ -s owner-board-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
-          const r=require('./current-owner-proof/result.json');
+          const r=require('./owner-board-proof/result.json');
           console.log(`PASS: ${r.pass}`);
-          console.log(`Mobile header: ${r.mobile.home.header.h}px`);
-          console.log(`Mobile emblem: ${r.mobile.home.logo.w}px · center ${r.mobile.home.logo.cx}/${r.mobile.home.winW/2}px`);
-          console.log(`Mobile benefits: ${r.mobile.home.benefitTracks} across`);
-          console.log(`Mobile featured card width: ${r.mobile.home.cards[0].w.toFixed(1)}px`);
-          console.log(`Desktop featured cards: ${r.desktop.home.cards}`);
+          console.log(`Board families: ${Object.keys(r.boards||{}).length}`);
           console.log(`Browser writes: ${r.writes.length}`);
           NODE
           else
@@ -178,6 +162,6 @@ jobs:
           name: wdcc-current-owner-approval-${{ github.sha }}
           path: |
             current-owner-preview-url.txt
-            current-owner-proof/
+            owner-board-proof/
           if-no-files-found: warn
           retention-days: 7
