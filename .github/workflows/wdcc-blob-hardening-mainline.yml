@@ -6,6 +6,7 @@ on:
       - fix/wdcc-blob-hardening-mainline-20260826
     paths:
       - lib/store.ts
+      - lib/wdccAuthority.ts
       - .github/workflows/wdcc-blob-hardening-mainline.yml
   workflow_dispatch:
 
@@ -17,24 +18,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-recovery-proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      EXPECTED_STORE_ID: store_cNUyQRVlXtyvZQ5N
+      MIN_KNOWN_CLEAN_REVISION: "640"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+
       - name: Install and compile only
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npm run build
-      - name: Verify durable Blob guards and inventory isolation
+
+      - name: Verify durable Blob guards, authority pin, and inventory isolation
         shell: bash
         run: |
           set -euo pipefail
@@ -42,9 +52,121 @@ jobs:
           grep -q 'readInFlight' lib/store.ts
           grep -q 'STATE_PROVIDER_BLOCKED' lib/store.ts
           grep -q 'BACKUP_READ_LIMIT' lib/store.ts
+          grep -q 'BACKUP_SCAN_MAX_PAGES' lib/store.ts
+          grep -q 'BACKUP_LIST_PAGE_SIZE' lib/store.ts
+          grep -q 'private/state/backups/platform-v3-' lib/store.ts
+          grep -q 'result?.cursor' lib/store.ts
           grep -q 'providerAccessBlocked' lib/store.ts
           grep -q 'isInternalVehicleRecord' lib/store.ts
           grep -q '!isInternalVehicleRecord(vehicle)' lib/store.ts
-          echo 'WDCC_BLOB_HARDENING_MAINLINE=PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'No deployment, route, alias, DNS, provider setting, state write, or production mutation is performed by this workflow.' >> "$GITHUB_STEP_SUMMARY"
+          grep -q 'WDCC_CANONICAL_BLOB_STORE_ID' lib/wdccAuthority.ts
+          grep -q 'store_cNUyQRVlXtyvZQ5N' lib/wdccAuthority.ts
+          grep -q 'if(oidcToken&&canonicalStoreId)' lib/wdccAuthority.ts
+          echo 'WDCC_BLOB_HARDENING_STATIC=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read-only exact canonical recovery proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install --global vercel@59.3.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+
+          cat > /tmp/wdcc-recovery-proof.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import {get} from '@vercel/blob';
+
+          const path='private/state/platform-v3.json';
+          const expected=process.env.EXPECTED_STORE_ID;
+          const minimum=Number(process.env.MIN_KNOWN_CLEAN_REVISION||0);
+          const oidcToken=process.env.VERCEL_OIDC_TOKEN||'';
+          const connectedStoreId=process.env.BLOB_STORE_ID||'';
+          const stores=[
+            ['canonical-v10','store_cNUyQRVlXtyvZQ5N'],
+            ['clean-bootstrap','store_vVJ5kU6x76yZVkGs'],
+            ['rescue-bootstrap','store_KopvAQeMcatdS5DS'],
+            ['private-20260801','store_LdMSV1550BRgc0SP']
+          ];
+
+          if(!oidcToken)throw Error('OIDC_TOKEN_MISSING');
+
+          async function read(storeId,pathname=path){
+            const r=await get(pathname,{access:'private',useCache:false,oidcToken,storeId});
+            if(!r||r.statusCode!==200||!r.stream)throw Error(`READ_FAILED:${pathname}`);
+            const chunks=[];
+            for await(const chunk of r.stream)chunks.push(chunk);
+            const raw=Buffer.concat(chunks);
+            const state=JSON.parse(raw.toString('utf8'));
+            if(!Array.isArray(state.users)||!Array.isArray(state.leads)||!Array.isArray(state.vehicles)||!Array.isArray(state.audit))throw Error('STATE_CONTRACT_INVALID');
+            const timestamps=[state.updatedAt,...state.vehicles.map(v=>v?.updatedAt||v?.createdAt),...state.leads.map(l=>l?.updatedAt||l?.createdAt),...state.audit.map(a=>a?.at)].filter(Boolean).map(String).sort();
+            const badPublishedVehicles=state.vehicles.filter(v=>String(v?.status||'').toLowerCase()==='published'&&(Number(v?.year)<=1900||!String(v?.make||'').trim()||!String(v?.model||'').trim()||Number(v?.price||v?.cashPrice||0)<=0||String(v?.stock||'').toUpperCase().startsWith('R36TEST-'))).length;
+            const qaLeads=state.leads.filter(l=>l?.qa===true||String(l?.status||'').toLowerCase()==='test'||String(l?.email||'').toLowerCase().endsWith('@invalid.example')||String(l?.name||'').toUpperCase().startsWith('WDCC QA ')).length;
+            return {
+              revision:Number(state.revision||0),
+              users:state.users.length,
+              vehicles:state.vehicles.length,
+              leads:state.leads.length,
+              audit:state.audit.length,
+              badPublishedVehicles,
+              qaLeads,
+              latestTimestamp:timestamps.at(-1)||null,
+              sha256:crypto.createHash('sha256').update(raw).digest('hex')
+            };
+          }
+
+          const results=[];
+          for(const [name,storeId] of stores){
+            try{
+              results.push({name,storeId,ok:true,...await read(storeId)});
+            }catch(error){
+              results.push({name,storeId,ok:false,error:String(error?.message||error)});
+            }
+          }
+
+          const canonical=results.find(x=>x.storeId===expected);
+          let emergencyFallback=null;
+          if(!canonical?.ok){
+            try{
+              const pathname='private/state/backups/platform-v3-pre-phx-v4-clean-32881804744-3-r639-8a204b36-3426-4a68-8141-8a44e1ffb931.json';
+              emergencyFallback={ok:true,pathname,...await read(expected,pathname)};
+            }catch(error){
+              emergencyFallback={ok:false,error:String(error?.message||error)};
+            }
+          }
+
+          const report={
+            ok:Boolean(canonical?.ok&&canonical.revision>=minimum),
+            expectedStoreId:expected,
+            connectedStoreId:connectedStoreId||null,
+            connectedStoreDrift:Boolean(connectedStoreId&&connectedStoreId!==expected),
+            minimumKnownCleanRevision:minimum,
+            canonical,
+            emergencyFallback,
+            candidates:results
+          };
+          console.log('RECOVERY_PROOF='+JSON.stringify(report));
+          if(!report.ok)process.exitCode=2;
+          NODE
+
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID \
+            vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- \
+            node /tmp/wdcc-recovery-proof.mjs | tee /tmp/wdcc-recovery-proof.log
+
+          grep '^RECOVERY_PROOF=' /tmp/wdcc-recovery-proof.log | tail -1 | cut -d= -f2- > /tmp/wdcc-recovery-proof.json
+          jq . /tmp/wdcc-recovery-proof.json
+          jq -e --arg store "$EXPECTED_STORE_ID" --argjson min "$MIN_KNOWN_CLEAN_REVISION" \
+            '.ok==true and .expectedStoreId==$store and .canonical.ok==true and .canonical.revision >= $min' \
+            /tmp/wdcc-recovery-proof.json >/dev/null
+
+          {
+            echo '### WDCC Blob recovery proof — PASS'
+            echo
+            echo "Exact SHA: $GITHUB_SHA"
+            echo "Canonical store: $EXPECTED_STORE_ID"
+            echo "Canonical revision: $(jq -r '.canonical.revision' /tmp/wdcc-recovery-proof.json)"
+            echo "State SHA-256: $(jq -r '.canonical.sha256' /tmp/wdcc-recovery-proof.json)"
+            echo "Connected-store drift ignored: $(jq -r '.connectedStoreDrift' /tmp/wdcc-recovery-proof.json)"
+            echo
+            echo 'Read-only verification only. No Blob object, deployment, route, alias, DNS, provider setting, or production data was changed.'
+          } >> "$GITHUB_STEP_SUMMARY"
