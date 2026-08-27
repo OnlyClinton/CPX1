@@ -1,0 +1,60 @@
+name: WDCC Cloudflare WWW Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-www-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Require Cloudflare authority
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}"
+      - name: Inspect and proxy www DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?name=www.wedontcarecars.com" \
+            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' > /tmp/www.json
+          jq -e '.success==true' /tmp/www.json >/dev/null
+          count="$(jq '.result|length' /tmp/www.json)"
+          test "$count" -ge 1
+          jq -r '.result[]|[.id,.type,.name,.content,.proxied]|@tsv' /tmp/www.json
+          id="$(jq -r '.result[0].id' /tmp/www.json)"
+          type="$(jq -r '.result[0].type' /tmp/www.json)"
+          content="$(jq -r '.result[0].content' /tmp/www.json)"
+          ttl="$(jq -r '.result[0].ttl' /tmp/www.json)"
+          comment="$(jq -r '.result[0].comment // empty' /tmp/www.json)"
+          jq -n --arg type "$type" --arg name 'www.wedontcarecars.com' --arg content "$content" --argjson ttl "$ttl" --arg comment "$comment" '{type:$type,name:$name,content:$content,ttl:$ttl,proxied:true,comment:$comment}' > /tmp/update.json
+          curl -fsS -X PUT "$CF_API/zones/$ZONE_ID/dns_records/$id" \
+            -H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/update.json > /tmp/updated.json
+          jq -e '.success==true and .result.proxied==true' /tmp/updated.json >/dev/null
+      - name: Verify www crosses the WDCC Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 30); do
+            code="$(curl -sS -D /tmp/h -L --max-time 20 -o /tmp/b -w '%{http_code}' "https://www.wedontcarecars.com/api/inventory?www-fix=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$code" = 200 ] && grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/h && jq -e '.ok==true and (.items|length)==5' /tmp/b >/dev/null 2>&1; then ok=1; break; fi
+            sleep 2
+          done
+          test "$ok" = 1
+          echo 'WWW_CLOUDFLARE_PROXY=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WWW_FIVE_CAR_EDGE_READ=PASS' >> "$GITHUB_STEP_SUMMARY"
