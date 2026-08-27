@@ -1,0 +1,134 @@
+name: WDCC Restore Five Assets And Cloudflare Source
+
+on:
+  push:
+    branches:
+      - emergency/wdcc-cloudflare-r2-20260827
+    paths:
+      - .github/workflows/wdcc-restore-five-assets-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-restore-five-assets-source
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout emergency branch with recovery refs
+        uses: actions/checkout@v4
+        with:
+          ref: emergency/wdcc-cloudflare-r2-20260827
+          fetch-depth: 0
+
+      - name: Restore exact recovered vehicle image binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin recovered-2vfd-source --depth=1
+          mkdir -p public/assets/cars
+          files=(
+            2004-nissan-350z-1.webp
+            2004-nissan-350z-2.webp
+            2004-nissan-350z-3.webp
+            2004-nissan-350z-4.webp
+            2016-ford-f150-limited-1.webp
+            2016-ford-f150-limited-2.webp
+            2016-ford-f150-limited-3.webp
+            2016-ford-f150-limited-4.webp
+            2016-ford-f150-limited-5.webp
+            2016-ford-f150-limited-6.webp
+            2016-ford-f150-limited-7.webp
+            2019-honda-pilot-1.webp
+            2019-kia-sportage-1.webp
+            2019-toyota-rav4-1.webp
+            2019-toyota-rav4-2.webp
+          )
+          for f in "${files[@]}"; do
+            git show "origin/recovered-2vfd-source:src/public/assets/cars/$f" > "public/assets/cars/$f"
+            test -s "public/assets/cars/$f"
+          done
+          printf '%s\n' "${files[@]}" > /tmp/restored-images.txt
+          test "$(wc -l < /tmp/restored-images.txt)" = 15
+          sha256sum public/assets/cars/*.webp | sort > /tmp/restored-image-sha256.txt
+          rm -f 'app/assets/cars/[filename]/route.ts'
+
+      - name: Move Add Vehicle upload transport to Cloudflare media API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('app/dealer/inventory/new/page.tsx')
+          s=p.read_text()
+          s=s.replace('import{upload}from"@vercel/blob/client";\n','')
+          old='const blob=await upload(`media/wdcc/${draftId}/${safe}`,file,{access:"private",handleUploadUrl:"/api/upload",clientPayload:JSON.stringify({vehicleId:draftId,requestId}),contentType:file.type});if(!blob?.pathname)throw new Error(`Photo ${i+1} upload failed`);paths.push(blob.pathname);'
+          new='const uploadResponse=await fetch(`/api/media-upload?vehicleId=${encodeURIComponent(draftId)}&filename=${encodeURIComponent(safe)}`,{method:"POST",credentials:"include",headers:{"Content-Type":file.type,"X-WDCC-Request-ID":requestId},body:file}),uploadJson=await uploadResponse.json().catch(()=>({}));if(!uploadResponse.ok||!uploadJson?.pathname)throw new Error(uploadJson.error||`Photo ${i+1} upload failed`);paths.push(String(uploadJson.pathname));'
+          if old not in s:
+            if '/api/media-upload?vehicleId=' not in s:
+              raise SystemExit('old upload call not found')
+          else:
+            s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          ! grep -q '@vercel/blob/client' app/dealer/inventory/new/page.tsx
+          grep -q '/api/media-upload?vehicleId=' app/dealer/inventory/new/page.tsx
+
+      - name: Use centralized verified five-car fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('app/Exact2vfDHome.tsx')
+          s=p.read_text()
+          if 'WDCC_RECOVERED_INVENTORY' not in s:
+            anchor='import TrackedCallLink from "./TrackedCallLink";\n'
+            if anchor in s:
+              s=s.replace(anchor,anchor+'import {WDCC_RECOVERED_INVENTORY} from "../lib/recoveredInventory";\n',1)
+            else:
+              first=s.find('\n')
+              s=s[:first+1]+'import {WDCC_RECOVERED_INVENTORY} from "../lib/recoveredInventory";\n'+s[first+1:]
+          s,n=re.subn(r'const fallback:Vehicle\[\]=\[.*?\];\nfunction customerVisible', 'const fallback:Vehicle[]=WDCC_RECOVERED_INVENTORY.map(v=>({...v})) as unknown as Vehicle[];\nfunction customerVisible', s, count=1, flags=re.S)
+          if n!=1 and 'const fallback:Vehicle[]=WDCC_RECOVERED_INVENTORY' not in s:
+            raise SystemExit(f'fallback replacement count={n}')
+          p.write_text(s)
+          PY
+          grep -q 'WDCC_RECOVERED_INVENTORY' app/Exact2vfDHome.tsx
+
+      - name: Validate exact binary set and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9
+          npx tsc --noEmit
+          test "$(find public/assets/cars -maxdepth 1 -type f -name '*.webp' | wc -l)" -ge 15
+          test -s public/assets/cars/2004-nissan-350z-1.webp
+          test -s public/assets/cars/2016-ford-f150-limited-7.webp
+          test -s public/assets/cars/2019-honda-pilot-1.webp
+          test -s public/assets/cars/2019-kia-sportage-1.webp
+          test -s public/assets/cars/2019-toyota-rav4-2.webp
+
+      - name: Commit restored source and all original images
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Recovery Bot'
+          git config user.email 'wdcc-recovery@users.noreply.github.com'
+          git add public/assets/cars app/Exact2vfDHome.tsx app/dealer/inventory/new/page.tsx lib/recoveredInventory.ts
+          git add -u 'app/assets/cars/[filename]/route.ts' || true
+          if git diff --cached --quiet; then
+            echo 'No source changes required.'
+            exit 0
+          fi
+          git commit -m 'feat(wdcc): restore all five vehicle galleries and Cloudflare photo upload'
+          git push origin HEAD:emergency/wdcc-cloudflare-r2-20260827
+          echo "RESTORED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'RESTORED_VEHICLE_IMAGES=15' >> "$GITHUB_STEP_SUMMARY"
