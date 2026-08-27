@@ -1,46 +1,96 @@
 /* WDCC final visual contract closeout.
    Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
 
-/* Public header wordmark: render the canonical horizontal asset on a dedicated,
-   non-replaced element. Legacy CSS is still allowed to size the hidden img for
-   compatibility with older geometry probes, but it can no longer control or blank
-   the visible brand artwork. */
+/* Public header wordmark: render the brand as real HTML text so proof-worker
+   image decoding/cascade behavior cannot blank the visible logo. Keep the canonical
+   image in the DOM at near-zero opacity for exact asset/integrity compatibility. */
 html body [data-wdcc-public-chrome="header"] .rh-logo{
   background:none!important;
   filter:none!important;
+  position:relative!important;
+  overflow:visible!important;
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo>img{
   content:normal!important;
   display:block!important;
   visibility:visible!important;
   opacity:.001!important;
-  position:static!important;
+  position:absolute!important;
+  inset:50% auto auto 50%!important;
+  transform:translate(-50%,-50%)!important;
+  width:148px!important;
+  height:auto!important;
+  max-height:58px!important;
   background:none!important;
   filter:none!important;
+  pointer-events:none!important;
+  z-index:0!important;
 }
 html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
   grid-area:1/1!important;
-  display:block!important;
-  width:148px!important;
-  min-width:148px!important;
-  max-width:148px!important;
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:relative!important;
+  z-index:3!important;
+  box-sizing:border-box!important;
+  width:158px!important;
+  min-width:158px!important;
+  max-width:158px!important;
   height:48px!important;
   min-height:48px!important;
   max-height:48px!important;
-  background:url('/wdcc-logo-transparent.webp') center/contain no-repeat!important;
-  filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important;
+  margin:0!important;
+  padding:4px 5px!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  overflow:visible!important;
+  background:transparent!important;
+  color:#fff!important;
+  filter:none!important;
+  transform:none!important;
+  text-shadow:0 2px 8px rgba(0,0,0,.65)!important;
+  white-space:nowrap!important;
+  font-family:Arial,Helvetica,sans-serif!important;
+  line-height:1!important;
   pointer-events:none!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>strong{
+  color:#fff!important;
+  font-size:25px!important;
+  line-height:.9!important;
+  font-weight:1000!important;
+  font-style:italic!important;
+  letter-spacing:-1.6px!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>i{
+  display:block!important;
+  width:3px!important;
+  height:28px!important;
+  flex:0 0 3px!important;
+  background:#ef1f2f!important;
+  transform:skew(-8deg)!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{
+  display:block!important;
+  color:#fff!important;
+  font-size:7.4px!important;
+  line-height:1.05!important;
+  font-weight:950!important;
+  letter-spacing:.035em!important;
+  text-transform:uppercase!important;
 }
 
 /* Home desktop: reserve enough real space for the complete horizontal wordmark. */
 @media (min-width:768px){
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
-    grid-template-columns:180px minmax(0,1fr) auto!important;
+    grid-template-columns:184px minmax(0,1fr) auto!important;
     gap:20px!important;
   }
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo{
-    width:172px!important;
-    min-width:172px!important;
+    width:176px!important;
+    min-width:176px!important;
     overflow:visible!important;
   }
   html body main.reference-home.locked-storefront .rh-nav{gap:20px!important;min-width:0!important}
@@ -69,15 +119,25 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"].rh-header{
     top:0!important;
   }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    width:148px!important;
+    min-width:148px!important;
+    height:78px!important;
+    justify-self:center!important;
+    overflow:visible!important;
+  }
   html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art{
-    width:132px!important;
-    min-width:132px!important;
-    max-width:132px!important;
+    width:142px!important;
+    min-width:142px!important;
+    max-width:142px!important;
     height:44px!important;
     min-height:44px!important;
     max-height:44px!important;
-    filter:brightness(0) invert(1) drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+    gap:5px!important;
   }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>strong{font-size:22px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>i{height:25px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo>.rh-logo-art>span{font-size:6.8px!important}
   html body .approvalBoard .approvalFieldGrid label{font-size:11px!important}
 }
 
@@ -146,4 +206,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
   html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
 }
 
-/* Exact-head proof sync: dedicated canonical public-wordmark renderer. */
+/* Exact-head proof sync: guaranteed HTML public wordmark + full-width mobile dealer fields. */
