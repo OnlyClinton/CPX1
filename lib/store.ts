@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import {get,list,put} from "@vercel/blob";
 import {blobAuthority} from "./wdccAuthority";
+import {previewRecoveryEnabled,previewRecoveryState} from "./wdccPreviewRecoveryState";
 
 export type User={
   id:string;
@@ -125,6 +126,11 @@ async function readStateFresh():Promise<State>{
 }
 
 export async function readState():Promise<State>{
+  // Explicit preview-only escape hatch for recovery certification while Vercel Blob
+  // is suspended. It is impossible to activate on production because both the
+  // VERCEL_ENV and recovery selector must match.
+  if(previewRecoveryEnabled())return cloneState(previewRecoveryState());
+
   const now=Date.now();
   if(readCache&&readCache.expiresAt>now)return cloneState(readCache.state);
   if(providerBlockedUntil>now)throw Error("STATE_PROVIDER_BACKOFF");
@@ -136,6 +142,7 @@ export async function readState():Promise<State>{
 }
 
 export async function writeState(input:State){
+  if(previewRecoveryEnabled())throw Error("PREVIEW_RECOVERY_READ_ONLY");
   const authority=blobAuthority();
   if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   const state=normalizeState(input);
