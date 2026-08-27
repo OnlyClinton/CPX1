@@ -1,0 +1,20 @@
+.card{min-width:0;background:#fff;border:1px solid #dce2e6;border-radius:10px;overflow:hidden;box-shadow:0 6px 16px rgba(15,29,42,.07);color:#111820}
+.photo{display:grid;place-items:center;width:100%;aspect-ratio:1.52;min-height:0;background:#0b1721;overflow:hidden;position:relative;color:#b9c4cc;font-size:11px;letter-spacing:.08em;text-decoration:none}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.placeholder{display:grid;place-items:center;gap:7px;color:#d0d8de;text-align:center;padding:20px}
+.placeholder small{font-size:9px;letter-spacing:.1em;color:#92a0ab}
+.placeholder strong{font-size:13px;color:#fff;letter-spacing:.02em}
+.badge{position:absolute;left:9px;top:9px;padding:5px 7px;border-radius:4px;background:#168a4d;color:#fff;font-size:7px;font-weight:950;letter-spacing:.05em}
+.body{padding:14px 14px 16px}
+.eyebrow{margin:0;color:#2d3943;font-size:10px;line-height:1.2}
+.title{display:block;margin-top:4px;color:#111820;font-size:16px;line-height:1.13;font-weight:900;letter-spacing:-.02em;text-decoration:none}
+.price{display:block;margin-top:14px;color:#0c151d;font-size:25px;line-height:1;font-weight:1000;letter-spacing:-.035em}
+.down{margin:6px 0 0;color:#5f6c77;font-size:10.5px;line-height:1.35;font-weight:800;text-transform:uppercase}
+.pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px;color:#53606a}
+.pills span{display:inline-flex;align-items:center;min-height:22px;padding:0 7px;border-radius:4px;background:#f0f2f4;border:1px solid #e0e5e8;font-size:8px;font-weight:850}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.actions a{min-height:42px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:#0a1824;color:#fff;font-size:9px;font-weight:950;text-align:center;text-decoration:none}
+.actions .primary{background:#ef1f2f}
+.featured .actions{display:none}
+@media(max-width:767px){.featured{flex:0 0 80vw;min-width:80vw;max-width:80vw;scroll-snap-align:center}.featured .photo{aspect-ratio:1.72}.featured .body{padding:17px 18px 19px}.featured .title{font-size:19px}.featured .price{font-size:30px}.featured .down{font-size:12px}.card:not(.featured) .photo{aspect-ratio:1.75}.card:not(.featured) .title{font-size:19px}.card:not(.featured) .price{font-size:30px}.card:not(.featured) .down{font-size:11.5px}.actions a{min-height:48px;font-size:10px}}
+@media(max-width:430px){.featured{flex-basis:84vw;min-width:84vw;max-width:84vw}}
