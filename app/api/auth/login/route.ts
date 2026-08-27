@@ -1,4 +1,3 @@
-import {sessionCookieHeader} from "../../../../lib/auth";
 import {readState,type User} from "../../../../lib/store";
 
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
@@ -60,7 +59,6 @@ export async function POST(request:Request){
 
     const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
     copyCookies(upstream,headers);
-    headers.append("set-cookie",sessionCookieHeader(user));
     return new Response(JSON.stringify({ok:true,role:user.role,user:{id:user.id,email:login.email,username:login.username,displayName:user.displayName||data?.user?.name||(login.username==="admin"?"WDCC Admin":"WDCC Dealer"),role:user.role}}),{status:200,headers});
   }catch(error){
     console.error("WDCC_NEON_AUTH_LOGIN_ERROR",error);
