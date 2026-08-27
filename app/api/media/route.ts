@@ -1,11 +1,24 @@
 import {get} from "@vercel/blob";
 import {blobAuthority} from "../../../lib/wdccAuthority";
+import {cloudflareDataAvailable,r2GetObject} from "../../../lib/cloudflareR2";
 
 export const dynamic="force-dynamic";
 
 export async function GET(req:Request){
   const p=new URL(req.url).searchParams.get("p")||"";
   if(!p.startsWith("media/wdcc/"))return new Response("Not found",{status:404});
+
+  if(cloudflareDataAvailable()){
+    try{
+      const object=await r2GetObject(p);
+      if(!object)return new Response("Not found",{status:404});
+      return new Response(object.body as any,{headers:{"Content-Type":object.httpMetadata?.contentType||"application/octet-stream","Cache-Control":"public,max-age=3600"}});
+    }catch(error){
+      console.error("WDCC_R2_MEDIA_READ_ERROR",error instanceof Error?error.message:"unknown");
+      return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});
+    }
+  }
+
   const authority=blobAuthority();
   if(authority.mode==="missing"){
     console.error("WDCC_MEDIA_AUTHORITY_MISSING");
