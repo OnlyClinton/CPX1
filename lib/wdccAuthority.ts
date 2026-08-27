@@ -9,10 +9,14 @@ export function canonicalDealerBackend(){
 }
 
 export function blobAuthority(){
-  const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
-  if(token)return {mode:"token" as const,options:{token}};
+  // Prefer Vercel's short-lived project-scoped OIDC whenever it is available.
+  // A stale long-lived Blob token must never shadow a valid scoped runtime identity.
   const oidcToken=(process.env.VERCEL_OIDC_TOKEN||"").trim();
   const storeId=(process.env.BLOB_STORE_ID||"").trim();
   if(oidcToken&&storeId)return {mode:"oidc" as const,options:{oidcToken,storeId}};
+
+  const token=(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
+  if(token)return {mode:"token" as const,options:{token}};
+
   return {mode:"missing" as const,options:{}};
 }
