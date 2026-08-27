@@ -1,0 +1,18 @@
+/* Final preview-only readability floor. Loaded after all legacy/owner-board layers. */
+
+html body main.dcPage.inventoryContract .inventoryHead{font-size:8.5px!important;line-height:1!important}
+html body main.dcPage.inventoryContract .visibilityTags i{font-size:8.5px!important;line-height:1!important;padding:4px 6px!important}
+html body main.dcPage.inventoryContract .statusCell b{font-size:8.5px!important;line-height:1!important;padding:5px 7px!important}
+html body main.dcPage.inventoryContract .readyCell span{font-size:8.5px!important;line-height:1.2!important}
+html body main.dcPage.inventoryContract .actionCell small{font-size:8.5px!important;line-height:1!important;margin-top:3px!important}
+html body main.dcPage.inventoryContract .inventoryFooter{font-size:8.5px!important;line-height:1.2!important}
+html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important;line-height:1!important}
+
+@media(max-width:767px){
+  html body main.dcPage.inventoryContract .visibilityTags i{font-size:8.5px!important;min-height:20px!important;display:inline-flex!important;align-items:center!important}
+  html body main.dcPage.inventoryContract .statusCell b{font-size:8.5px!important;min-height:22px!important;display:inline-flex!important;align-items:center!important}
+  html body main.dcPage.inventoryContract .readyCell span{font-size:9px!important}
+  html body main.dcPage.inventoryContract .actionCell a{min-width:54px!important;min-height:44px!important}
+  html body main.dcPage.inventoryContract .actionCell small{font-size:8.5px!important}
+  html body main.dcPage.inventoryContract .inventoryMobileNav span{font-size:8.5px!important}
+}
