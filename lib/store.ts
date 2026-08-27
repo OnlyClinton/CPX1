@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import {get,list,put} from "@vercel/blob";
 import {blobAuthority} from "./wdccAuthority";
+import {postgresStateConfigured,readPostgresState,writePostgresState} from "./postgresState";
 
 export type User={
   id:string;
@@ -26,6 +27,14 @@ export type State={
   audit:any[];
   updatedAt?:string;
 };
+export type StateProvider="blob"|"postgres";
+
+export function selectedStateProvider():StateProvider{
+  const value=String(process.env.WDCC_STATE_PROVIDER||"blob").trim().toLowerCase();
+  if(value==="postgres"||value==="neon")return "postgres";
+  if(!value||value==="blob"||value==="vercel")return "blob";
+  throw Error(`STATE_PROVIDER_INVALID:${value}`);
+}
 
 const PATH="private/state/platform-v3.json";
 // All historical WDCC backup families live under this shared prefix. Do not
@@ -121,7 +130,7 @@ async function listBackupCandidates(){
   });
 }
 
-async function loadState():Promise<State>{
+async function loadBlobState():Promise<State>{
   const authority=blobAuthority();
   try{
     const state=await readBlobState(PATH);
@@ -171,6 +180,12 @@ async function loadState():Promise<State>{
 }
 
 export async function readState():Promise<State>{
+  const provider=selectedStateProvider();
+  if(provider==="postgres"){
+    if(!postgresStateConfigured())throw Error("STATE_POSTGRES_URL_MISSING");
+    return readPostgresState();
+  }
+
   const authority=blobAuthority();
   if(authority.drift&&!driftReported){
     driftReported=true;
@@ -182,11 +197,17 @@ export async function readState():Promise<State>{
   }
   if(stateCache&&Date.now()<stateCache.expiresAt)return cloneState(stateCache.state);
   if(providerBackoffActive())throw Error("STATE_PROVIDER_BLOCKED");
-  if(!readInFlight)readInFlight=loadState().finally(()=>{readInFlight=null;});
+  if(!readInFlight)readInFlight=loadBlobState().finally(()=>{readInFlight=null;});
   return cloneState(await readInFlight);
 }
 
 export async function writeState(input:State){
+  const provider=selectedStateProvider();
+  if(provider==="postgres"){
+    if(!postgresStateConfigured())throw Error("STATE_POSTGRES_URL_MISSING");
+    return writePostgresState(input);
+  }
+
   const authority=blobAuthority();
   if(authority.mode==="missing")throw Error("STATE_AUTHORITY_MISSING");
   if(providerBackoffActive())throw Error("STATE_PROVIDER_BLOCKED");
