@@ -1,0 +1,108 @@
+/* WDCC round public-header contract restoration — preview branch only.
+   Restores the owner-approved persistent round emblem without touching auth,
+   persistence, provider state, DNS, aliases, schema, or production routes. */
+
+@media(min-width:768px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{
+    height:86px!important;
+    min-height:86px!important;
+    max-height:86px!important;
+  }
+  html body .wdcc-public-header .rh-header-inner{
+    height:86px!important;
+    min-height:86px!important;
+    grid-template-columns:106px minmax(0,1fr) auto!important;
+  }
+  html body .wdcc-public-header .rh-logo{
+    width:90px!important;
+    min-width:90px!important;
+    max-width:90px!important;
+    height:86px!important;
+    min-height:86px!important;
+    max-height:86px!important;
+    display:grid!important;
+    place-items:center!important;
+    justify-content:center!important;
+    overflow:visible!important;
+    z-index:2!important;
+    pointer-events:auto!important;
+  }
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:84px!important;
+    min-width:84px!important;
+    max-width:84px!important;
+    height:84px!important;
+    min-height:84px!important;
+    max-height:84px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    border-radius:50%!important;
+    clip-path:none!important;
+    transform:none!important;
+    pointer-events:none!important;
+  }
+}
+
+@media(min-width:768px) and (max-width:1180px){
+  html body .wdcc-public-header .rh-header-inner{
+    grid-template-columns:96px minmax(0,1fr) auto!important;
+  }
+}
+
+@media(max-width:767px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{
+    height:68px!important;
+    min-height:68px!important;
+    max-height:68px!important;
+    top:0!important;
+  }
+  html body .wdcc-public-header .rh-header-inner{
+    height:68px!important;
+    min-height:68px!important;
+    grid-template-columns:44px minmax(0,1fr) 44px!important;
+    grid-template-rows:68px!important;
+  }
+  html body .wdcc-public-header .rh-logo{
+    grid-column:2!important;
+    justify-self:center!important;
+    width:68px!important;
+    min-width:68px!important;
+    max-width:68px!important;
+    height:68px!important;
+    min-height:68px!important;
+    max-height:68px!important;
+    display:grid!important;
+    place-items:center!important;
+    z-index:2!important;
+    pointer-events:auto!important;
+  }
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+    width:64px!important;
+    min-width:64px!important;
+    max-width:64px!important;
+    height:64px!important;
+    min-height:64px!important;
+    max-height:64px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    border-radius:50%!important;
+    clip-path:none!important;
+    transform:none!important;
+    pointer-events:none!important;
+  }
+  html body .wdcc-public-header .rh-menu,
+  html body .wdcc-public-header .rh-call{
+    position:relative!important;
+    z-index:3!important;
+    pointer-events:auto!important;
+  }
+  html body .wdcc-public-header .rh-nav{
+    z-index:4!important;
+  }
+}
