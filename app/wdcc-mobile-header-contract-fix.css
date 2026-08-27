@@ -1,6 +1,17 @@
 /* WDCC final visual contract closeout.
    Loaded last so legacy preview layers cannot reintroduce stale chrome or sizing. */
 
+/* Render the canonical horizontal asset from the img src directly. Legacy layers
+   used CSS content replacement on the image element, which can leave a blank
+   replaced element in Chromium. */
+html body [data-wdcc-public-chrome="header"] .rh-logo>img{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  position:static!important;
+}
+
 /* Home desktop: reserve enough real space for the complete horizontal wordmark. */
 @media (min-width:768px){
   html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
@@ -11,10 +22,6 @@
     width:172px!important;
     min-width:172px!important;
     overflow:visible!important;
-  }
-  html body main.reference-home.locked-storefront [data-wdcc-wordmark="visible"]{
-    width:158px!important;
-    max-width:158px!important;
   }
   html body main.reference-home.locked-storefront .rh-nav{gap:20px!important;min-width:0!important}
 
@@ -109,4 +116,4 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
   html body .editVehicleApp .wizardNav:not(.final) .next:only-child{grid-column:1/-1!important}
 }
 
-/* Exact-head proof sync: human-QA polish revision. */
+/* Exact-head proof sync: canonical single-wordmark render revision. */
