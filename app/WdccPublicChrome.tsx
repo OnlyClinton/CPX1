@@ -21,7 +21,6 @@ export function WdccPublicHeader(){
         <button className={`rh-menu ${styles.menu}`} type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}>☰</button>
         <Link className={`rh-logo logoBrand ${styles.logo}`} href="/" aria-label="We Don't Care Cars home" onClick={close}>
           <img src="/wdcc-logo-transparent.webp" alt="" aria-hidden="true" width="400" height="128"/>
-          <span className={styles.wordmarkText} data-wdcc-wordmark="visible" aria-hidden="true"><strong>WDCC</strong><i aria-hidden="true"/><span>WE DON&apos;T CARE CARS</span></span>
         </Link>
         <nav id="wdcc-public-nav" className={`rh-nav ${styles.nav}${open?` open ${styles.navOpen}`:""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>
