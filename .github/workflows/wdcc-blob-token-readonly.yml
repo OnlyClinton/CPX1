@@ -1,0 +1,67 @@
+name: WDCC Blob Token Read-Only
+
+on:
+  push:
+    branches: [proof/wdcc-blob-recovery-20260827]
+    paths:
+      - '.github/workflows/wdcc-blob-token-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --global vercel@59.3.0 >/dev/null
+      - run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Verify existing static Blob credential without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .wdcc-token-readonly.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {list,get} from '@vercel/blob';
+          const token=String(process.env.BLOB_READ_WRITE_TOKEN||'').trim();
+          const result={mode:'READ_ONLY',tokenPresent:Boolean(token),canonical:null,backups:[],errors:[]};
+          if(!token){fs.writeFileSync('wdcc-blob-token-readonly.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));process.exit(2)}
+          const rev=p=>Number((String(p).match(/(?:^|-)r(\d+)(?:-|\.|$)/i)||[])[1]||0);
+          async function all(prefix){let cursor,out=[];for(let i=0;i<20;i++){const r=await list({prefix,limit:200,cursor,token});out.push(...(r.blobs||[]));if(!r.hasMore||!r.cursor)break;cursor=r.cursor}return out}
+          async function summarize(blob){
+            const r=await get(blob.pathname,{access:'private',token});if(!r||r.statusCode!==200)throw Error(`GET_${r?.statusCode||0}`);
+            const bytes=Buffer.from(await new Response(r.stream).arrayBuffer()),doc=JSON.parse(bytes.toString('utf8'));
+            const roots=[doc,doc?._meta,doc?.meta,doc?.metadata].filter(x=>x&&typeof x==='object'&&!Array.isArray(x)),meta={};
+            for(const root of roots)for(const k of ['revision','ledgerRevision','version','schemaVersion','updatedAt','createdAt','timestamp','release']){const v=root[k];if((typeof v==='string'||typeof v==='number')&&meta[k]===undefined)meta[k]=v}
+            const counts={};for(const k of ['users','inventory','vehicles','leads','events','media','sessions','audit','logs','customers','appointments','applications','messages']){const v=doc?.[k];if(Array.isArray(v))counts[k]=v.length;else if(v&&typeof v==='object')counts[k]=Object.keys(v).length}
+            return{pathname:blob.pathname,uploadedAt:blob.uploadedAt||null,size:blob.size??bytes.length,pathRevision:rev(blob.pathname),sha256:crypto.createHash('sha256').update(bytes).digest('hex'),meta,counts,validJson:true};
+          }
+          try{const xs=await all('private/state/platform-v3.json'),b=xs.find(x=>x.pathname==='private/state/platform-v3.json');if(b)result.canonical=await summarize(b)}catch(e){result.errors.push({scope:'canonical',error:String(e?.message||e)})}
+          try{const xs=await all('private/state/backups/');xs.sort((a,b)=>rev(b.pathname)-rev(a.pathname)||String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||'')));result.backupCount=xs.length;result.maxPathRevision=Math.max(0,...xs.map(x=>rev(x.pathname)));for(const b of xs.slice(0,5)){try{result.backups.push(await summarize(b))}catch(e){result.errors.push({scope:b.pathname,error:String(e?.message||e)})}}}catch(e){result.errors.push({scope:'backups',error:String(e?.message||e)})}
+          fs.writeFileSync('wdcc-blob-token-readonly.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));
+          if(!result.canonical&&!result.backups.length)process.exit(2);
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID vercel env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-token-readonly.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-blob-token-readonly-${{ github.sha }}
+          path: wdcc-blob-token-readonly.json
+          if-no-files-found: warn
+          retention-days: 3
+
+# READ-ONLY: existing credential, list/get only. No writes or deployment changes.
