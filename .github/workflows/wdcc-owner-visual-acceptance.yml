@@ -34,7 +34,10 @@ jobs:
             git show --pretty='' --name-only "$HEAD_SHA" > /tmp/changed.txt
           fi
           cat /tmp/changed.txt
-          if grep -Eq '^(app/|public/|styles/|next\.config\.|package(-lock)?\.json$|\.github/workflows/wdcc-(webgpu|dealer|owner|preview|release)|\.github/scripts/wdcc-)' /tmp/changed.txt; then
+          # Only application/rendering code and shipped assets require owner
+          # visual approval. Control-plane workflow changes are governed by
+          # the separate production-control audit and PR review policy.
+          if grep -Eq '^(app/|public/|styles/|next\.config\.|package(-lock)?\.json$)' /tmp/changed.txt; then
             visual=true
           fi
           echo "visual=$visual" >> "$GITHUB_OUTPUT"
@@ -73,7 +76,7 @@ jobs:
             if [ "${{ steps.scope.outputs.visual }}" = true ]; then
               echo 'Machine/E2E success is not visual approval. This gate stays fail-closed until the owner approves the exact head after reviewing its captured photography and animation.'
             else
-              echo 'No owner-visible WDCC change detected; visual approval is not required for this PR.'
+              echo 'No owner-visible WDCC application/asset change detected; visual approval is not required for this PR.'
             fi
             echo 'This workflow has read-only repository permissions and performs no deployment, alias, DNS, provider, database, schema, or application-state mutation.'
           } >> "$GITHUB_STEP_SUMMARY"
