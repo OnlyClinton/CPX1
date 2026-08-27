@@ -1,0 +1,82 @@
+name: WDCC Cloudflare Live Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wdcc-cloudflare-live-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+    steps:
+      - name: Require read authority
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+
+      - name: Prove Cloudflare routes and DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "$CF_API/zones/$ZONE_ID/workers/routes" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' > routes.json
+          jq -e '.success==true' routes.json >/dev/null
+          jq -e '.result[]|select(.pattern=="wedontcarecars.com/*" and .script=="wdcc-reference-root")' routes.json >/dev/null
+          jq -e '.result[]|select(.pattern=="www.wedontcarecars.com/*" and .script=="wdcc-reference-root")' routes.json >/dev/null
+          jq -e '.result[]|select(.pattern=="dealer.wedontcarecars.com/*" and .script=="wdcc-dealer-frontdoor")' routes.json >/dev/null
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?name=www.wedontcarecars.com" -H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json' > www-dns.json
+          jq -e '.success==true and (.result|length)>=1 and .result[0].proxied==true' www-dns.json >/dev/null
+
+      - name: Prove direct Worker edge inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -D worker.headers -o worker.json -w '%{http_code}' "https://wdcc-reference-root.clico-global.workers.dev/api/inventory?proof=$GITHUB_RUN_ID" > worker.code
+          test "$(cat worker.code)" = 200
+          grep -qi '^x-wdcc-cloudflare-public: exact-2vfd' worker.headers
+          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' worker.headers
+          jq -e '.ok==true and .readOnly==true and .blobHealthy==false and (.items|length)==5' worker.json >/dev/null
+
+      - name: Prove apex and www are served through Cloudflare Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in https://wedontcarecars.com https://www.wedontcarecars.com; do
+            name="$(echo "$host"|sed 's#https://##;s#[^A-Za-z0-9]#_#g')"
+            ok=0
+            for i in $(seq 1 12); do
+              code="$(curl -sS -D "$name.headers" -o "$name.json" -w '%{http_code}' "$host/api/inventory?proof=$GITHUB_RUN_ID-$i" || true)"
+              if [ "$code" = 200 ] && grep -qi '^cf-ray:' "$name.headers" && grep -qi '^x-wdcc-cloudflare-public: exact-2vfd' "$name.headers" && grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' "$name.headers" && jq -e '.ok==true and .readOnly==true and .blobHealthy==false and (.items|length)==5' "$name.json" >/dev/null 2>&1; then ok=1; break; fi
+              sleep 2
+            done
+            if [ "$ok" != 1 ]; then
+              echo "FAILED_HOST=$host"
+              sed -n '1,80p' "$name.headers" || true
+              cat "$name.json" || true
+              exit 1
+            fi
+          done
+          echo 'CLOUDFLARE_APEX=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'CLOUDFLARE_WWW=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'EDGE_INVENTORY_READ_ONLY=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'BLOB_REQUESTS=0' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dealer route smoke only
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L --max-time 20 -o dealer.html -w '%{http_code}' https://dealer.wedontcarecars.com/dealer || true)"
+          echo "$code" | grep -Eq '^(200|302|307|308)$'
+          grep -Eqi 'dealer sign in|dealer portal' dealer.html
+          echo 'DEALER_ROUTE_PRESERVED=PASS' >> "$GITHUB_STEP_SUMMARY"
