@@ -67,12 +67,12 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
   visibility:visible!important;
   opacity:1!important;
   position:static!important;
-  width:92px!important;
-  min-width:92px!important;
-  max-width:92px!important;
-  height:92px!important;
-  min-height:92px!important;
-  max-height:92px!important;
+  width:100px!important;
+  min-width:100px!important;
+  max-width:100px!important;
+  height:100px!important;
+  min-height:100px!important;
+  max-height:100px!important;
   object-fit:contain!important;
   object-position:center!important;
   border:0!important;
