@@ -1,16 +1,22 @@
-import {isDealerRuntime} from "../../../../lib/dealerRuntime";
-import {proxyDealer} from "../../../../lib/dealerProxy";
-import {NextResponse} from "next/server";
-import {clearSession} from "../../../../lib/auth";
+import {clearSessionCookieHeader} from "../../../../lib/auth";
 
+const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
 export const dynamic="force-dynamic";
 
+function copyCookies(upstream:Response,headers:Headers){
+  const getter=(upstream.headers as any).getSetCookie;
+  if(typeof getter==="function")for(const cookie of getter.call(upstream.headers))headers.append("set-cookie",cookie);
+  else{const cookie=upstream.headers.get("set-cookie");if(cookie)headers.append("set-cookie",cookie);}
+}
+
 export async function POST(request:Request){
-  if(!isDealerRuntime(request))return proxyDealer(request,"/api/auth/logout");
+  const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
+  headers.append("set-cookie",clearSessionCookieHeader());
   try{
-    await clearSession();
-    return NextResponse.json({ok:true},{headers:{"Cache-Control":"no-store"}});
+    const upstream=await fetch(`${AUTH_BASE}/sign-out`,{method:"POST",headers:{accept:"application/json",cookie:request.headers.get("cookie")||""},cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(10000)});
+    copyCookies(upstream,headers);
   }catch(error){
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"logout_failed"},{status:500,headers:{"Cache-Control":"no-store"}});
+    console.error("WDCC_NEON_AUTH_LOGOUT_ERROR",error);
   }
+  return new Response(JSON.stringify({ok:true}),{status:200,headers});
 }
