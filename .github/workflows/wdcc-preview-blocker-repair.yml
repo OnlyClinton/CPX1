@@ -1,0 +1,246 @@
+name: WDCC Preview Blocker Repair
+
+on:
+  push:
+    branches:
+      - fix/wdcc-preview-provider-recovery-20260827
+    paths:
+      - '.github/workflows/wdcc-preview-blocker-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-preview-blocker-repair
+  cancel-in-progress: false
+
+env:
+  VERCEL_CLI_VERSION: '59.3.0'
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  SOURCE_STORE_ID: store_cNUyQRVlXtyvZQ5N
+  TARGET_STORE_ID: store_WtHRfeknoGWfBJaG
+  CANONICAL_PATH: private/state/platform-v3.json
+
+jobs:
+  build-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify isolated Vercel build
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const ts=JSON.parse(fs.readFileSync('tsconfig.json','utf8'));
+          if(!(ts.exclude||[]).includes('open-next.config.ts')) throw new Error('open-next.config.ts isolation missing');
+          NODE
+          npm run build
+
+  repair-preview:
+    needs: build-safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Require Vercel credential
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+
+      - name: Link Phoenix project without changing settings
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Seed isolated recovery store from safest recent immutable backup
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          cat > .wdcc-preview-repair.mjs <<'NODE'
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import {get,list,put} from '@vercel/blob';
+
+          const oidc=(process.env.VERCEL_OIDC_TOKEN||'').trim();
+          const source=process.env.SOURCE_STORE_ID;
+          const target=process.env.TARGET_STORE_ID;
+          const canonical=process.env.CANONICAL_PATH;
+          if(!oidc) throw new Error('VERCEL_OIDC_TOKEN missing');
+          if(!source||!target||!canonical) throw new Error('recovery store configuration missing');
+          if(source===target) throw new Error('source and target stores must differ');
+
+          const options=(storeId)=>({access:'private',useCache:false,oidcToken:oidc,storeId});
+          async function read(storeId,pathname){
+            const r=await get(pathname,options(storeId));
+            if(!r||r.statusCode!==200||!r.stream) throw new Error(`GET_FAILED:${storeId}:${pathname}`);
+            const chunks=[];
+            for await(const chunk of r.stream) chunks.push(chunk);
+            return Buffer.concat(chunks).toString('utf8');
+          }
+          const hash=(raw)=>crypto.createHash('sha256').update(raw).digest('hex');
+          const qa=(v)=>{
+            const stock=String(v?.stock||v?.stock_id||'').toUpperCase();
+            const id=String(v?.id||'').toUpperCase();
+            const d=String(v?.description||'').toLowerCase();
+            const badges=Array.isArray(v?.badges)?v.badges.map(x=>String(x||'').toUpperCase()):[];
+            return v?.qa===true||/^R36TEST[-_]/.test(stock)||/^WDCC[-_]QA[-_]/.test(stock)||/^QA[-_]/.test(stock)||/^TEST[-_]/.test(stock)||/^WDCC[-_]QA[-_]/.test(id)||/^QA[-_]/.test(id)||badges.some(b=>b==='R36-TEST'||b==='QA'||b==='TEST'||b.includes('CERTIFICATION'))||d.includes('automated temporary qa vehicle')||d.includes('automated dealer workflow certification')||d.includes('automated recovery certification vehicle')||d.includes('synthetic upload acceptance')||d.includes('dealer upload qa');
+          };
+          const publicVehicles=(state)=>{
+            const nextYear=new Date().getUTCFullYear()+1;
+            return (Array.isArray(state?.vehicles)?state.vehicles:[]).filter(v=>String(v?.status||'').toLowerCase()==='published'&&Number(v?.year)>1900&&Number(v?.year)<=nextYear&&String(v?.make||'').trim()&&String(v?.model||'').trim()&&Number(v?.price||v?.cashPrice)>0&&!qa(v)&&!v?.internalOnly&&!['internal','dealer_only'].includes(String(v?.visibility||v?.listingVisibility||'').toLowerCase()));
+          };
+
+          const listed=await list({prefix:'private/state/',limit:1000,oidcToken:oidc,storeId:source});
+          const blobs=Array.isArray(listed?.blobs)?listed.blobs:[];
+          const candidates=[];
+          if(blobs.some(b=>b.pathname===canonical)) candidates.push({pathname:canonical,revision:Number.MAX_SAFE_INTEGER});
+          for(const b of blobs){
+            const p=String(b.pathname||'');
+            if(!p.startsWith('private/state/backups/')) continue;
+            const matches=[...p.matchAll(/(?:^|[-_])r(\d+)(?:[-_.]|$)/g)];
+            if(!matches.length) continue;
+            const revision=Math.max(...matches.map(m=>Number(m[1])));
+            if(Number.isFinite(revision)) candidates.push({pathname:p,revision});
+          }
+          candidates.sort((a,b)=>b.revision-a.revision||a.pathname.localeCompare(b.pathname));
+          if(!candidates.length) throw new Error('NO_RECOVERY_CANDIDATES');
+
+          let selected=null;
+          for(const candidate of candidates.slice(0,3)){
+            try{
+              const raw=await read(source,candidate.pathname);
+              const state=JSON.parse(raw);
+              const revision=Number(state?.revision||0);
+              const vehicles=Array.isArray(state?.vehicles)?state.vehicles:[];
+              const users=Array.isArray(state?.users)?state.users:[];
+              const publicCount=publicVehicles(state).length;
+              if(revision<500||users.length<2||vehicles.length<1||publicCount<1) continue;
+              selected={candidate,raw,state,revision,publicCount,sha256:hash(raw)};
+              break;
+            }catch{}
+          }
+          if(!selected) throw new Error('NO_SAFE_RECOVERY_STATE');
+
+          const targetListing=await list({prefix:'private/state/',limit:10,oidcToken:oidc,storeId:target});
+          const targetPaths=(targetListing?.blobs||[]).map(b=>b.pathname);
+          if(targetPaths.length>1||(targetPaths.length===1&&targetPaths[0]!==canonical)) throw new Error(`TARGET_STORE_NOT_ISOLATED:${targetPaths.join(',')}`);
+
+          let seeded=false;
+          if(targetPaths.length===1){
+            const existing=await read(target,canonical);
+            if(hash(existing)!==selected.sha256) throw new Error('TARGET_CANONICAL_DIFFERS_REFUSING_OVERWRITE');
+          }else{
+            await put(canonical,selected.raw,{access:'private',addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',oidcToken:oidc,storeId:target});
+            seeded=true;
+          }
+
+          const verify=await read(target,canonical);
+          if(hash(verify)!==selected.sha256) throw new Error('TARGET_HASH_MISMATCH');
+
+          const summary={
+            sourceStore:source,
+            targetStore:target,
+            sourcePath:selected.candidate.pathname,
+            revision:selected.revision,
+            publicInventoryCount:selected.publicCount,
+            stateSha256:selected.sha256,
+            seeded,
+            productionStoreModified:false,
+            productionRoutingModified:false
+          };
+          fs.writeFileSync('recovery-state-summary.json',JSON.stringify(summary,null,2)+'\n');
+          console.log(JSON.stringify(summary));
+          NODE
+          env -u VERCEL_ORG_ID -u VERCEL_PROJECT_ID npx --yes "vercel@${VERCEL_CLI_VERSION}" env run --environment=production --token="$VERCEL_TOKEN" --scope=cpxagency -- node .wdcc-preview-repair.mjs
+
+      - name: Deploy exactly one isolated preview using recovered store
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -uo pipefail
+          log="$PWD/phoenix-preview-deploy.log"
+          : > "$log"
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --yes \
+            --token="$VERCEL_TOKEN" \
+            --scope=cpxagency \
+            --env "BLOB_READ_WRITE_TOKEN=" \
+            --env "BLOB_STORE_ID=$TARGET_STORE_ID" \
+            --build-env "BLOB_READ_WRITE_TOKEN=" \
+            --build-env "BLOB_STORE_ID=$TARGET_STORE_ID" \
+            2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          clean="$(sed -r 's/\x1B\[[0-9;]*[mK]//g' "$log")"
+          url="$(printf '%s\n' "$clean" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -1 || true)"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+          if [ -z "$url" ]; then echo 'No immutable preview URL returned' >&2; exit 1; fi
+          case "$url" in
+            https://wdcc-cpx-launch.vercel.app|https://wedontcarecars.com|https://www.wedontcarecars.com)
+              echo 'Refusing mutable/production domain' >&2; exit 1;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > phoenix-preview-url.txt
+
+      - name: Health gate — one request only
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L --connect-timeout 15 --max-time 30 -o health.json -w '%{http_code}' "$URL/api/health" || true)"
+          code="${code:-000}"
+          jq . health.json 2>/dev/null || cat health.json || true
+          if [ "$code" != 200 ] || ! jq -e '.ok==true and .state=="readable"' health.json >/dev/null 2>&1; then
+            printf '{"classification":"health-blocked","http":%s,"inventoryQueried":false}\n' "$code" > recovery-result.json
+            exit 1
+          fi
+
+      - name: Inventory gate — only after readable health
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -L --connect-timeout 15 --max-time 30 -o inventory.json -w '%{http_code}' "$URL/api/inventory" || true)"
+          code="${code:-000}"
+          jq '{ok,count,error,previewFallback,inventorySource}' inventory.json 2>/dev/null || cat inventory.json || true
+          if [ "$code" != 200 ] || ! jq -e '.ok==true and (.previewFallback!=true) and (.items|type=="array") and (.items|length>0)' inventory.json >/dev/null 2>&1; then
+            printf '{"classification":"inventory-blocked","http":%s,"inventoryQueried":true}\n' "$code" > recovery-result.json
+            exit 1
+          fi
+          jq -n --arg url "$URL" --arg sha "$GITHUB_SHA" --argjson count "$(jq '.items|length' inventory.json)" '{classification:"preview-recovered",sha:$sha,url:$url,inventoryCount:$count,productionTouched:false}' > recovery-result.json
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-preview-blocker-repair-${{ github.sha }}
+          path: |
+            recovery-state-summary.json
+            recovery-result.json
+            phoenix-preview-deploy.log
+            phoenix-preview-url.txt
+            health.json
+            inventory.json
+          if-no-files-found: warn
+          retention-days: 7
