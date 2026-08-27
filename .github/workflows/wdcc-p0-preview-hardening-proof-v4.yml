@@ -1,0 +1,135 @@
+name: WDCC P0 Preview Hardening Proof V4
+
+on:
+  push:
+    branches: [preview/wdcc-p0-hardening-20260827]
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'scripts/wdcc-preview-fixtures.mjs'
+      - 'scripts/wdcc-p0-preview-hardening-proof.mjs'
+      - '.github/workflows/wdcc-p0-preview-hardening-proof-v4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-p0-preview-hardening-v4-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STATE_TOKEN: preview-state-token
+      MEDIA_TOKEN: preview-media-token
+      PREVIEW_PASSWORD: preview-only-password
+      WDCC_PROOF_OUT: wdcc-preview-proof-v4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove isolated zero-provider scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'preview/wdcc-p0-hardening-20260827'
+          test -s scripts/wdcc-preview-fixtures.mjs
+          test -s scripts/wdcc-p0-preview-hardening-proof.mjs
+          grep -Fq 'export async function mutateState' lib/store.ts
+          grep -Fq 'vehicle.publish_rollback' 'app/api/inventory/[id]/route.ts'
+          grep -Fq 'checkpointed:true' app/api/upload/route.ts
+          grep -Fq 'authority.mode!=="cloudflare-do"' lib/vehicleAudit.ts
+          grep -Fq 'process.env.WDCC_NEON_AUTH_BASE' app/api/auth/login/route.ts
+          grep -Fq 'wdcc-preview-hardening.css' app/layout.tsx
+          test -s app/about/page.tsx
+          test -s app/about/about.module.css
+          ! grep -Eq 'api\.cloudflare\.com|wrangler[[:space:]]+deploy|vercel[[:space:]]+(alias|deploy)|neon\.tech|wedontcarecars\.com/api' scripts/wdcc-preview-fixtures.mjs scripts/wdcc-p0-preview-hardening-proof.mjs
+          test -z "$(grep -Ev 'grep -E|grep -F|^\s*#' .github/workflows/wdcc-p0-preview-hardening-proof-v4.yml | grep -E 'api\.cloudflare\.com|wrangler[[:space:]]+deploy|vercel[[:space:]]+(alias|deploy)|/workers/routes' || true)"
+          echo 'ZERO_REAL_PROVIDER_MUTATION_SCOPE=PASS'
+
+      - name: Build and install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.55.0 >/dev/null
+          npm run build
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Start localhost-only authorities
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup node scripts/wdcc-preview-fixtures.mjs >/tmp/wdcc-preview-fixtures.log 2>&1 &
+          for i in $(seq 1 50); do
+            if curl -fsS http://127.0.0.1:4101/health >/dev/null && curl -fsS http://127.0.0.1:4102/health >/dev/null && curl -fsS http://127.0.0.1:4103/health >/dev/null; then
+              echo 'LOCAL_AUTHORITIES=READY'
+              exit 0
+            fi
+            sleep .2
+          done
+          cat /tmp/wdcc-preview-fixtures.log >&2
+          exit 1
+
+      - name: Start localhost application runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          common='WDCC_RUNTIME_ROLE=canonical WDCC_STATE_SERVICE_URL=http://127.0.0.1:4101 WDCC_STATE_SERVICE_TOKEN=preview-state-token WDCC_MEDIA_SERVICE_URL=http://127.0.0.1:4102 WDCC_MEDIA_SERVICE_TOKEN=preview-media-token WDCC_NEON_AUTH_BASE=http://127.0.0.1:4103'
+          nohup env $common WDCC_STOREFRONT_VERIFY_URL=http://localhost:3000 PORT=3000 npm start >/tmp/wdcc-app-3000.log 2>&1 &
+          nohup env $common WDCC_STOREFRONT_VERIFY_URL=http://127.0.0.1:4199 PORT=3001 npm start >/tmp/wdcc-app-3001.log 2>&1 &
+          for port in 3000 3001; do
+            ok=0
+            for i in $(seq 1 100); do
+              code="$(curl -sS -o /tmp/health-$port.json -w '%{http_code}' http://localhost:$port/api/health || true)"
+              if [ "$code" = 200 ]; then ok=1; break; fi
+              sleep .25
+            done
+            test "$ok" = 1 || { cat /tmp/wdcc-app-$port.log >&2; exit 1; }
+            jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do" and .session=="neon"' /tmp/health-$port.json >/dev/null
+          done
+          echo 'LOCAL_APP_RUNTIMES=READY'
+
+      - name: Run hard functional and visual proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-p0-preview-hardening-proof.mjs
+
+      - name: Reject server runtime regressions
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -E 'WDCC_VEHICLE_AUDIT_WRITE_FAILED|UnhandledPromiseRejection|uncaughtException' /tmp/wdcc-app-3000.log /tmp/wdcc-app-3001.log >/tmp/wdcc-unexpected-server-errors.txt 2>/dev/null; then
+            cat /tmp/wdcc-unexpected-server-errors.txt >&2
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo '## WDCC P0 Preview Hardening V4' >> "$GITHUB_STEP_SUMMARY"
+          echo "Exact preview head: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Auth, state, media and app runtimes were localhost-only. No production provider, route, DNS, alias, database, or credential mutation.' >> "$GITHUB_STEP_SUMMARY"
+          [ ! -s "$WDCC_PROOF_OUT/report.json" ] || cat "$WDCC_PROOF_OUT/report.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '### App log tail' >> "$GITHUB_STEP_SUMMARY"
+          tail -40 /tmp/wdcc-app-3000.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-p0-preview-hardening-v4-${{ github.sha }}
+          path: wdcc-preview-proof-v4/
+          if-no-files-found: warn
+          retention-days: 7
