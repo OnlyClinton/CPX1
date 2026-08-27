@@ -94,17 +94,18 @@ html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-
     transform:translate(-50%,-50%)!important;
   }
 
-  /* Mobile brand placement is a symmetric three-track grid, not an absolute offset.
-     Equal 50px outer tracks + equal gaps guarantee the middle track is viewport-centered. */
+  /* Mobile brand placement is a symmetric three-track grid. The inner frame is
+     explicitly inset 10px on both sides so its center is exactly the viewport center. */
   html body [data-wdcc-public-chrome="header"]{
     position:sticky!important;
     top:0!important;
   }
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{
-    width:calc(100% - 20px)!important;
+    box-sizing:border-box!important;
+    width:auto!important;
     max-width:none!important;
-    margin-left:auto!important;
-    margin-right:auto!important;
+    margin:0 10px!important;
+    padding:0!important;
     display:grid!important;
     grid-template-columns:50px minmax(0,1fr) 50px!important;
     grid-template-rows:78px!important;
