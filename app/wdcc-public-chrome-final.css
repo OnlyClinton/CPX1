@@ -12,8 +12,8 @@ html body [data-wdcc-public-chrome="header"] .rh-nav>a{font-size:11px!important;
 html body [data-wdcc-public-chrome="header"] .rh-header-actions{display:flex!important}
 html body [data-wdcc-public-chrome="header"] .rh-menu,html body [data-wdcc-public-chrome="header"] .rh-call{display:none!important}
 
-/* Locked owner contract: wide storefront inventory is three columns. */
-@media(min-width:1200px){html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}}
+/* Locked mockup contract: Featured Inventory is five cards on wide desktop. Full /inventory remains three columns. */
+@media(min-width:1200px){html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:14px!important}}
 
 html body main.wdcc-public-page .policyPage{width:min(960px,calc(100% - 36px))!important;margin:0 auto!important;padding:46px 48px!important;display:block!important;border:1px solid #dbe1e5!important;border-radius:18px!important;background:#fff!important;color:#111820!important;box-shadow:0 14px 36px rgba(11,24,36,.08)!important}
 html body main.wdcc-public-page .policyPage>.eyebrow{margin:0 0 14px!important;color:#6b7781!important;font-size:11px!important;letter-spacing:.16em!important}
@@ -31,8 +31,8 @@ html body main.wdcc-public-page .policyPage>p{max-width:none!important;margin:0 
 
 /* Real-device authority: coarse-pointer phones keep mobile chrome even with a wide reported CSS viewport. */
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
-  html body [data-wdcc-public-chrome="utility"].rh-utility{height:28px!important;min-height:28px!important}
-  html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{width:calc(100% - 20px)!important;height:28px!important;gap:10px!important;justify-content:space-between!important;font-size:8.5px!important;letter-spacing:.045em!important}
+  html body [data-wdcc-public-chrome="utility"].rh-utility{display:block!important;visibility:visible!important;opacity:1!important;height:28px!important;min-height:28px!important;max-height:28px!important}
+  html body [data-wdcc-public-chrome="utility"] .rh-utility-inner{display:flex!important;visibility:visible!important;opacity:1!important;width:calc(100% - 20px)!important;height:28px!important;min-height:28px!important;gap:10px!important;justify-content:space-between!important;font-size:8.5px!important;letter-spacing:.045em!important}
   html body [data-wdcc-public-chrome="utility"] .rh-utility-inner>a{display:none!important}
   html body [data-wdcc-public-chrome="header"].rh-header{height:78px!important;min-height:78px!important;top:28px!important}
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{width:calc(100% - 20px)!important;height:78px!important;grid-template-columns:50px minmax(0,1fr) 50px!important;gap:8px!important}
