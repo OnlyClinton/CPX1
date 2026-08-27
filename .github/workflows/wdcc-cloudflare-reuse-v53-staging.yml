@@ -1,4 +1,5 @@
 name: WDCC Cloudflare Reuse V53 Staging
+# OpenNext config is now committed on the emergency branch; rerun the same isolated proof.
 
 on:
   push:
