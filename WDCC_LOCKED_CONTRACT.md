@@ -15,7 +15,7 @@ Before this candidate can go live on **either Cloudflare production or Vercel pr
 ## Visual source of truth
 
 1. Opening intro: supplied desktop/mobile Tampa skyline + American-flag Challenger + centered circular WDCC badge + cinematic logo handoff.
-2. Public storefront: supplied desktop/mobile BAD CREDIT / NO CREDIT / WE DON'T CARE board.
+2. Public storefront: supplied desktop/mobile BAD CREDIT / NO CREDIT / WE DON'T CARE board. The persistent public chrome keeps the owner-approved round WDCC emblem large in the pinned header; mobile keeps the emblem centered between the hamburger control and circular call control.
 3. Dealer dashboard: supplied light-canvas desktop/mobile dashboard board.
 4. All Vehicles: supplied dark chrome + white workspace desktop/mobile inventory board.
 5. Import Vehicles: supplied four-step Import Vehicles board.
@@ -47,6 +47,7 @@ Do not merge or promote until:
 - Public home, dealer dashboard, inventory, import, Add/Edit, photo/readiness and preview routes compile.
 - A Cloudflare `workers.dev` preview of the exact visual candidate is live and visually inspected by the owner.
 - Automated desktop/mobile evidence rejects headline overflow and any inventory reuse of `wdcc-hero-v2.webp`.
+- Automated public-header evidence requires the owner-approved round emblem and verifies that mobile menu/call controls remain usable without overlap.
 - Owner explicitly approves that Cloudflare preview.
 - Only after visual approval, authenticated dealer create/edit/photo/publish and storefront lead/inventory APIs retain their existing contracts.
 - No production deployment, alias, DNS or Cloudflare production routing change is required to validate the source.
