@@ -42,4 +42,5 @@ jobs:
           grep -q 'RECOVERY_READ_ONLY' app/api/admin/users/route.ts
           grep -q 'PREVIEW_RECOVERY_READ_ONLY' lib/store.ts
           grep -q 'VERCEL_ENV==="preview"' lib/wdccPreviewRecoveryState.ts
-          ! grep -R --line-number -E 'postgres(ql)?://[^ ]+:[^ ]+@|NEON_AUTH_COOKIE_SECRET=' lib app .github/workflows/wdcc-neon-recovery-build.yml
+          ! grep -R --line-number -E 'postgres(ql)?://[^ ]+:[^ ]+@' lib app
+          ! grep -R --line-number -E 'NEON_AUTH_COOKIE_SECRET=' lib app
