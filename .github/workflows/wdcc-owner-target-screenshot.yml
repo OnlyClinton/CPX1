@@ -64,7 +64,7 @@ jobs:
             const matrix=[
               {label:'home',path:'/',selector:'.reference-home',skipIntro:true,publicChrome:true},
               {label:'inventory',path:'/inventory',selector:'.inventoryTop',publicChrome:true},
-              {label:'approval',path:'/get-approved',selector:'.leadPage',publicChrome:true,funnel:true},
+              {label:'approval',path:'/get-approved',selector:'.approvalBoard',publicChrome:true,approval:true},
               {label:'test-drive',path:'/schedule-test-drive',selector:'.leadPage',publicChrome:true,funnel:true},
               {label:'contact',path:'/contact',selector:'.leadPage',publicChrome:true,funnel:true},
               {label:'privacy',path:'/privacy',selector:'.policyPage',publicChrome:true,policy:true},
@@ -74,6 +74,7 @@ jobs:
               {label:'dealer-login',path:'/dealer/login',selector:'main'},
               {label:'dealer-dashboard',path:'/dealer',selector:'.dealerDashboardLocked',dealer:true},
               {label:'dealer-inventory',path:'/dealer/inventory',selector:'.inventoryContract',dealer:true},
+              {label:'dealer-editor',path:'/dealer/inventory/new',selector:'.editVehicleApp',dealerEditor:true},
             ];
 
             const fail=(name,code,data)=>{throw new Error(`${name.toUpperCase().replaceAll('-','_')}_${code} ${JSON.stringify(data||{})}`)};
@@ -97,14 +98,16 @@ jobs:
                 const legacyDock=[...document.querySelectorAll('.stickyCtaBar')].filter(visible).length;
                 return{utilityCount:utility.length,headerCount:headers.length,utility:rect(utility[0]),header:rect(header),logo:rect(logo),logoSrc:logo?.getAttribute('src')||'',logoCount:header?[...header.querySelectorAll('img')].filter(visible).length:0,call:rect(call),callRadius:callStyle?.borderTopLeftRadius||'',legacyDock};
               });
-              if(chrome.utilityCount!==1||chrome.headerCount!==1)fail(name,'PUBLIC_CHROME_COUNT',chrome);
-              const u=chrome.utility?.h||0,h=chrome.header?.h||0,lw=chrome.logo?.w||0,lh=chrome.logo?.h||0,ratio=lw/Math.max(lh,1);
+              const h=chrome.header?.h||0,lw=chrome.logo?.w||0,lh=chrome.logo?.h||0,ratio=lw/Math.max(lh,1);
               if(isMobile){
-                if(u<26||u>31||h<74||h>82)fail(name,'MOBILE_CHROME_HEIGHT',chrome);
+                if(chrome.utilityCount!==0||chrome.headerCount!==1)fail(name,'MOBILE_SINGLE_HEADER',chrome);
+                if(Math.abs(chrome.header?.y||0)>3||h<74||h>82)fail(name,'MOBILE_CHROME_HEIGHT',chrome);
                 if(lw<120||lw>170||lh<34||lh>58||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'MOBILE_LOGO_GEOMETRY',chrome);
                 if(!chrome.call||chrome.call.w<44||chrome.call.w>54||Math.abs(chrome.call.w-chrome.call.h)>2)fail(name,'MOBILE_CALL_GEOMETRY',chrome);
                 const radius=parseFloat(chrome.callRadius)||0;if(radius<chrome.call.w*.42&&!chrome.callRadius.includes('%'))fail(name,'MOBILE_CALL_NOT_ROUND',chrome);
               }else{
+                const u=chrome.utility?.h||0;
+                if(chrome.utilityCount!==1||chrome.headerCount!==1)fail(name,'DESKTOP_CHROME_COUNT',chrome);
                 if(u<27||u>34||h<70||h>82)fail(name,'DESKTOP_CHROME_HEIGHT',chrome);
                 if(lw<120||lw>180||lh<34||lh>60||ratio<2.4||!chrome.logoSrc.includes('wdcc-logo-transparent.webp'))fail(name,'DESKTOP_LOGO_GEOMETRY',chrome);
               }
@@ -117,10 +120,11 @@ jobs:
                 const vis=e=>{if(!e)return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0&&r.width>1&&r.height>1};
                 const rect=e=>{const r=e?.getBoundingClientRect();return r?{x:r.x,y:r.y,w:r.width,h:r.height,bottom:r.bottom}:null};
                 const px=(e,k)=>e?(parseFloat(getComputedStyle(e)[k])||0):0;
-                const hero=document.querySelector(label==='home'?'.rh-hero':'.inventoryTop');
-                const lead=document.querySelector('.leadPage');
-                const form=document.querySelector('.leadForm');
-                const h1=document.querySelector(label==='home'?'.rh-copy h1':'.leadPage h1,.inventoryTop h1,.vehicleTop h1');
+                const approval=label==='approval';
+                const hero=document.querySelector(label==='home'?'.rh-hero':label==='inventory'?'.inventoryTop':approval?'.approvalScene':null);
+                const lead=document.querySelector(approval?'.approvalBoard':'.leadPage');
+                const form=document.querySelector(approval?'.approvalWizard':'.leadForm');
+                const h1=document.querySelector(label==='home'?'.rh-copy h1':approval?'.approvalSceneCopy h1':'.leadPage h1,.inventoryTop h1,.vehicleTop h1');
                 const controls=form?[...form.querySelectorAll('input:not([type="checkbox"]),select,textarea')].filter(vis):[];
                 const inventoryGrid=document.querySelector('.inventoryGrid');
                 const firstInventory=inventoryGrid?.querySelector('article,.inventoryProviderState,.emptyInventory');
@@ -129,18 +133,9 @@ jobs:
                 const dealerBrand=document.querySelector('main.dcPage>.dcTop>.brand');
                 let pseudo=null;if(dealerBrand){const b=getComputedStyle(dealerBrand,'::before'),a=getComputedStyle(dealerBrand,'::after');pseudo={before:{content:b.content,display:b.display,w:b.width},after:{content:a.content,display:a.display,w:a.width}}}
                 const homeType=label==='home'?{
-                  benefitStrong:px(document.querySelector('.rh-benefit strong'),'fontSize'),
-                  benefitSmall:px(document.querySelector('.rh-benefit small'),'fontSize'),
-                  inventoryLabel:px(document.querySelector('.rh-section-head small'),'fontSize'),
-                  inventoryCopy:px(document.querySelector('.rh-section-head p'),'fontSize'),
-                  financeStrong:px(document.querySelector('.rh-step strong'),'fontSize'),
-                  financeSmall:px(document.querySelector('.rh-step small'),'fontSize'),
-                  trustStrong:px(document.querySelector('.rh-trust-grid b'),'fontSize'),
-                  trustCopy:px(document.querySelector('.rh-trust-grid span'),'fontSize'),
-                  buttonData:[...document.querySelectorAll('.rh-hero-actions .rh-btn')].filter(vis).map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),
-                  heroPhoneVisible:[...document.querySelectorAll('.rh-phone')].some(vis)
+                  benefitStrong:px(document.querySelector('.rh-benefit strong'),'fontSize'),benefitSmall:px(document.querySelector('.rh-benefit small'),'fontSize'),inventoryLabel:px(document.querySelector('.rh-section-head small'),'fontSize'),inventoryCopy:px(document.querySelector('.rh-section-head p'),'fontSize'),financeStrong:px(document.querySelector('.rh-step strong'),'fontSize'),financeSmall:px(document.querySelector('.rh-step small'),'fontSize'),trustStrong:px(document.querySelector('.rh-trust-grid b'),'fontSize'),trustCopy:px(document.querySelector('.rh-trust-grid span'),'fontSize'),buttonData:[...document.querySelectorAll('.rh-hero-actions .rh-btn')].filter(vis).map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),heroPhoneVisible:[...document.querySelectorAll('.rh-phone')].some(vis)
                 }:null;
-                return{hero:rect(hero),lead:rect(lead),form:rect(form),h1:rect(h1),h1Font:px(h1,'fontSize'),controlData:controls.map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),inventoryGrid:rect(inventoryGrid),firstInventory:rect(firstInventory),cards,dealerLogo:rect(dealerLogo),dealerLogoCount:dealerLogo&&vis(dealerLogo)?1:0,pseudo,homeType,isMobile};
+                return{hero:rect(hero),lead:rect(lead),form:rect(form),h1:rect(h1),h1Font:px(h1,'fontSize'),controlData:controls.map(e=>({h:rect(e)?.h||0,font:px(e,'fontSize')})),approvalStages:approval?[...document.querySelectorAll('.approvalStages button')].filter(vis).length:0,inventoryGrid:rect(inventoryGrid),firstInventory:rect(firstInventory),cards,dealerLogo:rect(dealerLogo),dealerLogoCount:dealerLogo&&vis(dealerLogo)?1:0,pseudo,homeType,isMobile};
               },{label:entry.label,isMobile});
 
               if(entry.label==='home'&&isMobile){
@@ -155,6 +150,12 @@ jobs:
                 if(isMobile&&data.firstInventory&&data.firstInventory.y>500)fail(name,'INVENTORY_FIRST_CONTENT_TOO_LOW',data);
                 const api=await p.evaluate(async()=>{try{const r=await fetch('/api/inventory?owner-optical=1',{cache:'no-store'});const j=await r.json();return{ok:r.ok,previewFallback:Boolean(j?.previewFallback),source:j?.inventorySource||'',status:r.status}}catch(e){return{ok:false,error:String(e)}}});
                 if(api.previewFallback&&data.cards>0)fail(name,'FALLBACK_PRESENTED_AS_LIVE_CARDS',{api,...data});
+              }
+              if(entry.approval){
+                if(!data.lead||!data.form||data.approvalStages!==3)fail(name,'APPROVAL_SURFACE_MISSING',data);
+                if(isMobile&&data.form.y>900)fail(name,'APPROVAL_FORM_TOO_LOW',data);
+                if(isMobile&&(data.h1Font<38||data.h1Font>58))fail(name,'APPROVAL_HEADING_SCALE',data);
+                if(data.controlData.some(c=>c.h<(isMobile?46:42)||(isMobile&&c.font<15.5)))fail(name,'APPROVAL_CONTROL_SCALE',data);
               }
               if(entry.funnel){
                 if(!data.lead||!data.form)fail(name,'FUNNEL_SURFACE_MISSING',data);
@@ -172,17 +173,22 @@ jobs:
               return data;
             }
 
+            async function assertDealerEditor(p,name){
+              const x=await p.evaluate(()=>({steps:[...document.querySelectorAll('.stepper>div')].length,info:document.querySelectorAll('[data-wizard-stage="info"]').length,pricing:document.querySelectorAll('[data-wizard-stage="pricing"]').length,photos:document.querySelectorAll('[data-wizard-stage="photos"]').length,details:document.querySelectorAll('[data-wizard-stage="details"]').length,review:document.querySelectorAll('[data-wizard-stage="review"]').length}));
+              if(x.steps!==5||x.info!==1||x.pricing||x.photos||x.details||x.review)fail(name,'DEALER_WIZARD_INITIAL_STAGE',x);
+              return x;
+            }
+
             async function shot(entry,viewport,isMobile){
               const name=`${isMobile?'mobile':'desktop'}-${entry.label}`;
               const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
               const p=await ctx.newPage();
               p.on('pageerror',e=>result.errors.push(`${name}: ${String(e)}`));
               p.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))result.writeRequests.push({page:name,method:r.method(),url:r.url()})});
-              if(entry.dealer)await wireDealer(p);
+              if(entry.dealer||entry.dealerEditor)await wireDealer(p);
               const join=entry.path.includes('?')?'&':'?';
               const r=await p.goto(`${base}${entry.path}${join}owner-matrix=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-              const http=r?.status()||0;
-              if(http!==200)fail(name,'HTTP',{http});
+              const http=r?.status()||0;if(http!==200)fail(name,'HTTP',{http});
               await p.waitForTimeout(850);
               if(entry.skipIntro){const b=p.getByRole('button',{name:/skip intro/i});if(await b.count())await b.click().catch(()=>{});await p.waitForTimeout(450)}
               await p.locator(entry.selector).first().waitFor({state:'visible',timeout:8000});
@@ -191,7 +197,7 @@ jobs:
               const text=(await p.locator('body').innerText().catch(()=>'' )).replace(/\s+/g,' ').trim();
               if(/application error|internal server error|this page could not be found/i.test(text))fail(name,'VISIBLE_ERROR',{});
               const chrome=entry.publicChrome?await assertPublicChrome(p,name,isMobile):null;
-              const optics=await assertPageOptics(p,entry,name,isMobile);
+              const optics=entry.dealerEditor?await assertDealerEditor(p,name):await assertPageOptics(p,entry,name,isMobile);
               result.pages[name]={http,url:p.url(),title:await p.title(),geometry:geom,chrome,optics,text:text.slice(0,1400)};
               result.assertions.push({name,pass:true});
               await p.screenshot({path:`/tmp/wdcc-owner-target/${name}.png`,fullPage:true});
