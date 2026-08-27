@@ -48,6 +48,7 @@ jobs:
           grep -Fq 'left:50%!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'transform:translate(-50%,-50%)!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'img.rh-logo-art[data-wdcc-logo-art="owner-approved"]' app/wdcc-owner-approved-logo-final.css
+          grep -Fq 'width:96px!important' app/wdcc-owner-approved-logo-final.css
           grep -Fq 'content:normal!important' app/wdcc-owner-approved-logo-final.css
           ! grep -Fq 'content:url(' app/wdcc-owner-screenshot-switch.css
           ! grep -Fq '.li .li-badge{' app/wdcc-owner-screenshot-switch.css
@@ -189,7 +190,7 @@ jobs:
               };
             });
             const ratio=header.logo.w/Math.max(header.logo.h,1);
-            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<60||header.logo.h>74||header.logo.w<55||header.logo.w>112||ratio<.72||ratio>1.45||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||!header.logo.src.startsWith('data:image/'))throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
+            if(Math.abs(header.logo.cx-header.winW/2)>4||header.logo.h<90||header.logo.h>100||header.logo.w<90||header.logo.w>100||ratio<.94||ratio>1.06||header.logo.opacity<.99||header.logo.content!=='normal'||header.logo.clipPath!=='none'||!header.logo.src.startsWith('data:image/'))throw new Error(`ANDROID_HEADER_OWNER_EMBLEM_BAD_${JSON.stringify(header)}`);
             await page.locator('[data-wdcc-public-chrome="header"]').screenshot({path:`${out}/android-header.png`});
 
             response=await page.goto(`${base}/?owner-review=1&android-owner=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
