@@ -64,7 +64,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          c.name=`wdcc-mockup-v2-${process.env.GITHUB_SHA}`;
+          c.name=`wdcc-v2-${process.env.GITHUB_SHA.slice(0,12)}`;
           c.workers_dev=true;
           c.preview_urls=true;
           delete c.route;
@@ -81,7 +81,7 @@ jobs:
           npx wrangler deploy --config wrangler.mockup-v2.jsonc 2>&1 | tee /tmp/deploy.log
           url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.workers\.dev' /tmp/deploy.log | tail -1)"
           test -n "$url"
-          case "$url" in *"${GITHUB_SHA:0:12}"*|*"$GITHUB_SHA"*) ;; *) echo "preview is not SHA-bound: $url" >&2; exit 1;; esac
+          case "$url" in *"${GITHUB_SHA:0:12}"*) ;; *) echo "preview is not SHA-bound: $url" >&2; exit 1;; esac
           echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$url" > mockup-v2-preview-url.txt
 
@@ -126,6 +126,8 @@ jobs:
             await page.locator('.li').waitFor({state:'visible',timeout:7000});
             await page.waitForTimeout(650);
             await page.screenshot({path:`${out}/${label}-01-intro.png`,fullPage:false});
+            const skip=page.locator('.li-skip');
+            if(await skip.count())await skip.click({force:true});
             await page.waitForFunction(()=>!document.querySelector('.li'),null,{timeout:3500});
             await page.waitForFunction(()=>document.querySelectorAll('.rh-grid article').length>=5,null,{timeout:7000});
             await page.waitForTimeout(250);
