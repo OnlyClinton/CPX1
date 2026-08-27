@@ -1,0 +1,54 @@
+name: WDCC Owner Visual Acceptance Gate
+
+on:
+  push:
+    branches: [feat/wdcc-webgpu-intro-owner-override-20260827]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APPROVED_SHA: ${{ vars.WDCC_OWNER_VISUAL_APPROVED_SHA }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require exact-head owner visual approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Exact candidate SHA: $HEAD_SHA"
+          if [ -z "${APPROVED_SHA:-}" ]; then
+            echo "OWNER VISUAL ACCEPTANCE REQUIRED: WDCC_OWNER_VISUAL_APPROVED_SHA is unset." >&2
+            echo "The machine review may capture valid screenshots/video and E2E may pass, but neither constitutes visual approval." >&2
+            echo "Review the exact-head inventory photography and animation, then set the repository variable to: $HEAD_SHA" >&2
+            exit 1
+          fi
+          if [ "$APPROVED_SHA" != "$HEAD_SHA" ]; then
+            echo "OWNER VISUAL ACCEPTANCE REQUIRED: approval is stale or belongs to another candidate." >&2
+            echo "approved=$APPROVED_SHA" >&2
+            echo "current=$HEAD_SHA" >&2
+            exit 1
+          fi
+          echo "WDCC_OWNER_VISUAL_ACCEPTANCE=PASS exact_sha=$HEAD_SHA"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### WDCC owner visual acceptance — fail closed'
+            echo "Exact head: $HEAD_SHA"
+            echo 'This check separates machine execution proof from owner-visible presentation acceptance.'
+            echo 'It must remain red while inventory photography or animation quality is rejected.'
+            echo 'Read-only control only: no production route, alias, DNS, deployment, provider, database, schema, or application-state mutation.'
+          } >> "$GITHUB_STEP_SUMMARY"
