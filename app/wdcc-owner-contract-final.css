@@ -8,7 +8,7 @@ html body [data-wdcc-public-chrome="header"] .rh-logo::before,
 html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
 html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;display:block!important;width:148px!important;min-width:148px!important;max-width:148px!important;height:auto!important;min-height:0!important;max-height:50px!important;object-fit:contain!important;object-position:center!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 6px 14px rgba(0,0,0,.5))!important}
 
-/* Desktop section rhythm: 2vfD impact with newest-board density. */
+/* Desktop section rhythm: 51077 density. */
 @media(min-width:1200px){
   html body main.reference-home.locked-storefront .rh-hero{height:500px!important;min-height:500px!important;max-height:500px!important}
   html body main.reference-home.locked-storefront .rh-copy{max-width:560px!important;padding:26px 0 30px!important}
@@ -49,12 +49,15 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand::after{content:none!i
 html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdcc-official-logo.webp')!important;display:block!important;visibility:visible!important;opacity:1!important;position:static!important;width:58px!important;min-width:58px!important;max-width:58px!important;height:58px!important;min-height:58px!important;max-height:58px!important;flex:0 0 58px!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important;background:transparent!important;border:0!important;box-shadow:none!important;pointer-events:auto!important}
 
 @media(max-width:767px),(max-width:1180px) and (hover:none) and (pointer:coarse){
+  /* 51077 mobile has one public header only. */
+  html body [data-wdcc-public-chrome="utility"].rh-utility{display:none!important;visibility:hidden!important;opacity:0!important;height:0!important;min-height:0!important;max-height:0!important;overflow:hidden!important}
+  html body [data-wdcc-public-chrome="header"].rh-header{top:0!important;height:78px!important;min-height:78px!important}
   html body [data-wdcc-public-chrome="header"] .rh-header-inner{grid-template-columns:50px minmax(0,1fr) 50px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo{width:150px!important;height:78px!important;justify-self:center!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo img{content:url('/wdcc-logo-transparent.webp')!important;width:136px!important;min-width:136px!important;max-width:136px!important;height:auto!important;min-height:0!important;max-height:46px!important;object-fit:contain!important;transform:none!important;border:0!important;border-radius:0!important;clip-path:none!important;background:transparent!important;box-shadow:none!important;filter:brightness(0) invert(1) drop-shadow(0 5px 12px rgba(0,0,0,.48))!important}
   html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{width:50px!important;min-width:50px!important;max-width:50px!important;height:50px!important;min-height:50px!important;max-height:50px!important;flex-basis:50px!important}
 
-  /* Mobile section rhythm follows the supplied phone board, not desktop proportions scaled down. */
+  /* Mobile section rhythm follows 51077 rather than desktop proportions scaled down. */
   html body main.reference-home.locked-storefront .rh-hero{min-height:555px!important;height:auto!important;max-height:none!important}
   html body main.reference-home.locked-storefront .rh-hero-inner{min-height:555px!important;height:auto!important;align-items:flex-end!important}
   html body main.reference-home.locked-storefront .rh-copy{padding:105px 0 18px!important}
@@ -69,17 +72,18 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdc
   html body main.reference-home.locked-storefront .rh-inventory{padding:20px 0 24px!important}
   html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:11px!important}
 
-  /* Supplied mobile storefront: several compact Featured cards are visible at once and the rail remains swipeable. */
-  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;gap:8px!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:14px!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:2px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 clamp(108px,29.5vw,132px)!important;min-width:clamp(108px,29.5vw,132px)!important;max-width:clamp(108px,29.5vw,132px)!important;scroll-snap-align:start!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{padding:9px 9px 11px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_eyebrow__"]{font-size:8.5px!important;line-height:1.15!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:12.5px!important;line-height:1.14!important;min-height:29px!important;margin-top:3px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:19px!important;line-height:1!important;margin-top:8px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_down__"]{font-size:9px!important;line-height:1.2!important;margin-top:5px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"]{display:none!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_badge__"]{font-size:6.5px!important;padding:4px 5px!important;left:6px!important;top:6px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{aspect-ratio:1.35!important}
+  /* 51077: one readable card plus a controlled next-card peek. */
+  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;gap:10px!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:14px!important;padding-left:14px!important;padding-right:14px!important;padding-bottom:4px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 clamp(286px,82vw,330px)!important;min-width:clamp(286px,82vw,330px)!important;max-width:clamp(286px,82vw,330px)!important;scroll-snap-align:start!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_body__"]{padding:14px 15px 16px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_eyebrow__"]{font-size:10.5px!important;line-height:1.2!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_title__"]{font-size:18px!important;line-height:1.12!important;min-height:0!important;margin-top:5px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_price__"]{font-size:26px!important;line-height:1!important;margin-top:10px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_down__"]{font-size:11.5px!important;line-height:1.2!important;margin-top:6px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"]{display:flex!important;gap:6px!important;margin-top:10px!important;flex-wrap:wrap!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_pills__"] span{font-size:10.5px!important;line-height:1.15!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_badge__"]{font-size:9px!important;padding:5px 7px!important;left:8px!important;top:8px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article [class*="WdccVehicleCard_photo__"]{aspect-ratio:1.5!important}
 
   html body main.reference-home.locked-storefront .rh-finance{padding:22px 14px 24px!important}
   html body main.reference-home.locked-storefront .finance-heading{margin-bottom:10px!important}
@@ -108,12 +112,10 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdc
   html body .editVehicleApp .editHead{padding:13px 11px 11px!important}
   html body .editVehicleApp .sectionBlock{padding:13px 11px!important}
 
-  /* Narrow phones: readable two-column operational form, not a desktop form squeezed down. */
   html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
   html body .editVehicleApp label.description{grid-column:1/-1!important}
 }
 
-/* Wider phone/tablet mockup state: preserve the denser four-column 3293 editor composition. */
 @media(min-width:430px) and (max-width:767px){
   html body .editVehicleApp .fieldGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
   html body .editVehicleApp label.description{grid-column:1/-1!important}
@@ -121,10 +123,7 @@ html body main.dcPage.dealerDashboardLocked>.dcTop>a.brand>img{content:url('/wdc
   html body .editVehicleApp select{padding-left:7px!important;padding-right:7px!important;font-size:13px!important}
 }
 
-/* Keep the public wordmark materially large on narrow phones. */
 @media(max-width:420px){
   html body [data-wdcc-public-chrome="header"] .rh-logo{width:146px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo img{width:132px!important;min-width:132px!important;max-width:132px!important;height:auto!important;min-height:0!important;max-height:44px!important}
 }
-
-/* Exact-head proof synchronization marker: visible wordmark revision. */
