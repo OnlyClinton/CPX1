@@ -7,6 +7,7 @@ on:
     paths:
       - 'app/**'
       - 'scripts/wdcc-full-responsive-audit.mjs'
+      - 'scripts/wdcc-vehicle-page-audit.mjs'
       - '.github/workflows/wdcc-full-responsive-audit.yml'
   workflow_dispatch:
 
@@ -68,6 +69,16 @@ jobs:
           set -euo pipefail
           node scripts/wdcc-full-responsive-audit.mjs
 
+      - name: Audit vehicle detail or honest unavailable fallback
+        id: vehicle_audit
+        env:
+          URL: http://127.0.0.1:4175
+          OUT: responsive-audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/wdcc-vehicle-page-audit.mjs
+
       - name: Require current branch head
         id: head_gate
         shell: bash
@@ -95,6 +106,14 @@ jobs:
           NODE
           else
             echo 'Audit output unavailable.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -s responsive-audit/vehicle-page-audit.json ]; then
+            node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const p=require('./responsive-audit/vehicle-page-audit.json');
+          console.log(`Vehicle detail proof: PASS · ${p.mode} · captures ${p.captures.length} · writes ${p.writes.length}`);
+          NODE
+          else
+            echo 'Vehicle detail proof: unavailable.' >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "Current-head gate: ${{ steps.head_gate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
 
