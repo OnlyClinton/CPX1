@@ -1,0 +1,49 @@
+name: WDCC Blob Account CLI Read-Only
+on:
+  push:
+    branches: [proof/wdcc-blob-recovery-20260827]
+    paths: ['.github/workflows/wdcc-blob-account-cli-readonly.yml']
+permissions:
+  contents: read
+jobs:
+  export-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM: cpxagency
+      ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      FULL_URL: https://cnuyqrvlxtyvzq5n.private.blob.vercel-storage.com/private/state/backups/platform-v3-pre-reuse-clean-32983110396-1-r654-a345a3b2-6659-4441-a3ae-94b5b9a988e4.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24}
+      - run: npm install --global vercel@59.7.0 >/dev/null
+      - name: Link Phoenix project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$ORG_ID" "$PROJECT_ID" > .vercel/project.json
+      - name: Attempt account-level private Blob read
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/r654.json
+          if vercel blob get "$FULL_URL" --access private --output /tmp/r654.json --token="$VERCEL_TOKEN" --scope="$TEAM" >/tmp/blob-get.out 2>/tmp/blob-get.err; then
+            test -s /tmp/r654.json
+            node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const b=fs.readFileSync('/tmp/r654.json');
+          const s=JSON.parse(b.toString('utf8'));
+          const counts={};
+          for(const k of ['users','vehicles','inventory','leads','events','media','audit']){
+            const v=s?.[k]; if(Array.isArray(v)) counts[k]=v.length; else if(v&&typeof v==='object') counts[k]=Object.keys(v).length;
+          }
+          console.log(JSON.stringify({ok:true,revision:Number(s.revision||0),updatedAt:s.updatedAt||null,bytes:b.length,sha256:crypto.createHash('sha256').update(b).digest('hex'),counts}));
+          NODE
+          else
+            echo 'ACCOUNT_CLI_READ=DENIED'
+            tail -20 /tmp/blob-get.err | sed -E 's/(token|authorization|bearer)[^ ]*/[redacted]/Ig'
+            exit 78
+          fi
+# Read-only: no put/delete/create/connect/env/provider/deployment action.
