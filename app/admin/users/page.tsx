@@ -1,5 +1,9 @@
 "use client";
 import {FormEvent,useEffect,useState} from "react";
+
+const adminUserFields=["email","secondaryEmail","username","password","displayName","business","phone"] as const;
+type AdminUserField=(typeof adminUserFields)[number];
+
 export default function AdminUsers(){
   const [users,setUsers]=useState<any[]>([]);
   const [message,setMessage]=useState("");
@@ -34,6 +38,7 @@ export default function AdminUsers(){
     });
     load();
   }
+  function setField(k:AdminUserField,value:string){setForm(current=>({...current,[k]:value}))}
   return <main className="adminUsersPage" style={{minHeight:"100vh",background:"#07090c",color:"#fff",
     padding:24,fontFamily:"Arial"}}>
     <div style={{maxWidth:1100,margin:"auto"}}>
@@ -41,13 +46,11 @@ export default function AdminUsers(){
       <form onSubmit={submit} style={{display:"grid",
         gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",
         gap:10,background:"#11161d",padding:18,borderRadius:14}}>
-        {["email","secondaryEmail","username","password","displayName","business","phone"].map(k=>
-          <input key={k} type={k==="password"?"password":"text"}
-            required={["email","username","password"].includes(k)}
-            placeholder={k} value={(form as any)[k]}
-            onChange={e=>setForm({...form,[k]:e.target.value})
-            style={{padding:12,borderRadius:8}}/>
-        )}
+        {adminUserFields.map(k=><input key={k} type={k==="password"?"password":"text"}
+          required={k==="email"||k==="username"||k==="password"}
+          placeholder={k} value={form[k]}
+          onChange={e=>setField(k,e.target.value)}
+          style={{padding:12,borderRadius:8}}/>)}
         <select value={form.role}
           onChange={e=>setForm({...form,role:e.target.value})
           style={{padding:12,borderRadius:8}}>
