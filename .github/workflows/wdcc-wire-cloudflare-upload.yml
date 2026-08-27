@@ -1,0 +1,68 @@
+name: WDCC Wire Cloudflare Upload Client
+
+on:
+  push:
+    branches: [fix/wdcc-locked-contract-20260826]
+    paths:
+      - '.github/workflows/wdcc-wire-cloudflare-upload.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wdcc-wire-cloudflare-upload-client
+  cancel-in-progress: false
+
+jobs:
+  wire-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-locked-contract-20260826
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Replace Vercel browser uploader only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('app/dealer/inventory/VehicleEditor.tsx')
+          s=p.read_text()
+          old_import='import {upload} from "@vercel/blob/client";'
+          new_import='import {uploadVehiclePhoto} from "../../../lib/wdccUploadClient";'
+          if old_import in s:
+              s=s.replace(old_import,new_import,1)
+          elif new_import not in s:
+              raise SystemExit('UPLOAD_IMPORT_NOT_FOUND')
+          pattern=re.compile(r'''const blob=await upload\(`media/wdcc/\$\{id\}/\$\{crypto\.randomUUID\(\)\}-\$\{safe\}`,file,\{access:"private",handleUploadUrl:"/api/upload",clientPayload:JSON\.stringify\(\{vehicleId:id,requestId\}\),contentType:file\.type\}\);\s*if\(!blob\?\.pathname\)throw Error\(`Photo \$\{i\+1\} upload failed`\);paths\.push\(blob\.pathname\);''')
+          replacement='''const uploaded=await uploadVehiclePhoto({vehicleId:id,requestId,file});\n        if(!uploaded?.pathname)throw Error(`Photo ${i+1} upload failed`);paths.push(uploaded.pathname);'''
+          s,n=pattern.subn(replacement,s,count=1)
+          if n==0 and 'uploadVehiclePhoto({vehicleId:id,requestId,file})' not in s:
+              raise SystemExit('UPLOAD_CALL_NOT_FOUND')
+          p.write_text(s)
+          PY
+          ! grep -q '@vercel/blob/client' app/dealer/inventory/VehicleEditor.tsx
+          grep -q 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
+      - run: npm ci
+      - name: Build exact branch after upload seam repair
+        run: npm run build
+      - name: Commit only after green build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app/dealer/inventory/VehicleEditor.tsx; then
+            echo 'VehicleEditor already wired; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/dealer/inventory/VehicleEditor.tsx
+          git commit -m 'fix(wdcc): use provider-neutral dealer photo upload'
+          git push origin HEAD:fix/wdcc-locked-contract-20260826
