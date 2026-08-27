@@ -6,9 +6,14 @@ const base=process.env.URL;
 if(!base)throw new Error('IMMUTABLE_PREVIEW_URL_MISSING');
 const sourcePath=new URL('./wdcc-immutable-visual-proof-base.mjs',import.meta.url);
 const alignedPath=new URL('./.wdcc-immutable-visual-proof-aligned.mjs',import.meta.url);
-const source=fs.readFileSync(sourcePath,'utf8');
-// The base proof is the controlling newest-owner contract: horizontal public
-// wordmark, five wide Featured Inventory cards, tablet reflow and mobile swipe.
+let source=fs.readFileSync(sourcePath,'utf8');
+// Align the legacy base proof with FINAL VISUAL AUTHORITY 51077: mobile has
+// one public header only (no utility strip above it), while desktop retains
+// the utility strip + header stack.
+const oldMobileChrome="if(Math.abs((mobileHome.hTop||0)-(mobileHome.uH||0))>3||Math.abs((mobileHome.heroTop||0)-(mobileHome.hBottom||0))>3)throw new Error(`MOBILE_CHROME_GAP_${JSON.stringify(mobileHome)}`);";
+const newMobileChrome="if((mobileHome.uH||0)>1||Math.abs(mobileHome.hTop||0)>3||Math.abs((mobileHome.heroTop||0)-(mobileHome.hBottom||0))>3)throw new Error(`MOBILE_CHROME_GAP_${JSON.stringify(mobileHome)}`);";
+if(!source.includes(oldMobileChrome))throw new Error(`IMMUTABLE_OWNER_CONTRACT_SOURCE_DRIFT: ${oldMobileChrome}`);
+source=source.replace(oldMobileChrome,newMobileChrome);
 fs.writeFileSync(alignedPath,source);
 try{await import(`${pathToFileURL(alignedPath.pathname).href}?aligned=${Date.now()}`)}finally{fs.rmSync(alignedPath,{force:true})}
 
