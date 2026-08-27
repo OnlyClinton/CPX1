@@ -54,6 +54,19 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
+      - name: Inspect Blob project connection READ ONLY
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          npx --yes vercel@latest blob list-stores --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-project-stores.txt
+          echo "project_store_list_rc=${PIPESTATUS[0]}" | tee blob-project-stores-status.txt
+          npx --yes vercel@latest blob list-stores --all --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-team-stores.txt
+          echo "team_store_list_rc=${PIPESTATUS[0]}" | tee blob-team-stores-status.txt
+          npx --yes vercel@latest blob get-store "$WDCC_BLOB_STORE_ID" --token="$VERCEL_TOKEN" --scope=cpxagency 2>&1 | tee blob-store.txt
+          echo "get_store_rc=${PIPESTATUS[0]}" | tee blob-store-status.txt
+          set -e
+
       - name: Mint project-scoped OIDC token
         id: oidc
         env:
@@ -132,6 +145,12 @@ jobs:
         with:
           name: wdcc-phoenix-preview-provider-${{ github.sha }}
           path: |
+            blob-project-stores.txt
+            blob-project-stores-status.txt
+            blob-team-stores.txt
+            blob-team-stores-status.txt
+            blob-store.txt
+            blob-store-status.txt
             phoenix-preview-deploy.log
             phoenix-preview-url.txt
             phoenix-provider-proof.json
