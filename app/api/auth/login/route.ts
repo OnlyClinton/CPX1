@@ -3,6 +3,7 @@ import {proxyDealer} from "../../../../lib/dealerProxy";
 import {NextResponse} from "next/server";
 import {setSession,verifyPassword} from "../../../../lib/auth";
 import {readState} from "../../../../lib/store";
+import {appendRecoveryCookies,neonRecoveryEnabled,recoveryRole,recoverySignIn} from "../../../../lib/wdccNeonRecovery";
 
 export const dynamic="force-dynamic";
 
@@ -15,6 +16,19 @@ export async function POST(request:Request){
     const login=norm(body?.email||body?.username||body?.login);
     const password=String(body?.password||"");
     if(!login||!password)return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
+
+    if(neonRecoveryEnabled()){
+      if(!login.includes("@"))return NextResponse.json({ok:false,error:"recovery_email_required"},{status:400,headers:{"Cache-Control":"no-store"}});
+      const signed=await recoverySignIn(request,login,password);
+      if(!signed.ok)return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
+      const user=signed.data?.user||signed.data?.data?.user||null;
+      if(!user?.id)return NextResponse.json({ok:false,error:"recovery_session_missing"},{status:503,headers:{"Cache-Control":"no-store"}});
+      const role=recoveryRole(user);
+      const headers=new Headers({"Cache-Control":"no-store","X-WDCC-Recovery-Auth":"neon"});
+      appendRecoveryCookies(headers,signed.cookies);
+      return NextResponse.json({ok:true,role,tenantId:"wdcc",name:user.name||user.email||"WDCC User",mustChangePassword:false,user:{id:user.id,displayName:user.name||user.email,username:user.email,email:user.email,role,tenantId:"wdcc"},recovery:true},{headers});
+    }
+
     const state=await readState();
     const user=state.users.find(u=>{
       if(u.status==="disabled"||u.disabled)return false;
