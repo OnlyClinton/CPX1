@@ -145,13 +145,14 @@ jobs:
             if(transformA===transformB)throw new Error(`WHEEL_NOT_SPINNING_${transformA}`);
             await page.screenshot({path:`${out}/mobile-02-wheel-spin.png`});
             const capabilities=await page.evaluate(()=>{const c=document.createElement('canvas');let webgl=false;try{webgl=!!(c.getContext('webgl2')||c.getContext('webgl'))}catch{}return{webgpuApi:'gpu' in navigator,webgl}});
-            let renderMode=null;
-            try{
+            const declaredMode=await root.getAttribute('data-render-mode');
+            let renderMode=await root.getAttribute('data-three-runtime-mode');
+            if(!renderMode&&capabilities.webgl){
               await page.waitForFunction(()=>{const m=document.querySelector('.li')?.getAttribute('data-three-runtime-mode');return m==='webgpu'||m==='webgl'},null,{timeout:800});
-              renderMode=await root.getAttribute('data-three-runtime-mode');
-            }catch(e){
-              const declared=await root.getAttribute('data-render-mode');
-              if(capabilities.webgl||declared!=='static')throw e;
+              renderMode=await page.evaluate(()=>document.querySelector('.li')?.getAttribute('data-three-runtime-mode')||null);
+            }
+            if(!renderMode){
+              if(declaredMode!=='static')throw new Error(`RENDER_MODE_MISSING_${declaredMode}`);
               renderMode='static';
             }
             const wheelBlur=await wheel.evaluate(el=>getComputedStyle(el).filter);
@@ -159,9 +160,11 @@ jobs:
             await page.screenshot({path:`${out}/mobile-03-gpu-settle.png`});
             await page.waitForTimeout(280);
             await page.screenshot({path:`${out}/mobile-04-logo-clear.png`});
-            await page.waitForTimeout(330);
+            await page.waitForFunction(()=>document.documentElement.classList.contains('wdcc-intro-handoff'),null,{timeout:800});
+            await page.waitForTimeout(100);
             const handoff=await page.evaluate(()=>{const intro=document.querySelector('.li');const ui=document.querySelector('.rh-hero-inner');return{rootOpacity:intro?Number(getComputedStyle(intro).opacity):0,uiOpacity:ui?Number(getComputedStyle(ui).opacity):0,docHandoff:document.documentElement.classList.contains('wdcc-intro-handoff')}});
             await page.screenshot({path:`${out}/mobile-05-handoff.png`});
+            if(!handoff.docHandoff||handoff.uiOpacity<=0)throw new Error(`HANDOFF_NOT_VISIBLE_${JSON.stringify(handoff)}`);
             await page.waitForTimeout(600);
             const introCount=await page.locator('.li').count();
             const finalUi=await page.locator('.rh-hero-inner').evaluate(el=>Number(getComputedStyle(el).opacity));
@@ -169,7 +172,7 @@ jobs:
             if(introCount!==0)throw new Error(`INTRO_NOT_DISPOSED_${introCount}`);
             if(finalUi<.95)throw new Error(`SITE_UI_NOT_VISIBLE_${finalUi}`);
             if(soundPressed!=='true')throw new Error(`SOUND_NOT_ACTIVATED_${soundPressed}`);
-            Object.assign(metrics,{capabilities,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi});
+            Object.assign(metrics,{capabilities,declaredMode,renderMode,transformA,transformB,wheelBlur,soundPressed,handoff,introCount,finalUi});
             fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');
             await ctx.close();
           }catch(e){metrics.failure=String(e);fs.writeFileSync(`${out}/metrics.json`,JSON.stringify(metrics,null,2)+'\n');throw e}finally{await browser.close()}
