@@ -172,3 +172,71 @@ html body .editVehicleApp .wizardNav button:disabled{opacity:.55!important;curso
 }
 
 /* Exact-head proof sync: real horizontal logo + explicit owner-only historical inventory review mode. */
+
+/* FINAL LOGO RELIABILITY: render the official round badge as a real image.
+   Do not rely on CSS content:url swaps or filtered transparent wordmarks. */
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+  grid-template-columns:104px minmax(0,1fr) auto!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  width:96px!important;
+  min-width:96px!important;
+  height:78px!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+  content:normal!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:78px!important;
+  min-width:78px!important;
+  max-width:78px!important;
+  height:78px!important;
+  min-height:78px!important;
+  max-height:78px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+  background:transparent!important;
+  filter:drop-shadow(0 5px 12px rgba(0,0,0,.48))!important;
+}
+html body .li .li-badge-art{display:none!important;visibility:hidden!important;opacity:0!important}
+html body .li .li-badge>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  z-index:2!important;
+  width:96%!important;
+  height:96%!important;
+  object-fit:contain!important;
+  border-radius:50%!important;
+  clip-path:circle(48% at 50% 50%)!important;
+}
+@media (min-width:768px){
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:108px minmax(0,1fr) auto!important;
+  }
+  html body main.reference-home.locked-storefront [data-wdcc-public-chrome="header"] .rh-logo{
+    width:96px!important;
+    min-width:96px!important;
+  }
+}
+@media (max-width:767px){
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{
+    grid-template-columns:50px minmax(0,1fr) 50px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo{
+    width:92px!important;
+    min-width:92px!important;
+    height:78px!important;
+  }
+  html body [data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art{
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+    height:72px!important;
+    min-height:72px!important;
+    max-height:72px!important;
+  }
+}
