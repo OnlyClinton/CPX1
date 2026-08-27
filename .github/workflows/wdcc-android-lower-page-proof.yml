@@ -65,7 +65,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const cfg=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
-          cfg.name=`wdcc-android-lower-${process.env.GITHUB_SHA}`;
+          cfg.name=`wdal-${process.env.GITHUB_SHA}`;
           cfg.workers_dev=true;
           cfg.preview_urls=true;
           delete cfg.route;
