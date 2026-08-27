@@ -26,6 +26,11 @@ const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.88||d.car
 if(!code.includes(densityFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${densityFrom}`);
 code=code.replace(densityFrom,densityTo);
 
+const photoFrom="if(result.mediaAvailable)await page.locator('.photoDrop img').first().waitFor({state:'visible',timeout:10000});else await page.locator('.photoDrop').waitFor({state:'visible'});";
+const photoTo="const photosStep=page.locator('.stepper button').filter({hasText:'Photos'}).first();await photosStep.waitFor({state:'visible',timeout:10000});await photosStep.click();await page.locator('[data-wizard-stage=\"photos\"]').waitFor({state:'visible',timeout:10000});if(result.mediaAvailable)await page.locator('.photoDrop img').first().waitFor({state:'visible',timeout:10000});else await page.locator('.photoDrop').waitFor({state:'visible'});";
+if(!code.includes(photoFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${photoFrom}`);
+code=code.replace(photoFrom,photoTo);
+
 fs.writeFileSync(runtime,code);
 try{
   await import(`${pathToFileURL(process.cwd()+'/'+runtime).href}?owner-contract=${Date.now()}`);

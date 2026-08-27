@@ -52,6 +52,12 @@ const wireDealer=async page=>{
   await page.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
   await page.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:'{"ok":true,"items":[]}'}):r.abort());
 };
+const openWizardStage=async(page,label,stage)=>{
+  const button=page.locator('.stepper button').filter({hasText:label}).first();
+  await button.waitFor({state:'visible',timeout:10000});
+  await button.click();
+  await page.locator(`[data-wizard-stage="${stage}"]`).first().waitFor({state:'visible',timeout:10000});
+};
 const browser=await chromium.launch({headless:true});
 try{
   const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
@@ -76,10 +82,14 @@ try{
   await d.goto(`${base}/dealer/inventory/new?pointer-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
   await d.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
   await assertHits(d,'DEALER_DESKTOP_EDITOR',['.editTop a','.editTop button','.editSide a']);
-  const desktopPhotos=await assertSurface(d,'DEALER_DESKTOP_PHOTOS','.sectionBlock:has(h2:text-is("Photos"))',500,180);
+  await openWizardStage(d,'Photos','photos');
+  const desktopPhotos=await assertSurface(d,'DEALER_DESKTOP_PHOTOS','[data-wizard-stage="photos"]',500,180);
   await desktopPhotos.screenshot({path:'immutable-visual-proof/dealer-photos-desktop.png'});
   const desktopReadiness=await assertSurface(d,'DEALER_DESKTOP_READINESS','.readinessCard',240,180);
   await desktopReadiness.screenshot({path:'immutable-visual-proof/dealer-readiness-desktop.png'});
+  const desktopLivePreview=await assertSurface(d,'DEALER_DESKTOP_LIVE_PREVIEW','.editRight .vehiclePreview',240,180);
+  await desktopLivePreview.screenshot({path:'immutable-visual-proof/dealer-live-preview-desktop.png'});
+  await openWizardStage(d,'Review','review');
   const desktopPreview=d.getByRole('button',{name:/^preview$/i}).last();await desktopPreview.scrollIntoViewIfNeeded();await desktopPreview.click({timeout:5000});
   const desktopPreviewModal=await assertSurface(d,'DEALER_DESKTOP_PREVIEW','.previewModal',500,300);
   await assertHits(d,'DEALER_DESKTOP_PREVIEW_ACTIONS',['.previewModal button','.previewModal a']);
@@ -99,11 +109,15 @@ try{
   await dm.goto(`${base}/dealer/inventory/new?pointer-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
   await dm.locator('.editVehicleApp').waitFor({state:'visible',timeout:10000});
   await assertHits(dm,'DEALER_MOBILE_EDITOR_TOP',['.editTop a','.editTop button']);
-  const mobilePhotos=await assertSurface(dm,'DEALER_MOBILE_PHOTOS','.sectionBlock:has(h2:text-is("Photos"))',300,180);
+  await openWizardStage(dm,'Photos','photos');
+  const mobilePhotos=await assertSurface(dm,'DEALER_MOBILE_PHOTOS','[data-wizard-stage="photos"]',300,180);
   await assertHits(dm,'DEALER_MOBILE_PHOTO_ACTIONS',['.photoTools button','.addPhoto']);
   await mobilePhotos.screenshot({path:'immutable-visual-proof/dealer-photos-mobile.png'});
   const mobileReadiness=await assertSurface(dm,'DEALER_MOBILE_READINESS','.mobileReadiness',300,120);
   await mobileReadiness.screenshot({path:'immutable-visual-proof/dealer-readiness-mobile.png'});
+  const mobileLivePreview=await assertSurface(dm,'DEALER_MOBILE_LIVE_PREVIEW','.mobilePreview .vehiclePreview',300,180);
+  await mobileLivePreview.screenshot({path:'immutable-visual-proof/dealer-live-preview-mobile.png'});
+  await openWizardStage(dm,'Review','review');
   const mobilePreview=dm.getByRole('button',{name:/^preview$/i}).first();await mobilePreview.scrollIntoViewIfNeeded();await mobilePreview.click({timeout:5000});
   const mobilePreviewModal=await assertSurface(dm,'DEALER_MOBILE_PREVIEW','.previewModal',300,300);
   await assertHits(dm,'DEALER_MOBILE_PREVIEW_ACTIONS',['.previewModal button','.previewModal a']);
