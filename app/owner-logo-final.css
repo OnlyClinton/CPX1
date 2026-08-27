@@ -11,14 +11,21 @@ html body main.reference-home.locked-storefront .rh-header .rh-header-inner .rh-
   border-radius:50%!important;
 }
 
-/* Deterministically beat the older dealer rule that hides this exact <img>. */
+/* Deterministically beat the older dealer rule that hides this exact <img>, and
+   prevent the top-bar flex layout from shrinking the badge below acceptance size. */
 html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand > img{
   display:block!important;
   visibility:visible!important;
   opacity:1!important;
   width:58px!important;
+  min-width:58px!important;
+  max-width:58px!important;
   height:58px!important;
+  min-height:58px!important;
+  max-height:58px!important;
   flex:0 0 58px!important;
+  flex-shrink:0!important;
+  box-sizing:border-box!important;
   content:url('/wdcc-official-logo.webp')!important;
   object-fit:contain!important;
   object-position:center!important;
@@ -27,6 +34,11 @@ html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTo
   background:transparent!important;
   border:2px solid rgba(255,255,255,.78)!important;
   box-shadow:0 9px 20px rgba(0,0,0,.42)!important;
+}
+html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand{
+  flex-shrink:0!important;
+  min-width:max-content!important;
+  overflow:visible!important;
 }
 html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand::before{
   content:none!important;
@@ -75,7 +87,11 @@ html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTo
 
   html body main.dcPage.dcPage.dealerDashboardLocked.dealerDashboardLocked > .dcTop.dcTop > a.brand.brand > img{
     width:50px!important;
+    min-width:50px!important;
+    max-width:50px!important;
     height:50px!important;
-    flex-basis:50px!important;
+    min-height:50px!important;
+    max-height:50px!important;
+    flex:0 0 50px!important;
   }
 }
