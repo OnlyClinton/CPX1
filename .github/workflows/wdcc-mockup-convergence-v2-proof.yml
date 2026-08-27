@@ -51,7 +51,7 @@ jobs:
           grep -q 'RECOVERED FIRST-PARTY MEDIA' app/wdccVisualReviewInventory.ts
           grep -q 'withWdccRecoveredReviewMedia' app/ReferenceCloneHome.tsx
           grep -q 'pointer:coarse' app/wdcc-r31-owner-convergence.css
-          grep -q 'wizardStep3' app/dealer/inventory/VehicleEditor.tsx
+          grep -Fq 'wizardStep${step+1}' app/dealer/inventory/VehicleEditor.tsx
           grep -q 'WDCC_VISUAL_PROOF_FALLBACK' app/api/inventory/route.ts
           grep -q 'data-wdcc-cinematic-intro="owner-v3"' app/LockedIntro.tsx
           grep -q 'wdcc-owner-board-convergence-v2.css' app/layout.tsx
