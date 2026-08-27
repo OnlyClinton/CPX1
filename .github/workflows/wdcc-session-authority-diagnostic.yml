@@ -1,0 +1,61 @@
+name: WDCC Session Authority Diagnostic
+
+on:
+  push:
+    branches: [diagnostic/wdcc-session-authority-20260827]
+    paths:
+      - '.github/workflows/wdcc-session-authority-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: cpxagency
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install exact Vercel CLI
+        run: npm install --global vercel@59.3.0 >/dev/null
+      - name: Read-only session authority inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          projects=(
+            'phoenix:prj_a3oclCcy4sbA2tge4BX7VAKXE4KR'
+            'dealer:prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB'
+            'storefront:prj_We7xkAkB5Qy31Pt17USSkQFE0u7h'
+          )
+          keys=(SESSION_SECRET AUTH_SECRET BETTER_AUTH_SECRET WDCC_SESSION_SECRET NEXTAUTH_SECRET)
+          : > /tmp/session-authority.tsv
+          for entry in "${projects[@]}"; do
+            name="${entry%%:*}"; project="${entry#*:}"
+            dir="/tmp/wdcc-session-$name"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$project" > "$dir/.vercel/project.json"
+            (cd "$dir" && VERCEL_PROJECT_ID="$project" vercel env pull "$dir/prod.env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
+            for key in "${keys[@]}"; do
+              line="$(grep -m1 "^${key}=" "$dir/prod.env" || true)"
+              value="${line#*=}"; value="${value#\"}"; value="${value%\"}"
+              present=false; [ -n "$line" ] && present=true
+              printf '%s\t%s\t%s\t%s\n' "$name" "$key" "$present" "${#value}" >> /tmp/session-authority.tsv
+            done
+            rm -f "$dir/prod.env"
+          done
+          column -t -s $'\t' /tmp/session-authority.tsv
+          {
+            echo '## WDCC session authority diagnostic'
+            echo
+            echo '| project | key | present | length |'
+            echo '|---|---|---:|---:|'
+            awk -F'\t' '{printf "| %s | %s | %s | %s |\n",$1,$2,$3,$4}' /tmp/session-authority.tsv
+            echo
+            echo 'Values were never printed or uploaded. Read-only Vercel env pulls only.'
+          } >> "$GITHUB_STEP_SUMMARY"
