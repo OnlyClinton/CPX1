@@ -15,8 +15,8 @@ html body [data-wdcc-public-chrome="header"] .rh-header-actions{display:flex!imp
 html body [data-wdcc-public-chrome="header"] .rh-menu,
 html body [data-wdcc-public-chrome="header"] .rh-call{display:none!important}
 
-/* Supplied 3294 desktop contract: five featured vehicles across. */
-@media(min-width:1200px){html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:14px!important}}
+/* Owner contract: wide storefront inventory is exactly three columns. */
+@media(min-width:1200px){html body main.reference-home.locked-storefront .rh-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}}
 
 /* Policy pages share the chrome but never inherit the lead-form composition. */
 html body main.wdcc-public-page .policyPage{width:min(960px,calc(100% - 36px))!important;margin:0 auto!important;padding:46px 48px!important;display:block!important;border:1px solid #dbe1e5!important;border-radius:18px!important;background:#fff!important;color:#111820!important;box-shadow:0 14px 36px rgba(11,24,36,.08)!important}
