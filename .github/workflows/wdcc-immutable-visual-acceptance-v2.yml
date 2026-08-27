@@ -116,13 +116,13 @@ jobs:
           [ "$code" = 200 ] || fail "REMOTE_ROOT_HTTP_$code"
           root_bytes="$(wc -c < /tmp/wdcc-remote-root.html | tr -d ' ')"
           [ "$root_bytes" -gt 5000 ] || fail "REMOTE_ROOT_TOO_SMALL_$root_bytes"
-          grep -Fq "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
+          grep -Fq -- "$local_build" /tmp/wdcc-remote-root.html || fail REMOTE_ROOT_BUILD_ID_MISSING
 
           dealer_code="$(curl --http1.1 -sS -L -o /tmp/wdcc-remote-dealer.html -w '%{http_code}' "$REMOTE_URL/dealer?visual=remote-$GITHUB_SHA" || true)"
           [ "$dealer_code" = 200 ] || fail "REMOTE_DEALER_HTTP_$dealer_code"
           dealer_bytes="$(wc -c < /tmp/wdcc-remote-dealer.html | tr -d ' ')"
           [ "$dealer_bytes" -gt 1000 ] || fail "REMOTE_DEALER_TOO_SMALL_$dealer_bytes"
-          grep -Fq "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
+          grep -Fq -- "$local_build" /tmp/wdcc-remote-dealer.html || fail REMOTE_DEALER_BUILD_ID_MISSING
 
           for asset in wdcc-hero-v2.webp wdcc-official-logo.webp; do
             curl --http1.1 -fsSL "$REMOTE_URL/$asset" -o "/tmp/remote-$asset" || fail "REMOTE_ASSET_FETCH_$asset"
@@ -153,7 +153,7 @@ jobs:
           local_bytes="$(wc -c < /tmp/wdcc-local-root.html | tr -d ' ')"
           [ "$local_bytes" -gt 5000 ]
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          grep -Fq "$local_build" /tmp/wdcc-local-root.html
+          grep -Fq -- "$local_build" /tmp/wdcc-local-root.html
           echo 'url=http://127.0.0.1:4173' >> "$GITHUB_OUTPUT"
 
       - name: Prove intro smoke-to-clear contract
