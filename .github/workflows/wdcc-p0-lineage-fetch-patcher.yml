@@ -1,0 +1,50 @@
+name: WDCC P0 Lineage Fetch Patcher
+
+on:
+  push:
+    branches: [fix/wdcc-p0-lineage-fetch-20260827]
+    paths:
+      - '.github/workflows/wdcc-p0-lineage-fetch-patcher.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/wdcc-p0-lineage-fetch-20260827
+          fetch-depth: 1
+      - name: Apply one-line lineage fix and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/wdcc-owner-approved-p0-dealer-upload.yml')
+          s=p.read_text()
+          needle="""      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.P0_SHA }}
+          fetch-depth: 1
+"""
+          repl="""      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.P0_SHA }}
+          fetch-depth: 0
+"""
+          if s.count(needle)!=1:
+              raise SystemExit(f'expected one exact P0 checkout, found {s.count(needle)}')
+          p.write_text(s.replace(needle,repl,1))
+          PY
+          rm .github/workflows/wdcc-p0-lineage-fetch-patcher.yml
+          git diff --check
+          test "$(git diff --numstat .github/workflows/wdcc-owner-approved-p0-dealer-upload.yml | awk '{print $1":"$2}')" = '1:1'
+          git config user.name 'WDCC Control Proof Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(wdcc): fetch full P0 lineage before promotion gate'
+          git push origin HEAD:fix/wdcc-p0-lineage-fetch-20260827
