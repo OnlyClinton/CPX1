@@ -18,11 +18,14 @@ export async function POST(request:Request){
     if(!login||!password)return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
 
     if(neonRecoveryEnabled()){
-      if(!login.includes("@"))return NextResponse.json({ok:false,error:"recovery_email_required"},{status:400,headers:{"Cache-Control":"no-store"}});
+      if(!login.includes("@"))return NextResponse.json({ok:false,error:"recovery_email_required"},{status:400,headers:{"Cache-Control":"no-store","X-WDCC-Recovery-Auth":"neon"}});
       const signed=await recoverySignIn(request,login,password);
-      if(!signed.ok)return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
+      if(!signed.ok){
+        const rejected=signed.status===400||signed.status===401||signed.status===403;
+        return NextResponse.json({ok:false,error:rejected?"invalid_credentials":"recovery_auth_provider_failed",recovery:true},{status:rejected?401:502,headers:{"Cache-Control":"no-store","X-WDCC-Recovery-Auth":"neon","X-WDCC-Recovery-Auth-Upstream":String(signed.status)}});
+      }
       const user=signed.data?.user||signed.data?.data?.user||null;
-      if(!user?.id)return NextResponse.json({ok:false,error:"recovery_session_missing"},{status:503,headers:{"Cache-Control":"no-store"}});
+      if(!user?.id)return NextResponse.json({ok:false,error:"recovery_session_missing"},{status:503,headers:{"Cache-Control":"no-store","X-WDCC-Recovery-Auth":"neon"}});
       const role=recoveryRole(user);
       const headers=new Headers({"Cache-Control":"no-store","X-WDCC-Recovery-Auth":"neon"});
       appendRecoveryCookies(headers,signed.cookies);
