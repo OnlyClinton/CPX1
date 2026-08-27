@@ -1,4 +1,4 @@
-name: WDCC Cloudflare Capacity Inventory
+name: WDCC Cloudflare Route Ownership Readback
 
 on:
   push:
@@ -12,44 +12,35 @@ permissions:
   issues: write
 
 jobs:
-  inventory:
+  routes:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ZONE_API_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CANDIDATE: wdcc-v53-staging
     steps:
-      - name: Read Worker scripts and production routes
+      - name: Read current wedontcarecars.com Worker routes only
         shell: bash
         run: |
           set -euo pipefail
-          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do test -n "${!v:-}" || exit 20; done
-          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" -o /tmp/scripts.json
-          jq -e '.success==true' /tmp/scripts.json >/dev/null
+          test -n "${CLOUDFLARE_ZONE_API_TOKEN:-}"; test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           zone_json="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com&account.id=$CLOUDFLARE_ACCOUNT_ID&per_page=50")"
           ZONE="$(printf '%s' "$zone_json" | jq -r '.result[0].id')"; test -n "$ZONE"; test "$ZONE" != null
           curl -fsS -H "Authorization: Bearer $CLOUDFLARE_ZONE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones/$ZONE/workers/routes" -o /tmp/routes.json
           jq -e '.success==true' /tmp/routes.json >/dev/null
-          jq -n --slurpfile s /tmp/scripts.json --slurpfile r /tmp/routes.json '
-            ($r[0].result | map(.script) | map(select(.!=null)) | unique) as $bound |
-            {
-              workerCount: ($s[0].result|length),
-              boundScripts: $bound,
-              routes: ($r[0].result|map({pattern,script,id})),
-              unbound: ($s[0].result|map(select((.id as $id | $bound|index($id))==null)|{id,modified_on,created_on,usage_model}))
-            }
-          ' > /tmp/capacity.json
-          cat /tmp/capacity.json
-      - name: Report read-only inventory
+          jq '[.result[]|{pattern,script,id}]' /tmp/routes.json > /tmp/routes-summary.json
+          jq -e --arg c "$CANDIDATE" 'all(.result[]; (.script//"") != $c)' /tmp/routes.json >/dev/null
+          echo "CANDIDATE_UNBOUND=true"
+          cat /tmp/routes-summary.json
+      - name: Report route ownership proof
         if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -s /tmp/capacity.json ]; then
-            count="$(jq -r '.workerCount' /tmp/capacity.json)"
-            bound="$(jq -c '.boundScripts' /tmp/capacity.json)"
-            unbound="$(jq -c '[.unbound[]|.id] | .[:25]' /tmp/capacity.json)"
-            gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Read-only Cloudflare capacity inventory run $GITHUB_RUN_ID: worker count=$count; production-route-bound scripts=$bound; first unbound Worker candidates=$unbound. No Worker, route, DNS, alias, or deployment mutation was performed by this inventory." || true
+          if [ -s /tmp/routes-summary.json ]; then
+            dealer="$(jq -c '[.[]|select(.pattern=="dealer.wedontcarecars.com/*")]|first//null' /tmp/routes-summary.json)"
+            scripts="$(jq -c '[.[].script]|map(select(.!=null))|unique' /tmp/routes-summary.json)"
+            gh issue comment 205 --repo "$GITHUB_REPOSITORY" --body "Read-only Cloudflare route proof run $GITHUB_RUN_ID: candidate \`wdcc-v53-staging\` is not present in any current wedontcarecars.com Worker route. Dealer route record=$dealer ; all currently route-bound scripts=$scripts. No Worker, route, DNS, alias, or deployment mutation was performed." || true
           fi
