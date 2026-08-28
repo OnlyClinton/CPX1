@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
   mechanical assertions with the current FINAL VISUAL AUTHORITY:
     - desktop Featured Inventory: five compact columns
     - phone Featured Inventory: one dominant swipe/snap card with the next card advancing off-canvas
-    - full /inventory: three columns desktop, one column mobile
+    - full /inventory: five compact columns desktop, one compact row per vehicle on mobile
     - phone Add/Edit: one full-width readable field column at 390px
   It also corrects drawer visibility semantics: the off-canvas sidebar does not
   need to be visible while closed; the top dealer brand must remain visible.
@@ -23,6 +23,11 @@ const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fa
 const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
+
+const inventoryFrom="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:3},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
+const inventoryTo="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:5},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
+if(!code.includes(inventoryFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${inventoryFrom}`);
+code=code.replace(inventoryFrom,inventoryTo);
 
 const densityFrom="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.46||d.cardW<d.viewport*.28||d.secondX>=d.viewport)fail('MOBILE_FEATURED_DENSITY_3294',d)";
 const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.96||d.cardW<d.viewport*.85||d.secondX<d.viewport*.90||d.secondX>d.viewport*1.05)fail('MOBILE_FEATURED_DENSITY_3294',d)";
