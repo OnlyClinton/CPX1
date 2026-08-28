@@ -12,7 +12,7 @@ import {pathToFileURL} from 'node:url';
   It also follows editor branding semantics: desktop keeps both side and top brands;
   mobile does not require its off-canvas side brand, but keeps the top brand visible.
   This wrapper is also the shared exact-SHA trigger for Responsive + Real Snapshot
-  acceptance after proof-harness-only corrections, including source-lock follow-ups;
+  acceptance after proof-harness-only corrections, including source-lock and page-matrix follow-ups;
   the executable contract below is unchanged.
 */
 const source='scripts/wdcc-verified-real-snapshot-visual-stress.mjs';
