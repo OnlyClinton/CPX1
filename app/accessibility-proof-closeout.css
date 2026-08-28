@@ -1,0 +1,48 @@
+/*
+ * Preview-lane accessibility closeout.
+ * Loaded after visual convergence layers to enforce the responsive audit's
+ * minimum readable control, label, and dealer-navigation sizes.
+ */
+html body form input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+html body form select,
+html body form textarea{
+  min-height:40px!important;
+  font-size:12px!important;
+  line-height:1.25!important;
+}
+html body form input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+html body form select{
+  height:40px!important;
+}
+html body form label{
+  font-size:11px!important;
+  line-height:1.2!important;
+}
+html body .dcSide nav a,
+html body .targetLeadSide nav a,
+html body .crmSidebar nav a{
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+@media(max-width:767px){
+  html body form input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+  html body form select,
+  html body form textarea{
+    min-height:46px!important;
+    font-size:16px!important;
+  }
+  html body form input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+  html body form select{
+    height:46px!important;
+  }
+  html body form label{
+    font-size:11px!important;
+  }
+  html body .dashMobileNav span,
+  html body .inventoryMobileNav span,
+  html body .targetLeadMobile span,
+  html body .refDealerMobileNav span{
+    font-size:9px!important;
+    line-height:1.15!important;
+  }
+}

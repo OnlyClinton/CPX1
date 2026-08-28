@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
-      URL: https://wdcc-proof-${{ github.sha }}.clico-global.workers.dev
+      URL: https://wiva-${{ github.sha }}.clico-global.workers.dev
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -70,22 +70,23 @@ jobs:
           async function assertLogo(p,name,isMobile){
             const x=await p.evaluate(()=>{
               const header=document.querySelector('[data-wdcc-public-chrome="header"]');
-              const logo=header?.querySelector('img[data-wdcc-logo-art="owner-approved"]');
-              const hr=header?.getBoundingClientRect(),r=logo?.getBoundingClientRect(),s=logo?getComputedStyle(logo):null;
+              const shell=header?.querySelector('.rh-logo');
+              const logo=shell?.querySelector('img[data-wdcc-logo-art="owner-wordmark"]');
+              const hr=header?.getBoundingClientRect(),sr=shell?.getBoundingClientRect();
+              const ps=shell?getComputedStyle(shell,'::before'):null;
               const utility=document.querySelector('[data-wdcc-public-chrome="utility"]');
               const us=utility?getComputedStyle(utility):null,ur=utility?.getBoundingClientRect();
-              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,w:r?.width||0,h:r?.height||0,cx:r?r.x+r.width/2:0,headerH:hr?.height||0,winW:innerWidth,display:s?.display||'',visibility:s?.visibility||'',opacity:Number(s?.opacity||0),clipPath:s?.clipPath||'',content:s?.content||'',utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),count:header?.querySelectorAll('img[data-wdcc-logo-art="owner-approved"]').length||0};
+              return{found:Boolean(logo),src:logo?.getAttribute('src')||'',complete:Boolean(logo?.complete),naturalWidth:logo?.naturalWidth||0,naturalHeight:logo?.naturalHeight||0,shellW:sr?.width||0,shellH:sr?.height||0,cx:sr?sr.x+sr.width/2:0,headerH:hr?.height||0,winW:innerWidth,pseudoContent:ps?.content||'',pseudoDisplay:ps?.display||'',pseudoVisibility:ps?.visibility||'',pseudoOpacity:Number(ps?.opacity||0),utilityVisible:Boolean(utility&&us?.display!=='none'&&us?.visibility!=='hidden'&&Number(us?.opacity)>0&&(ur?.height||0)>1),roundPersistent:header?.querySelectorAll('img[data-wdcc-logo-art="owner-approved"]').length||0};
             });
-            if(!x.found||x.count!==1||!x.complete||x.naturalWidth<20||x.naturalHeight<20||x.src!=='/wdcc-owner-logo'||x.display==='none'||x.visibility==='hidden'||x.opacity<=0||x.content!=='normal'||x.clipPath!=='none')fail(`${name}_OWNER_LOGO_LOAD`,x);
-            const min=isMobile?58:68,max=isMobile?66:84;
-            if(x.w<min||x.w>max||x.h<min||x.h>max||x.w/Math.max(x.h,1)<.82||x.w/Math.max(x.h,1)>1.18)fail(`${name}_OWNER_LOGO_GEOMETRY`,x);
-            if(isMobile&&(x.headerH<60||x.headerH>68))fail(`${name}_MOBILE_HEADER_HEIGHT`,x);
-            if(isMobile&&Math.abs(x.cx-x.winW/2)>4)fail(`${name}_OWNER_LOGO_CENTER`,x);
+            if(!x.found||!x.complete||x.naturalWidth<20||x.naturalHeight<20||x.src!=='/wdcc-logo-transparent.webp')fail(`${name}_WORDMARK_ASSET`,x);
+            if(x.roundPersistent!==0)fail(`${name}_SUPERSEDED_ROUND_HEADER`,x);
+            if(!/WDCC/.test(x.pseudoContent)||x.pseudoDisplay==='none'||x.pseudoVisibility==='hidden'||x.pseudoOpacity<=0||x.shellW<1||x.shellH<1)fail(`${name}_COMPACT_WORDMARK`,x);
+            if(isMobile&&(x.headerH<56||x.headerH>76))fail(`${name}_MOBILE_HEADER_HEIGHT`,x);
+            if(isMobile&&Math.abs(x.cx-x.winW/2)>8)fail(`${name}_WORDMARK_CENTER`,x);
             if(isMobile&&x.utilityVisible)fail(`${name}_MOBILE_UTILITY_VISIBLE`,x);
             if(!isMobile&&!x.utilityVisible)fail(`${name}_DESKTOP_UTILITY_MISSING`,x);
             return x;
           }
-
           async function shot(spec,isMobile){
             const viewport=isMobile?{width:390,height:844}:{width:1440,height:1000};
             const ctx=await browser.newContext({viewport,isMobile,hasTouch:isMobile,deviceScaleFactor:1});
@@ -110,7 +111,7 @@ jobs:
               const count=await p.locator('.rh-grid > article').count();
               if(count!==5)fail(`${pageName}_FEATURED_COUNT`,{count});
               const geom=await p.locator('.rh-grid').evaluate(el=>{const s=getComputedStyle(el),cards=[...el.children].map(e=>e.getBoundingClientRect());return{display:s.display,tracks:s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,firstW:cards[0]?.width||0,secondX:cards[1]?.x||9999,thirdX:cards[2]?.x||9999,fourthX:cards[3]?.x||9999,viewport:innerWidth}});
-              if(isMobile){if(geom.display!=='flex'||geom.firstW<100||geom.firstW>130||geom.secondX>=170||geom.thirdX>=390||geom.fourthX<350||geom.fourthX>430)fail(`${pageName}_FEATURED_DENSE_STRIP`,geom)}else if(geom.tracks!==5)fail(`${pageName}_FEATURED_GRID`,geom);
+              if(isMobile){if(geom.display!=='flex'||geom.firstW<geom.viewport*.85||geom.firstW>geom.viewport*.96||geom.secondX<geom.viewport*.90||geom.secondX>geom.viewport*1.05)fail(`${pageName}_FEATURED_SWIPE_CARD`,geom)}else if(geom.tracks!==5)fail(`${pageName}_FEATURED_GRID`,geom);
               pageData.featured={count,...geom};
             }
 
@@ -171,7 +172,7 @@ jobs:
           echo '### WDCC owner exact page matrix — PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: $URL/?owner-review=1" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Compact centered owner-approved emblem + dense three-card mobile strip + five verified historical NOT-LIVE review vehicles enforced.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Compact WDCC wordmark + dominant mobile swipe card + five verified historical NOT-LIVE review vehicles enforced.' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:

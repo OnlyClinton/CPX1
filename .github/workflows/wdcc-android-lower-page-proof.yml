@@ -39,17 +39,32 @@ jobs:
           test -s public/wdcc-logo-transparent.webp
           test -s app/WdccPublicChrome.tsx
           test -s app/wdcc-round-header-contract.css
+          test -s app/owner-supplied-board-final-lock.css
+          test -s app/owner-95-convergence.css
+          test -s app/inventory-95-convergence.css
+          test -s app/closeout-95-convergence.css
+          test -s app/accessibility-proof-closeout.css
           test -s app/wdcc-review-media/[id]/route.ts
           grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
           grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
-          grep -Fq 'Public header = WDCC wordmark' app/wdcc-round-header-contract.css
-          grep -Fq 'COMPACT DESKTOP / ANDROID DESKTOP-SITE' app/wdcc-round-header-contract.css
-          grep -Fq 'grid-template-columns:repeat(4,minmax(0,1fr))!important' app/wdcc-round-header-contract.css
+          ! grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
+          grep -Fq '.rh-logo::before' app/owner-95-convergence.css
+          grep -Fq 'content:"WDCC"!important' app/owner-95-convergence.css
           grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
           grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
-          last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
-          test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
-
+          node <<'NODE'
+          const fs=require('fs');
+          const source=fs.readFileSync('app/layout.tsx','utf8');
+          const chain=['wdcc-round-header-contract.css','owner-supplied-board-final-lock.css','owner-95-convergence.css','inventory-95-convergence.css','closeout-95-convergence.css','accessibility-proof-closeout.css'];
+          let previous=-1;
+          for(const file of chain){
+            const marker=`import"./${file}";`;
+            const index=source.indexOf(marker);
+            if(index<0||index<=previous)throw new Error(`AUTHORITATIVE_CSS_CHAIN_DRIFT: ${file}`);
+            previous=index;
+          }
+          if(source.includes('wdcc-system-v2.css'))throw new Error('SUPERSEDED_WDCC_SYSTEM_V2_REINTRODUCED');
+          NODE
       - name: Build exact Cloudflare candidate
         shell: bash
         run: |
