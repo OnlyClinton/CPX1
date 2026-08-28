@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
     - desktop Featured Inventory: five compact columns
     - phone Featured Inventory: one dominant swipe/snap card with the next card advancing off-canvas
     - full /inventory: five compact columns desktop, one compact row per vehicle on mobile
-    - phone Add/Edit: one full-width readable field column at 390px
+    - phone Add/Edit: two readable field columns within the 316px form grid at 390px
   It also follows editor branding semantics: desktop keeps both side and top brands;
   mobile does not require its off-canvas side brand, but keeps the top brand visible.
   This wrapper is also the shared exact-SHA trigger for Responsive + Real Snapshot
@@ -20,7 +20,7 @@ const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
 let code=fs.readFileSync(source,'utf8');
 
 const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
-const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+const editorTo="if(spec.mobile){if(fields.tracks!==2||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
 
