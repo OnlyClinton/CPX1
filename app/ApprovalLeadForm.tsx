@@ -6,13 +6,14 @@ type ApprovalState={
   name:string;
   phone:string;
   email:string;
+  contactPreference:string;
   monthlyIncome:string;
   downPayment:string;
   desiredVehicle:string;
   referralSource:string;
 };
 
-const initial:ApprovalState={name:"",phone:"",email:"",monthlyIncome:"",downPayment:"",desiredVehicle:"",referralSource:""};
+const initial:ApprovalState={name:"",phone:"",email:"",contactPreference:"",monthlyIncome:"",downPayment:"",desiredVehicle:"",referralSource:""};
 const stages=["Your Info","Your Vehicle","Review"];
 const money=(value:string)=>{const n=Number(value||0);return Number.isFinite(n)&&n>0?n.toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0}):"Not entered"};
 
@@ -25,14 +26,14 @@ export default function ApprovalLeadForm(){
   const[message,setMessage]=useState("");
 
   const canContinue=useMemo(()=>{
-    if(step===0)return Boolean(form.name.trim()&&(form.phone.trim()||form.email.trim())&&Number(form.monthlyIncome)>0);
+    if(step===0)return Boolean(form.name.trim()&&(form.phone.trim()||form.email.trim())&&form.contactPreference&&Number(form.monthlyIncome)>0);
     if(step===1)return Boolean(Number(form.downPayment)>=0&&form.desiredVehicle.trim()&&form.referralSource.trim());
     return consent;
   },[step,form,consent]);
 
   const set=(name:keyof ApprovalState,value:string)=>setForm(v=>({...v,[name]:value}));
   function next(){
-    if(step===0&&!canContinue){setMessage("Add your name, a phone or email, and monthly income to continue.");return;}
+    if(step===0&&!canContinue){setMessage("Add your name, a phone or email, contact preference, and monthly income to continue.");return;}
     if(step===1&&!canContinue){setMessage("Add a desired vehicle and tell us how you heard about WDCC.");return;}
     setMessage("");setStep(v=>Math.min(2,v+1));
   }
@@ -54,6 +55,7 @@ export default function ApprovalLeadForm(){
         name:form.name.trim(),
         phone,
         email,
+        contactPreference:form.contactPreference,
         monthlyIncome:Number(form.monthlyIncome),
         downPayment:Number(form.downPayment||0),
         vehicleInterest:form.desiredVehicle.trim(),
@@ -62,6 +64,7 @@ export default function ApprovalLeadForm(){
         consent:true,
         source,
         pagePath:url.pathname,
+        submittedAt:new Date().toISOString(),
         referrer:document.referrer||undefined,
         utmSource:qs.get("utm_source")||undefined,
         utmMedium:qs.get("utm_medium")||undefined,
@@ -92,6 +95,7 @@ export default function ApprovalLeadForm(){
         <label><span>FULL NAME</span><input value={form.name} onChange={e=>set("name",e.target.value)} autoComplete="name" maxLength={120} placeholder="Your name" required/></label>
         <label><span>PHONE</span><input value={form.phone} onChange={e=>set("phone",e.target.value)} type="tel" inputMode="tel" autoComplete="tel" maxLength={40} placeholder="813-555-0123"/></label>
         <label><span>EMAIL</span><input value={form.email} onChange={e=>set("email",e.target.value)} type="email" autoComplete="email" maxLength={160} placeholder="you@example.com"/></label>
+        <label><span>CONTACT PREFERENCE</span><select value={form.contactPreference} onChange={e=>set("contactPreference",e.target.value)} required><option value="">Choose one</option><option value="call">Call</option><option value="text">Text</option><option value="email">Email</option></select></label>
         <label><span>MONTHLY INCOME</span><input value={form.monthlyIncome} onChange={e=>set("monthlyIncome",e.target.value)} type="number" inputMode="decimal" min="0" step="100" placeholder="$4,000" required/></label>
       </div>
     </section>}
@@ -108,7 +112,7 @@ export default function ApprovalLeadForm(){
     {step===2&&<section className="approvalStagePanel" data-stage="review">
       <div className="approvalStageHeading"><small>STEP 3 OF 3</small><h2>Review your request.</h2><p>Confirm the basics. This sends a contact request to WDCC; it is not a hard-credit application.</p></div>
       <div className="approvalReview">
-        <article><span>CONTACT</span><b>{form.name||"—"}</b><small>{form.phone||form.email||"—"}</small></article>
+        <article><span>CONTACT</span><b>{form.name||"—"}</b><small>{form.phone||form.email||"—"} · {form.contactPreference||"No preference"}</small></article>
         <article><span>MONTHLY INCOME</span><b>{money(form.monthlyIncome)}</b><small>Self-reported</small></article>
         <article><span>DOWN PAYMENT</span><b>{money(form.downPayment)}</b><small>Starting amount</small></article>
         <article><span>VEHICLE</span><b>{form.desiredVehicle||"—"}</b><small>{form.referralSource||"Source not selected"}</small></article>
