@@ -22,6 +22,131 @@ html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!im
 }
 
 @media(max-width:767px){
+  /* 51546 public mobile header. */
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo{
+    width:106px!important;
+    min-width:106px!important;
+    max-width:106px!important;
+    height:60px!important;
+    min-height:60px!important;
+    max-height:60px!important;
+    justify-self:center!important;
+  }
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{
+    width:96px!important;
+    min-width:96px!important;
+    max-width:96px!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:42px!important;
+    object-fit:contain!important;
+    object-position:center!important;
+  }
+
+  /* 51546 split mobile hero: artwork first, copy + actions beneath it. */
+  html body main.reference-home.locked-storefront section.rh-hero{
+    position:relative!important;
+    height:550px!important;
+    min-height:550px!important;
+    max-height:550px!important;
+    overflow:hidden!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero>img.rh-hero-art{
+    position:absolute!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    bottom:auto!important;
+    width:100%!important;
+    height:225px!important;
+    min-height:225px!important;
+    max-height:225px!important;
+    object-fit:cover!important;
+    object-position:66% 47%!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero>.rh-hero-shade{
+    position:absolute!important;
+    top:0!important;
+    left:0!important;
+    right:0!important;
+    bottom:auto!important;
+    width:100%!important;
+    height:225px!important;
+    min-height:225px!important;
+    max-height:225px!important;
+    background:linear-gradient(0deg,rgba(2,7,12,.35),transparent 48%)!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero>.rh-hero-inner{
+    position:absolute!important;
+    top:225px!important;
+    left:0!important;
+    right:0!important;
+    bottom:auto!important;
+    width:100%!important;
+    max-width:none!important;
+    height:325px!important;
+    min-height:325px!important;
+    max-height:325px!important;
+    margin:0!important;
+    display:block!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:13px 24px 18px!important;
+    background:#02070c!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    width:100%!important;
+    gap:7px!important;
+    margin-top:12px!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions .rh-btn{
+    display:flex!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    min-height:38px!important;
+  }
+
+  /* 51546 compact 2x2 benefit bridge. */
+  html body main.reference-home.locked-storefront .rh-benefit-wrap .rh-benefits{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    width:100%!important;
+  }
+
+  /* 51546 one readable featured card per snap position. */
+  html body main.reference-home.locked-storefront section.rh-inventory{
+    padding:15px 10px 18px!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-inventory .rh-grid{
+    display:flex!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:0 0 3px!important;
+    gap:9px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scroll-snap-type:x mandatory!important;
+    scrollbar-width:none!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-inventory .rh-grid::-webkit-scrollbar{display:none!important}
+  html body main.reference-home.locked-storefront section.rh-inventory .rh-grid>article{
+    flex:0 0 calc(100vw - 32px)!important;
+    width:calc(100vw - 32px)!important;
+    min-width:calc(100vw - 32px)!important;
+    max-width:calc(100vw - 32px)!important;
+    scroll-snap-align:start!important;
+  }
+
+  /* 51543 compact public inventory rows. */
   html body main.inventoryPage.wdcc-public-page section.section.light .wrap .wdccVehicleGrid{
     display:grid!important;
     grid-template-columns:1fr!important;
