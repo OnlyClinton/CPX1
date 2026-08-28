@@ -1,0 +1,99 @@
+/* 51543 inventory owner-board convergence. Imported after the general 9.5 layer. */
+
+.inventoryPage .section.light{padding-top:20px!important;padding-bottom:18px!important;background:#f5f5f4!important}
+.inventoryPage .wdccOwnerReviewBanner,.inventoryPage .wdccRecoveryInventoryBanner{margin:0 0 14px!important}
+.publicInventoryFilterShell{margin:0 0 14px!important}
+.publicInventoryMobileToolbar{display:none!important}
+
+.inventoryPage .publicInventoryControls{
+  display:grid!important;
+  grid-template-columns:minmax(0,1.7fr) minmax(250px,.86fr) minmax(210px,.72fr)!important;
+  gap:0!important;
+  align-items:stretch!important;
+  padding:0!important;
+  min-height:190px!important;
+  background:#fff!important;
+  border:1px solid #d6dade!important;
+  border-radius:10px!important;
+  box-shadow:0 8px 24px rgba(10,18,25,.08)!important;
+  overflow:hidden!important;
+}
+.inventoryFilterColumn,.inventoryRangeColumn,.inventorySortColumn{padding:16px 18px!important;min-width:0!important}
+.inventoryFilterColumn,.inventoryRangeColumn{border-right:1px solid #e0e2e4!important}
+.inventoryFilterTitle,.inventoryRangeGroup>strong,.inventorySortColumn>strong{display:block!important;font-size:11px!important;line-height:1!important;font-weight:950!important;letter-spacing:.02em!important;color:#111820!important;margin:0 0 12px!important}
+.inventorySearch{display:none!important}
+.inventorySelectGrid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}
+.inventoryPage .publicInventoryControls select,.inventoryPage .publicInventoryControls input:not([type="range"]){width:100%!important;height:42px!important;min-height:42px!important;border:1px solid #cbd0d5!important;border-radius:5px!important;background:#fff!important;color:#222!important;font-size:12px!important;font-weight:700!important;padding:0 12px!important;outline:none!important}
+.inventoryPage .publicInventoryControls select:focus,.inventoryPage .publicInventoryControls input:focus{border-color:#101820!important;box-shadow:0 0 0 2px rgba(16,24,32,.08)!important}
+.inventoryMoreFilters{margin-top:10px!important;height:34px!important;min-width:130px!important;padding:0 12px!important;border:1px solid #cbd0d5!important;border-radius:5px!important;background:#fff!important;color:#29323a!important;font-size:10px!important;font-weight:900!important;text-align:left!important;cursor:pointer!important}
+.inventoryMoreFilters span{float:right!important}
+
+.inventoryRangeColumn{display:grid!important;grid-template-rows:1fr 1fr!important;gap:14px!important}
+.inventoryRangeGroup{display:flex!important;flex-direction:column!important;justify-content:center!important;min-width:0!important}
+.inventoryRangeGroup>strong{margin-bottom:10px!important}
+.inventoryRangeGroup input[type="range"]{display:block!important;width:100%!important;margin:0!important;accent-color:#111820!important;cursor:pointer!important}
+.inventoryRangeGroup>div{display:flex!important;justify-content:space-between!important;margin-top:7px!important;color:#303840!important;font-size:9px!important;font-weight:850!important}
+
+.inventorySortColumn{display:flex!important;flex-direction:column!important;justify-content:flex-start!important}
+.inventorySortColumn>strong{margin-bottom:12px!important}
+.inventorySortColumn select{margin-bottom:12px!important}
+.inventoryViewResults{height:42px!important;border:0!important;border-radius:4px!important;background:#ef1727!important;color:#fff!important;font-size:11px!important;font-weight:950!important;letter-spacing:.015em!important;cursor:pointer!important}
+.inventoryClearFilters{align-self:center!important;margin-top:14px!important;padding:0!important;border:0!important;border-bottom:1px solid #7b8085!important;background:transparent!important;color:#555c62!important;font-size:9px!important;font-weight:850!important;cursor:pointer!important}
+
+.inventoryPage .publicInventoryMeta{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;margin:10px 2px 8px!important}
+.publicInventoryViewControls{display:flex!important;align-items:center!important;gap:5px!important;color:#4c535a!important;font-size:9px!important;font-weight:900!important}
+.publicInventoryViewControls button{width:28px!important;height:28px!important;padding:0!important;border:1px solid #c7ccd1!important;border-radius:4px!important;background:#fff!important;color:#222!important;font-size:15px!important;line-height:1!important;cursor:pointer!important}
+.publicInventoryViewControls button[aria-pressed="true"]{background:#101820!important;color:#fff!important;border-color:#101820!important}
+.inventoryPage .wdccVehicleGrid.wdccListView{grid-template-columns:1fr!important}
+.inventoryPage .wdccVehicleGrid.wdccListView>article{max-width:none!important}
+
+.inventoryReadyBand{padding:14px 0 0!important;background:#f5f5f4!important}
+.inventoryReadyInner{min-height:82px!important;display:grid!important;grid-template-columns:70px 1fr 300px!important;align-items:center!important;gap:16px!important;padding:0 28px!important;border-radius:8px!important;background:#07131e!important;color:#fff!important}
+.inventoryReadyIcon{width:46px!important;height:46px!important;border:2px solid #fff!important;border-radius:50%!important;display:grid!important;place-items:center!important;font-size:25px!important}
+.inventoryReadyInner h2{margin:0 0 5px!important;font-size:21px!important;line-height:1!important;font-weight:950!important;letter-spacing:.015em!important}
+.inventoryReadyInner p{margin:0!important;color:#c8ced4!important;font-size:11px!important}
+.inventoryReadyInner>a{height:44px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:12px!important;border-radius:4px!important;background:#ef1727!important;color:#fff!important;text-decoration:none!important;font-size:12px!important;font-weight:950!important}
+
+.inventoryTrustBand{padding:0 0 18px!important;background:#f5f5f4!important}
+.inventoryTrustGrid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;border:1px solid #d8dcdf!important;border-top:0!important;border-radius:0 0 8px 8px!important;background:#fff!important;overflow:hidden!important}
+.inventoryTrustGrid>div{min-height:86px!important;display:grid!important;grid-template-columns:46px 1fr!important;grid-template-rows:auto auto!important;align-content:center!important;column-gap:12px!important;padding:12px 18px!important;border-right:1px solid #e1e3e5!important}
+.inventoryTrustGrid>div:last-child{border-right:0!important}
+.inventoryTrustGrid>div>span{grid-row:1/3!important;width:38px!important;height:38px!important;display:grid!important;place-items:center!important;border:2px solid #111820!important;border-radius:50%!important;color:#111820!important;font-size:17px!important;font-weight:900!important}
+.inventoryTrustGrid strong{align-self:end!important;font-size:10px!important;font-weight:950!important;color:#111820!important}
+.inventoryTrustGrid small{align-self:start!important;margin-top:4px!important;color:#687079!important;font-size:9px!important;line-height:1.25!important}
+.inventoryMobilePreapprove{display:none!important}
+
+@media(max-width:980px) and (min-width:768px){
+  .inventoryPage .publicInventoryControls{grid-template-columns:minmax(0,1.45fr) minmax(210px,.8fr) minmax(190px,.68fr)!important}
+  .inventorySelectGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .inventoryReadyInner{grid-template-columns:58px 1fr 230px!important}
+}
+
+@media(max-width:767px){
+  .inventoryPage .section.light{padding:20px 12px 76px!important}
+  .inventoryPage .wdccOwnerReviewBanner,.inventoryPage .wdccRecoveryInventoryBanner{margin-bottom:10px!important}
+  .publicInventoryFilterShell{margin:0 0 10px!important}
+  .publicInventoryMobileToolbar{display:grid!important;grid-template-columns:minmax(0,1fr) 120px!important;gap:9px!important;align-items:stretch!important}
+  .inventoryMobileFilterButton{height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;border:1px solid #687078!important;border-radius:5px!important;background:#fff!important;color:#20262c!important;font-size:11px!important;font-weight:950!important;cursor:pointer!important}
+  .inventoryMobileFilterButton>span{font-size:17px!important}
+  .inventoryMobileFilterButton>b{width:20px!important;height:20px!important;display:grid!important;place-items:center!important;border-radius:50%!important;background:#ef1727!important;color:#fff!important;font-size:9px!important}
+  .inventoryMobileSort{display:block!important;position:relative!important}
+  .inventoryMobileSort>span{position:absolute!important;left:8px!important;top:5px!important;z-index:1!important;color:#697078!important;font-size:6.5px!important;font-weight:900!important;pointer-events:none!important}
+  .inventoryMobileSort select{width:100%!important;height:48px!important;padding:12px 7px 0!important;border:1px solid #687078!important;border-radius:5px!important;background:#fff!important;color:#20262c!important;font-size:10px!important;font-weight:850!important}
+
+  .inventoryPage .publicInventoryControls{display:none!important;grid-template-columns:1fr!important;min-height:0!important;margin-top:9px!important;border-radius:7px!important}
+  .inventoryPage .publicInventoryControls.mobileOpen{display:block!important}
+  .inventoryFilterColumn,.inventoryRangeColumn,.inventorySortColumn{padding:14px!important;border-right:0!important;border-bottom:1px solid #e0e2e4!important}
+  .inventorySortColumn{border-bottom:0!important}
+  .inventorySearch{display:block!important;margin-bottom:9px!important}
+  .inventorySelectGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .inventoryRangeColumn{display:grid!important;grid-template-columns:1fr!important;gap:12px!important}
+  .inventoryMoreFilters{display:none!important}
+  .inventoryPage .publicInventoryMeta{margin:9px 3px 7px!important}
+  .publicInventoryViewControls span{display:none!important}
+  .publicInventoryViewControls button{width:27px!important;height:27px!important}
+  .inventoryPage .wdccVehicleGrid.wdccListView{grid-template-columns:1fr!important}
+
+  .inventoryReadyBand,.inventoryTrustBand{display:none!important}
+  .inventoryMobilePreapprove{position:fixed!important;display:flex!important;left:0!important;right:0!important;bottom:0!important;height:56px!important;align-items:center!important;justify-content:center!important;gap:12px!important;background:#ef1727!important;color:#fff!important;text-decoration:none!important;font-size:13px!important;font-weight:950!important;z-index:80!important;box-shadow:0 -5px 18px rgba(0,0,0,.22)!important}
+}

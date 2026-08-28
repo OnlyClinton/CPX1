@@ -17,6 +17,7 @@ import"./wdcc-owner-board-final.css";
 import"./wdcc-round-header-contract.css";
 import"./owner-supplied-board-final-lock.css";
 import"./owner-95-convergence.css";
+import"./inventory-95-convergence.css";
 
 export const metadata={title:"We Don't Care Cars | Tampa Bay Used Cars & In-House Financing",description:"Shop real Tampa Bay inventory, see clear starting numbers, schedule a test drive, and talk directly to Sean at We Don't Care Cars.",metadataBase:new URL("https://wedontcarecars.com"),openGraph:{title:"We Don't Care Cars | Tampa Bay",description:"Bad credit? No credit? We don't care. Real inventory and direct help.",url:"https://wedontcarecars.com",siteName:"We Don't Care Cars | Tampa Bay",type:"website"}};
 
