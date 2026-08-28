@@ -35,10 +35,12 @@ const dashboard={summary:{soldThisWeek:7,newToday:12,appointments:5,applications
 async function wire(page){
  await page.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
  await page.route('**/api/crm/dashboard**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
- await page.route('**/api/inventory/**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item:vehicles[0]})}):r.abort());
+ // Playwright resolves the most recently registered matching route first.
+ // Register collection routes before item routes so /api/inventory/:id and /api/leads/:id win correctly.
  await page.route('**/api/inventory**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,items:vehicles})}):r.abort());
- await page.route('**/api/leads/**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item:leads[0]})}):r.abort());
+ await page.route('**/api/inventory/**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item:vehicles[0]})}):r.abort());
  await page.route('**/api/leads**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,items:leads})}):r.abort());
+ await page.route('**/api/leads/**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,item:leads[0]})}):r.abort());
 }
 async function goto(page,path){
  let response=null;
