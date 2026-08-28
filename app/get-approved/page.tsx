@@ -16,7 +16,7 @@ export default function Page(){
           <div className="approvalSean"><span>QUESTIONS? TALK TO SEAN</span><a href="tel:18135164752">☎ <b>(813) 516-4752</b></a><small>Call or Text Anytime</small></div>
         </div>
       </section>
-      <section className="approvalFormSide">
+      <section className="approvalFormSide" id="preapproval-form">
         <div className="approvalCard">
           <div className="approvalCardTop"><div><h2>GET PRE-APPROVED</h2><p>Take 2 minutes to complete our secure pre-approval.<br/>No SSN required to get started.</p></div></div>
           <ApprovalLeadForm/>
@@ -28,6 +28,13 @@ export default function Page(){
       <article><i>◇</i><div><b>IN-HOUSE FINANCING</b><span>We work with all credit types.</span></div></article>
       <article><i>☏</i><div><b>DIRECT WITH SEAN</b><span>Talk to Sean directly. Get real answers.</span></div></article>
       <article><i>0</i><div><b>HIDDEN FEES</b><span>Clear starting numbers and direct help.</span></div></article>
+    </section>
+    <section className="approvalLower" aria-label="WDCC Tampa Bay buyer support">
+      <div className="approvalLowerGrid">
+        <article className="approvalCustomerProof"><h3>WHAT OUR CUSTOMERS SAY</h3><div className="approvalStars" aria-label="Five star service focus">★★★★★</div><p>Straight answers, clear next steps, and direct contact with Sean from application through pickup.</p></article>
+        <article className="approvalTampaProof"><h3>WE&apos;RE TAMPA BAY PROUD</h3><div className="approvalTampaFeatures"><div><i>⌂</i><b>TAMPA BAY</b><span>Local inventory</span></div><div><i>✓</i><b>FAST APPROVALS</b><span>Simple next steps</span></div><div><i>◇</i><b>IN-HOUSE FINANCING</b><span>Multiple credit profiles</span></div><div><i>☏</i><b>DIRECT WITH SEAN</b><span>Call or text anytime</span></div></div></article>
+      </div>
+      <div className="approvalReady"><div><b>READY TO DRIVE?</b><span>Get pre-approved now and see what you qualify for.</span></div><a href="#preapproval-form">GET PRE-APPROVED NOW <span aria-hidden="true">→</span></a><div className="approvalReadyPhone"><b>☎ (813) 516-4752</b><small>Call or Text Sean Anytime</small></div></div>
     </section>
     <WdccPublicFooter/>
   </>;
