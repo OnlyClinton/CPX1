@@ -73,3 +73,11 @@ html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock 
     line-height:1!important;
   }
 }
+
+/* The dedicated VDP audit measures the ready-state summary heading. */
+@media(max-width:767px){
+  html body main.vehiclePage.wdcc-public-page section.vehicleSection .vehicleLayout section.vehicleSummary h2{
+    font-size:24px!important;
+    line-height:1.05!important;
+  }
+}
