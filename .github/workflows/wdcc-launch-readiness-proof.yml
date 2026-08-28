@@ -1,0 +1,80 @@
+name: WDCC Launch Readiness Proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_isolated_branch:
+        description: Type ISOLATED_ONLY to enable the proof
+        required: true
+        type: string
+      neon_branch_id:
+        description: Disposable Neon branch ID
+        required: true
+        type: string
+      neon_endpoint_id:
+        description: Disposable branch read/write endpoint ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-launch-readiness-${{ inputs.neon_branch_id }}
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      WDCC_DATABASE_URL: ${{ secrets.WDCC_E2E_DATABASE_URL }}
+      WDCC_EXPECTED_NEON_BRANCH_ID: ${{ inputs.neon_branch_id }}
+      WDCC_EXPECTED_NEON_PROJECT_ID: royal-violet-34968484
+      WDCC_EXPECTED_NEON_ENDPOINT_ID: ${{ inputs.neon_endpoint_id }}
+      WDCC_PRODUCTION_NEON_BRANCH_ID: br-sparkling-scene-ayoutdzc
+      WDCC_NEON_AUTH_URL: https://${{ inputs.neon_endpoint_id }}.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+      WDCC_E2E_ARTIFACT_DIR: /tmp/wdcc-launch-readiness
+      WDCC_MOCKUP_PREVIEW: "0"
+      WDCC_VISUAL_PROOF_FALLBACK: "0"
+      WDCC_RECOVERY_INVENTORY: "0"
+      WDCC_RECOVERY_MODE: "0"
+    steps:
+      - name: Refuse shared or unconfirmed database targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm_isolated_branch }}" = ISOLATED_ONLY
+          test -n "$WDCC_DATABASE_URL"
+          test "$WDCC_EXPECTED_NEON_BRANCH_ID" != "$WDCC_PRODUCTION_NEON_BRANCH_ID"
+          [[ "$WDCC_EXPECTED_NEON_BRANCH_ID" == br-* ]]
+          [[ "$WDCC_EXPECTED_NEON_ENDPOINT_ID" == ep-* ]]
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          npm run build
+
+      - name: Prove complete business flow
+        shell: bash
+        run: node tests/launch-readiness/run.mjs
+
+      - name: Upload launch proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-launch-readiness-${{ github.run_id }}
+          path: /tmp/wdcc-launch-readiness
+          if-no-files-found: error
+          retention-days: 14

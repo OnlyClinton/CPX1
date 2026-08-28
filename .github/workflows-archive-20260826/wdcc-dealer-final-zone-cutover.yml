@@ -170,7 +170,7 @@ jobs:
               code="$(curl -sS -b "$jar" -o /tmp/${label}-session.json -w '%{http_code}' "$base/api/auth/session")"
               echo "$label session $name=$code"; test "$code" = 200; jq -e '.authenticated==true' /tmp/${label}-session.json >/dev/null
             }
-            login 'Big Pussy' /tmp/${label}-dealer.cookies
+            login dealer /tmp/${label}-dealer.cookies
             login admin /tmp/${label}-admin.cookies
             for path in /api/crm/dashboard /api/leads /api/inventory; do
               code="$(curl -sS -b /tmp/${label}-dealer.cookies -o /tmp/${label}-check.json -w '%{http_code}' "$base$path")"; echo "$label $path=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/${label}-check.json >/dev/null
@@ -271,7 +271,7 @@ jobs:
             code="$(curl -sS -b "$jar" -o /tmp/live-session.json -w '%{http_code}' "https://$DEALER_DOMAIN/api/auth/session")"
             echo "live session $name=$code"; test "$code" = 200; jq -e '.authenticated==true' /tmp/live-session.json >/dev/null
           }
-          login 'Big Pussy' /tmp/live-dealer.cookies
+          login dealer /tmp/live-dealer.cookies
           login admin /tmp/live-admin.cookies
           for path in /api/crm/dashboard /api/leads /api/inventory; do
             code="$(curl -sS -b /tmp/live-dealer.cookies -o /tmp/live-check.json -w '%{http_code}' "https://$DEALER_DOMAIN$path")"; echo "live $path=$code"; test "$code" = 200; jq -e '.ok==true' /tmp/live-check.json >/dev/null

@@ -1,45 +1,61 @@
-import {get} from "@vercel/blob";
-import {blobAuthority,mediaAuthority} from "../../../lib/wdccAuthority";
+import {currentUser} from "../../../lib/auth";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
+import {getVehicle} from "../../../lib/wdccDb";
+import {canStaffReadVehicleMedia,parseVehicleMediaPathname,readVehicleMediaPathname,vehicleMediaIsPublic} from "../../../lib/vehicleMedia";
 
 export const dynamic="force-dynamic";
+export const runtime="nodejs";
 
-export async function GET(req:Request){
-  const p=new URL(req.url).searchParams.get("p")||"";
-  if(!p.startsWith("media/wdcc/"))return new Response("Not found",{status:404});
+const commonHeaders={
+  "X-Content-Type-Options":"nosniff",
+  "Cross-Origin-Resource-Policy":"same-origin",
+  "Cache-Control":"private, no-store"
+};
 
-  const media=mediaAuthority();
-  if(media.mode==="cloudflare-do"){
-    try{
-      const response=await fetch(`${media.options.mediaServiceUrl}/media?p=${encodeURIComponent(p)}`,{
-        method:"GET",
-        headers:{Authorization:`Bearer ${media.options.mediaServiceToken}`},
-        cache:"no-store"
-      });
-      if(response.status===404)return new Response("Not found",{status:404,headers:{"Cache-Control":"no-store"}});
-      if(!response.ok||!response.body)return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});
-      const headers=new Headers();
-      headers.set("Content-Type",response.headers.get("content-type")||"application/octet-stream");
-      headers.set("Cache-Control","public,max-age=3600");
-      const etag=response.headers.get("etag");if(etag)headers.set("ETag",etag);
-      headers.set("X-WDCC-Media-Provider","cloudflare");
-      return new Response(response.body,{status:200,headers});
-    }catch(error){
-      console.error("WDCC_MEDIA_CLOUDFLARE_READ_ERROR",error instanceof Error?error.message:"unknown");
-      return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});
+function response(message:string,status:number){
+  return new Response(message,{status,headers:commonHeaders});
+}
+
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/media");
+  const pathname=new URL(request.url).searchParams.get("p")||"";
+  const parsed=parseVehicleMediaPathname(pathname);
+  if(!parsed)return response("Not found",404);
+
+  let vehicle:any;
+  try{vehicle=await getVehicle(parsed.vehicleId,{includeNonPublic:true});}
+  catch(error){
+    console.error("WDCC_VEHICLE_MEDIA_INVENTORY_UNAVAILABLE",error);
+    return response("Media unavailable",503);
+  }
+  if(!vehicle)return response("Not found",404);
+
+  const associated=Array.isArray(vehicle.photoPathnames)&&vehicle.photoPathnames.some((value:unknown)=>String(value||"")===parsed.pathname);
+  const publicListing=associated&&vehicleMediaIsPublic(vehicle);
+  if(!publicListing){
+    let user:any;
+    try{user=await currentUser();}
+    catch(error){
+      console.error("WDCC_VEHICLE_MEDIA_AUTH_UNAVAILABLE",error);
+      return response("Media unavailable",503);
     }
+    if(!canStaffReadVehicleMedia(vehicle,user))return response("Not found",404);
   }
 
-  const authority=blobAuthority();
-  if(authority.mode==="missing"||authority.mode==="cloudflare-do"){
-    console.error("WDCC_MEDIA_AUTHORITY_MISSING");
-    return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});
-  }
   try{
-    const r=await get(p,{access:"private",useCache:true,...authority.options});
-    if(!r||r.statusCode!==200||!r.stream)return new Response("Not found",{status:404});
-    return new Response(r.stream as any,{headers:{"Content-Type":r.blob.contentType||"application/octet-stream","Cache-Control":"public,max-age=3600","X-WDCC-Media-Provider":"vercel-blob"}});
+    const media=await readVehicleMediaPathname(parsed.pathname,{allowPublicFallback:publicListing});
+    if(!media)return response("Not found",404);
+    return new Response(media.stream,{status:200,headers:{
+      ...commonHeaders,
+      "Content-Type":media.metadata.contentType,
+      "Content-Length":String(media.metadata.size),
+      ...("etag" in media.metadata&&media.metadata.etag?{ETag:media.metadata.etag}:{}),
+      "X-WDCC-Media-Provider":media.metadata.provider,
+      "X-WDCC-Media-Access":media.access
+    }});
   }catch(error){
-    console.error("WDCC_MEDIA_READ_ERROR",error instanceof Error?error.message:"unknown");
-    return new Response("Media unavailable",{status:503,headers:{"Cache-Control":"no-store"}});
+    console.error("WDCC_VEHICLE_MEDIA_READ_UNAVAILABLE",error);
+    return response("Media unavailable",503);
   }
 }

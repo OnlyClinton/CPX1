@@ -1,46 +1,17 @@
 "use client";
-import {FormEvent,useEffect,useMemo,useState} from "react";
-
-const adminUserFields=["email","secondaryEmail","username","password","displayName","business","phone"] as const;
-type AdminUserField=(typeof adminUserFields)[number];
-
-const labels:Record<AdminUserField,string>={
-  email:"Primary email",secondaryEmail:"Secondary email",username:"Username",password:"Temporary password",
-  displayName:"Display name",business:"Business / location",phone:"Phone"
-};
+import {useEffect,useMemo,useState} from "react";
 
 export default function AdminUsers(){
   const [users,setUsers]=useState<any[]>([]);
   const [message,setMessage]=useState("");
-  const [busy,setBusy]=useState(false);
-  const [form,setForm]=useState({email:"",secondaryEmail:"",username:"",password:"",displayName:"",business:"",phone:"",role:"dealer_agent"});
 
   async function load(){
     const r=await fetch("/api/admin/users",{cache:"no-store"});
     const j=await r.json().catch(()=>({}));
-    if(j.ok)setUsers(j.users||[]);
+    if(!r.ok||!j.ok)throw Error(r.status===503?"503 · Secure admin directory is temporarily unavailable.":j.error||`Admin directory ${r.status}`);
+    setUsers(j.users||[]);
   }
-  useEffect(()=>{load().catch(()=>{})},[]);
-
-  async function submit(e:FormEvent){
-    e.preventDefault();
-    if(busy)return;
-    setBusy(true);setMessage("Creating secure WDCC account…");
-    try{
-      const r=await fetch("/api/admin/users",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(form)});
-      const j=await r.json().catch(()=>({}));
-      if(!r.ok||!j.ok)throw Error(j.error||"Unable to create user");
-      setMessage(`Created ${j.user.id}`);
-      setForm(current=>({...current,email:"",secondaryEmail:"",username:"",password:"",displayName:"",business:"",phone:""}));
-      await load();
-    }catch(error){setMessage(error instanceof Error?error.message:"Unable to create user")}finally{setBusy(false)}
-  }
-
-  async function act(id:string,action:string){
-    await fetch("/api/admin/users",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id,action})});
-    await load();
-  }
-  function setField(k:AdminUserField,value:string){setForm(current=>({...current,[k]:value}))}
+  useEffect(()=>{load().catch(error=>setMessage(error instanceof Error?error.message:"Admin directory unavailable"))},[]);
 
   const metrics=useMemo(()=>({
     total:users.length,
@@ -53,7 +24,7 @@ export default function AdminUsers(){
     <div className="adminShell">
       <header className="adminHero">
         <div className="adminBrand"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><span>WDCC ADMIN CONTROL</span><strong>User Management</strong></div></div>
-        <div className="adminHeroCopy"><small>ACCESS CONTROL</small><h1>Manage authorized users.</h1><p>Create dealer and admin accounts, review access, and disable credentials from one controlled workspace.</p></div>
+        <div className="adminHeroCopy"><small>ACCESS CONTROL</small><h1>Review authorized users.</h1><p>Verify provisioned dealer and admin accounts, assigned roles, and active access from one controlled workspace.</p></div>
       </header>
 
       <section className="metricGrid" aria-label="User access overview">
@@ -64,19 +35,14 @@ export default function AdminUsers(){
       </section>
 
       <section className="adminPanel createPanel">
-        <div className="panelHeading"><div><small>NEW ACCESS</small><h2>Create user</h2><p>Assign the minimum role required. Required fields are clearly marked.</p></div><span className="secureChip">● SECURE ADMIN</span></div>
-        <form onSubmit={submit} className="userForm">
-          {adminUserFields.map(k=><label key={k}><span>{labels[k]}{(k==="email"||k==="username"||k==="password")&&<em>Required</em>}</span><input type={k==="password"?"password":k.includes("email")||k==="email"?"email":k==="phone"?"tel":"text"} required={k==="email"||k==="username"||k==="password"} placeholder={labels[k]} value={form[k]} onChange={e=>setField(k,e.target.value)}/></label>)}
-          <label><span>Role<em>Required</em></span><select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="dealer_agent">Dealer Agent</option><option value="tenant_admin">Dealer Admin</option><option value="platform_admin">Platform Admin</option></select></label>
-          <button className="createButton" disabled={busy}>{busy?"CREATING…":"CREATE USER"}</button>
-        </form>
-        <div className="adminMessage" role="status" aria-live="polite">{message||"New accounts remain subject to their assigned WDCC role and tenant permissions."}</div>
+        <div className="panelHeading"><div><small>ACCOUNT PROVISIONING</small><h2>Managed through Neon Auth</h2><p>This screen is a read-only view of the canonical account directory.</p></div><span className="secureChip">● NEON AUTHORITY</span></div>
+        <div className="adminMessage" role="status" aria-live="polite">{message||"Create, disable, and role-change operations are intentionally unavailable here. Provisioning is performed through the audited Neon Auth admin workflow."}</div>
       </section>
 
       <section className="adminPanel usersPanel">
         <div className="panelHeading compact"><div><small>AUTHORIZED USERS</small><h2>Account directory</h2></div><b>{users.length} total</b></div>
-        <div className="desktopTableWrap"><table><thead><tr>{["ID","USER","EMAIL","ROLE","STATUS","ACTION"].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{users.map(u=><tr key={u.id}><td>{u.id}</td><td><strong>{u.displayName||u.username||"WDCC User"}</strong><small>{u.username}</small></td><td>{u.email}</td><td><span className="rolePill">{String(u.role||"user").replaceAll("_"," ")}</span></td><td><span className={`statusPill ${u.disabled?"off":"on"}`}>{u.disabled?"Disabled":"Active"}</span></td><td>{u.id!=="000"?<button className="rowAction" onClick={()=>act(u.id,u.disabled?"enable":"disable")}>{u.disabled?"Enable":"Disable"}</button>:<span className="protected">Protected</span>}</td></tr>)}</tbody></table></div>
-        <div className="mobileUserList">{users.map(u=><article key={u.id}><div><strong>{u.displayName||u.username||"WDCC User"}</strong><span>{u.email||u.username}</span></div><div className="mobileMeta"><span className="rolePill">{String(u.role||"user").replaceAll("_"," ")}</span><span className={`statusPill ${u.disabled?"off":"on"}`}>{u.disabled?"Disabled":"Active"}</span></div>{u.id!=="000"?<button className="rowAction" onClick={()=>act(u.id,u.disabled?"enable":"disable")}>{u.disabled?"Enable account":"Disable account"}</button>:<span className="protected">Protected platform account</span>}</article>)}</div>
+        <div className="desktopTableWrap"><table><thead><tr>{["ID","USER","EMAIL","ROLE","STATUS","AUTHORITY"].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{users.map(u=><tr key={u.id}><td>{u.id}</td><td><strong>{u.displayName||u.username||"WDCC User"}</strong><small>{u.username}</small></td><td>{u.email}</td><td><span className="rolePill">{String(u.role||"user").replaceAll("_"," ")}</span></td><td><span className={`statusPill ${u.disabled?"off":"on"}`}>{u.disabled?"Disabled":"Active"}</span></td><td><span className="protected">Neon Auth managed</span></td></tr>)}</tbody></table></div>
+        <div className="mobileUserList">{users.map(u=><article key={u.id}><div><strong>{u.displayName||u.username||"WDCC User"}</strong><span>{u.email||u.username}</span></div><div className="mobileMeta"><span className="rolePill">{String(u.role||"user").replaceAll("_"," ")}</span><span className={`statusPill ${u.disabled?"off":"on"}`}>{u.disabled?"Disabled":"Active"}</span></div><span className="protected">Managed through Neon Auth admin provisioning</span></article>)}</div>
       </section>
     </div>
     <style jsx>{`

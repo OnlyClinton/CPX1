@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import {FormEvent,useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
+import {usePortalAuth} from "./PortalAuthContext";
+import PortalServiceUnavailable from "./PortalServiceUnavailable";
 
 type Mode="dealer"|"admin";
 
@@ -10,46 +12,30 @@ const sourceName=(value:any)=>String(value||"Website").replace(/[-_]+/g," ").rep
 const age=(value:any)=>{if(!value)return "";const t=new Date(value).getTime();if(!Number.isFinite(t))return "";const mins=Math.max(0,Math.round((Date.now()-t)/60000));if(mins<60)return `${mins}m ago`;const hrs=Math.round(mins/60);if(hrs<24)return `${hrs}h ago`;return `${Math.round(hrs/24)}d ago`;};
 
 export default function PortalExperience({mode}:{mode:Mode}){
-  const[session,setSession]=useState<any>(null);
+  const auth=usePortalAuth();
   const[data,setData]=useState<any>(null);
-  const[username,setUsername]=useState(mode==="admin"?"Admin":"Dealer");
-  const[password,setPassword]=useState("");
-  const[message,setMessage]=useState("");
-  const[busy,setBusy]=useState(false);
+  const isAdmin=mode==="admin";
+  const roleAllowed=auth&&(isAdmin?auth.role==="platform_admin":auth.role==="dealer_agent"||auth.role==="platform_admin");
 
-  async function loadDashboard(){
-    const r=await fetch("/api/crm/dashboard",{cache:"no-store",credentials:"include"});
-    const j=await r.json().catch(()=>({}));
-    setData(r.ok?j:{summary:{},leads:[],inventory:[],error:j?.error||`Dashboard ${r.status}`});
-  }
-
-  async function loadSession(){
-    const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j?.authenticated){setSession(null);return;}
-    const role=String(j?.user?.role||"").toLowerCase();
-    if(mode==="admin"&&!role.includes("admin")){setSession(null);setMessage("Admin account required.");return;}
-    setSession(j);
-    await loadDashboard();
-  }
-
-  useEffect(()=>{loadSession().catch(()=>setSession(null))},[]);
-
-  async function signIn(e:FormEvent){
-    e.preventDefault();if(busy)return;setBusy(true);setMessage("Signing in…");
-    try{
-      const login=username.trim();
-      const r=await fetch("/api/auth/login",{method:"POST",credentials:"include",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({username:login,email:login,password})});
+  useEffect(()=>{
+    if(!roleAllowed)return;
+    const controller=new AbortController();
+    (async()=>{
+      const r=await fetch("/api/crm/dashboard",{cache:"no-store",credentials:"include",signal:controller.signal});
       const j=await r.json().catch(()=>({}));
-      if(!r.ok||!j?.ok)throw Error(r.status===401?"Login or password is incorrect.":j?.error||"Sign-in failed.");
-      const role=String(j?.role||j?.user?.role||"").toLowerCase();
-      if(mode==="admin"&&!role.includes("admin"))throw Error("Admin account required.");
-      await loadSession();setMessage("");
-    }catch(error){setMessage(error instanceof Error?error.message:"Sign-in failed.");}
-    finally{setBusy(false)}
-  }
+      if(r.status===401||r.status===403){location.replace(`/login?next=${encodeURIComponent(mode==="admin"?"/admin":"/dealer")}`);return;}
+      setData(r.ok?j:{summary:{},leads:[],inventory:[],error:j?.error||`Dashboard ${r.status}`});
+    })().catch(error=>{
+      if(error instanceof DOMException&&error.name==="AbortError")return;
+      setData({summary:{},leads:[],inventory:[],error:"Dashboard unavailable"});
+    });
+    return()=>controller.abort();
+  },[mode,roleAllowed]);
 
-  async function logout(){await fetch("/api/auth/logout",{method:"POST",credentials:"include",cache:"no-store"}).catch(()=>{});setSession(null);setData(null);setPassword("");}
+  async function logout(){
+    await fetch("/api/auth/logout",{method:"POST",credentials:"include",cache:"no-store"}).catch(()=>{});
+    location.replace("/login");
+  }
 
   const summary=data?.summary||{};
   const leads=Array.isArray(data?.leads)?data.leads:[];
@@ -63,22 +49,13 @@ export default function PortalExperience({mode}:{mode:Mode}){
   const topVehicles=useMemo(()=>[...inventory].sort((a:any,b:any)=>Number(b.views||b.leads||0)-Number(a.views||a.leads||0)).slice(0,5),[inventory]);
   const recent=useMemo(()=>[...leads].sort((a:any,b:any)=>new Date(b.updatedAt||b.createdAt||0).getTime()-new Date(a.updatedAt||a.createdAt||0).getTime()).slice(0,5),[leads]);
 
-  if(!session?.authenticated)return <><style jsx global>{portalCss}</style><main className="portalLoginPage">
-    <section className="loginCard">
-      <div className="loginBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>WDCC</b><span>{mode==="admin"?"ADMIN PORTAL":"DEALER PORTAL"}</span></div></div>
-      <span className="loginKicker">WDCC</span><h1>{mode==="admin"?"Admin Sign In":"Dealer Sign In"}</h1><p>{mode==="admin"?"Platform oversight and dealership control.":"Inventory, photos and vehicle management."}</p>
-      <form onSubmit={signIn}><label>USERNAME<input value={username} onChange={e=>setUsername(e.target.value)} autoCapitalize="none" autoComplete="username" required/></label><label>PASSWORD<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?"SIGNING IN…":"SIGN IN"}</button></form>
-      <div className="loginMessage" role="status">{message}</div><small>Authorized access only. Usernames are case-insensitive; passwords are case-sensitive.</small>
-    </section>
-  </main></>;
-
-  const isAdmin=mode==="admin";
+  if(!roleAllowed)return <PortalServiceUnavailable area={isAdmin?"admin portal":"dealer portal"}/>;
   return <><style jsx global>{portalCss}</style><main className="portalApp"><aside className="portalSide">
     <Link className="portalBrand" href={isAdmin?"/admin":"/dealer"}><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><b>{isAdmin?"WDCC · ADMIN PORTAL":"WDCC · DEALER PORTAL"}</b><span>{isAdmin?"PLATFORM CONTROL":"INVENTORY OPERATIONS"}</span></div></Link>
     <nav><Link className="active" href={isAdmin?"/admin":"/dealer"}>⌂ Dashboard</Link><strong>INVENTORY</strong><Link href="/dealer/inventory">All Vehicles</Link><Link href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link><Link href="/dealer/inventory">Categories</Link><Link href="/dealer/inventory">Import Vehicles</Link><strong>OPERATIONS</strong><Link href="/dealer/leads">Leads</Link><Link href="/dealer/leads">Appointments</Link><Link href="/dealer/leads">Test Drives</Link><Link href="/dealer/leads">Customers</Link><Link href="/dealer/leads">Applications</Link><Link href="/dealer/leads">Messages</Link><Link href="/dealer/inventory/logs">Reports</Link>{isAdmin&&<Link href="/admin/users">Users</Link>}<Link href={isAdmin?"/admin":"/dealer"}>Settings</Link></nav>
     <div className="portalPromo"><b>BAD CREDIT?</b><b>NO CREDIT?</b><strong>WE DON'T CARE.</strong><img src="/wdcc-hero-v2.webp" alt=""/><Link href="/dealer/inventory/new">ADD VEHICLE →</Link></div>
   </aside><section className="portalWorkspace">
-    <header className="portalTop"><div className="topIdentity"><img src="/wdcc-logo-transparent.webp" alt=""/><div><b>{isAdmin?"WDCC · ADMIN PORTAL":"WDCC · DEALER PORTAL"}</b><span>{session?.user?.displayName||session?.user?.username||(isAdmin?"Admin":"Dealer")}</span></div></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span><button onClick={logout}>Sign Out</button></header>
+    <header className="portalTop"><div className="topIdentity"><img src="/wdcc-logo-transparent.webp" alt=""/><div><b>{isAdmin?"WDCC · ADMIN PORTAL":"WDCC · DEALER PORTAL"}</b><span>{auth.displayName}</span></div></div><a href="tel:18135164752">☎ (813) 516-4752</a><span>Sean · Sales Manager</span><button onClick={logout}>Sign Out</button></header>
     <div className="dashboardWrap"><div className="dashboardTitle"><h1>Dashboard</h1><button>Current period ▾</button></div>
       {data?.error&&<div className="dashboardNotice">Signed in. Dashboard data is reconnecting: {data.error}</div>}
       <div className="metricGrid"><Metric label="New Leads" value={newLeads}/><Metric label="Applications" value={applications}/><Metric label="Approved" value={approved}/><Metric label="Sold This Week" value={sold}/></div>

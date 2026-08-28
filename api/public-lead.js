@@ -1,23 +1,88 @@
-const crypto=require('node:crypto');
-const {put}=require('@vercel/blob');
+const crypto=require("node:crypto");
 
-function send(res,status,obj){res.statusCode=status;res.setHeader('content-type','application/json; charset=utf-8');res.setHeader('cache-control','no-store');res.end(JSON.stringify(obj))}
-function body(req){let b=req.body;if(Buffer.isBuffer(b))b=b.toString('utf8');if(typeof b==='string')try{b=JSON.parse(b)}catch{b={}};return b&&typeof b==='object'?b:{}}
-function key(token){return crypto.createHash('sha256').update(String(process.env.WDCC_LEAD_ENCRYPTION_KEY||token)+'|wdcc-lead-v2').digest()}
-function encrypt(obj,token){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',key(token),iv);const plain=Buffer.from(JSON.stringify(obj));const ct=Buffer.concat([cipher.update(plain),cipher.final()]);return {v:2,alg:'A256GCM',iv:iv.toString('base64url'),tag:cipher.getAuthTag().toString('base64url'),data:ct.toString('base64url')}}
-function marker(v){const text=Object.values(v||{}).map(x=>String(x||'')).join(' ');const m=text.match(/\bTEST-[A-Z0-9-]{3,48}\b/i);return m?m[0].toUpperCase():null}
-module.exports=async function(req,res){
-  if(req.method!=='POST')return send(res,405,{ok:false,error:'method_not_allowed'});
+const MAX_BODY_BYTES=64*1024;
+const FORWARDED_HEADERS=["user-agent","accept-language","x-forwarded-for","x-vercel-forwarded-for","cf-connecting-ip"];
+
+function send(res,status,body,extraHeaders={}){
+  res.statusCode=status;
+  res.setHeader("content-type","application/json; charset=utf-8");
+  res.setHeader("cache-control","no-store");
+  res.setHeader("x-wdcc-legacy-lead-route","canonical-forward-v1");
+  for(const[name,value]of Object.entries(extraHeaders))if(value)res.setHeader(name,value);
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req){
+  let value=req.body;
+  if(Buffer.isBuffer(value)){
+    if(value.byteLength>MAX_BODY_BYTES)throw Error("lead_payload_too_large");
+    value=value.toString("utf8");
+  }
+  if(typeof value==="string"){
+    if(Buffer.byteLength(value,"utf8")>MAX_BODY_BYTES)throw Error("lead_payload_too_large");
+    try{value=JSON.parse(value);}catch{throw Error("invalid_request_body");}
+  }
+  if(!value||typeof value!=="object"||Array.isArray(value))throw Error("invalid_request_body");
+  return value;
+}
+
+function canonicalLeadUrl(){
+  const explicit=String(process.env.WDCC_CANONICAL_LEAD_URL||"").trim();
+  const backend=String(process.env.WDCC_DEALER_BACKEND_URL||"").trim();
+  if(!explicit&&!backend)return null;
+  let target;
+  try{target=explicit?new URL(explicit):new URL("/api/leads",`${backend.replace(/\/+$/g,"")}/`);}catch{return null;}
+  if(target.username||target.password||target.search||target.hash||target.pathname!=="/api/leads")return null;
+  if(target.protocol==="https:")return target;
+  const environment=String(process.env.WDCC_ENVIRONMENT||"").trim().toLowerCase();
+  const local=target.protocol==="http:"&&["localhost","127.0.0.1","[::1]"].includes(target.hostname);
+  return local&&["dev","development","e2e","test"].includes(environment)?target:null;
+}
+
+function canonicalPayload(body,idempotencyKey){
+  const first=String(body.first??body.firstName??"").trim();
+  const last=String(body.last??body.lastName??"").trim();
+  const suppliedName=String(body.name??"").trim();
+  return {
+    ...body,
+    kind:body.kind??body.type??body.intent,
+    name:suppliedName||`${first} ${last}`.trim(),
+    downPayment:body.downPayment??body.down,
+    vehicleInterest:body.vehicleInterest??body.desiredVehicle??body.vehicle,
+    idempotencyKey
+  };
+}
+
+module.exports=async function publicLeadCanonicalForward(req,res){
+  if(req.method!=="POST")return send(res,405,{ok:false,persisted:false,error:"method_not_allowed"},{allow:"POST"});
+  const target=canonicalLeadUrl();
+  if(!target)return send(res,503,{ok:false,persisted:false,error:"canonical_lead_authority_unavailable"},{"retry-after":"5"});
+
   try{
-    const token=process.env.BLOB_READ_WRITE_TOKEN||process.env.WDCC_MEDIA_BLOB_READ_WRITE_TOKEN;
-    if(!token)return send(res,503,{ok:false,error:'lead_store_not_bound'});
-    const b=body(req),phone=String(b.phone||'').trim(),email=String(b.email||'').trim();
-    if(!phone&&!email)return send(res,400,{ok:false,error:'contact_required'});
-    const createdAt=new Date().toISOString(),leadId=crypto.randomUUID();
-    const lead={schemaVersion:2,leadId,createdAt,intent:String(b.intent||b.type||'lead').slice(0,80),source:String(b.source||'wedontcarecars.com').slice(0,120),first:String(b.first||b.firstName||'').slice(0,120),last:String(b.last||b.lastName||'').slice(0,120),phone:phone.slice(0,80),email:email.slice(0,180),down:String(b.down||b.downPayment||'').slice(0,80),city:String(b.city||'').slice(0,120),vehicle:String(b.vehicle||'').slice(0,240),message:String(b.message||b.notes||'').slice(0,3000),consent:Boolean(b.consent),testMarker:marker(b)};
-    const envelope=encrypt(lead,token),d=new Date(createdAt);const path=`private/wdcc/leads/${d.getUTCFullYear()}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${Date.now()}-${leadId}.json.enc`;
-    const saved=await put(path,Buffer.from(JSON.stringify(envelope)),{access:'public',token,addRandomSuffix:false,contentType:'application/octet-stream',cacheControlMaxAge:0});
-    console.log('WDCC_LEAD_STORED',JSON.stringify({leadId,createdAt,intent:lead.intent,testMarker:lead.testMarker,persistence:'blob-ledger'}));
-    return send(res,201,{ok:true,leadId,createdAt,testMarker:lead.testMarker,persistence:'blob-ledger',receiptPath:saved.pathname||path});
-  }catch(e){console.error('WDCC_LEAD_STORE_ERROR',String(e?.message||e));return send(res,500,{ok:false,error:'lead_store_failed'})}
+    const body=readBody(req);
+    const suppliedKey=String(req.headers?.["idempotency-key"]??body.idempotencyKey??"").trim().slice(0,160);
+    const idempotencyKey=suppliedKey||crypto.randomUUID();
+    const headers={"content-type":"application/json","accept":"application/json","idempotency-key":idempotencyKey};
+    for(const name of FORWARDED_HEADERS){
+      const value=req.headers?.[name];
+      if(typeof value==="string"&&value.trim())headers[name]=value.trim().slice(0,500);
+    }
+    const upstream=await fetch(target,{
+      method:"POST",headers,body:JSON.stringify(canonicalPayload(body,idempotencyKey)),
+      redirect:"manual",cache:"no-store",signal:AbortSignal.timeout(12_000)
+    });
+    const text=await upstream.text();
+    let result;
+    try{result=text?JSON.parse(text):{};}catch{return send(res,502,{ok:false,persisted:false,error:"canonical_lead_invalid_response"},{"retry-after":"5"});}
+    return send(res,upstream.status,result,{
+      "x-wdcc-data-authority":upstream.headers.get("x-wdcc-data-authority")||"neon",
+      "x-wdcc-canonical-lead-status":String(upstream.status)
+    });
+  }catch(error){
+    const code=error instanceof Error?error.message:"canonical_lead_forward_failed";
+    if(code==="invalid_request_body")return send(res,400,{ok:false,persisted:false,error:code});
+    if(code==="lead_payload_too_large")return send(res,413,{ok:false,persisted:false,error:code});
+    console.error("WDCC_LEGACY_PUBLIC_LEAD_FORWARD_ERROR",code);
+    return send(res,503,{ok:false,persisted:false,error:"canonical_lead_authority_unavailable"},{"retry-after":"5"});
+  }
 };

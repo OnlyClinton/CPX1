@@ -1,97 +1,123 @@
 import {handleUpload,type HandleUploadBody} from "@vercel/blob/client";
-import {NextResponse} from "next/server";
+import {after,NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
-import {mediaAuthority} from "../../../lib/wdccAuthority";
-import {readState} from "../../../lib/store";
+import {getVehicleById} from "../../../lib/wdccDb";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {captureVehicleMedia,isVehicleMediaPathname,parseVehicleMediaPathname,VEHICLE_PHOTO_CONTENT_TYPES,VEHICLE_PHOTO_MAX_BYTES,vehicleBlobClientUploadToken,vehicleMediaCaptureRoot} from "../../../lib/vehicleMedia";
 
 export const dynamic="force-dynamic";
-const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
-const allowedTypes=new Set(["image/jpeg","image/png","image/webp","image/avif"]);
-const MAX_BYTES=15*1024*1024;
+export const runtime="nodejs";
 
-function json(body:any,status:number,rid:string){return NextResponse.json(body,{status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});}
-function safeName(value:string){return String(value||"photo").replace(/[^a-zA-Z0-9._-]+/g,"-").slice(-120)||"photo";}
+const editorRoles=new Set(["dealer","dealer_agent","tenant_admin","platform_admin","admin"]);
+const allowedTypes=new Set<string>(VEHICLE_PHOTO_CONTENT_TYPES);
 
-async function authorizeVehicle(rid:string,vehicleId:string){
-  const user=await currentUser();
+function json(body:any,status:number,rid:string,headers:Record<string,string>={}){
+  return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,...headers}});
+}
+function uploadStatus(detail:string){
+  if(detail==="Unauthorized")return 401;
+  if(detail==="Forbidden")return 403;
+  if(detail==="Vehicle not found")return 404;
+  if(detail==="Vehicle archived")return 409;
+  if(detail.includes("UNAVAILABLE")||detail.includes("MISSING"))return 503;
+  return 400;
+}
+function payload(value:unknown){try{return JSON.parse(String(value||"{}"));}catch{return {};}}
+
+function audit(event:Parameters<typeof recordVehicleAudit>[0]){
+  after(()=>recordVehicleAudit(event));
+}
+
+async function authorizeVehicle(vehicleId:string){
+  const[authResult,vehicleResult]=await Promise.allSettled([
+    currentUser(),
+    getVehicleById(vehicleId)
+  ]);
+  if(authResult.status==="rejected")throw Error("AUTH_BACKEND_UNAVAILABLE");
+  const user:any=authResult.value;
   if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))throw Error("Unauthorized");
-  const state=await readState();
-  const vehicle:any=state.vehicles.find(item=>item.id===vehicleId);
+  if(vehicleResult.status==="rejected")throw Error("INVENTORY_BACKEND_UNAVAILABLE");
+  const vehicle:any=vehicleResult.value;
   if(!vehicle)throw Error("Vehicle not found");
-  if(String(user.role).toLowerCase()!=="platform_admin"&&String(vehicle.tenantId||"wdcc")!==String(user.tenantId||"wdcc"))throw Error("Forbidden");
+  const role=String(user.role||"").toLowerCase();
+  const userTenant=String(user.dealerId||user.tenantId||"").trim();
+  const vehicleTenant=String(vehicle.dealerId||vehicle.tenantId||"").trim();
+  if(role!=="platform_admin"&&userTenant!==vehicleTenant)throw Error("Forbidden");
   if(String(vehicle.status||"").toLowerCase()==="archived")throw Error("Vehicle archived");
   return {user,vehicle};
 }
 
-async function cloudflareUpload(request:Request,rid:string,authority:any){
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/upload");
+  const rid=requestId(request);
+  try{
+    const user:any=await currentUser();
+    if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return json({ok:false,error:"Unauthorized"},401,rid);
+    const capture=vehicleMediaCaptureRoot();
+    if(!capture&&!vehicleBlobClientUploadToken())return json({ok:false,error:"upload_authority_unavailable"},503,rid);
+    return json({ok:true,mode:capture?"e2e-local-capture":"vercel-blob-client",access:"private",maximumSizeInBytes:VEHICLE_PHOTO_MAX_BYTES,allowedContentTypes:[...VEHICLE_PHOTO_CONTENT_TYPES]},200,rid);
+  }catch(error){return json({ok:false,error:error instanceof Error?error.message:"upload_unavailable"},503,rid);}
+}
+
+async function captureUpload(request:Request,rid:string){
+  if(!vehicleMediaCaptureRoot())return json({ok:false,error:"client_upload_handshake_required"},400,rid);
   const form=await request.formData();
   const vehicleId=String(form.get("vehicleId")||"").trim();
-  const suppliedRid=String(form.get("requestId")||rid).trim().slice(0,160)||rid;
+  const pathname=String(form.get("pathname")||"").trim();
+  const correlationId=String(form.get("requestId")||rid).trim().slice(0,160)||rid;
   const file=form.get("file");
-  if(!vehicleId||!(file instanceof File))return json({ok:false,error:"vehicleId_and_file_required",requestId:suppliedRid},400,suppliedRid);
-  if(!allowedTypes.has(file.type)||file.size<=0||file.size>MAX_BYTES)return json({ok:false,error:"invalid_photo",requestId:suppliedRid},400,suppliedRid);
-
+  if(!vehicleId||!isVehicleMediaPathname(vehicleId,pathname)||!(file instanceof File))return json({ok:false,error:"invalid_capture_upload",requestId:correlationId},400,correlationId);
+  if(!allowedTypes.has(file.type)||file.size<=0||file.size>VEHICLE_PHOTO_MAX_BYTES)return json({ok:false,error:"invalid_photo",requestId:correlationId},400,correlationId);
   try{
-    const {user,vehicle}=await authorizeVehicle(suppliedRid,vehicleId);
-    const pathname=`media/wdcc/${vehicleId}/${crypto.randomUUID()}-${safeName(file.name)}`;
-    await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"ok",requestId:suppliedRid,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames.length:0,detail:pathname});
-
-    const response=await fetch(`${authority.options.mediaServiceUrl}/media?p=${encodeURIComponent(pathname)}`,{
-      method:"PUT",
-      headers:{"Content-Type":file.type,Authorization:`Bearer ${authority.options.mediaServiceToken}`},
-      body:await file.arrayBuffer(),
-      cache:"no-store"
-    });
-    const result:any=await response.json().catch(()=>({}));
-    if(!response.ok||result?.ok!==true)throw Error(`media_provider_failed:${response.status}:${result?.error||"unknown"}`);
-    await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:suppliedRid,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,detail:pathname});
-    return json({ok:true,pathname,contentType:file.type,size:file.size,sha256:result.sha256,provider:"cloudflare"},200,suppliedRid);
+    const {user,vehicle}=await authorizeVehicle(vehicleId);
+    const stored=await captureVehicleMedia(pathname,new Uint8Array(await file.arrayBuffer()),file.type);
+    audit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:correlationId,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,detail:JSON.stringify(stored)});
+    return json({ok:true,...stored,url:`/api/media?p=${encodeURIComponent(stored.pathname)}`},200,correlationId,{"X-WDCC-Test-Capture":"1"});
   }catch(error){
     const detail=error instanceof Error?error.message:"upload_failed";
-    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:suppliedRid,vehicleId:vehicleId||null,detail});
-    const status=detail==="Unauthorized"?401:detail==="Forbidden"?403:detail==="Vehicle not found"?404:400;
-    return json({ok:false,error:detail,requestId:suppliedRid},status,suppliedRid);
+    audit({action:"vehicle.photo_upload",outcome:"failed",requestId:correlationId,vehicleId:vehicleId||null,detail});
+    return json({ok:false,error:detail,requestId:correlationId},uploadStatus(detail),correlationId);
   }
 }
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/upload");
   const rid=requestId(request);
-  const media=mediaAuthority();
-  if(media.mode==="cloudflare-do")return cloudflareUpload(request,rid,media);
-
-  const uploadToken=String(process.env.BLOB_READ_WRITE_TOKEN||"").trim();
-  if(!uploadToken){
-    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:"upload_authority_unavailable"});
-    console.error("WDCC_UPLOAD_AUTHORITY_MISSING",JSON.stringify({requestId:rid,hasOidc:Boolean(process.env.VERCEL_OIDC_TOKEN),hasStoreId:Boolean(process.env.BLOB_STORE_ID)}));
+  if(request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data"))return captureUpload(request,rid);
+  const token=vehicleBlobClientUploadToken();
+  if(!token){
+    audit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail:"BLOB_CLIENT_UPLOAD_TOKEN_MISSING"});
     return json({ok:false,error:"upload_authority_unavailable",requestId:rid},503,rid);
   }
   try{
-    const body=(await request.json())as HandleUploadBody;
+    const body=(await request.json()) as HandleUploadBody;
     const result=await handleUpload({
-      body,request,token:uploadToken,
+      body,request,token,
       onBeforeGenerateToken:async(pathname,clientPayload)=>{
-        let payload:any={};try{payload=JSON.parse(clientPayload||"{}");}catch{}
-        const vehicleId=String(payload.vehicleId||"");
-        const correlationId=String(payload.requestId||rid).slice(0,160)||rid;
-        if(!vehicleId||!pathname.startsWith(`media/wdcc/${vehicleId}/`))throw Error("Invalid upload path");
-        const {user,vehicle}=await authorizeVehicle(correlationId,vehicleId);
-        await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"ok",requestId:correlationId,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames.length:0,detail:pathname});
-        return {allowedContentTypes:[...allowedTypes],maximumSizeInBytes:MAX_BYTES,addRandomSuffix:true,tokenPayload:JSON.stringify({vehicleId,userId:user.id,actorRole:user.role,tenantId:user.tenantId||"wdcc",requestId:correlationId,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock})};
+        const client=payload(clientPayload),vehicleId=String(client.vehicleId||"").trim();
+        const correlationId=String(client.requestId||rid).trim().slice(0,160)||rid;
+        if(!vehicleId||!isVehicleMediaPathname(vehicleId,pathname))throw Error("Invalid upload path");
+        const parsed=parseVehicleMediaPathname(pathname);if(!parsed)throw Error("Invalid upload path");
+        const {user,vehicle}=await authorizeVehicle(vehicleId);
+        audit({action:"vehicle.photo_authorize",outcome:"ok",requestId:correlationId,vehicleId,actorId:user.id,actorRole:user.role,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock,status:vehicle.status,photoCount:Array.isArray(vehicle.photoPathnames)?vehicle.photoPathnames.length:0,detail:parsed.pathname});
+        return {
+          allowedContentTypes:[...VEHICLE_PHOTO_CONTENT_TYPES],maximumSizeInBytes:VEHICLE_PHOTO_MAX_BYTES,
+          addRandomSuffix:false,allowOverwrite:false,cacheControlMaxAge:31536000,validUntil:Date.now()+10*60*1000,
+          tokenPayload:JSON.stringify({vehicleId,pathname:parsed.pathname,userId:user.id,actorRole:user.role,requestId:correlationId,sha256:/^[0-9a-f]{64}$/i.test(String(client.sha256||""))?String(client.sha256):null,size:Number(client.size)||null,contentType:allowedTypes.has(String(client.contentType||""))?String(client.contentType):null,year:vehicle.year,make:vehicle.make,model:vehicle.model,mileage:vehicle.mileage,stock:vehicle.stock})
+        };
       },
       onUploadCompleted:async({blob,tokenPayload})=>{
-        let payload:any={};try{payload=JSON.parse(tokenPayload||"{}");}catch{}
-        await recordVehicleAudit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:String(payload.requestId||rid),vehicleId:payload.vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,year:payload.year,make:payload.make,model:payload.model,mileage:payload.mileage,stock:payload.stock,detail:blob.pathname});
+        const completed=payload(tokenPayload),vehicleId=String(completed.vehicleId||"");
+        if(!vehicleId||completed.pathname!==blob.pathname||!isVehicleMediaPathname(vehicleId,blob.pathname))throw Error("UPLOAD_COMPLETION_PATH_MISMATCH");
+        audit({action:"vehicle.photo_uploaded",outcome:"ok",requestId:String(completed.requestId||rid),vehicleId,actorId:completed.userId||null,actorRole:completed.actorRole||null,year:completed.year,make:completed.make,model:completed.model,mileage:completed.mileage,stock:completed.stock,detail:JSON.stringify({pathname:blob.pathname,url:blob.url,contentType:blob.contentType,size:completed.size,sha256:completed.sha256,provider:"vercel-blob"})});
       }
     });
     return json(result,200,rid);
   }catch(error){
     const detail=error instanceof Error?error.message:"upload_failed";
-    await recordVehicleAudit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail});
-    const status=detail==="Unauthorized"?401:detail==="Forbidden"?403:400;
-    return json({ok:false,error:detail,requestId:rid},status,rid);
+    audit({action:"vehicle.photo_upload",outcome:"failed",requestId:rid,detail});
+    return json({ok:false,error:detail,requestId:rid},uploadStatus(detail),rid);
   }
 }

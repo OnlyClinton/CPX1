@@ -1,6 +1,6 @@
 "use client";
 
-import {useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 
 type ApprovalState={
   name:string;
@@ -23,6 +23,15 @@ export default function ApprovalLeadForm(){
   const[busy,setBusy]=useState(false);
   const[success,setSuccess]=useState(false);
   const[message,setMessage]=useState("");
+  const vehicleId=useRef("");
+  const idempotencyKey=useRef("");
+
+  useEffect(()=>{
+    const qs=new URL(window.location.href).searchParams;
+    vehicleId.current=(qs.get("vehicle")||qs.get("vehicleId")||"").trim().slice(0,160);
+    const selected=(qs.get("vehicleLabel")||vehicleId.current).trim().slice(0,240);
+    if(selected)setForm(current=>current.desiredVehicle?current:{...current,desiredVehicle:selected});
+  },[]);
 
   const canContinue=useMemo(()=>{
     if(step===0)return Boolean(form.name.trim()&&(form.phone.trim()||form.email.trim())&&Number(form.monthlyIncome)>0);
@@ -30,9 +39,14 @@ export default function ApprovalLeadForm(){
     return consent;
   },[step,form,consent]);
 
-  const set=(name:keyof ApprovalState,value:string)=>setForm(v=>({...v,[name]:value}));
+  const set=(name:keyof ApprovalState,value:string)=>{idempotencyKey.current="";setSuccess(false);setForm(v=>({...v,[name]:value}));};
+  function submissionKey(){
+    if(!idempotencyKey.current)idempotencyKey.current=globalThis.crypto?.randomUUID?.()||`approval-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return idempotencyKey.current;
+  }
   function next(){
     if(step===0&&!canContinue){setMessage("Add your name, a phone or email, and monthly income to continue.");return;}
+    if(step===0&&form.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())){setMessage("Enter a valid email address or leave the email field blank.");return;}
     if(step===1&&!canContinue){setMessage("Add a desired vehicle and tell us how you heard about WDCC.");return;}
     setMessage("");setStep(v=>Math.min(2,v+1));
   }
@@ -47,7 +61,7 @@ export default function ApprovalLeadForm(){
     setBusy(true);setSuccess(false);setMessage("Sending your request…");
     try{
       const url=new URL(window.location.href),qs=url.searchParams;
-      const idempotencyKey=crypto.randomUUID();
+      const key=submissionKey();
       const source=(qs.get("source")||qs.get("utm_source")||"get-approved").slice(0,80);
       const payload={
         kind:"approval",
@@ -58,6 +72,7 @@ export default function ApprovalLeadForm(){
         downPayment:Number(form.downPayment||0),
         vehicleInterest:form.desiredVehicle.trim(),
         desiredVehicle:form.desiredVehicle.trim(),
+        vehicleId:vehicleId.current||undefined,
         referralSource:form.referralSource.trim(),
         consent:true,
         source,
@@ -68,9 +83,9 @@ export default function ApprovalLeadForm(){
         utmCampaign:qs.get("utm_campaign")||undefined,
         utmContent:qs.get("utm_content")||undefined,
         clickId:qs.get("gclid")||qs.get("fbclid")||undefined,
-        idempotencyKey
+        idempotencyKey:key
       };
-      const response=await fetch("/api/leads",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":idempotencyKey},body:JSON.stringify(payload)});
+      const response=await fetch("/api/leads",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":key},body:JSON.stringify(payload)});
       const json=await response.json().catch(()=>({}));
       if(!response.ok)throw Error(json.error||"submit_failed");
       setSuccess(true);
@@ -113,13 +128,13 @@ export default function ApprovalLeadForm(){
         <article><span>DOWN PAYMENT</span><b>{money(form.downPayment)}</b><small>Starting amount</small></article>
         <article><span>VEHICLE</span><b>{form.desiredVehicle||"—"}</b><small>{form.referralSource||"Source not selected"}</small></article>
       </div>
-      <label className="approvalConsent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)} required/><span>I agree WDCC may call, text, or email me about this request at the contact information I provided. Consent is not a condition of purchase. Message and data rates may apply.</span></label>
+      <label className="approvalConsent"><input type="checkbox" checked={consent} onChange={e=>{idempotencyKey.current="";setSuccess(false);setConsent(e.target.checked)}} required/><span>I agree WDCC may call, text, or email me about this request at the contact information I provided. Consent is not a condition of purchase. Message and data rates may apply.</span></label>
     </section>}
 
-    {message&&<div className={`approvalMessage${success?" success":""}`} role="status" aria-live="polite">{message}</div>}
+    {message&&<div className={`approvalMessage${success?" success":""}`} role={success?"status":"alert"} aria-live="polite">{message}</div>}
     <div className="approvalActions">
       {step>0&&<button type="button" className="back" onClick={()=>{setMessage("");setStep(v=>v-1)}} disabled={busy}>Back</button>}
-      {step<2?<button type="button" className="next" onClick={next}>Continue</button>:<button type="submit" className="submit" disabled={busy||!consent}>{busy?"SENDING…":"SEND PRE-APPROVAL REQUEST"}</button>}
+      {step<2?<button type="button" className="next" onClick={next}>Continue</button>:<button type="submit" className="submit" disabled={busy||!consent||success}>{busy?"SENDING…":success?"REQUEST RECEIVED":"SEND PRE-APPROVAL REQUEST"}</button>}
     </div>
   </form>;
 }

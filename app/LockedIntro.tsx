@@ -4,23 +4,22 @@ import {useEffect,useRef,useState} from "react";
 import {WDCC_CORRECT_LOGO_DATA_URI} from "./wdccCorrectLogoData";
 
 type Phase="show"|"handoff"|"exit"|"done";
-const INTRO_KEY="wdcc-owner-cinematic-intro-v3";
 
 export default function LockedIntro(){
-  const[phase,setPhase]=useState<Phase>("show");
+  const[phase,setPhase]=useState<Phase>("done");
   const rootRef=useRef<HTMLDivElement|null>(null);
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    const proofHold=params.has("visual-mobile")||params.has("visual-desktop")||navigator.webdriver===true;
     const forceReplay=params.has("intro")||params.has("owner-webgpu")||params.has("owner-cinematic");
+    if(!forceReplay)return;
+    setPhase("show");
+    const proofHold=params.has("visual-mobile")||params.has("visual-desktop")||navigator.webdriver===true;
     if(proofHold){
       document.documentElement.classList.add("wdcc-visual-proof","wdcc-intro-active");
       return()=>document.documentElement.classList.remove("wdcc-visual-proof","wdcc-intro-active","wdcc-intro-handoff");
     }
     if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){setPhase("done");return}
-    if(!forceReplay){try{if(sessionStorage.getItem(INTRO_KEY)==="seen"){setPhase("done");return}}catch{}}
-    try{sessionStorage.setItem(INTRO_KEY,"seen")}catch{}
     document.documentElement.classList.add("wdcc-intro-active");
     const handoff=window.setTimeout(()=>{document.documentElement.classList.add("wdcc-intro-handoff");setPhase("handoff")},1320);
     const exit=window.setTimeout(()=>setPhase("exit"),1440);
@@ -78,7 +77,7 @@ export default function LockedIntro(){
       @media(max-width:430px){.li-badge{width:min(66vw,260px);min-width:220px}.li-tag{font-size:11px}.li-skip{min-height:40px;padding:0 13px;font-size:10px}}
       @media(prefers-reduced-motion:reduce){html:not(.wdcc-visual-proof) .li{display:none!important}.li-scene,.li-smoke,.li-smoke:before,.li-smoke:after,.li-light,.li-badge,.li-badge:before,.li-badge:after,.li-tag{animation:none!important}}
     `}</style>
-    <div className="li-scene" aria-hidden="true"><img src="/wdcc-hero-v2.webp" alt="" width="1672" height="941" fetchPriority="high"/></div>
+    <div className="li-scene" aria-hidden="true"><picture><source media="(max-width: 767px)" srcSet="/wdcc-hero-v2.webp"/><img src="/wdcc-hero-canonical.webp" alt="" width="1536" height="1024" fetchPriority="high"/></picture></div>
     <div className="li-vignette" aria-hidden="true"/>
     <div className="li-smoke" aria-hidden="true"/>
     <div className="li-light" aria-hidden="true"/>

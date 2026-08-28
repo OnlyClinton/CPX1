@@ -61,9 +61,10 @@ export function withWdccRecoveredReviewMedia<T extends WdccRecoveredMediaCandida
 
 const REVIEW_KEY="wdcc-owner-review-fixture-v2-real-media";
 
-export function isWdccVisualReviewFixture(){
+export function isWdccVisualReviewFixture(allowed=false){
   if(typeof window==="undefined")return false;
   try{
+    if(!allowed){sessionStorage.removeItem(REVIEW_KEY);return false}
     const p=new URL(window.location.href).searchParams;
     if(p.get("owner-review")==="0"){sessionStorage.removeItem(REVIEW_KEY);return false}
     if(p.get("owner-review")==="1"||p.get("visual-fixture")==="verified-real"){

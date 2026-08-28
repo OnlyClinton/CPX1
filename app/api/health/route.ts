@@ -1,15 +1,12 @@
 import {NextResponse} from "next/server";
-import {backendHealth} from "../../../lib/dealerProxy";
-import {readState} from "../../../lib/store";
-import {blobAuthority,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
+import {neonAuthReadiness,neonAuthUrl} from "../../../lib/neonAuth";
+import {vehicleBlobClientUploadToken,vehicleBlobReadConfigured,vehicleMediaCaptureRoot} from "../../../lib/vehicleMedia";
+import {databaseConfigured,databaseHealth,databaseIdentity,leadEmailReadiness} from "../../../lib/wdccDb";
 
 export const dynamic="force-dynamic";
-const headers={"Cache-Control":"no-store","X-Robots-Tag":"noindex, nofollow"};
-
-function canonicalRuntime(){
-  const role=String(process.env.WDCC_RUNTIME_ROLE||"").trim().toLowerCase();
-  return process.env.VERCEL_PROJECT_ID===WDCC_PHOENIX_PROJECT_ID||role==="backend"||role==="api"||role==="canonical";
-}
+const headers={"Cache-Control":"no-store","X-Robots-Tag":"noindex, nofollow","X-WDCC-Data-Authority":"neon"};
 
 function provider(){
   if(process.env.RAILWAY_DEPLOYMENT_ID||process.env.RAILWAY_GIT_COMMIT_SHA)return "railway";
@@ -17,39 +14,71 @@ function provider(){
   return "portable";
 }
 
-function integrations(){
-  const email=Boolean((process.env.RESEND_API_KEY||"").trim());
-  const sms=Boolean((process.env.TWILIO_ACCOUNT_SID||"").trim()&&(process.env.TWILIO_AUTH_TOKEN||"").trim()&&(process.env.TWILIO_FROM_NUMBER||"").trim()&&(process.env.WDCC_LEAD_NOTIFICATION_PHONE||"").trim());
-  const webhook=Boolean((process.env.WDCC_LEAD_WEBHOOK_URL||"").trim());
-  return{email:{configured:email},sms:{configured:sms},webhook:{configured:webhook},dashboard:{configured:true}};
+function mediaReadiness(){
+  let local=false;
+  try{local=Boolean(vehicleMediaCaptureRoot());}catch{}
+  const clientUpload=Boolean(vehicleBlobClientUploadToken());
+  return {
+    configured:clientUpload||local,
+    uploadConfigured:clientUpload||local,
+    readConfigured:vehicleBlobReadConfigured()||local,
+    provider:local?"e2e-local-capture":clientUpload?"vercel-blob-client":"missing",
+    requiredProductionVariable:"BLOB_READ_WRITE_TOKEN"
+  };
 }
 
-export async function GET(){
-  const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
-
-  if(canonicalRuntime()){
-    const storage=blobAuthority();
-    const session=Boolean((process.env.SESSION_SECRET||"").trim());
-    const notificationIntegrations=integrations();
-    if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
-    }
-    try{
-      const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
-    }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
-    }
-  }
-
+function authReadiness(database:ReturnType<typeof databaseIdentity>){
+  const configured=neonAuthReadiness();
+  if(!configured.valid)return {...configured,ready:false,databaseMatched:null,sessionLifecycle:"upstream-revoked-before-app-session"};
   try{
-    const {response,json}=await backendHealth();
-    const ok=response.ok&&json?.ok===true&&json?.state!=="unreadable";
-    // Older immutable canonical backends do not expose integration readiness.
-    // In that case report the facade runtime's actual configuration instead of null.
-    const notificationIntegrations=json?.integrations||integrations();
-    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
-  }catch(error){
-    return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:integrations(),integrationReadinessSource:"facade-runtime",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
+    const parsed=new URL(neonAuthUrl());
+    const expected=database.database?`/${database.database}/auth`:null;
+    const databaseMatched=expected?parsed.pathname===expected:true;
+    return {...configured,ready:databaseMatched,databaseMatched,reason:databaseMatched?null:"database_mismatch",sessionLifecycle:"upstream-revoked-before-app-session"};
+  }catch{
+    return {...configured,valid:false,ready:false,databaseMatched:null,reason:"invalid",sessionLifecycle:"upstream-revoked-before-app-session"};
+  }
+}
+
+function readinessReasons(input:{session:boolean;email:boolean;media:boolean;outboxRetry:boolean;auth:{ready:boolean;reason:string|null}}){
+  const authReason=!input.auth.ready?(input.auth.reason==="missing"?"neon_auth_url_missing":input.auth.reason==="database_mismatch"?"neon_auth_database_mismatch":"neon_auth_url_invalid"):null;
+  return [
+    ...(!input.session?["session_secret_missing"]:[]),
+    ...(!input.auth.ready&&authReason?[authReason]:[]),
+    ...(!input.email?["lead_email_not_ready"]:[]),
+    ...(!input.media?["vehicle_media_upload_not_ready"]:[]),
+    ...(!input.outboxRetry?["lead_outbox_retry_not_ready"]:[])
+  ];
+}
+
+export async function GET(request:Request){
+  if(!isDealerRuntime(request))return proxyDealer(request,"/api/health");
+  const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
+  const identity=databaseIdentity();
+  const email=leadEmailReadiness();
+  const media=mediaReadiness();
+  const auth=authReadiness(identity);
+  const session=String(process.env.SESSION_SECRET||"").length>=32;
+  const outboxRetry=String(process.env.CRON_SECRET||"").trim().length>=32;
+  const integrationReasons=readinessReasons({session,email:email.configured,media:media.configured,outboxRetry,auth});
+  const base={
+    service:"wdcc-neon-business-flow",release:"WDCC-V54-NEON-AUTHORITY",authority:"neon",provider:provider(),commit,
+    database:identity,session:session?"configured":"missing",
+    integrations:{
+      auth,
+      email:{configured:email.configured,apiKey:email.apiKey,recipients:email.recipients,from:email.from,baseUrl:email.baseUrl,override:email.override,reason:email.reason},
+      dashboard:{configured:true},media,outboxRetry:{configured:outboxRetry,schedule:"*/5 * * * *"}
+    }
+  };
+  if(!databaseConfigured()){
+    return NextResponse.json({ok:false,degraded:true,...base,state:"unconfigured",reasons:["database_missing",...integrationReasons]},{status:503,headers});
+  }
+  try{
+    const state=await databaseHealth();
+    const reasons=integrationReasons;
+    const ok=reasons.length===0;
+    return NextResponse.json({ok,degraded:!ok,...base,database:state.identity,state:"readable",counts:{vehicles:state.vehicles,leads:state.leads,pendingOutbox:state.pendingOutbox,staleOutbox:state.staleOutbox,deadLetterOutbox:state.deadLetterOutbox},reasons},{status:ok?200:503,headers});
+  }catch{
+    return NextResponse.json({ok:false,degraded:true,...base,state:"unreadable",reasons:["database_unreadable",...integrationReasons],error:"database_health_failed"},{status:503,headers});
   }
 }

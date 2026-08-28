@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
+import {loadPublicInventory} from "../lib/publicInventoryClient";
 import WdccVehicleCard,{type WdccVehicle} from "./WdccVehicleCard";
 import {isWdccVisualReviewFixture,WDCC_VISUAL_REVIEW_INVENTORY,WDCC_VISUAL_REVIEW_LABEL} from "./wdccVisualReviewInventory";
 
@@ -17,7 +18,7 @@ function customerVisible(v:Vehicle){
   return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!qa&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only";
 }
 
-export default function InventoryGrid(){
+export default function InventoryGrid({allowVisualFixture=false}:{allowVisualFixture?:boolean}){
   const[items,setItems]=useState<Vehicle[]>([]);
   const[state,setState]=useState<InventoryState>("loading");
   const[fixtureMode,setFixtureMode]=useState(false);
@@ -30,7 +31,7 @@ export default function InventoryGrid(){
 
   useEffect(()=>{
     let live=true;
-    if(isWdccVisualReviewFixture()){
+    if(isWdccVisualReviewFixture(allowVisualFixture)){
       setFixtureMode(true);
       setDesignMode(false);
       setRecoveryMode(false);
@@ -38,8 +39,7 @@ export default function InventoryGrid(){
       setState("ready");
       return()=>{live=false};
     }
-    fetch("/api/inventory",{cache:"no-store"})
-      .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body?.error||`Inventory ${r.status}`);return body})
+    loadPublicInventory()
       .then(body=>{
         if(!live)return;
         const designPreview=body?.mockupPreview===true||body?.inventorySource==="r31-r25-design-reference";
@@ -55,7 +55,7 @@ export default function InventoryGrid(){
       })
       .catch(()=>{if(live){setItems([]);setFixtureMode(false);setDesignMode(false);setRecoveryMode(false);setState("error")}});
     return()=>{live=false};
-  },[]);
+  },[allowVisualFixture]);
 
   const makes=useMemo(()=>Array.from(new Set(items.map(v=>String(v.make||"").trim()).filter(Boolean))).sort(),[items]);
   const filtered=useMemo(()=>{

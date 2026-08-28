@@ -10,13 +10,14 @@ function runtimeRole(){
 export function isDealerRuntime(request?:Request){
   const role=runtimeRole();
   if(role==="backend"||role==="api"||role==="canonical")return true;
-  if(role==="frontend"||role==="storefront"||role==="proxy")return false;
 
-  // Both the dealer project and Phoenix canonical project own auth locally.
-  // This fallback matters when a deployment is missing WDCC_RUNTIME_ROLE:
-  // Phoenix must never proxy its own auth routes back through the frontend path.
+  // A known canonical Vercel project always wins over a stale role variable.
+  // Cloudflare does not receive VERCEL_PROJECT_ID, while this ordering prevents
+  // a misconfigured Vercel deployment from proxying back to its own origin.
   const projectId=String(process.env.VERCEL_PROJECT_ID||"").trim();
   if(projectId===DEALER_PROJECT_ID||projectId===PHOENIX_PROJECT_ID)return true;
+
+  if(role==="frontend"||role==="storefront"||role==="proxy")return false;
 
   if(!request)return false;
   try{

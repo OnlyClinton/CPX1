@@ -55,7 +55,7 @@ export default function WdccVehicleCard({vehicle,featured=false}:{vehicle:WdccVe
       <strong className={styles.price}>${price.toLocaleString()}</strong>
       <p className={styles.down}>{down!=null&&Number(down)>0?`$${Number(down).toLocaleString()} DOWN`:"CALL FOR DOWN PAYMENT"}</p>
       <div className={styles.pills}>{tags.map((tag,i)=><span key={`${String(tag)}-${i}`}>{String(tag)}</span>)}</div>
-      {!featured&&<div className={styles.actions}><Link href={href}>VIEW VEHICLE</Link><Link className={styles.primary} href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(String(v.id||v.slug||""))}`}>GET PRE-APPROVED</Link></div>}
+      {!featured&&<div className={styles.actions}><Link href={href}>VIEW VEHICLE</Link><Link className={styles.primary} href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(String(v.id||v.slug||""))}&vehicleLabel=${encodeURIComponent(title)}`}>GET PRE-APPROVED</Link></div>}
     </div>
   </article>;
 }

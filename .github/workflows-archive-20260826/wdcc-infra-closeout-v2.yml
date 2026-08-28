@@ -116,7 +116,7 @@ jobs:
 
           auth_gate(){
             base="$1"; label="$2"
-            for login in 'Big Pussy' admin; do
+            for login in dealer admin; do
               jar="/tmp/${label}-$(printf '%s' "$login"|tr ' ' '_').cookies"
               jq -nc --arg login "$login" --arg password "$WDCC_DEALER_E2E_PASSWORD" '{login:$login,password:$password}' >/tmp/login.json
               code="$(curl -sS -c "$jar" -o /tmp/login-response.json -w '%{http_code}' -X POST "$base/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/login.json)"
@@ -167,7 +167,7 @@ jobs:
           done
           test "$ready" = 1
 
-          for login in 'Big Pussy' admin; do
+          for login in dealer admin; do
             jar="/tmp/live-$(printf '%s' "$login"|tr ' ' '_').cookies"
             jq -nc --arg login "$login" --arg password "$WDCC_DEALER_E2E_PASSWORD" '{login:$login,password:$password}' >/tmp/live-login-payload.json
             code="$(curl -sS -c "$jar" -o /tmp/live-login.json -w '%{http_code}' -X POST "https://$DEALER_DOMAIN/api/auth/login" -H 'content-type: application/json' -H "origin: https://$DEALER_DOMAIN" --data-binary @/tmp/live-login-payload.json)"

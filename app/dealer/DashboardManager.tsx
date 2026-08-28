@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {FormEvent,useEffect,useState} from "react";
+import PortalServiceUnavailable from "../PortalServiceUnavailable";
 
 type Lead=Record<string,any>;type Vehicle=Record<string,any>;
 const image=(v:Vehicle)=>{const p=String(v.primaryPhotoPathname||v.photoPathnames?.[0]||"").trim();return p?`/api/media?p=${encodeURIComponent(p)}`:String(v.image||v.primary_image_url||"")};
@@ -11,10 +12,10 @@ const kind=(l:Lead)=>String(l.kind||l.type||l.source||"").toLowerCase();
 const stamp=(v:any)=>new Date(v?.updatedAt||v?.createdAt||0).getTime();
 
 export default function DashboardManager(){
-  const[session,setSession]=useState<any>(undefined),[data,setData]=useState<any>(null),[username,setUsername]=useState("Dealer"),[password,setPassword]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+  const[session,setSession]=useState<any>(undefined),[data,setData]=useState<any>(null),[username,setUsername]=useState("Dealer"),[password,setPassword]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[sessionUnavailable,setSessionUnavailable]=useState(false);
   async function loadDashboard(){const r=await fetch("/api/crm/dashboard",{cache:"no-store",credentials:"include"}),j=await r.json().catch(()=>({}));setData(r.ok?j:{summary:{},leads:[],inventory:[],error:j.error||`Dashboard ${r.status}`})}
-  async function loadSession(){const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"}),j=await r.json().catch(()=>({}));if(j?.authenticated){setSession(j);await loadDashboard()}else setSession(null)}
-  useEffect(()=>{loadSession().catch(()=>setSession(null))},[]);
+  async function loadSession(){const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"}),j=await r.json().catch(()=>({}));if(r.status===503){setSessionUnavailable(true);setSession(null);return}setSessionUnavailable(false);if(j?.authenticated){setSession(j);await loadDashboard()}else setSession(null)}
+  useEffect(()=>{loadSession().catch(()=>{setSessionUnavailable(true);setSession(null)})},[]);
   async function login(e:FormEvent){e.preventDefault();if(busy)return;setBusy(true);setMessage("Signing in…");try{const r=await fetch("/api/auth/login",{method:"POST",credentials:"include",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({username:username.trim(),email:username.trim(),password})}),j=await r.json().catch(()=>({}));if(!r.ok||!j?.ok)throw Error(r.status===401?"Login or password is incorrect.":j.error||"Sign-in failed.");await loadSession();setMessage("")}catch(e){setMessage(e instanceof Error?e.message:"Sign-in failed.")}finally{setBusy(false)}}
   async function logout(){await fetch("/api/auth/logout",{method:"POST",credentials:"include"}).catch(()=>{});setSession(null);setData(null);setPassword("")}
 
@@ -22,6 +23,7 @@ export default function DashboardManager(){
   const metrics={vehicles:inventory.length,published:inventory.filter(v=>String(v.status||"").toLowerCase()==="published").length,drafts:inventory.filter(v=>String(v.status||"").toLowerCase()==="draft").length,sold:Number(summary.soldThisWeek??summary.sold??leads.filter(l=>stage(l)==="sold").length),leads:Number(summary.newToday??summary.newLeads??leads.filter(l=>stage(l)==="new").length),appointments:Number(summary.appointments??leads.filter(l=>kind(l).includes("schedule")||kind(l).includes("appointment")||kind(l).includes("test")).length),applications:Number(summary.applications??leads.filter(l=>kind(l).includes("approval")||kind(l).includes("application")).length),messages:Number(summary.messages??leads.filter(l=>kind(l).includes("contact")||kind(l).includes("call")).length)};
   const recentVehicles=[...inventory].sort((a,b)=>stamp(b)-stamp(a)).slice(0,5),recentLeads=[...leads].sort((a,b)=>stamp(b)-stamp(a)).slice(0,5),pct=metrics.vehicles?Math.round(metrics.published/metrics.vehicles*100):0,draftPct=metrics.vehicles?Math.round(metrics.drafts/metrics.vehicles*100):0;
 
+  if(sessionUnavailable)return <PortalServiceUnavailable area="dealer dashboard"/>;
   if(session===undefined)return <main className="wdccGate">Checking secure dealer session…</main>;
   if(!session)return <main className="lockedDealerLogin"><section className="loginVisual"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><small>WDCC DEALER PORTAL</small><h1>RUN YOUR DEALERSHIP.<br/>CLOSE MORE DEALS.</h1><p>Inventory, leads, appointments and sales operations in one place.</p></div></section><form onSubmit={login}><small>SECURE DEALER ACCESS</small><h2>Dealer Sign In</h2><label>USERNAME<input value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" required/></label><label>PASSWORD<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/></label><button disabled={busy}>{busy?"SIGNING IN…":"SIGN IN"}</button><p>{message}</p></form><style jsx global>{css}</style></main>;
 

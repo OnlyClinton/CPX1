@@ -3,6 +3,12 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
+  "crons": [
+    {
+      "path": "/api/internal/lead-outbox",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "git": {
     "deploymentEnabled": false
   }
