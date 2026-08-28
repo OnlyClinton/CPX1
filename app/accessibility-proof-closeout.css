@@ -65,3 +65,11 @@ html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock 
     line-height:1.15!important;
   }
 }
+
+/* Mobile VDP title readability required by the dedicated vehicle-page audit. */
+@media(max-width:767px){
+  html body main.vehiclePage.wdcc-public-page section.inventoryTop.vehicleTop .wrap h1{
+    font-size:24px!important;
+    line-height:1!important;
+  }
+}
