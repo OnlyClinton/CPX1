@@ -11,7 +11,6 @@ const browser=await chromium.launch({headless:true});
 const writes=[];
 const fail=(name,data={})=>{throw new Error(`${name}_${JSON.stringify(data)}`)};
 const watch=page=>page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method()))writes.push({method:r.method(),url:r.url()})});
-const tracks=e=>e?getComputedStyle(e).gridTemplateColumns.split(/\s+/).filter(Boolean).length:0;
 const vehicles=[
   {id:'real-2004-nissan-350z',year:2020,make:'Dodge',model:'Challenger',trim:'SXT',price:24995,downPayment:2000,mileage:41000,stock:'DG-C2020-SXT',status:'published',visibility:'public',transmission:'Automatic',drivetrain:'RWD',bodyStyle:'Coupe',fuelType:'Gasoline',description:'Verified owner-review fixture.',primary_image_url:'/wdcc-review-media/nissan350z'},
   {id:'real-2016-ford-f150-limited',year:2019,make:'Dodge',model:'Charger',trim:'R/T',price:21995,downPayment:1500,mileage:53000,stock:'DCR-2019-RT',status:'published',visibility:'public',transmission:'Automatic',drivetrain:'RWD',bodyStyle:'Sedan',fuelType:'Gasoline',description:'Verified owner-review fixture.',primary_image_url:'/wdcc-review-media/fordF150'},
@@ -35,7 +34,12 @@ async function goto200(page,path,name){
   for(let i=1;i<=15;i++){
     const join=path.includes('?')?'&':'?';
     const response=await page.goto(`${base}${path}${join}owner-proof=${Date.now()}-${i}`,{waitUntil:'domcontentloaded',timeout:30000}).catch(()=>null);
-    status=response?.status()||0;if(status===200)return response;await page.waitForTimeout(1200);
+    status=response?.status()||0;
+    if(status===200){
+      await page.evaluate(()=>{globalThis.tracks=e=>e?getComputedStyle(e).gridTemplateColumns.split(/\s+/).filter(Boolean).length:0});
+      return response;
+    }
+    await page.waitForTimeout(1200);
   }
   fail(`${name}_HTTP`,{status,path});
 }

@@ -86,7 +86,7 @@ jobs:
         run: |
           echo '### WDCC verified historical real-record visual stress' >> "$GITHUB_STEP_SUMMARY"
           echo "Exact SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Purpose: visual-only population stress using previously verified WDCC vehicle records/media. It validates the newest owner-locked five-column wide desktop + dominant mobile swipe-card contract; it does not claim the snapshot is live and does not replace canonical provider acceptance.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Purpose: visual-only population stress using previously verified WDCC vehicle records/media. It validates the controlling three-column public inventory + dominant mobile swipe-card + single-column mobile editor contract; it does not claim the snapshot is live and does not replace canonical provider acceptance.' >> "$GITHUB_STEP_SUMMARY"
           if [ -s verified-real-visual-stress/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./verified-real-visual-stress/result.json');
