@@ -39,6 +39,12 @@ export function WdccPublicHeader(){
         <TrackedCallLink className="rh-call" source="public-header-phone" label="Call Sean"><span>☎</span></TrackedCallLink>
       </div>
     </header>
+    <style jsx global>{`
+      @media(min-width:768px) and (max-width:1180px){
+        html body .wdcc-public-header .rh-logo{width:116px!important;min-width:116px!important;max-width:116px!important}
+        html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{width:112px!important;min-width:112px!important;max-width:112px!important}
+      }
+    `}</style>
   </>;
 }
 
