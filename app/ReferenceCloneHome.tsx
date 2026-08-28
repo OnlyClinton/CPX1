@@ -54,6 +54,9 @@ export default function ReferenceCloneHome(){
    </div></div></section>
    <section className="rh-trust" id="reviews"><div className="rh-trust-grid owner-board-trust-grid"><article><div className="trust-symbol">★</div><div><b>TAMPA BAY PROUD</b><span>Local dealer. Local community.</span></div></article><article><div className="trust-symbol">•••</div><div><b>STRAIGHT ANSWERS</b><span>No runaround. No hidden fees.</span></div></article><article><div className="trust-avatar">SE</div><div><b>REAL PEOPLE</b><span>Talk to Sean. Not a call center.</span></div></article><article><div className="trust-symbol">✓</div><div><b>CONFIDENCE DRIVEN</b><span>We make it happen when others can&apos;t.</span></div></article></div></section>
    <style jsx global>{`
+     html body main.reference-home.locked-storefront .rh-copy h1 .red{color:#ef1727!important}
+     html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:#1689ff!important}
+     html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
      @media(max-width:767px){
        html body main.reference-home.locked-storefront .rh-steps.owner-board-finance-grid{grid-template-columns:1fr!important;gap:7px!important}
        html body main.reference-home.locked-storefront .rh-trust-grid.owner-board-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
