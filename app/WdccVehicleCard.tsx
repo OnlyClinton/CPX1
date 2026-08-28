@@ -42,7 +42,7 @@ export default function WdccVehicleCard({vehicle,featured=false}:{vehicle:WdccVe
 
   return <article className={`${styles.card}${featured?` ${styles.featured}`:""}`}>
     <Link className={styles.photo} href={href} aria-label={`View ${title}`}>
-      {showPhoto?<img src={src} alt={title} loading={featured?"eager":"lazy"} onError={()=>setPhotoFailed(true)}/>:<span className={styles.placeholder} role="img" aria-label={`${title} photo unavailable`}><small>PHOTO TEMPORARILY UNAVAILABLE</small><strong>{v.make||"WDCC"} {v.model||"VEHICLE"}</strong></span>}
+      {showPhoto?<img src={src} alt={title} loading={featured?"eager":"lazy"} onError={()=>setPhotoFailed(true)}/>:<span className={styles.placeholder} role="img" aria-label={`${title} photo unavailable`}><small>PHOTO COMING SOON</small><strong>{v.make||"WDCC"} {v.model||"VEHICLE"}</strong></span>}
       {featured&&<span className={styles.badge}>AVAILABLE</span>}
     </Link>
     <div className={styles.body}>
