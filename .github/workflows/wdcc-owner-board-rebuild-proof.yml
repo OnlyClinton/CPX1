@@ -111,7 +111,7 @@ jobs:
           done
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
-          grep -Fq "$local_build" /tmp/wob-home.html
+          grep -Fq -- "$local_build" /tmp/wob-home.html
           grep -Fq 'data-wdcc-logo-art="owner-wordmark"' /tmp/wob-home.html
           test "$(curl --http1.1 -sS -L -o /tmp/wob-hero.webp -w '%{http_code}' "$URL/wdcc-hero-v2.webp?warm=$GITHUB_RUN_ID")" = 200
           test -s /tmp/wob-hero.webp
