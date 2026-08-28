@@ -1,0 +1,5 @@
+/* Final owner-supplied visual lock — imported after the legacy WDCC layers.
+   Board 51546 requires BAD CREDIT red / NO CREDIT blue / WE DON'T CARE white. */
+html body main.reference-home.locked-storefront .rh-copy h1 .red{color:#ef1727!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:#1689ff!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
