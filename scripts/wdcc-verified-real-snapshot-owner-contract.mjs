@@ -9,8 +9,8 @@ import {pathToFileURL} from 'node:url';
     - phone Featured Inventory: one dominant swipe/snap card with the next card advancing off-canvas
     - full /inventory: five compact columns desktop, one compact row per vehicle on mobile
     - phone Add/Edit: one full-width readable field column at 390px
-  It also corrects drawer visibility semantics: the off-canvas sidebar does not
-  need to be visible while closed; the top dealer brand must remain visible.
+  It also follows editor branding semantics: desktop keeps both side and top brands;
+  mobile does not require its off-canvas side brand, but keeps the top brand visible.
   This wrapper is also the shared exact-SHA trigger for Responsive + Real Snapshot
   acceptance after proof-harness-only corrections, including source-lock follow-ups;
   the executable contract below is unchanged.
@@ -23,6 +23,11 @@ const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fa
 const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
+
+const editorDesktopFrom="else{if(fields.tracks!==4||layout.tracks!==2||sideBrand||!topBrand)fail('DESKTOP_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+const editorDesktopTo="else{if(fields.tracks!==4||layout.tracks!==2||!sideBrand||!topBrand)fail('DESKTOP_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+if(!code.includes(editorDesktopFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorDesktopFrom}`);
+code=code.replace(editorDesktopFrom,editorDesktopTo);
 
 const inventoryFrom="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:3},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
 const inventoryTo="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:5},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";

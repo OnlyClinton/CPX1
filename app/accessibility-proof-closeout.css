@@ -48,3 +48,20 @@ html body .portalSide nav a{
     line-height:1.15!important;
   }
 }
+
+/* Specificity closeout for consent/editor labels and the current inventory dock. */
+html body main.wdcc-public-page form.leadForm .leadGrid label.consent.wide,
+html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock div.fieldGrid>label{
+  font-size:11px!important;
+  line-height:1.2!important;
+}
+@media(max-width:767px){
+  html body main.wdcc-public-page form.leadForm .leadGrid label.consent.wide,
+  html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock div.fieldGrid>label{
+    font-size:11px!important;
+  }
+  html body main.dcPage.inventoryContract nav.inventoryMobileNav a span{
+    font-size:9px!important;
+    line-height:1.15!important;
+  }
+}
