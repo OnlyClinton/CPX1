@@ -21,6 +21,22 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
 html body .editVehicleApp .previewImage.previewImageEmpty{display:grid!important;place-items:center!important;background:linear-gradient(145deg,#0a1722,#132a3a)!important;min-height:220px!important}
 html body .editVehicleApp .previewPhotoComingSoon{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;min-height:220px!important;color:#dbe5ec!important;font-size:12px!important;font-weight:950!important;letter-spacing:.12em!important;text-align:center!important}
 
+/* Public VDP follows the same image/spec language as inventory cards. */
+html body .vehiclePage .vehicleLayout{display:grid!important;grid-template-columns:minmax(0,1.22fr) minmax(360px,.78fr)!important;gap:24px!important;align-items:start!important}
+html body .vehiclePage .vehiclePhoto{aspect-ratio:16/10!important;min-height:0!important;border-radius:12px!important;overflow:hidden!important;background:#0b1721!important}
+html body .vehiclePage .vehiclePhoto>img{width:100%!important;height:100%!important;object-fit:cover!important}
+html body .vehiclePage .vehiclePhotoMissing{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;min-height:360px!important;background:linear-gradient(145deg,#0a1722,#173044)!important;color:#e4edf3!important;font-size:12px!important;font-weight:950!important;letter-spacing:.12em!important}
+html body .vehiclePage .vehicleGallery{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:8px!important;margin-top:9px!important}
+html body .vehiclePage .vehicleGallery button{padding:0!important;border:2px solid transparent!important;border-radius:7px!important;overflow:hidden!important;aspect-ratio:4/3!important;background:#0b1721!important;cursor:pointer!important}
+html body .vehiclePage .vehicleGallery button.active{border-color:var(--wdcc-red)!important}
+html body .vehiclePage .vehicleGallery img{width:100%!important;height:100%!important;object-fit:cover!important}
+html body .vehiclePage .vehicleFacts{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+html body .vehiclePage .vehicleFeatures{margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e0e5e8!important}
+html body .vehiclePage .vehicleFeatures h3,html body .vehiclePage .vehicleDescriptionBlock h3{font-size:14px!important;margin:0 0 10px!important}
+html body .vehiclePage .vehicleFeatures>div{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+html body .vehiclePage .vehicleFeatures span{font-size:12px!important;color:#43515c!important}
+html body .vehiclePage .vehicleDescriptionBlock{margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e0e5e8!important}
+
 /* 10668 desktop: three operational panels in one primary row, actions beneath. */
 @media(min-width:1100px){
   html body main.dealerDashboardLocked .dashboardContent{display:grid!important;grid-template-columns:minmax(245px,.82fr) minmax(420px,1.28fr) minmax(230px,.70fr)!important;grid-template-areas:"title title title" "error error error" "metrics metrics metrics" "inventory vehicles activity" "ops ops ops"!important;gap:10px!important;align-content:start!important}
@@ -72,4 +88,11 @@ html body .editVehicleApp .previewPhotoComingSoon{display:grid!important;place-i
   html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important}
   html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   html body .editVehicleApp .previewImage.previewImageEmpty,html body .editVehicleApp .previewPhotoComingSoon{min-height:170px!important}
+
+  html body .vehiclePage .vehicleLayout{grid-template-columns:1fr!important;gap:14px!important}
+  html body .vehiclePage .vehiclePhotoMissing{min-height:230px!important}
+  html body .vehiclePage .vehicleGallery{display:flex!important;overflow-x:auto!important;gap:7px!important;scroll-snap-type:x mandatory!important;padding-bottom:3px!important}
+  html body .vehiclePage .vehicleGallery button{flex:0 0 82px!important;scroll-snap-align:start!important}
+  html body .vehiclePage .vehicleFacts{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body .vehiclePage .vehicleFeatures>div{grid-template-columns:1fr!important}
 }
