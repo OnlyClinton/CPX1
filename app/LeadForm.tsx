@@ -17,8 +17,12 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
     const formEl=event.currentTarget;
     const form=new FormData(formEl);
     const body:any=Object.fromEntries(form.entries());
-    const phone=String(body.phone||"").trim(),email=String(body.email||"").trim();
+    const name=String(body.name||"").trim(),phone=String(body.phone||"").trim(),email=String(body.email||"").trim();
+    if(!name){setSuccess(false);setMessage("Add your name so Sean knows who to follow up with.");return;}
     if(!phone&&!email){setSuccess(false);setMessage("Add a phone number or email so Sean can reach you.");return;}
+    if(form.get("consent")!=="on"){setSuccess(false);setMessage("Please accept the contact consent to send this request.");return;}
+    if(kind==="schedule"&&(!String(body.preferredDate||"").trim()||!String(body.preferredTime||"").trim())){setSuccess(false);setMessage("Choose a preferred date and time for your test drive.");return;}
+    if(kind==="contact"&&!String(body.message||"").trim()){setSuccess(false);setMessage("Add a message or question so Sean has the context for your request.");return;}
 
     setBusy(true);setSuccess(false);setMessage("Sending…");
     try{
@@ -30,12 +34,14 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
       const payload={
         ...body,
         kind,
+        name,
         phone,
         email,
-        consent:form.get("consent")==="on",
+        consent:true,
         source:leadSource,
         vehicleId:vehicle||undefined,
         pagePath:url.pathname,
+        submittedAt:new Date().toISOString(),
         referrer:document.referrer||undefined,
         utmSource:qs.get("utm_source")||undefined,
         utmMedium:qs.get("utm_medium")||undefined,
@@ -62,8 +68,8 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
       <label>Phone<input name="phone" type="tel" autoComplete="tel" inputMode="tel" maxLength={40} placeholder="813-555-0123"/></label>
       <label>Email<input name="email" type="email" autoComplete="email" maxLength={160} placeholder="you@example.com"/></label>
       {kind!=="contact"&&<label>Vehicle of interest<input name="vehicleInterest" maxLength={240}/></label>}
-      {kind==="schedule"&&<label>Preferred date or time<input name="preferredTime" maxLength={120}/></label>}
-      <label className="wide">Message<textarea name="message" maxLength={2000}/></label>
+      {kind==="schedule"&&<><label>Preferred date<input name="preferredDate" type="date" required/></label><label>Preferred time<input name="preferredTime" type="time" required/></label></>}
+      <label className="wide">{kind==="schedule"?"Comments":"Message"}<textarea name="message" maxLength={2000} required={kind==="contact"}/></label>
       <label className="consent wide"><input name="consent" type="checkbox" required/> I agree WDCC may call, text, or email me about this request at the contact information I provided. Consent is not a condition of purchase. Message and data rates may apply.</label>
     </div>
     <button className="cta red" disabled={busy} type="submit">{busy?"SENDING…":submitLabel[kind]}</button>
