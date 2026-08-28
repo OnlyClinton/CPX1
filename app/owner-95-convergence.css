@@ -1,0 +1,164 @@
+/* WDCC 9.5 owner-board convergence layer.
+   Presentation only. Imported last so superseded legacy chrome cannot win the cascade. */
+
+/* The historical WebP still occupies the semantic image slot for compatibility/proof,
+   while the visible compact board wordmark is rendered deterministically in CSS. */
+html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo{
+  position:relative!important;
+  isolation:isolate!important;
+}
+html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{
+  opacity:0!important;
+}
+html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo::before{
+  content:"WDCC"!important;
+  position:absolute!important;
+  left:0!important;
+  top:5px!important;
+  width:132px!important;
+  height:38px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  margin:0!important;
+  padding:0!important;
+  font-family:Impact,"Arial Black",Arial,sans-serif!important;
+  font-size:36px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  font-style:italic!important;
+  letter-spacing:-2.8px!important;
+  color:transparent!important;
+  background:linear-gradient(90deg,#fff 0 51%,#ef1727 51% 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  filter:drop-shadow(0 1px 0 #000)!important;
+  transform:skewX(-5deg)!important;
+  transform-origin:left center!important;
+  z-index:2!important;
+  pointer-events:none!important;
+}
+html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo::after{
+  content:"WE DON'T CARE CARS"!important;
+  position:absolute!important;
+  left:1px!important;
+  top:41px!important;
+  width:132px!important;
+  color:#fff!important;
+  font-family:Arial,Helvetica,sans-serif!important;
+  font-size:6.5px!important;
+  line-height:1!important;
+  font-weight:950!important;
+  font-style:normal!important;
+  letter-spacing:.35px!important;
+  text-align:left!important;
+  white-space:nowrap!important;
+  z-index:2!important;
+  pointer-events:none!important;
+}
+
+/* Dealer board 51076 uses the same compact WDCC wordmark family. */
+html body .portalBrand,html body .topIdentity{position:relative!important}
+html body .portalBrand>img,html body .topIdentity>img{opacity:0!important}
+html body .portalBrand::before,html body .topIdentity::before{
+  content:"WDCC"!important;
+  position:absolute!important;
+  left:4px!important;
+  top:7px!important;
+  width:62px!important;
+  height:28px!important;
+  display:block!important;
+  font-family:Impact,"Arial Black",Arial,sans-serif!important;
+  font-size:21px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  font-style:italic!important;
+  letter-spacing:-1.7px!important;
+  color:transparent!important;
+  background:linear-gradient(90deg,#fff 0 51%,#ef1727 51% 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  transform:skewX(-5deg)!important;
+  transform-origin:left center!important;
+  pointer-events:none!important;
+}
+html body .topIdentity::before{left:0!important;top:10px!important;width:52px!important;font-size:18px!important}
+
+@media(max-width:767px){
+  /* 51546/51543/51075: closed chrome must stay closed until hamburger state is truly expanded. */
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner>.rh-header-actions{
+    display:none!important;
+    visibility:hidden!important;
+    opacity:0!important;
+    pointer-events:none!important;
+    width:0!important;
+    height:0!important;
+    overflow:hidden!important;
+  }
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner>.rh-nav{
+    display:none!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+  }
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-header-inner:has(.rh-menu[aria-expanded="true"])>.rh-nav.open{
+    display:flex!important;
+    visibility:visible!important;
+    pointer-events:auto!important;
+  }
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo::before{
+    left:50%!important;
+    top:7px!important;
+    width:96px!important;
+    height:32px!important;
+    justify-content:center!important;
+    font-size:29px!important;
+    letter-spacing:-2.2px!important;
+    transform:translateX(-50%) skewX(-5deg)!important;
+    transform-origin:center center!important;
+    text-align:center!important;
+  }
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"] .rh-logo::after{
+    left:50%!important;
+    top:40px!important;
+    width:100px!important;
+    transform:translateX(-50%)!important;
+    text-align:center!important;
+    font-size:5.3px!important;
+    letter-spacing:.2px!important;
+  }
+
+  /* Keep all three owner-board headline rows intact at 390px; no right-edge clipping. */
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1{
+    font-size:clamp(34px,9.35vw,37px)!important;
+    line-height:.91!important;
+    letter-spacing:-.035em!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy h1>span{
+    display:block!important;
+    white-space:nowrap!important;
+    max-width:100%!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-copy{
+    padding:11px 22px 12px!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-proof-list{
+    margin-top:8px!important;
+    gap:1px!important;
+    font-size:9.5px!important;
+    line-height:1.18!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions{
+    margin-top:9px!important;
+    gap:6px!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-hero-actions .rh-btn{
+    min-height:36px!important;
+  }
+  html body main.reference-home.locked-storefront section.rh-hero .rh-phone{
+    margin-top:6px!important;
+    font-size:8.5px!important;
+  }
+
+  html body .portalBrand::before{top:5px!important;font-size:19px!important}
+  html body .topIdentity::before{top:8px!important;font-size:18px!important}
+}
