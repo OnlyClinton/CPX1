@@ -50,8 +50,9 @@ jobs:
           ! grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq '.rh-logo::before' app/owner-95-convergence.css
           grep -Fq 'content:"WDCC"!important' app/owner-95-convergence.css
-          grep -Fq 'recoveredSourceText' app/wdcc-review-media/[id]/route.ts
-          grep -Fq 'contents-api' app/wdcc-review-media/[id]/route.ts
+          grep -Fq 'RECOVERED_MEDIA_COMMIT' app/wdcc-review-media/[id]/route.ts
+          grep -Fq 'verified-first-party-recovery' app/wdcc-review-media/[id]/route.ts
+          grep -Fq 'bundled-local' app/wdcc-review-media/[id]/route.ts
           node <<'NODE'
           const fs=require('fs');
           const source=fs.readFileSync('app/layout.tsx','utf8');
