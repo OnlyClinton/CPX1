@@ -1,5 +1,41 @@
 /* Final owner-supplied visual lock — imported after the legacy WDCC layers.
-   Board 51546 requires BAD CREDIT red / NO CREDIT blue / WE DON'T CARE white. */
+   51546: BAD CREDIT red / NO CREDIT blue / WE DON'T CARE white.
+   51543: five compact cards on wide desktop; compact two-column vehicle rows on mobile. */
 html body main.reference-home.locked-storefront .rh-copy h1 .red{color:#ef1727!important}
 html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:#1689ff!important}
 html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
+
+@media(min-width:1181px){
+  html body main.inventoryPage.wdcc-public-page section.section.light .wrap .wdccVehicleGrid{
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:12px!important;
+  }
+}
+
+@media(min-width:768px) and (max-width:1180px){
+  html body main.inventoryPage.wdcc-public-page section.section.light .wrap .wdccVehicleGrid{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:10px!important;
+  }
+}
+
+@media(max-width:767px){
+  html body main.inventoryPage.wdcc-public-page section.section.light .wrap .wdccVehicleGrid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:7px!important;
+  }
+  html body main.inventoryPage.wdcc-public-page .wdccVehicleGrid>article{
+    display:grid!important;
+    grid-template-columns:130px minmax(0,1fr)!important;
+    min-height:128px!important;
+  }
+  html body main.inventoryPage.wdcc-public-page .wdccVehicleGrid>article>a:first-child{
+    width:130px!important;
+    height:128px!important;
+    min-height:128px!important;
+    aspect-ratio:auto!important;
+  }
+}
