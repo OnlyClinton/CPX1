@@ -1,5 +1,5 @@
 /* WDCC OWNER CONTRACT LOCK — isolated preview lane only.
-   Narrow final authority for owner-supplied 9194 / 50869 / 51074 / 10668 / 10667.
+   Narrow authority for owner-supplied 9194 / 50869 / 51074 / 10668 / 10667.
    Visual-only: no auth, data, provider, persistence, schema, DNS, alias, or production behavior. */
 
 /* Exact owner headline color order. */
@@ -7,10 +7,11 @@ html body main.reference-home.locked-storefront .rh-copy h1 .red{color:var(--wdc
 html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:var(--wdcc-blue)!important}
 html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
 
-/* Exact owner emblem in persistent public chrome. */
-html body .wdcc-public-header .rh-header-inner{grid-template-columns:126px minmax(0,1fr) auto!important}
-html body .wdcc-public-header .rh-logo{width:112px!important;height:74px!important;display:grid!important;place-items:center!important;overflow:visible!important}
-html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{display:block!important;visibility:visible!important;opacity:1!important;width:102px!important;height:102px!important;max-width:102px!important;max-height:102px!important;object-fit:contain!important;transform:none!important;filter:drop-shadow(0 4px 10px rgba(0,0,0,.34))!important}
+/* Newest storefront contract: horizontal WDCC wordmark in persistent public chrome.
+   The round badge remains exclusive to the intro/dealer identity. */
+html body .wdcc-public-header .rh-header-inner{grid-template-columns:160px minmax(0,1fr) auto!important}
+html body .wdcc-public-header .rh-logo{width:142px!important;height:74px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;overflow:visible!important}
+html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{display:block!important;visibility:visible!important;opacity:1!important;width:132px!important;height:auto!important;max-width:132px!important;max-height:58px!important;object-fit:contain!important;transform:none!important;filter:none!important}
 
 /* Trust symbols must not inherit the generic trust-copy span treatment. */
 html body main.reference-home.locked-storefront .rh-trust-grid .trust-symbol,
@@ -30,7 +31,7 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body main.dealerDashboardLocked .activityLocked>a{min-height:41px!important;grid-template-columns:18px minmax(0,1fr) auto!important;gap:5px!important}
 }
 
-/* 10667 desktop editor: restore the dealer emblem in the top bar. */
+/* 10667 desktop editor: one dealer identity in the top bar. */
 @media(min-width:768px){
   html body .editVehicleApp .editTop .topBrand{display:flex!important;align-items:center!important;gap:9px!important;margin-right:auto!important;min-width:235px!important}
   html body .editVehicleApp .editTop .topBrand>img{display:block!important;width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;max-width:52px!important;max-height:52px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
@@ -38,12 +39,12 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body .editVehicleApp .editTop .topBrand span{font-size:8px!important;margin-top:3px!important;color:#aebbc5!important}
 }
 
-/* 9194 mobile: compact 64px chrome and one continuous image-led hero. */
+/* 9194 mobile: compact 64px chrome, horizontal wordmark, intentional 2x2 benefit bridge. */
 @media(max-width:767px){
   html body .wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
   html body .wdcc-public-header .rh-header-inner{height:64px!important;min-height:64px!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;padding:0 10px!important}
-  html body .wdcc-public-header .rh-logo{grid-column:2!important;justify-self:center!important;width:66px!important;height:64px!important}
-  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-approved"]{width:62px!important;height:62px!important;min-width:62px!important;min-height:62px!important;max-width:62px!important;max-height:62px!important}
+  html body .wdcc-public-header .rh-logo{grid-column:2!important;justify-self:center!important;width:122px!important;height:64px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{width:112px!important;height:auto!important;max-width:112px!important;max-height:48px!important;object-fit:contain!important}
   html body .wdcc-public-header .rh-menu,html body .wdcc-public-header .rh-call{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important}
   html body .wdcc-public-header .rh-nav{top:64px!important}
 
@@ -59,11 +60,11 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body main.reference-home.locked-storefront .rh-btn{min-height:43px!important}
   html body main.reference-home.locked-storefront .rh-phone{margin-top:8px!important}
 
-  html body main.reference-home.locked-storefront .rh-benefit{min-height:68px!important;padding:6px 3px!important}
+  html body main.reference-home.locked-storefront .rh-benefits{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:76px!important;padding:8px 8px!important}
   html body main.reference-home.locked-storefront .rh-inventory{padding-top:16px!important;padding-bottom:22px!important}
   html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:7px!important}
   html body main.reference-home.locked-storefront .rh-finance{padding-top:21px!important;padding-bottom:24px!important}
-  html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important;gap:7px!important}
-  html body main.reference-home.locked-storefront .rh-step{min-height:67px!important}
+  html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important}
   html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
