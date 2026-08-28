@@ -12,5 +12,22 @@ export default function Inventory(){
       <a className="inventoryMobilePreapprove" href="/get-approved?source=inventory-mobile-sticky">GET PRE-APPROVED <span aria-hidden="true">→</span></a>
     </main>
     <WdccPublicFooter/>
+    <style>{`
+      /* Route-local final authority: public inventory is 3-up desktop, 1-up mobile. */
+      @media (min-width:768px){
+        html body main.inventoryPage.wdcc-public-page section.section.light > div.wrap > div.inventoryGrid.wdccVehicleGrid:not(.wdccListView){
+          display:grid!important;
+          grid-template-columns:repeat(3,minmax(0,1fr))!important;
+          gap:18px!important;
+        }
+      }
+      @media (max-width:767px){
+        html body main.inventoryPage.wdcc-public-page section.section.light > div.wrap > div.inventoryGrid.wdccVehicleGrid:not(.wdccListView){
+          display:grid!important;
+          grid-template-columns:minmax(0,1fr)!important;
+          gap:12px!important;
+        }
+      }
+    `}</style>
   </>;
 }

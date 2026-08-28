@@ -122,7 +122,7 @@ jobs:
           set -euo pipefail
           node .github/support/wdcc-owner-board-rebuild-proof.mjs
           test -s owner-board-proof/result.json
-          node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length||!r.boards?.home51546Mobile||!r.boards?.inventory51543Mobile||!r.boards?.approval51075Mobile||!r.boards?.dashboard51076Mobile||!r.boards?.allVehicles51522Mobile||!r.boards?.add51073Mobile||!r.boards?.androidDesktopSite)process.exit(1)"
+          node -e "const r=require('./owner-board-proof/result.json');const required=['homeMobile','inventoryMobile','approvalMobile','dealerMobile','dealerInventoryMobile','editorMobile','androidDesktopSite'];if(!r.pass||r.writes.length||required.some(k=>!r.boards?.[k]))process.exit(1)"
 
       - name: Require exact current head
         shell: bash
@@ -145,8 +145,9 @@ jobs:
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./owner-board-proof/result.json');
           console.log(`PASS: ${r.pass}`);
-          console.log(`Android Desktop-site tracks: ${r.boards.androidDesktopSite.featured}`);
+          console.log(`Android Desktop-site tracks: ${r.boards?.androidDesktopSite?.featured ?? 'n/a'}`);
           console.log(`Browser writes: ${r.writes.length}`);
+          console.log(`Proof surfaces: ${Object.keys(r.boards||{}).length}`);
           console.log('ANDROID_OWNER_REVIEW_ELIGIBLE: YES');
           NODE
           else
