@@ -17,6 +17,10 @@ html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner
 html body main.reference-home.locked-storefront .rh-trust-grid .trust-symbol,
 html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{margin-top:0!important;width:34px!important;height:34px!important;display:grid!important;place-items:center!important;font-size:10px!important;line-height:1!important}
 
+/* Missing listing media is explicit and never replaced by storefront hero artwork. */
+html body .editVehicleApp .previewImage.previewImageEmpty{display:grid!important;place-items:center!important;background:linear-gradient(145deg,#0a1722,#132a3a)!important;min-height:220px!important}
+html body .editVehicleApp .previewPhotoComingSoon{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;min-height:220px!important;color:#dbe5ec!important;font-size:12px!important;font-weight:950!important;letter-spacing:.12em!important;text-align:center!important}
+
 /* 10668 desktop: three operational panels in one primary row, actions beneath. */
 @media(min-width:1100px){
   html body main.dealerDashboardLocked .dashboardContent{display:grid!important;grid-template-columns:minmax(245px,.82fr) minmax(420px,1.28fr) minmax(230px,.70fr)!important;grid-template-areas:"title title title" "error error error" "metrics metrics metrics" "inventory vehicles activity" "ops ops ops"!important;gap:10px!important;align-content:start!important}
@@ -67,4 +71,5 @@ html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{mar
   html body main.reference-home.locked-storefront .rh-finance{padding-top:21px!important;padding-bottom:24px!important}
   html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important}
   html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body .editVehicleApp .previewImage.previewImageEmpty,html body .editVehicleApp .previewPhotoComingSoon{min-height:170px!important}
 }
