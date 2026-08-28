@@ -1,7 +1,7 @@
 "use client";
 
 import Link from"next/link";
-import{useEffect,useState}from"react";
+import{useEffect,useMemo,useState}from"react";
 import{WdccPublicFooter,WdccPublicHeader}from"../../WdccPublicChrome";
 import{isWdccVisualReviewFixture,wdccVisualReviewVehicle,WDCC_VISUAL_REVIEW_LABEL}from"../../wdccVisualReviewInventory";
 import{WDCC_RECOVERY_INVENTORY}from"../../../lib/recoveryInventory";
@@ -17,6 +17,7 @@ function customerVisible(v:VehicleRecord){
   const qa=/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||badges.some((b:string)=>b==="R36-TEST"||b==="QA"||b==="TEST"||b.includes("CERTIFICATION"));
   return status==="published"&&v?.internalOnly!==true&&visibility!=="internal"&&visibility!=="dealer_only"&&!qa;
 }
+const mediaPath=(p:any)=>String(p||"").trim()?`/api/media?p=${encodeURIComponent(String(p).trim())}`:"";
 
 export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const[id,setId]=useState("");
@@ -24,10 +25,12 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const[state,setState]=useState<LoadState>("loading");
   const[fixtureMode,setFixtureMode]=useState(false);
   const[recoveryMode,setRecoveryMode]=useState(false);
+  const[activePhoto,setActivePhoto]=useState(0);
 
   useEffect(()=>{let live=true;params.then(x=>{if(live)setId(String(x?.id||""))}).catch(()=>{if(live)setState("error")});return()=>{live=false}},[params]);
   useEffect(()=>{
     if(!id)return;
+    setActivePhoto(0);
     if(isWdccVisualReviewFixture()){
       setFixtureMode(true);setRecoveryMode(false);
       const item=wdccVisualReviewVehicle(id);
@@ -49,8 +52,28 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
   const v=vehicle;
   const q=id?`?vehicle=${encodeURIComponent(id)}&source=vdp`:"";
   const title=v?`${v.year} ${v.make} ${v.model}`:"VEHICLE DETAILS";
-  const src=v?.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:String(v?.primary_image_url||v?.image||"").trim();
   const down=v?.downPayment??v?.down_payment;
+  const photos=useMemo(()=>{
+    if(!v)return[] as string[];
+    const paths=[v.primaryPhotoPathname,...(Array.isArray(v.photoPathnames)?v.photoPathnames:[])].filter(Boolean).map(mediaPath);
+    const external=[v.primary_image_url,v.image].map(x=>String(x||"").trim()).filter(Boolean);
+    return Array.from(new Set([...paths,...external]));
+  },[v]);
+  const features=useMemo(()=>{
+    if(!v)return[] as string[];
+    const raw=Array.isArray(v.features)?v.features:Array.isArray(v.options)?v.options:typeof v.features==="string"?v.features.split(/[,\n]/):[];
+    return raw.map((x:any)=>String(x||"").trim()).filter(Boolean).slice(0,18);
+  },[v]);
+  const activeSrc=photos[activePhoto]||photos[0]||"";
+  const facts=[
+    ["MILEAGE",Number(v?.mileage||0)>0?`${Number(v?.mileage).toLocaleString()} mi`:"—"],
+    ["TRANSMISSION",v?.transmission],
+    ["DRIVETRAIN",v?.drivetrain],
+    ["FUEL",v?.fuelType||v?.fuel_type||v?.fuel],
+    ["BODY",v?.bodyStyle||v?.body_style],
+    ["CONDITION",v?.condition],
+    ["STOCK",v?.stock||v?.stock_id]
+  ].filter(([,value])=>String(value||"").trim());
 
   return <>
     <WdccPublicHeader/>
@@ -62,8 +85,8 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
         {state==="loading"&&<div className="vehicleStatus" role="status"><span className="vehicleStatusBadge">WDCC</span><div><h2>Loading current vehicle details…</h2><p>Checking the published inventory record.</p></div></div>}
         {state==="error"&&<section className="vehicleUnavailable" role="status"><div className="eyebrow muted">INVENTORY STATUS</div><h2>Vehicle details are temporarily unavailable.</h2><p>We are not substituting a demo vehicle or made-up listing. Call Sean for current availability, or return to inventory.</p><div className="vehicleActions"><Link className="cta red" href="/inventory">BROWSE INVENTORY</Link><Link className="cta" href="/get-approved?source=vehicle-unavailable">GET PRE-APPROVED</Link><a className="cta ghost" href="tel:+18135164752">CALL SEAN · 813-516-4752</a></div></section>}
         {state==="ready"&&v&&<div className="vehicleLayout">
-          <section className="vehicleMedia"><div className="photo vehiclePhoto">{src?<img src={src} alt={title}/>:<div className="vehiclePhotoMissing" role="img" aria-label={`${title} photo temporarily unavailable`}><span>PHOTO TEMPORARILY UNAVAILABLE</span></div>}</div><p>{recoveryMode?"The vehicle record is verified; media is not being substituted while storage is unavailable.":fixtureMode?"Historical record photo is not being substituted while media storage is blocked.":"Photos shown are attached to this published vehicle record."}</p></section>
-          <section className="vehicleSummary"><div className="eyebrow muted">{recoveryMode?"CONFIRM AVAILABILITY":fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts"><span><small>MILEAGE</small><b>{Number(v.mileage||0).toLocaleString()} mi</b></span>{v.stock||v.stock_id?<span><small>STOCK</small><b>{String(v.stock||v.stock_id)}</b></span>:null}{v.transmission?<span><small>TRANSMISSION</small><b>{String(v.transmission)}</b></span>:null}{v.drivetrain?<span><small>DRIVETRAIN</small><b>{String(v.drivetrain)}</b></span>:null}</div>{String(v.description||"").trim()&&<p className="vehicleDescription">{String(v.description)}</p>}<div className="vehicleActions vehicleActionsPrimary"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><a className="cta dark" href="tel:+18135164752">CALL SEAN</a></div></section>
+          <section className="vehicleMedia"><div className="photo vehiclePhoto">{activeSrc?<img src={activeSrc} alt={`${title} photo ${activePhoto+1}`}/>:<div className="vehiclePhotoMissing" role="img" aria-label={`${title} photo coming soon`}><span>PHOTO COMING SOON</span></div>}</div>{photos.length>1&&<div className="vehicleGallery" aria-label="Vehicle photo gallery">{photos.map((src,i)=><button key={`${src}-${i}`} className={i===activePhoto?"active":""} type="button" onClick={()=>setActivePhoto(i)} aria-label={`Show vehicle photo ${i+1}`}><img src={src} alt=""/></button>)}</div>}<p>{recoveryMode?"The vehicle record is verified; media is not being substituted while storage is unavailable.":fixtureMode?"Historical review media is clearly marked and never presented as current provider state.":photos.length?"Photos shown are attached to this published vehicle record.":"Vehicle media has not been attached yet. No substitute image is being shown."}</p></section>
+          <section className="vehicleSummary"><div className="eyebrow muted">{recoveryMode?"CONFIRM AVAILABILITY":fixtureMode?"HISTORICAL REVIEW RECORD":"AVAILABLE VEHICLE"}</div><h2>{title}{v.trim?` ${v.trim}`:""}</h2><div className="price">${Number(v.price||v.cashPrice||0).toLocaleString()}</div>{down!=null&&<div className="down">${Number(down).toLocaleString()} estimated down</div>}<div className="vehicleFacts">{facts.map(([label,value])=><span key={String(label)}><small>{label}</small><b>{String(value)}</b></span>)}</div>{features.length>0&&<section className="vehicleFeatures"><h3>Features</h3><div>{features.map(feature=><span key={feature}>✓ {feature}</span>)}</div></section>}{String(v.description||"").trim()&&<section className="vehicleDescriptionBlock"><h3>Description</h3><p className="vehicleDescription">{String(v.description)}</p></section>}<div className="vehicleActions vehicleActionsPrimary"><Link className="cta red" href={`/schedule-test-drive${q}`}>SCHEDULE TEST DRIVE</Link><a className="cta dark" href="tel:+18135164752">CALL SEAN</a></div></section>
         </div>}
       </div></section>
     </main>
