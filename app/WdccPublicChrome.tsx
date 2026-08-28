@@ -21,8 +21,9 @@ export function WdccPublicHeader(){
     <header className="rh-header wdcc-public-header" data-wdcc-public-chrome="header">
       <div className="rh-header-inner">
         <button className="rh-menu" type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="wdcc-public-nav" onClick={()=>setOpen(v=>!v)}><span/><span/><span/></button>
-        <Link className="rh-logo" href="/" aria-label="We Don't Care Cars home" onClick={close}>
-          <img className="rh-logo-art" data-wdcc-logo-art="owner-wordmark" src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="142" height="58" fetchPriority="high"/>
+        <Link className="rh-logo" data-wdcc-logo-render="owner-approved-round" href="/" aria-label="We Don't Care Cars home" onClick={close}>
+          <img className="rh-logo-round" data-wdcc-logo-render="owner-approved-round" src="/wdcc-owner-logo" alt="We Don't Care Cars" width="112" height="112" fetchPriority="high"/>
+          <img className="rh-logo-art rh-logo-legacy-wordmark" data-wdcc-logo-art="owner-wordmark" src="/wdcc-logo-transparent.webp" alt="" aria-hidden="true" width="142" height="58"/>
         </Link>
         <nav id="wdcc-public-nav" className={`rh-nav${open?" open":""}`} aria-label="Main navigation">
           <Link href="/inventory" onClick={close}>Inventory</Link>

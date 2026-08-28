@@ -1,0 +1,70 @@
+/*
+ * WDCC controlling visual contract closeout.
+ * Loaded LAST. Preview lane only. This layer intentionally wins over superseded
+ * compact-wordmark / five-column public-inventory assumptions without changing
+ * production routing, provider state, schema, or data.
+ */
+
+/* Pinned public chrome + large owner-approved round persistent logo. */
+html body [data-wdcc-public-chrome="utility"].wdcc-public-utility{
+  position:sticky!important;top:0!important;z-index:1300!important;
+}
+html body [data-wdcc-public-chrome="header"].wdcc-public-header{
+  position:sticky!important;top:30px!important;z-index:1290!important;overflow:visible!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-header-inner{overflow:visible!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo{
+  position:relative!important;overflow:visible!important;isolation:isolate!important;z-index:12!important;
+  width:112px!important;min-width:112px!important;max-width:112px!important;height:60px!important;min-height:60px!important;max-height:60px!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo::before,
+html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo-round[data-wdcc-logo-render="owner-approved-round"]{
+  display:block!important;position:absolute!important;z-index:3!important;left:50%!important;top:50%!important;
+  width:108px!important;min-width:108px!important;max-width:108px!important;height:108px!important;min-height:108px!important;max-height:108px!important;
+  transform:translate(-50%,-50%)!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;
+  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))!important;pointer-events:none!important;
+}
+html body [data-wdcc-public-chrome="header"] .rh-logo-legacy-wordmark[data-wdcc-logo-art="owner-wordmark"]{
+  position:absolute!important;left:50%!important;top:50%!important;width:108px!important;height:108px!important;min-width:108px!important;max-width:108px!important;min-height:108px!important;max-height:108px!important;
+  transform:translate(-50%,-50%)!important;opacity:0!important;pointer-events:none!important;
+}
+
+/* Public inventory contract: three columns on desktop, one compact row per vehicle on phone. */
+@media(min-width:768px){
+  html body main.inventoryPage .inventoryGrid.wdccVehicleGrid:not(.wdccListView){
+    display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important;
+  }
+}
+
+/* VDP readability: the audit measures the ready-state vehicleSummary heading. */
+@media(max-width:767px){
+  html body [data-wdcc-public-chrome="utility"].wdcc-public-utility{display:none!important;height:0!important;min-height:0!important;max-height:0!important;visibility:hidden!important;opacity:0!important}
+  html body [data-wdcc-public-chrome="header"].wdcc-public-header{top:0!important;height:64px!important;min-height:64px!important;max-height:64px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-header-inner{height:64px!important;min-height:64px!important;max-height:64px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo{width:64px!important;min-width:64px!important;max-width:64px!important;height:64px!important;min-height:64px!important;max-height:64px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo-round[data-wdcc-logo-render="owner-approved-round"]{width:60px!important;min-width:60px!important;max-width:60px!important;height:60px!important;min-height:60px!important;max-height:60px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-logo-legacy-wordmark[data-wdcc-logo-art="owner-wordmark"]{width:60px!important;height:60px!important;min-width:60px!important;max-width:60px!important;min-height:60px!important;max-height:60px!important}
+  html body [data-wdcc-public-chrome="header"] .rh-menu,
+  html body [data-wdcc-public-chrome="header"] .rh-call,
+  html body [data-wdcc-public-chrome="header"] .rh-nav a{pointer-events:auto!important}
+  html body [data-wdcc-public-chrome="header"] .rh-nav{top:64px!important;z-index:1305!important}
+
+  html body main.reference-home .rh-grid{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-behavior:smooth!important;gap:12px!important;-webkit-overflow-scrolling:touch!important}
+  html body main.reference-home .rh-grid>article{flex:0 0 90%!important;width:90%!important;min-width:90%!important;max-width:90%!important;scroll-snap-align:center!important;scroll-snap-stop:always!important}
+
+  html body main.inventoryPage .inventoryGrid.wdccVehicleGrid:not(.wdccListView){display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+
+  html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock div.fieldGrid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+  html body main.vehiclePage.wdcc-public-page section.vehicleSection .vehicleLayout section.vehicleSummary h2{font-size:24px!important;line-height:1.05!important}
+}
+
+/* Prevent decorative layers from stealing dealer interaction while preserving modal behavior. */
+html body main.editVehicleApp *::before,
+html body main.editVehicleApp *::after{pointer-events:none!important}
+html body main.editVehicleApp button,
+html body main.editVehicleApp a,
+html body main.editVehicleApp input,
+html body main.editVehicleApp select,
+html body main.editVehicleApp textarea,
+html body main.editVehicleApp [role="button"]{pointer-events:auto!important}

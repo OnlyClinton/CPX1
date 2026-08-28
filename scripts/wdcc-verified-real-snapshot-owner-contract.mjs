@@ -3,24 +3,19 @@ import {pathToFileURL} from 'node:url';
 
 /*
   Owner-contract wrapper for the verified historical real-record visual stress lane.
-  The base fixture owns the populated visual data while this wrapper aligns legacy
-  mechanical assertions with the current FINAL VISUAL AUTHORITY:
-    - desktop Featured Inventory: five compact columns
-    - phone Featured Inventory: one dominant swipe/snap card with the next card advancing off-canvas
-    - full /inventory: five compact columns desktop, one compact row per vehicle on mobile
-    - phone Add/Edit: two readable field columns within the 316px form grid at 390px
-  It also follows editor branding semantics: desktop keeps both side and top brands;
-  mobile does not require its off-canvas side brand, but keeps the top brand visible.
-  This wrapper is also the shared exact-SHA trigger for Responsive + Real Snapshot
-  acceptance after proof-harness-only corrections, including source-lock and page-matrix follow-ups;
-  the executable contract below is unchanged.
+  Controlling contract:
+    - desktop Featured Inventory may remain the compact populated board presentation
+    - phone Featured Inventory is one dominant swipe/snap card
+    - full /inventory is THREE columns on desktop and one compact row per vehicle on mobile
+    - phone Add/Edit is ONE readable field column at 390px
+  It also follows the current dealer shell and explicitly opens Photos before media checks.
 */
 const source='scripts/wdcc-verified-real-snapshot-visual-stress.mjs';
 const runtime='scripts/.wdcc-verified-real-snapshot-owner-contract.runtime.mjs';
 let code=fs.readFileSync(source,'utf8');
 
 const editorFrom="if(spec.mobile){if(fields.tracks!==2||!sideBrand||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
-const editorTo="if(spec.mobile){if(fields.tracks!==2||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
+const editorTo="if(spec.mobile){if(fields.tracks!==1||fields.w<300||!topBrand)fail('MOBILE_EDITOR_3293',{fields,layout,sideBrand,topBrand})}";
 if(!code.includes(editorFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorFrom}`);
 code=code.replace(editorFrom,editorTo);
 
@@ -29,10 +24,8 @@ const editorDesktopTo="else{if(fields.tracks!==4||layout.tracks!==2||!sideBrand|
 if(!code.includes(editorDesktopFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${editorDesktopFrom}`);
 code=code.replace(editorDesktopFrom,editorDesktopTo);
 
-const inventoryFrom="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:3},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
-const inventoryTo="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:5},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
-if(!code.includes(inventoryFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${inventoryFrom}`);
-code=code.replace(inventoryFrom,inventoryTo);
+const inventoryContract="for(const spec of [{name:'desktop',viewport:{width:1440,height:1000},mobile:false,tracks:3},{name:'mobile',viewport:{width:390,height:844},mobile:true,tracks:1}])";
+if(!code.includes(inventoryContract))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${inventoryContract}`);
 
 const densityFrom="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.46||d.cardW<d.viewport*.28||d.secondX>=d.viewport)fail('MOBILE_FEATURED_DENSITY_3294',d)";
 const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.96||d.cardW<d.viewport*.85||d.secondX<d.viewport*.90||d.secondX>d.viewport*1.05)fail('MOBILE_FEATURED_DENSITY_3294',d)";
@@ -50,8 +43,4 @@ if(!code.includes(photoFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT
 code=code.replace(photoFrom,photoTo);
 
 fs.writeFileSync(runtime,code);
-try{
-  await import(`${pathToFileURL(process.cwd()+'/'+runtime).href}?owner-contract=${Date.now()}`);
-}finally{
-  fs.rmSync(runtime,{force:true});
-}
+try{await import(`${pathToFileURL(process.cwd()+'/'+runtime).href}?owner-contract=${Date.now()}`)}finally{fs.rmSync(runtime,{force:true})}
