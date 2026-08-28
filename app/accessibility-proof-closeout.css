@@ -20,7 +20,8 @@ html body form label{
 }
 html body .dcSide nav a,
 html body .targetLeadSide nav a,
-html body .crmSidebar nav a{
+html body .crmSidebar nav a,
+html body .portalSide nav a{
   font-size:12px!important;
   line-height:1.2!important;
 }
@@ -41,7 +42,8 @@ html body .crmSidebar nav a{
   html body .dashMobileNav span,
   html body .inventoryMobileNav span,
   html body .targetLeadMobile span,
-  html body .refDealerMobileNav span{
+  html body .refDealerMobileNav span,
+  html body .portalBottom a span{
     font-size:9px!important;
     line-height:1.15!important;
   }
