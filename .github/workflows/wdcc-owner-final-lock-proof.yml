@@ -36,16 +36,26 @@ jobs:
           set -euo pipefail
           test -s app/wdcc-owner-board-final.css
           test -s app/owner-contract-lock.css
+          test -s app/dealer/DealerNav.tsx
+          test -s app/dealer/DealerOperationsModule.tsx
           test -s .github/support/wdcc-owner-final-lock-proof.mjs
           test -s .github/support/wdcc-owner-final-dashboard-diagnostic.mjs
           test -s .github/support/wdcc-owner-final-mobile-diagnostic.mjs
           grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
           grep -Fq 'owner-contract-lock.css' app/layout.tsx
-          grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
-          grep -Fq 'src="/wdcc-owner-logo"' app/WdccPublicChrome.tsx
-          ! grep -Fq 'wdcc-wordmark' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
+          ! grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq '.rh-copy h1 .red{color:var(--wdcc-red)!important}' app/owner-contract-lock.css
           grep -Fq '.rh-copy h1 .white{color:#fff!important}' app/owner-contract-lock.css
+          grep -Fq 'grid-template-columns:repeat(2,minmax(0,1fr))!important' app/owner-contract-lock.css
+          grep -Fq 'DealerNav active="editor"' app/dealer/inventory/VehicleEditor.tsx
+          ! grep -Fq '||"/wdcc-hero-v2.webp"' app/dealer/inventory/VehicleEditor.tsx
+          for route in appointments test-drives customers applications messages reports settings; do
+            test -s "app/dealer/$route/page.tsx"
+          done
+          ! grep -Fq 'href="/dealer/leads?view=appointments"' app/dealer/DashboardManager.tsx
+          ! grep -Fq 'href="/dealer/leads?view=appointments"' app/dealer/inventory/InventoryManager.tsx
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
@@ -106,14 +116,15 @@ jobs:
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/home.html
 
-          logo=000
-          for i in $(seq 1 15); do
-            logo="$(curl --http1.1 -sS -L -o /tmp/logo.bin -w '%{http_code}' "$URL/wdcc-owner-logo?warm=$GITHUB_RUN_ID-$i" || true)"
-            [ "$logo" = 200 ] && [ -s /tmp/logo.bin ] && break
-            sleep 1
+          for asset in wdcc-logo-transparent.webp wdcc-owner-logo; do
+            asset_code=000
+            for i in $(seq 1 15); do
+              asset_code="$(curl --http1.1 -sS -L -o "/tmp/${asset//\//-}.bin" -w '%{http_code}' "$URL/$asset?warm=$GITHUB_RUN_ID-$i" || true)"
+              [ "$asset_code" = 200 ] && break
+              sleep 1
+            done
+            test "$asset_code" = 200
           done
-          test "$logo" = 200
-          test -s /tmp/logo.bin
 
           for id in nissan350z fordF150 hondaPilot kiaSportage toyotaRav4; do
             for i in $(seq 1 12); do
