@@ -1,0 +1,146 @@
+name: WDCC Owner Release Readiness READ ONLY
+
+on:
+  push:
+    branches:
+      - fix/wdcc-owner-final-lock-20260827
+    paths:
+      - '.github/workflows/wdcc-owner-release-readiness-readonly.yml'
+      - 'wrangler.jsonc'
+      - 'lib/store.ts'
+      - 'lib/wdccAuthority.ts'
+      - 'app/api/health/**'
+      - 'app/api/inventory/**'
+      - 'app/api/leads/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-release-readiness-readonly
+  cancel-in-progress: true
+
+env:
+  TEAM: cpxagency
+  TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PHOENIX_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  DEALER_ID: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+  STOREFRONT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  WDCC_BLOB_STORE_ID: store_cNUyQRVlXtyvZQ5N
+
+jobs:
+  canonical-provider-read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Read canonical Phoenix health and inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend="$(node -e "const c=JSON.parse(require('fs').readFileSync('wrangler.jsonc','utf8'));process.stdout.write(String(c.vars?.WDCC_DEALER_BACKEND_URL||''))")"
+          test -n "$backend"
+          printf '%s\n' "$backend" > canonical-backend-url.txt
+          health_code="$(curl -sS -L --connect-timeout 15 --max-time 35 -o health.json -w '%{http_code}' "${backend%/}/api/health?owner-readiness=$GITHUB_RUN_ID" || true)"
+          inventory_code="$(curl -sS -L --connect-timeout 15 --max-time 35 -o inventory.json -w '%{http_code}' "${backend%/}/api/inventory?owner-readiness=$GITHUB_RUN_ID" || true)"
+          jq -n --arg sha "$GITHUB_SHA" --arg backend "$backend" --arg health "$health_code" --arg inventory "$inventory_code" '{sha:$sha,backend:$backend,healthHttp:$health,inventoryHttp:$inventory}' > provider-http.json
+          echo "### Canonical provider READ ONLY" >> "$GITHUB_STEP_SUMMARY"
+          echo "Health HTTP: $health_code" >> "$GITHUB_STEP_SUMMARY"
+          echo "Inventory HTTP: $inventory_code" >> "$GITHUB_STEP_SUMMARY"
+          test "$health_code" = 200
+          test "$inventory_code" = 200
+          jq -e '.ok==true and .state=="readable"' health.json >/dev/null
+          jq -e '.ok==true and (.previewFallback!=true) and (.inventorySource!="last-known-good-real-proof") and (.recoveryFallback!=true) and (.items|type=="array")' inventory.json >/dev/null
+          jq '{ok,state,storage,revision,commit}' health.json >> "$GITHUB_STEP_SUMMARY"
+          jq '{ok,count:(.items|length),inventorySource,live,previewFallback,recoveryFallback}' inventory.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-provider-read-${{ github.sha }}
+          path: |
+            canonical-backend-url.txt
+            provider-http.json
+            health.json
+            inventory.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  provider-and-notification-provisioning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Vercel read credential
+        run: test -n "${VERCEL_TOKEN:-}"
+      - name: Inspect Blob provider READ ONLY
+        shell: bash
+        run: |
+          set +e
+          npx --yes vercel@59.3.0 blob list-stores --token="$VERCEL_TOKEN" --scope="$TEAM" > blob-project-stores.txt 2>&1
+          list_rc=$?
+          npx --yes vercel@59.3.0 blob get-store "$WDCC_BLOB_STORE_ID" --token="$VERCEL_TOKEN" --scope="$TEAM" > blob-store.txt 2>&1
+          get_rc=$?
+          set -e
+          jq -n --argjson listRc "$list_rc" --argjson getRc "$get_rc" '{listStoresRc:$listRc,getStoreRc:$getRc}' > blob-status.json
+          echo "### Blob provider READ ONLY" >> "$GITHUB_STEP_SUMMARY"
+          echo "list-stores rc: $list_rc" >> "$GITHUB_STEP_SUMMARY"
+          echo "get-store rc: $get_rc" >> "$GITHUB_STEP_SUMMARY"
+          test "$list_rc" -eq 0
+          test "$get_rc" -eq 0
+      - name: Audit notification provisioning without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wdcc-readiness
+          pull(){
+            label="$1"; project="$2"
+            mkdir -p "/tmp/wdcc-readiness/$label/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$project" > "/tmp/wdcc-readiness/$label/.vercel/project.json"
+            (cd "/tmp/wdcc-readiness/$label" && npx --yes vercel@59.3.0 env pull "/tmp/$label.env" --yes --environment=production --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
+            chmod 600 "/tmp/$label.env"
+          }
+          present(){ grep -qE "^$2=.+" "/tmp/$1.env" && printf true || printf false; }
+          pull phoenix "$PHOENIX_ID"
+          pull dealer "$DEALER_ID"
+          pull storefront "$STOREFRONT_ID"
+          : > readiness.tsv
+          for label in phoenix dealer storefront; do
+            email="$(present "$label" RESEND_API_KEY)"
+            recipients="$(present "$label" WDCC_LEAD_NOTIFICATION_EMAILS)"
+            webhook="$(present "$label" WDCC_LEAD_WEBHOOK_URL)"
+            sid="$(present "$label" TWILIO_ACCOUNT_SID)"; token="$(present "$label" TWILIO_AUTH_TOKEN)"; from="$(present "$label" TWILIO_FROM_NUMBER)"; to="$(present "$label" WDCC_LEAD_NOTIFICATION_PHONE)"
+            sms=false; [ "$sid" = true ] && [ "$token" = true ] && [ "$from" = true ] && [ "$to" = true ] && sms=true
+            printf '%s|%s|%s|%s|%s\n' "$label" "$email" "$recipients" "$sms" "$webhook" >> readiness.tsv
+          done
+          phx_email="$(awk -F'|' '$1=="phoenix"{print $2}' readiness.tsv)"
+          phx_recipients="$(awk -F'|' '$1=="phoenix"{print $3}' readiness.tsv)"
+          phx_sms="$(awk -F'|' '$1=="phoenix"{print $4}' readiness.tsv)"
+          phx_webhook="$(awk -F'|' '$1=="phoenix"{print $5}' readiness.tsv)"
+          jq -n --argjson email "$phx_email" --argjson recipients "$phx_recipients" --argjson sms "$phx_sms" --argjson webhook "$phx_webhook" '{phoenix:{emailProvider:$email,explicitRecipients:$recipients,smsProvider:$sms,webhook:$webhook}}' > notification-readiness.json
+          echo "### Notification provisioning READ ONLY" >> "$GITHUB_STEP_SUMMARY"
+          echo "Phoenix email provider configured: $phx_email" >> "$GITHUB_STEP_SUMMARY"
+          echo "Phoenix explicit email recipients configured: $phx_recipients" >> "$GITHUB_STEP_SUMMARY"
+          echo "Phoenix SMS provider configured: $phx_sms" >> "$GITHUB_STEP_SUMMARY"
+          echo "Phoenix webhook configured: $phx_webhook" >> "$GITHUB_STEP_SUMMARY"
+          rm -f /tmp/phoenix.env /tmp/dealer.env /tmp/storefront.env
+          test "$phx_email" = true
+          test "$phx_recipients" = true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-owner-provisioning-${{ github.sha }}
+          path: |
+            blob-project-stores.txt
+            blob-store.txt
+            blob-status.json
+            readiness.tsv
+            notification-readiness.json
+          if-no-files-found: warn
+          retention-days: 7
