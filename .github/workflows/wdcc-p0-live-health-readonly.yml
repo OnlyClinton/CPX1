@@ -1,0 +1,44 @@
+name: WDCC P0 Live Health Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-p0-live-health-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STATE_URL: https://wdcc-v53-1-staging.clico-global.workers.dev
+      MEDIA_URL: https://wdcc-v53-staging.clico-global.workers.dev
+      APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+    steps:
+      - name: Verify P0 authority health read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe(){
+            local name="$1" url="$2" expected="$3"
+            code="$(curl --http1.1 -sS -D "/tmp/$name.headers" -o "/tmp/$name.body" -w '%{http_code}' "$url" || true)"
+            echo "$name HTTP=$code"
+            test "$code" = "$expected"
+            head -c 3000 "/tmp/$name.body"; echo
+          }
+          probe STATE "$STATE_URL/health" 200
+          jq -e '.ok==true and .state=="readable"' /tmp/STATE.body >/dev/null
+          probe MEDIA "$MEDIA_URL/health" 200
+          jq -e '.ok==true and (.storage=="durable-object-sqlite-chunked" or .storage!=null)' /tmp/MEDIA.body >/dev/null
+          code="$(curl --http1.1 -sS -D /tmp/APP.headers -o /tmp/APP.body -w '%{http_code}' "$APP_URL/api/health?owner-live-p0=1" || true)"
+          echo "APP HTTP=$code"
+          case "$code" in 200|503) ;; *) exit 1;; esac
+          tr -d '\r' </tmp/APP.headers >/tmp/APP.norm
+          grep -Ei '^(x-wdcc-data-authority|x-wdcc-backend|content-type):' /tmp/APP.norm || true
+          jq -c . /tmp/APP.body | head -c 5000; echo
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
