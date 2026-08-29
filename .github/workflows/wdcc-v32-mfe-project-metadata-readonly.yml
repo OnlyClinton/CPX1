@@ -1,0 +1,35 @@
+name: WDCC V32 MFE Project Metadata Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-mfe-project-metadata-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+    steps:
+      - name: Inspect only MFE/check-related project metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN" > /tmp/project.json
+          node - <<'NODE'
+          const fs=require('fs'); const p=JSON.parse(fs.readFileSync('/tmp/project.json','utf8'));
+          const out={};
+          for(const [k,v] of Object.entries(p)) if(/microfront|group|check|job/i.test(k)) out[k]=v;
+          out.id=p.id; out.name=p.name; out.framework=p.framework; out.rootDirectory=p.rootDirectory; out.buildCommand=p.buildCommand; out.outputDirectory=p.outputDirectory;
+          console.log(JSON.stringify(out,null,2));
+          NODE
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
