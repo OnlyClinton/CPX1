@@ -25,8 +25,25 @@ export type WdccVehicle={
   image?:string;
 };
 
+const VERIFIED_RECOVERY_MEDIA:Record<string,string>={
+  "2004-nissan-350z":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2004-nissan-350z.jpg",
+  "2016-ford-f150-limited":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2016-ford-f150-limited.jpg",
+  "2019-honda-pilot":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-honda-pilot.jpg",
+  "2019-kia-sportage":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-kia-sportage.jpg",
+  "2019-toyota-rav4":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-toyota-rav4.jpg"
+};
+
+function recoveryMediaKey(v:WdccVehicle){
+  return String(v.slug||v.id||"").trim().toLowerCase().replace(/^recovered-/,"").replace(/^recovery-/,"");
+}
+
 export function vehicleHref(v:WdccVehicle){return `/vehicle/${encodeURIComponent(String(v.id||v.slug||""))}`}
-export function vehiclePhoto(v:WdccVehicle){return v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:String(v.primary_image_url||v.image||"").trim()}
+export function vehiclePhoto(v:WdccVehicle){
+  if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;
+  const direct=String(v.primary_image_url||v.image||"").trim();
+  if(direct)return direct;
+  return VERIFIED_RECOVERY_MEDIA[recoveryMediaKey(v)]||"";
+}
 
 export default function WdccVehicleCard({vehicle,featured=false}:{vehicle:WdccVehicle;featured?:boolean}){
   const v=vehicle;
