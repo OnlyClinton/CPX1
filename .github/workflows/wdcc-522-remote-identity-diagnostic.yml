@@ -1,0 +1,59 @@
+name: WDCC 522 Remote Identity Diagnostic
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-remote-identity-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      REMOTE_URL: https://proof883f-wdcc-v2-883f211f345f-proof.clico-global.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract frozen reference assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/wdcc-ref && mkdir -p /tmp/wdcc-ref
+          git archive "$FROZEN_SHA" public/wdcc-hero-v2.webp public/wdcc-hero-canonical.webp app/favicon.ico | tar -x -C /tmp/wdcc-ref
+      - name: Diagnose exact remote identity checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "REMOTE_URL=$REMOTE_URL"
+          root_code="$(curl --http1.1 -sS -L -D /tmp/root.headers -o /tmp/root.html -w '%{http_code}' "$REMOTE_URL/?owner-review=0&diag=1" || true)"
+          echo "ROOT_HTTP=$root_code ROOT_BYTES=$(wc -c </tmp/root.html 2>/dev/null || echo 0)"
+          grep -Eio '/_next/static/[^" ]+' /tmp/root.html | head -n 5 || true
+
+          health_code="$(curl --http1.1 -sS -D /tmp/health.headers -o /tmp/health.json -w '%{http_code}' "$REMOTE_URL/api/health?boundary-proof=$FROZEN_SHA&diag=1" || true)"
+          tr -d '\r' </tmp/health.headers >/tmp/health.norm || true
+          echo "HEALTH_HTTP=$health_code"
+          grep -Ei '^(x-wdcc-backend|x-wdcc-data-authority|x-wdcc-mockup-preview|content-type):' /tmp/health.norm || true
+          jq -c '{ok,status,backend,dataAuthority,error,message}' /tmp/health.json 2>/dev/null || true
+
+          hero_code="$(curl --http1.1 -sS -L -o /tmp/hero.webp -w '%{http_code}' "$REMOTE_URL/wdcc-hero-v2.webp?diag=1" || true)"
+          echo "HERO_HTTP=$hero_code"
+          if [ -s /tmp/hero.webp ]; then
+            echo "HERO_REMOTE_SHA256=$(sha256sum /tmp/hero.webp|awk '{print $1}')"
+            echo "HERO_FROZEN_SHA256=$(sha256sum /tmp/wdcc-ref/public/wdcc-hero-v2.webp|awk '{print $1}')"
+          fi
+
+          inventory_code="$(curl --http1.1 -sS -D /tmp/inventory.headers -o /tmp/inventory.json -w '%{http_code}' "$REMOTE_URL/api/inventory?diag=1" || true)"
+          tr -d '\r' </tmp/inventory.headers >/tmp/inventory.norm || true
+          echo "INVENTORY_HTTP=$inventory_code"
+          grep -Ei '^(x-wdcc-mockup-preview|content-type):' /tmp/inventory.norm || true
+          jq -c '{mockupPreview,inventorySource,count:(.items|length),names:[.items[]?|((.year|tostring)+" "+.make+" "+.model+" "+.trim)]}' /tmp/inventory.json 2>/dev/null || true
+          echo 'PRODUCTION_DEPLOYED=NO'
+          echo 'ROUTES_CHANGED=NO'
+          echo 'TRAFFIC_CHANGED=NO'
