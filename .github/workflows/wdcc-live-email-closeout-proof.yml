@@ -105,13 +105,13 @@ jobs:
 
           const sleep = ms => new Promise(r => setTimeout(r, ms));
           (async () => {
-            const subject = `WDCC live email closeout — ${process.env.FROZEN_CANDIDATE_SHA.slice(0,12)} — run ${process.env.GITHUB_RUN_ID}`;
+            const subject = `WDCC live email closeout — ${process.env.FROZEN_CANDIDATE_SHA.slice(0,12)}`;
             const send = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${key}`,
                 'Content-Type': 'application/json',
-                'Idempotency-Key': `wdcc-live-email-${process.env.FROZEN_CANDIDATE_SHA}`
+                'Idempotency-Key': `wdcc-live-email-${process.env.FROZEN_CANDIDATE_SHA}-v2`
               },
               body: JSON.stringify({
                 from: process.env.PROOF_FROM,
