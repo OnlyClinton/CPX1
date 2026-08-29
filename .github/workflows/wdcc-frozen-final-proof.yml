@@ -45,6 +45,9 @@ jobs:
           grep -Fq 'Exact owner-approved WDCC round emblem' app/wdccCorrectLogoData.ts
           test -s .github/support/wdcc-final-brand-proof.mjs
           test -s .github/support/wdcc-polished-visual-proof.mjs
+          test -s .github/support/wdcc-intro-motion-proof.mjs
+          grep -Fq 'li-wheel-front' app/LockedIntro.tsx
+          grep -Fq -- '--li-spin' app/LockedIntro.tsx
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
       - name: Build exact candidate
@@ -109,6 +112,13 @@ jobs:
             done
             test "$asset_code" = 200
           done
+      - name: Prove cinematic intro motion
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/support/wdcc-intro-motion-proof.mjs
       - name: Prove frozen final
         env:
           URL: ${{ steps.deploy.outputs.url }}
