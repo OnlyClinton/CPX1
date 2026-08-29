@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -116,9 +116,10 @@ jobs:
           ].join('\n'));
           fs.writeFileSync('wrangler.p0-state.jsonc',JSON.stringify({...common,name:process.env.STATE_WORKER,main:'cloudflare/wdcc-state-worker.mjs',durable_objects:{bindings:[{name:'WDCC_STATE',class_name:'WDCCState'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']}]},null,2)+'\n');
           fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'wdcc-p0-media-compat.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']},{tag:'p0-media-v2',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
-          fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...common,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
+          fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...common,compatibility_flags:['nodejs_compat','global_fetch_strictly_public'],name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
           NODE
           node --check wdcc-p0-media-compat.mjs
+          grep -Fq '"global_fetch_strictly_public"' wrangler.p0-app.jsonc
           for f in wrangler.p0-state.jsonc wrangler.p0-media.jsonc wrangler.p0-app.jsonc; do
             ! grep -Eq '"routes?"|"custom_domains?"' "$f"
           done
@@ -347,9 +348,10 @@ jobs:
           export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","$P0_SHA");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
           JS
           cat > wrangler.p0-frontdoor.jsonc <<'JSON'
-          {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
+          {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat","global_fetch_strictly_public"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
           JSON
           ! grep -Eq '"routes?"|"custom_domains?"' wrangler.p0-frontdoor.jsonc
+          grep -Fq '"global_fetch_strictly_public"' wrangler.p0-frontdoor.jsonc
           npx wrangler versions upload --config wrangler.p0-frontdoor.jsonc --message "Owner-approved P0 dealer upload $P0_SHA" 2>&1 | tee /tmp/proxy-upload.log
           new="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/proxy-upload.log | tail -1 | awk '{print $4}')"; test -n "$new"
           echo "new=$new" >> "$GITHUB_OUTPUT"
