@@ -1,3 +1,3 @@
-import ReferenceCloneHome from "./ReferenceCloneHome";
+import WdccUnifiedHome from "./WdccUnifiedHome";
 
-export default function Home(){return <ReferenceCloneHome/>}
+export default function Home(){return <WdccUnifiedHome/>}
