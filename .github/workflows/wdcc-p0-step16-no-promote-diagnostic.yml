@@ -16,42 +16,39 @@ jobs:
     timeout-minutes: 5
     env:
       PREVIEW: https://5714ffed-wdcc-dealer-frontdoor.clico-global.workers.dev
+      DIRECT: https://wdcc-proof-04c5d526.clico-global.workers.dev
       WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
     steps:
-      - name: Prove immutable frontdoor login/session authorization without writes
+      - name: Compare direct app and immutable frontdoor authorization without writes
         shell: bash
         run: |
           set -euo pipefail
           test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
-
-          probe(){
-            label="$1"; url="$2"
-            code="$(curl --http1.1 -sS -D "/tmp/$label.h" -o "/tmp/$label.b" -w '%{http_code}' "$url" || true)"
-            echo "$label HTTP=$code"
-            grep -iE '^(location|x-wdcc-dealer-frontdoor|x-wdcc-dealer-app-sha):' "/tmp/$label.h" || true
-          }
-          probe HEALTH "$PREVIEW/api/health?diag=$GITHUB_RUN_ID"
-          probe LOGIN_PAGE "$PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
-          probe NEW_PAGE "$PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
-
           jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/login-body.json
-          login_code="$(curl --http1.1 -sS -D /tmp/login.h -c /tmp/dealer.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o /tmp/login.json -w '%{http_code}' "$PREVIEW/api/auth/login")"
-          echo "LOGIN_API HTTP=$login_code"
-          jq -c '{ok:(.ok//false),role:(.role//null),error:(.error//null)}' /tmp/login.json || true
-          awk 'BEGIN{IGNORECASE=1} /^set-cookie:/{line=$0; sub(/\r$/, "", line); split(line,a,"="); name=a[1]; sub(/^set-cookie:[[:space:]]*/,"",name); print "SET_COOKIE_NAME=" name}' /tmp/login.h || true
 
-          session_code="$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/session.json -w '%{http_code}' "$PREVIEW/api/auth/session")"
-          echo "SESSION_API HTTP=$session_code"
-          jq -c '{authenticated:(.authenticated//false),role:(.user.role//null),error:(.error//null)}' /tmp/session.json || true
+          check_base(){
+            label="$1"; base="$2"; jar="/tmp/${label}.jar"
+            health="$(curl --http1.1 -sS -D "/tmp/${label}-health.h" -o "/tmp/${label}-health.json" -w '%{http_code}' "$base/api/health?diag=$GITHUB_RUN_ID" || true)"
+            echo "${label}_HEALTH HTTP=$health"
+            grep -iE '^(x-wdcc-dealer-frontdoor|x-wdcc-dealer-app-sha):' "/tmp/${label}-health.h" || true
 
-          logs_code="$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/vehicle-logs.json -w '%{http_code}' "$PREVIEW/api/dealer/vehicle-logs")"
-          echo "PROTECTED_VEHICLE_LOGS HTTP=$logs_code"
-          jq -c '{ok:(.ok//false),error:(.error//null),revision:(.revision//null)}' /tmp/vehicle-logs.json || true
+            login="$(curl --http1.1 -sS -D "/tmp/${label}-login.h" -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o "/tmp/${label}-login.json" -w '%{http_code}' "$base/api/auth/login")"
+            echo "${label}_LOGIN HTTP=$login"
+            jq -c '{ok:(.ok//false),role:(.role//null),error:(.error//null)}' "/tmp/${label}-login.json" || true
+            awk -v p="${label}_COOKIE=" 'BEGIN{IGNORECASE=1} /^set-cookie:/{line=$0;sub(/\r$/, "",line);split(line,a,"=");name=a[1];sub(/^set-cookie:[[:space:]]*/,"",name);print p name}' "/tmp/${label}-login.h" || true
 
-          test "$login_code" = 200
-          test "$session_code" = 200
-          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/session.json >/dev/null
-          test "$logs_code" = 200
-          echo 'STEP16_AUTHORIZATION_PREVIEW=PASS'
-          rm -f /tmp/login-body.json /tmp/dealer.jar
+            session="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-session.json" -w '%{http_code}' "$base/api/auth/session")"
+            echo "${label}_SESSION HTTP=$session"
+            jq -c '{authenticated:(.authenticated//false),email:(.user.email//null),role:(.user.role//null),error:(.error//null)}' "/tmp/${label}-session.json" || true
+
+            protected="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-protected.json" -w '%{http_code}' "$base/api/dealer/vehicle-logs")"
+            echo "${label}_PROTECTED HTTP=$protected"
+            jq -c '{ok:(.ok//false),error:(.error//null),revision:(.revision//null)}' "/tmp/${label}-protected.json" || true
+          }
+
+          check_base DIRECT "$DIRECT"
+          check_base PREVIEW "$PREVIEW"
+          echo 'NO_PROMOTION=YES'
+          echo 'NO_STATE_OR_MEDIA_WRITE=YES'
+          rm -f /tmp/login-body.json /tmp/DIRECT.jar /tmp/PREVIEW.jar
