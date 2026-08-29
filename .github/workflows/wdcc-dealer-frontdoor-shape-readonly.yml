@@ -1,0 +1,30 @@
+name: WDCC Dealer Frontdoor Shape Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-shape-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect script shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /tmp/frontdoor.js
+          sed -n '1,60p' /tmp/frontdoor.js
+          echo '=== SHAPE ==='
+          grep -E '^(export default|addEventListener|var UI|var API|async function|function )' /tmp/frontdoor.js | head -n 40 || true
+          echo "BYTES=$(wc -c </tmp/frontdoor.js)"
+          echo 'READ_ONLY=YES'
