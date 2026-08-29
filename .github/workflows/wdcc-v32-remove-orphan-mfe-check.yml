@@ -1,0 +1,70 @@
+name: WDCC V32 Remove Orphan MFE Check
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-remove-orphan-mfe-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      MFE_CHECK_ID: chk_cbccb39b-098f-491c-ad4c-803b76aebcbc
+      TYPECHECK_ID: chk_2eff227c-8c9a-41d1-8f8f-17d349241213
+      LINT_ID: chk_8e7ba426-a0fd-4ef7-9873-6d47d05dfab2
+      OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+    steps:
+      - name: Fail closed: prove orphan condition and live alias unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.id==env.OLD_DEPLOYMENT_ID and .projectId==env.PROJECT_ID' <<<"$live" >/dev/null
+          curl -fsS "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" "${auth[@]}" >/tmp/project.json
+          node - <<'NODE'
+          const p=require('/tmp/project.json');
+          const mfeKeys=Object.keys(p).filter(k=>/microfront/i.test(k));
+          if(mfeKeys.length) { console.error('UNEXPECTED_MFE_PROJECT_METADATA='+mfeKeys.join(',')); process.exit(1); }
+          if(!p.jobs?.['mfe-config-present']?.targets?.includes('production')) process.exit(2);
+          NODE
+          curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}" >/tmp/checks.json
+          jq -e --arg id "$MFE_CHECK_ID" '.checks[] | select(.id==$id and .name=="Microfrontends Config Present" and .blocks=="deployment-alias" and .source.kind=="vercel" and .source.subKind=="vercel-native-check" and .source.jobName=="mfe-config-present" and .sourceIntegrationConfigurationId=="")' /tmp/checks.json >/dev/null
+          jq -e --arg id "$TYPECHECK_ID" '.checks[] | select(.id==$id and .name=="Typecheck" and .blocks=="deployment-alias")' /tmp/checks.json >/dev/null
+          jq -e --arg id "$LINT_ID" '.checks[] | select(.id==$id and .name=="Lint")' /tmp/checks.json >/dev/null
+          code="$(curl -sS -o /tmp/mfe-config -w '%{http_code}' "https://api.vercel.com/v1/microfrontends/$OLD_DEPLOYMENT_ID/config?teamId=$TEAM_ID" "${auth[@]}")"
+          [ "$code" = 404 ]
+          echo 'ORPHAN_MFE_CHECK_PROVEN=YES'
+          echo 'PRODUCTION_ALIAS_UNCHANGED=YES'
+      - name: Delete only orphaned MFE check
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          code="$(curl -sS -X DELETE -o /tmp/delete.json -w '%{http_code}' "https://api.vercel.com/v2/projects/$PROJECT_ID/checks/$MFE_CHECK_ID?teamId=$TEAM_ID" "${auth[@]}")"
+          echo "DELETE_HTTP=$code"
+          case "$code" in 200|204) ;; *) cat /tmp/delete.json; exit 1;; esac
+          echo 'ORPHAN_MFE_CHECK_REMOVED=YES'
+      - name: Verify Typecheck and Lint preserved and no production movement
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}" >/tmp/after.json
+          ! jq -e --arg id "$MFE_CHECK_ID" '.checks[]? | select(.id==$id)' /tmp/after.json >/dev/null
+          jq -e --arg id "$TYPECHECK_ID" '.checks[] | select(.id==$id and .blocks=="deployment-alias")' /tmp/after.json >/dev/null
+          jq -e --arg id "$LINT_ID" '.checks[] | select(.id==$id)' /tmp/after.json >/dev/null
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.id==env.OLD_DEPLOYMENT_ID and .projectId==env.PROJECT_ID' <<<"$live" >/dev/null
+          echo 'TYPECHECK_BLOCKER_PRESERVED=YES'
+          echo 'LINT_PRESERVED=YES'
+          echo 'PRODUCTION_CHANGED=NO'
