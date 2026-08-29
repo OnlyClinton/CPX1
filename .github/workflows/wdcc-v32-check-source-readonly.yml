@@ -1,0 +1,38 @@
+name: WDCC V32 Check Source Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-check-source-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      DEPLOYMENT_ID: dpl_D1k4NzmKoSVxRYU8BMrfgEAPhadA
+      MFE_CHECK_ID: chk_cbccb39b-098f-491c-ad4c-803b76aebcbc
+    steps:
+      - name: Inspect check definitions and deployment check runs only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}" > /tmp/checks.json
+          echo '=== PROJECT CHECKS ==='
+          jq -c '.checks[]? | {id,name,requires,blocks,source,createdAt,updatedAt}' /tmp/checks.json
+          echo '=== MFE CHECK EXACT ==='
+          jq -c --arg id "$MFE_CHECK_ID" '.checks[]? | select(.id==$id)' /tmp/checks.json
+          curl -fsS "https://api.vercel.com/v2/deployments/$DEPLOYMENT_ID/check-runs?teamId=$TEAM_ID" "${auth[@]}" > /tmp/runs.json
+          echo '=== READY DEPLOYMENT CHECK RUNS ==='
+          jq -c '.runs[]? | {id,checkId,name,status,conclusion,detailsUrl,startedAt,completedAt}' /tmp/runs.json
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
