@@ -16,6 +16,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
       DEALER_ROOT: https://dealer.wedontcarecars.com
       APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
       FAILED_P0_VERSION_PREVIEW: https://ca5b9c4a-wdcc-dealer-frontdoor.clico-global.workers.dev
@@ -26,6 +27,7 @@ jobs:
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json')
 
           curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
@@ -47,8 +49,6 @@ jobs:
           jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
           echo '=== DEALER CUSTOM DOMAINS ==='
           jq -c '.result[]? | select(((.hostname // .domain // "") | contains("dealer.wedontcarecars.com")) or ((.service // .script // .script_name // "") == "wdcc-dealer-frontdoor")) | {hostname,domain,service,script,script_name,environment}' /tmp/domains.json || true
-          echo '=== DEALER DNS ==='
-          jq -c '.result[]? | {type,name,content,proxied}' /tmp/dns.json || true
           echo '=== FRONTDOOR DEPLOYMENTS ==='
           jq -c '(.result.deployments[]? // .result[]?) | {id,created_on,annotations,versions}' /tmp/deployments.json || true
 
@@ -57,15 +57,24 @@ jobs:
             code="$(curl --http1.1 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$url" || true)"
             echo "=== $label HTTP $code ==="
             grep -iE '^(server|cf-ray|location|x-wdcc-[^:]+|x-vercel-id|x-matched-path):' "$hdr" || true
-            head -c 1200 "$out" || true
+            head -c 900 "$out" || true
             echo
           }
           probe PUBLIC_HEALTH "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
           probe DIRECT_APP_HEALTH "$APP_URL/api/health?diag=$GITHUB_RUN_ID"
           probe FAILED_P0_HEALTH "$FAILED_P0_VERSION_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
-          probe DIRECT_APP_DEALER_LOGIN "$APP_URL/dealer/login?diag=$GITHUB_RUN_ID"
           probe FAILED_P0_DEALER_LOGIN "$FAILED_P0_VERSION_PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
           probe FAILED_P0_LOGIN_PAGE "$FAILED_P0_VERSION_PREVIEW/login?diag=$GITHUB_RUN_ID"
           probe FAILED_P0_ADD_VEHICLE "$FAILED_P0_VERSION_PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
+
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/login-body.json
+          login_code="$(curl --http1.1 -sS -c /tmp/frontdoor.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o /tmp/frontdoor-login.json -w '%{http_code}' "$FAILED_P0_VERSION_PREVIEW/api/auth/login")"
+          echo "=== FAILED_P0_REAL_LOGIN HTTP $login_code ==="
+          jq -c 'if .ok==true then {ok,role} else {ok,error} end' /tmp/frontdoor-login.json || true
+          session_code="$(curl --http1.1 -sS -b /tmp/frontdoor.jar -o /tmp/frontdoor-session.json -w '%{http_code}' "$FAILED_P0_VERSION_PREVIEW/api/auth/session")"
+          echo "=== FAILED_P0_SESSION HTTP $session_code ==="
+          jq -c '{authenticated,user:{role:.user.role}}' /tmp/frontdoor-session.json || true
+          rm -f /tmp/login-body.json /tmp/frontdoor.jar
 
           echo 'DIAGNOSTIC_READ_ONLY=PASS'
