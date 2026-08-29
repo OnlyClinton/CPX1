@@ -32,20 +32,14 @@ jobs:
           curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
           zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
           curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
-          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
           optional_json(){ out="$1"; shift; code="$(curl -sS -o "$out" -w '%{http_code}' "$@" || true)"; echo "optional_read_http=$code file=$out"; if [ "$code" != 200 ]; then printf '{"success":false,"result":[]}' > "$out"; fi; }
           optional_json /tmp/deployments.json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/deployments" "${auth[@]}"
           echo '=== DEALER WORKER ROUTES ==='; jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
           echo '=== FRONTDOOR DEPLOYMENTS ==='; jq -c '(.result.deployments[]? // .result[]?) | {id,created_on,annotations,versions}' /tmp/deployments.json || true
-
           probe(){ label="$1"; url="$2"; out="/tmp/${label}.body"; hdr="/tmp/${label}.hdr"; code="$(curl --http1.1 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$url" || true)"; echo "=== $label HTTP $code ==="; grep -iE '^(server|cf-ray|location|x-wdcc-[^:]+|x-vercel-id|x-matched-path):' "$hdr" || true; head -c 700 "$out" || true; echo; }
           probe PUBLIC_HEALTH "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
           probe DIRECT_APP_HEALTH "$APP_URL/api/health?diag=$GITHUB_RUN_ID"
           probe FAILED_P0_HEALTH "$FAILED_P0_VERSION_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
-          probe FAILED_P0_DEALER_LOGIN "$FAILED_P0_VERSION_PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
-          probe FAILED_P0_LOGIN_PAGE "$FAILED_P0_VERSION_PREVIEW/login?diag=$GITHUB_RUN_ID"
-          probe FAILED_P0_ADD_VEHICLE "$FAILED_P0_VERSION_PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
-
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
           jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/login-body.json
           auth_probe(){ label="$1"; base="$2"; jar="/tmp/${label}.jar"; login="/tmp/${label}-login.json"; session="/tmp/${label}-session.json"; login_code="$(curl --http1.1 -sS -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o "$login" -w '%{http_code}' "$base/api/auth/login")"; echo "=== ${label}_REAL_LOGIN HTTP $login_code ==="; jq -c 'if .ok==true then {ok,role} else {ok,error} end' "$login" || true; session_code="$(curl --http1.1 -sS -b "$jar" -o "$session" -w '%{http_code}' "$base/api/auth/session")"; echo "=== ${label}_SESSION HTTP $session_code ==="; jq -c '{authenticated,user:{role:.user.role}}' "$session" || true; rm -f "$jar"; }
@@ -53,3 +47,67 @@ jobs:
           auth_probe FAILED_P0 "$FAILED_P0_VERSION_PREVIEW"
           rm -f /tmp/login-body.json
           echo 'DIAGNOSTIC_READ_ONLY=PASS'
+
+  discover-neon-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect current WDCC production env authority without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install -g vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"
+          projects=(
+            'wdcc-cpx-launch|prj_a3oclCcy4sbA2tge4BX7VAKXE4KR'
+            'wdcc-dealer-portal|prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB'
+            'wdcc-v32-storefront|prj_We7xkAkB5Qy31Pt17USSkQFE0u7h'
+            'wedontcarecars|prj_Ov6OomlySBxvTBf0j5cqcAQHDiPK'
+          )
+          found=''
+          for entry in "${projects[@]}"; do
+            name="${entry%%|*}"; pid="${entry#*|}"; dir="$work/$pid"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
+            file="$dir/prod.env"
+            if (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
+              PROJECT_NAME="$name" ENV_FILE="$file" node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync(process.env.ENV_FILE,'utf8');
+          const lines=text.split(/\r?\n/).filter(Boolean);
+          const env={};for(const line of lines){const i=line.indexOf('=');if(i>0){let v=line.slice(i+1).trim();if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1);env[line.slice(0,i).trim()]=v.replace(/\\n/g,'\n');}}
+          const keys=Object.keys(env).filter(k=>/NEON|POSTGRES|DATABASE|AUTH_URL/i.test(k)).sort();
+          const dbKeys=['WDCC_DATABASE_URL','DATABASE_URL','POSTGRES_URL','NEON_DATABASE_URL','POSTGRES_PRISMA_URL','POSTGRES_URL_NON_POOLING'];
+          let db=null;for(const k of dbKeys){try{const u=new URL(env[k]||'');if(['postgres:','postgresql:'].includes(u.protocol)){db={key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')};break}}catch{}}
+          const authKeys=['WDCC_NEON_AUTH_URL','NEON_AUTH_URL'];let auth=null;for(const k of authKeys){try{const u=new URL(env[k]||'');if(u.protocol==='https:'&&u.hostname.includes('.neonauth.')){auth={key:k,host:u.hostname,path:u.pathname};break}}catch{}}
+          console.log(JSON.stringify({project:process.env.PROJECT_NAME,matchingKeys:keys,db,auth}));
+          NODE
+              for key in WDCC_DATABASE_URL DATABASE_URL POSTGRES_URL NEON_DATABASE_URL POSTGRES_PRISMA_URL POSTGRES_URL_NON_POOLING; do
+                val="$(grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- || true)"
+                val="${val%\"}"; val="${val#\"}"
+                case "$val" in postgres://*|postgresql://*) if [ -z "$found" ]; then found="$val"; fi;; esac
+              done
+            fi
+          done
+          if [ -n "$found" ]; then
+            echo 'CURRENT_WDCC_DATABASE_URL_FOUND=YES'
+            printf '::add-mask::%s\n' "$found"
+            if ! command -v psql >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; fi
+            echo '=== NEON AUTH TABLES ==='
+            psql "$found" -X -A -t -c "select table_name from information_schema.tables where table_schema='neon_auth' order by table_name" || true
+            echo '=== DEALER AUTH USER SAFE METADATA ==='
+            psql "$found" -X -A -t -F '|' -c "select id,email,coalesce(role::text,'') from neon_auth.\"user\" where email='dealer@internal.wedontcarecars.com'" || true
+            echo '=== DEALER ACCOUNT SAFE METADATA ==='
+            psql "$found" -X -A -t -F '|' -c "select \"providerId\", case when password is null then 'NO_PASSWORD' else 'PASSWORD_PRESENT' end from neon_auth.account where \"userId\" in (select id from neon_auth.\"user\" where email='dealer@internal.wedontcarecars.com')" || true
+          else
+            echo 'CURRENT_WDCC_DATABASE_URL_FOUND=NO'
+          fi
+          echo 'SECRET_VALUES_PRINTED=NO'
+          echo 'READ_ONLY=YES'
