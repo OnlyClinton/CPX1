@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: b0631c8cc59e5e8f00685dc0f2afef440d6f5935
+  P0_SHA: fd342ce9258c0479936e10854efc068378be8864
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-B0631C8C-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-FD342CE9-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -78,8 +78,10 @@ jobs:
           grep -Fq 'ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth' app/api/auth/login/route.ts
           grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/login/route.ts
           grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' lib/auth.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/login/route.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          ! grep -Fq 'dealer@internal.wedontcarecars.com' lib/auth.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
           ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
@@ -278,6 +280,29 @@ jobs:
             sleep 2
           done
           if [ "$ok" != 1 ]; then echo 'isolated dealer app health contract did not become ready' >&2; cat /tmp/app-health >&2 || true; exit 1; fi
+
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          app_auth_ready=0
+          for i in $(seq 1 30); do
+            rm -f /tmp/app-ready.jar
+            jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/app-ready-login-body.json
+            login_code="$(curl --http1.1 -sS -c /tmp/app-ready.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/app-ready-login-body.json -o /tmp/app-ready-login.json -w '%{http_code}' "$APP_URL/api/auth/login" || true)"
+            session_code="$(curl --http1.1 -sS -b /tmp/app-ready.jar -o /tmp/app-ready-session.json -w '%{http_code}' "$APP_URL/api/auth/session" || true)"
+            protected_code="$(curl --http1.1 -sS -b /tmp/app-ready.jar -o /tmp/app-ready-protected.json -w '%{http_code}' "$APP_URL/api/dealer/vehicle-logs?ready=$GITHUB_RUN_ID-$i" || true)"
+            email="$(jq -r '.user.email // empty' /tmp/app-ready-session.json 2>/dev/null || true)"
+            role="$(jq -r '.user.role // empty' /tmp/app-ready-session.json 2>/dev/null || true)"
+            protected_ok="$(jq -r '.ok // false' /tmp/app-ready-protected.json 2>/dev/null || true)"
+            echo "P0_APP_AUTH_READINESS attempt=$i login=$login_code session=$session_code email=${email:-missing} role=${role:-missing} protected=$protected_code protected_ok=$protected_ok"
+            if [ "$login_code" = 200 ] && [ "$session_code" = 200 ] && [ "$email" = 'dealer-v2@internal.wedontcarecars.com' ] && { [ "$role" = 'dealer_agent' ] || [ "$role" = 'dealer' ]; } && [ "$protected_code" = 200 ] && [ "$protected_ok" = true ]; then
+              app_auth_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$app_auth_ready" = 1
+          rm -f /tmp/app-ready.jar /tmp/app-ready-login-body.json /tmp/app-ready-login.json /tmp/app-ready-session.json /tmp/app-ready-protected.json
+          echo 'P0_EXACT_APP_CURRENTUSER_AUTHORITY=PASS'
+
           stage_login_code="$(curl --http1.1 -sS -D /tmp/dealer-login-headers -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")"
           test "$stage_login_code" = 307
           stage_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/dealer-login-headers)"
