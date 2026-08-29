@@ -53,13 +53,29 @@ export default function ReferenceCloneHome(){
      <article className="rh-step"><b>1</b><div><strong>APPLY ONLINE</strong><small>Send basic details securely.</small></div></article><article className="rh-step"><b>2</b><div><strong>TALK TO SEAN</strong><small>Confirm down payment and vehicle fit.</small></div></article><article className="rh-step"><b>3</b><div><strong>CHOOSE YOUR CAR</strong><small>Shop our inventory online or in person.</small></div></article><article className="rh-step"><b>4</b><div><strong>DRIVE TODAY</strong><small>Schedule pickup or a test drive.</small></div></article>
    </div></div></section>
    <section className="rh-trust" id="reviews"><div className="rh-trust-grid owner-board-trust-grid"><article><div className="trust-symbol">★</div><div><b>TAMPA BAY PROUD</b><span>Local dealer. Local community.</span></div></article><article><div className="trust-symbol">•••</div><div><b>STRAIGHT ANSWERS</b><span>No runaround. No hidden fees.</span></div></article><article><div className="trust-avatar">SE</div><div><b>REAL PEOPLE</b><span>Talk to Sean. Not a call center.</span></div></article><article><div className="trust-symbol">✓</div><div><b>CONFIDENCE DRIVEN</b><span>We make it happen when others can&apos;t.</span></div></article></div></section>
-   <style jsx global>{`
-     html body main.reference-home.locked-storefront .rh-copy h1 .red{color:#ef1727!important}
-     html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:#1689ff!important}
-     html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
+   <style>{`
+     html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-copy h1 .red{color:#ef1727!important}
+     html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-copy h1 .blue{color:#1689ff!important}
+     html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-copy h1 .white{color:#fff!important}
      @media(max-width:767px){
-       html body main.reference-home.locked-storefront .rh-steps.owner-board-finance-grid{grid-template-columns:1fr!important;gap:7px!important}
-       html body main.reference-home.locked-storefront .rh-trust-grid.owner-board-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefits.rh-benefits{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:0!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit{min-height:76px!important;padding:8px 5px!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:4px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit .rh-icon{width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;font-size:13px!important;margin:0!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit strong{font-size:7.5px!important;line-height:1.08!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit small{font-size:6.5px!important;line-height:1.15!important;margin-top:1px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head h2{font-size:25px!important;line-height:1!important;margin:2px 0 3px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head p{display:block!important;font-size:9px!important;line-height:1.3!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-padding-inline:10px!important;padding:0 10px 3px!important;gap:7px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article{flex:0 0 29.5vw!important;flex-grow:0!important;flex-shrink:0!important;flex-basis:29.5vw!important;width:29.5vw!important;min-width:108px!important;max-width:124px!important;scroll-snap-align:start!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>a:first-child{aspect-ratio:1.18!important;min-height:0!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div{padding:7px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>p:first-child{font-size:6px!important;margin:0!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>a{font-size:9.5px!important;line-height:1.08!important;min-height:20px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>strong{font-size:15px!important;margin-top:5px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>p:nth-of-type(2){font-size:6.5px!important;margin:3px 0 0!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>div>span{font-size:5.5px!important;min-height:16px!important;padding:0 3px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-steps.owner-board-finance-grid{grid-template-columns:1fr!important;gap:7px!important}
+       html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-trust-grid.owner-board-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
      }
    `}</style>
    <WdccPublicFooter/>
