@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-WORKER-FETCH'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -107,6 +107,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const common={compatibility_date:'2026-08-25',compatibility_flags:['nodejs_compat'],workers_dev:true,preview_urls:true,observability:{enabled:true}};
+          const appCommon={...common,compatibility_flags:['nodejs_compat','global_fetch_strictly_public']};
           fs.writeFileSync('wdcc-p0-media-compat.mjs',[
             'import mediaDefault,{WDCCMedia} from "./cloudflare/wdcc-media-worker.mjs";',
             'import {WDCCState} from "./cloudflare/wdcc-state-worker.mjs";',
@@ -116,9 +117,10 @@ jobs:
           ].join('\n'));
           fs.writeFileSync('wrangler.p0-state.jsonc',JSON.stringify({...common,name:process.env.STATE_WORKER,main:'cloudflare/wdcc-state-worker.mjs',durable_objects:{bindings:[{name:'WDCC_STATE',class_name:'WDCCState'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']}]},null,2)+'\n');
           fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'wdcc-p0-media-compat.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']},{tag:'p0-media-v2',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
-          fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...common,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
+          fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...appCommon,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
           NODE
           node --check wdcc-p0-media-compat.mjs
+          grep -Fq '"global_fetch_strictly_public"' wrangler.p0-app.jsonc
           for f in wrangler.p0-state.jsonc wrangler.p0-media.jsonc wrangler.p0-app.jsonc; do
             ! grep -Eq '"routes?"|"custom_domains?"' "$f"
           done
@@ -238,12 +240,17 @@ jobs:
           cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
           cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
           ok=0
+          code=000
           for i in $(seq 1 20); do
             code="$(curl --http1.1 -sS -o /tmp/app-health -w '%{http_code}' "$APP_URL/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
             if [ "$code" = 200 ] && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/app-health >/dev/null; then ok=1;break;fi
             sleep 2
           done
-          test "$ok" = 1
+          if [ "$ok" != 1 ]; then
+            echo "P0 app health did not converge; last HTTP=$code" >&2
+            cat /tmp/app-health >&2 || true
+            exit 1
+          fi
           test "$(curl --http1.1 -sS -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")" = 200
           test "$(curl --http1.1 -sS -o /tmp/dealer-new-page -w '%{http_code}' "$APP_URL/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
           invalid="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data '{"username":"dealer","password":"__wdcc_invalid_probe__"}' -o /tmp/invalid-login -w '%{http_code}' "$APP_URL/api/auth/login")"
@@ -347,9 +354,10 @@ jobs:
           export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","$P0_SHA");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
           JS
           cat > wrangler.p0-frontdoor.jsonc <<'JSON'
-          {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
+          {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat","global_fetch_strictly_public"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
           JSON
           ! grep -Eq '"routes?"|"custom_domains?"' wrangler.p0-frontdoor.jsonc
+          grep -Fq '"global_fetch_strictly_public"' wrangler.p0-frontdoor.jsonc
           npx wrangler versions upload --config wrangler.p0-frontdoor.jsonc --message "Owner-approved P0 dealer upload $P0_SHA" 2>&1 | tee /tmp/proxy-upload.log
           new="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/proxy-upload.log | tail -1 | awk '{print $4}')"; test -n "$new"
           echo "new=$new" >> "$GITHUB_OUTPUT"
@@ -380,12 +388,17 @@ jobs:
           npx wrangler versions deploy "$NEW_VERSION@100%" --name "$FRONTDOOR_WORKER" -y --message "Owner-approved P0 dealer upload $P0_SHA"
           promoted=1
           ok=0
+          code=000
           for i in $(seq 1 20); do
             code="$(curl --http1.1 -sS -D /tmp/live-dh -o /tmp/live-health -w '%{http_code}' "$DEALER_ROOT/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
             if [ "$code" = 200 ] && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-dh && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null; then ok=1;break;fi
             sleep 2
           done
-          test "$ok" = 1
+          if [ "$ok" != 1 ]; then
+            echo "Live dealer health did not converge; last HTTP=$code" >&2
+            cat /tmp/live-health >&2 || true
+            false
+          fi
           test "$(curl --http1.1 -sS -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")" = 200
           test "$(curl --http1.1 -sS -o /tmp/live-new-page -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
 
