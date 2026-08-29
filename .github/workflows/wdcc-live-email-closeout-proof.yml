@@ -1,0 +1,176 @@
+name: WDCC Live Email Closeout Proof
+
+on:
+  push:
+    branches: [proof/wdcc-live-email-closeout-20260829]
+    paths:
+      - '.github/workflows/wdcc-live-email-closeout-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-live-email-closeout-proof
+  cancel-in-progress: false
+
+env:
+  FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+  VERCEL_SCOPE: cpxagency
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  PROOF_RECIPIENT: sean@wedontcarecars.com
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prove workflow-only lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$FROZEN_CANDIDATE_SHA"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = '.github/workflows/wdcc-live-email-closeout-proof.yml'
+          echo "FROZEN_CANDIDATE_SHA=$FROZEN_CANDIDATE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo 'CANDIDATE_CODE_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Read canonical Vercel email configuration only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p /tmp/wdcc-email-proof-project/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > /tmp/wdcc-email-proof-project/.vercel/project.json
+          cd /tmp/wdcc-email-proof-project
+          vercel env pull /tmp/wdcc-email.env --environment=production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+          test -s /tmp/wdcc-email.env
+          echo 'VERCEL_EMAIL_CONFIG_READ=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate recipient, sender, and provider configuration
+        id: config
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          . /tmp/wdcc-email.env
+          set +a
+
+          export RESEND_API_KEY="${RESEND_API_KEY:-${WDCC_RESEND_API_KEY:-}}"
+          test -n "$RESEND_API_KEY"
+          test -n "${WDCC_LEAD_NOTIFICATION_EMAILS:-}"
+          test -n "${WDCC_LEAD_FROM_EMAIL:-}"
+
+          node - <<'NODE'
+          const recipient=process.env.PROOF_RECIPIENT.toLowerCase();
+          const configured=(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
+          if(!configured.includes(recipient)){
+            console.error('Configured WDCC recipient list does not include the required Sean mailbox.');
+            process.exit(2);
+          }
+          const from=(process.env.WDCC_LEAD_FROM_EMAIL||'').trim();
+          const match=from.match(/<([^>]+)>\s*$/);
+          const address=(match?match[1]:from).trim().toLowerCase();
+          if(!/^[^@\s]+@wedontcarecars\.com$/.test(address)){
+            console.error('Configured WDCC From identity is not on wedontcarecars.com.');
+            process.exit(3);
+          }
+          console.log(`from=${from}`);
+          NODE
+
+          from_value="$(node -e 'process.stdout.write(String(process.env.WDCC_LEAD_FROM_EMAIL||""))')"
+          echo "from=$from_value" >> "$GITHUB_OUTPUT"
+          echo 'RECIPIENT_CONFIG_INCLUDES_SEAN=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "FROM_IDENTITY=$from_value" >> "$GITHUB_STEP_SUMMARY"
+          echo 'RESEND_API_KEY_PRESENT=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send exactly one live provider proof and require delivery
+        id: send
+        shell: bash
+        env:
+          CONFIGURED_FROM: ${{ steps.config.outputs.from }}
+        run: |
+          set -euo pipefail
+          set -a
+          . /tmp/wdcc-email.env
+          set +a
+          export RESEND_API_KEY="${RESEND_API_KEY:-${WDCC_RESEND_API_KEY:-}}"
+
+          unset WDCC_DATABASE_URL DATABASE_URL POSTGRES_URL NEON_DATABASE_URL NEON_BRANCH_ID WDCC_DATABASE_BRANCH_ID
+
+          subject="WDCC live email closeout — ${FROZEN_CANDIDATE_SHA:0:12} — run ${GITHUB_RUN_ID}"
+          text="WDCC live email launch-gate proof. Candidate SHA: ${FROZEN_CANDIDATE_SHA}. This message proves the configured WDCC sender and real Resend provider can deliver to sean@wedontcarecars.com. No reply is required."
+          payload="$(jq -n --arg from "$CONFIGURED_FROM" --arg to "$PROOF_RECIPIENT" --arg subject "$subject" --arg text "$text" '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          idem="wdcc-live-email-${FROZEN_CANDIDATE_SHA}-${GITHUB_RUN_ID}"
+
+          code="$(curl -sS -o /tmp/resend-send.json -w '%{http_code}' https://api.resend.com/emails \
+            -X POST \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -H "Idempotency-Key: $idem" \
+            --data "$payload")"
+          case "$code" in 200|201) ;; *) echo "Resend send failed with HTTP $code" >&2; cat /tmp/resend-send.json >&2; exit 4;; esac
+          email_id="$(jq -r '.id // empty' /tmp/resend-send.json)"
+          test -n "$email_id"
+
+          delivered=0
+          last_event=''
+          message_id=''
+          for i in $(seq 1 30); do
+            retrieve_code="$(curl -sS -o /tmp/resend-email.json -w '%{http_code}' "https://api.resend.com/emails/$email_id" -H "Authorization: Bearer $RESEND_API_KEY")"
+            if [ "$retrieve_code" = 200 ]; then
+              last_event="$(jq -r '.last_event // empty' /tmp/resend-email.json)"
+              message_id="$(jq -r '.message_id // empty' /tmp/resend-email.json)"
+              case "$last_event" in
+                delivered|opened|clicked) delivered=1; break ;;
+                bounced|failed|complained|suppressed) echo "Resend terminal failure event: $last_event" >&2; exit 5 ;;
+              esac
+            fi
+            sleep 2
+          done
+          test "$delivered" = 1
+
+          jq -n \
+            --arg candidate_sha "$FROZEN_CANDIDATE_SHA" \
+            --arg workflow_sha "$GITHUB_SHA" \
+            --arg recipient "$PROOF_RECIPIENT" \
+            --arg from "$CONFIGURED_FROM" \
+            --arg subject "$subject" \
+            --arg resend_email_id "$email_id" \
+            --arg message_id "$message_id" \
+            --arg last_event "$last_event" \
+            '{ok:true,candidate_sha:$candidate_sha,workflow_sha:$workflow_sha,recipient_config_confirmed:true,recipient:$recipient,from:$from,subject:$subject,resend_email_id:$resend_email_id,message_id:$message_id,last_event:$last_event,production_database_access:false,production_routes_changed:false,production_data_changed:false}' \
+            > live-email-proof.json
+
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+          echo "email_id=$email_id" >> "$GITHUB_OUTPUT"
+          echo "message_id=$message_id" >> "$GITHUB_OUTPUT"
+          echo "last_event=$last_event" >> "$GITHUB_OUTPUT"
+          echo 'LIVE_RESEND_SEND=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "RESEND_EMAIL_ID=$email_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "MESSAGE_ID=$message_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "LAST_EVENT=$last_event" >> "$GITHUB_STEP_SUMMARY"
+          echo "PROOF_SUBJECT=$subject" >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_DATABASE_ACCESS=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_ROUTES_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_DATA_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-live-email-closeout-${{ github.run_id }}
+          path: live-email-proof.json
+          if-no-files-found: error
+          retention-days: 14
