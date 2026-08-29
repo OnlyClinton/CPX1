@@ -32,6 +32,19 @@ jobs:
           cd "$work"
           npm init -y >/dev/null 2>&1
           npm install dotenv@16 >/dev/null 2>&1
+          cat > "$work/inspect.cjs" <<'NODE'
+          const fs=require('fs'),dotenv=require('dotenv');
+          const env=dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
+          const dbKeys=['WDCC_DATABASE_URL','DATABASE_URL','POSTGRES_URL','NEON_DATABASE_URL'];
+          const authKeys=['WDCC_NEON_AUTH_URL','NEON_AUTH_URL'];
+          let db=null;
+          for(const k of dbKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(['postgres:','postgresql:'].includes(u.protocol)){db={key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')};break}}catch{}}
+          let auth=null;
+          for(const k of authKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(u.protocol==='https:'&&u.hostname.includes('.neonauth.')){auth={key:k,host:u.hostname,path:u.pathname};break}}catch{}}
+          const cron=(env.CRON_SECRET||env.WDCC_CRON_SECRET||'').trim();
+          const cronUsable=cron.length>=32&&!/^@/.test(cron)&&!/^\$/.test(cron)&&!/^VERCEL_/i.test(cron);
+          console.log(JSON.stringify({project:process.env.PROJECT_NAME,db,auth,cronUsable,keys:{WDCC_DATABASE_URL:Boolean(env.WDCC_DATABASE_URL),DATABASE_URL:Boolean(env.DATABASE_URL),POSTGRES_URL:Boolean(env.POSTGRES_URL),WDCC_NEON_AUTH_URL:Boolean(env.WDCC_NEON_AUTH_URL),CRON_SECRET:Boolean(env.CRON_SECRET)}}));
+          NODE
           projects=(
             'wdcc-cpx-launch|prj_a3oclCcy4sbA2tge4BX7VAKXE4KR'
             'wdcc-dealer-portal|prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB'
@@ -53,19 +66,7 @@ jobs:
             printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
             file="$dir/prod.env"
             if (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
-              PROJECT_NAME="$name" ENV_FILE="$file" node - <<'NODE'
-              const fs=require('fs'),dotenv=require('dotenv');
-              const env=dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
-              const dbKeys=['WDCC_DATABASE_URL','DATABASE_URL','POSTGRES_URL','NEON_DATABASE_URL'];
-              const authKeys=['WDCC_NEON_AUTH_URL','NEON_AUTH_URL'];
-              let db=null;
-              for(const k of dbKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(['postgres:','postgresql:'].includes(u.protocol)){db={key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')};break}}catch{}}
-              let auth=null;
-              for(const k of authKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(u.protocol==='https:'&&u.hostname.includes('.neonauth.')){auth={key:k,host:u.hostname,path:u.pathname};break}}catch{}}
-              const cron=(env.CRON_SECRET||env.WDCC_CRON_SECRET||'').trim();
-              const cronUsable=cron.length>=32&&!/^@/.test(cron)&&!/^\$/.test(cron)&&!/^VERCEL_/i.test(cron);
-              console.log(JSON.stringify({project:process.env.PROJECT_NAME,db,auth,cronUsable,keys:{WDCC_DATABASE_URL:Boolean(env.WDCC_DATABASE_URL),DATABASE_URL:Boolean(env.DATABASE_URL),POSTGRES_URL:Boolean(env.POSTGRES_URL),WDCC_NEON_AUTH_URL:Boolean(env.WDCC_NEON_AUTH_URL),CRON_SECRET:Boolean(env.CRON_SECRET)}}));
-              NODE
+              PROJECT_NAME="$name" ENV_FILE="$file" node "$work/inspect.cjs"
             else
               echo "{\"project\":\"$name\",\"pull\":\"failed\"}"
             fi
