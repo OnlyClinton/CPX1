@@ -6,7 +6,7 @@ import {createdAtOf,sourceLabel,stageLabels,stageOf,when,type LeadRecord} from "
 
 type Vehicle=Record<string,any>;
 const money=(v:any)=>Number(v||0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0});
-const imageFor=(v:Vehicle)=>{const direct=v.image||v.photo||v.primaryPhotoUrl||v.primaryPhoto||v.imageUrl||"";if(direct)return direct;const p=String(v.primaryPhotoPathname||v.photoPathnames?.[0]||"").trim();return p?`/api/media?p=${encodeURIComponent(p)}`:""};
+const imageFor=(v:Vehicle)=>{const direct=v.image||v.photo||v.primaryPhotoUrl||v.primary_image_url||v.primaryPhoto||v.imageUrl||"";if(direct)return direct;const p=String(v.primaryPhotoPathname||v.photoPathnames?.[0]||"").trim();return p?`/api/media?p=${encodeURIComponent(p)}`:""};
 const vehicleName=(v:Vehicle)=>`${v.year||""} ${v.make||""} ${v.model||""} ${v.trim||""}`.replace(/\s+/g," ").trim()||"Vehicle";
 
 export default function DealerDashboard(){
