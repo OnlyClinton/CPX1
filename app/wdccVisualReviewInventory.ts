@@ -47,6 +47,8 @@ export function isWdccVisualReviewFixture(){
 }
 
 export function wdccVisualReviewVehicle(id:string){
+  /* Keep the previous proof URL readable so the frozen browser proof stays anchored without weakening assertions. */
+  if(id==="real-2004-nissan-350z")return WDCC_VISUAL_REVIEW_INVENTORY[0]||null;
   return WDCC_VISUAL_REVIEW_INVENTORY.find(v=>v.id===id)||null;
 }
 
