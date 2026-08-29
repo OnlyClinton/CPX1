@@ -1,0 +1,38 @@
+name: WDCC Live Control Plane Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-live-controlplane-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+    steps:
+      - name: Inspect Cloudflare WDCC routes and workers.dev state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          zone_json="$(curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}")"
+          zone="$(jq -r '.result[0].id // empty' <<<"$zone_json")"; test -n "$zone"
+          echo '=== ROUTES ==='
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" | jq -c '.result[] | {pattern,script}'
+          echo '=== CUSTOM DOMAINS ==='
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" | jq -c '.result[] | {hostname,service,environment}'
+          echo '=== PROOF WORKER SUBDOMAIN SETTINGS ==='
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/wdcc-v2-${FROZEN_SHA:0:12}-proof/subdomain" "${auth[@]}" | jq -c '{success,result}'
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
