@@ -17,7 +17,7 @@ env:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,3 +58,44 @@ jobs:
           grep -qi "we don.t care" /tmp/home.html
           grep -q "wdcc-hero-v2.webp" /tmp/home.html
           echo "PREVIEW_SMOKE=PASS" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build browser proof target
+        run: |
+          npm ci
+          npm run build
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+      - name: Capture exact desktop and mobile renders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/wdcc-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill $app_pid 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:3000/ >/dev/null && break
+            sleep 1
+          done
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for (const cfg of [
+              {name:'desktop',width:1440,height:1200},
+              {name:'mobile',width:390,height:844}
+            ]) {
+              const page=await browser.newPage({viewport:{width:cfg.width,height:cfg.height},deviceScaleFactor:1});
+              await page.goto('http://127.0.0.1:3000/?intro=1',{waitUntil:'networkidle'});
+              await page.screenshot({path:`proof/${cfg.name}-intro.png`,fullPage:false});
+              await page.waitForTimeout(2800);
+              await page.screenshot({path:`proof/${cfg.name}-home.png`,fullPage:true});
+            }
+            await browser.close();
+          })();
+          NODE
+          echo "VISUAL_CAPTURE=PASS" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-95-visual-proof
+          path: proof/*.png
+          if-no-files-found: error
