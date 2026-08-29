@@ -28,18 +28,23 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Lock frozen source
+      - name: Lock owner desktop and mobile source
         shell: bash
         run: |
           set -euo pipefail
-          test -s app/dealer/dealer-brand-lock.css
-          test -s app/public-brand-lock.css
-          grep -Fq 'dealer-brand-lock.css' app/dealer/layout.tsx
-          grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/DashboardManager.tsx
-          grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/inventory/InventoryManager.tsx
-          grep -Fq 'public-brand-lock.css' app/layout.tsx
+          test -s app/dealer/dealer-target.css
+          test -s app/dealer/dealer-owner-mock.css
+          test -s app/storefront-owner-mock.css
+          grep -Fq 'DealerDashboard' app/dealer/page.tsx
+          grep -Fq 'dealer-target.css' app/dealer/layout.tsx
+          grep -Fq 'dealer-owner-mock.css' app/dealer/layout.tsx
+          grep -Fq 'storefront-owner-mock.css' app/layout.tsx
           grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
           grep -Fq 'WE DON&apos;T CARE CARS' app/WdccPublicChrome.tsx
+          grep -Fq 'targetDealerStats' app/dealer/DealerDashboard.tsx
+          grep -Fq 'targetDealerCharts' app/dealer/DealerDashboard.tsx
+          grep -Fq 'targetDealerLower' app/dealer/DealerDashboard.tsx
+          grep -Fq 'targetDealerQuick' app/dealer/DealerDashboard.tsx
           test -s .github/support/wdcc-final-brand-proof.mjs
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
@@ -105,7 +110,7 @@ jobs:
             done
             test "$asset_code" = 200
           done
-      - name: Prove frozen final
+      - name: Prove owner desktop and mobile mock split
         env:
           URL: ${{ steps.deploy.outputs.url }}
         shell: bash
