@@ -16,25 +16,24 @@ jobs:
     timeout-minutes: 10
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
-      TEAM: cpxagency
-      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
       STAGED_URL: wdcc-v32-storefront-ea9ys9u9v-cpxagency.vercel.app
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Make one authenticated protected stage request
+      - name: Make one protected stage request using environment auth
         shell: bash
         run: |
           set -euo pipefail
           npm install --global vercel@59.5.0 >/dev/null
           work="$(mktemp -d)"; mkdir -p "$work/.vercel"
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > "$work/.vercel/project.json"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > "$work/.vercel/project.json"
           cd "$work"
-          vercel --token="$VERCEL_TOKEN" --scope="$TEAM" curl '/api/health?vcurl-diag=3' --deployment "https://$STAGED_URL" > /tmp/health.json
+          vercel curl '/api/health?vcurl-diag=4' --deployment "https://$STAGED_URL" > /tmp/health.json
           jq -c '{ok,state,storage,authority,release}' /tmp/health.json
           jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/health.json >/dev/null
-          echo 'AUTHENTICATED_VERCEL_CURL=PASS'
+          echo 'ENV_AUTH_VERCEL_CURL=PASS'
           echo 'READ_ONLY=YES'
           echo 'PRODUCTION_CHANGED=NO'
