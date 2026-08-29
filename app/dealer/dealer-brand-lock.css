@@ -48,6 +48,23 @@ html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcCo
   color:#68747e!important;
 }
 
+/* Do not allow decoded vehicle media to inherit hidden/transparent legacy states. */
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .recentVehicles .miniThumb{
+  overflow:hidden!important;
+  background:#10202c!important;
+}
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .recentVehicles .miniThumb>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  object-position:center!important;
+  transform:none!important;
+  filter:none!important;
+}
+
 @media(max-width:760px){
   html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand,
   html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand{
@@ -66,5 +83,9 @@ html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcCo
   }
   html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcContent.dashboardContent{
     background:#f6f7f9!important;
+    padding-bottom:118px!important;
+  }
+  html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .activityLocked{
+    margin-bottom:26px!important;
   }
 }
