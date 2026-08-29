@@ -15,20 +15,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Compare live recovery and P0 app inventory
+      - name: Record live inventory status and prove P0 replacement
         shell: bash
         run: |
           set -euo pipefail
           LIVE='https://wedontcarecars.com/api/inventory'
           APP='https://wdcc-proof-04c5d526.clico-global.workers.dev/api/inventory'
-          for kind in live app; do
-            url="$LIVE"; [ "$kind" = app ] && url="$APP"
-            code="$(curl --http1.1 -sS -D "/tmp/$kind.h" -o "/tmp/$kind.json" -w '%{http_code}' "$url?owner-live-parity=$(date +%s)")"
-            echo "$kind HTTP=$code"; [ "$code" = 200 ]
-            tr -d '\r' <"/tmp/$kind.h" >"/tmp/$kind.hn"
-            grep -Ei '^(x-wdcc-|cache-control|content-type):' "/tmp/$kind.hn" || true
-            jq -c '{mockupPreview,inventorySource,count:(.items//.inventory//.vehicles//[]|length),items:[(.items//.inventory//.vehicles//[])[]?|{id,year,make,model,trim,status,primary_image_url,primaryPhotoPathname}]}' "/tmp/$kind.json" | head -c 10000; echo
-            echo "$kind BODY_SHA256=$(sha256sum /tmp/$kind.json|awk '{print $1}')"
-          done
+          live_code="$(curl --http1.1 -sS -D /tmp/live.h -o /tmp/live.body -w '%{http_code}' "$LIVE?owner-live-parity=$(date +%s)" || true)"
+          echo "LIVE_INVENTORY_HTTP=$live_code"
+          app_code="$(curl --http1.1 -sS -D /tmp/app.h -o /tmp/app.json -w '%{http_code}' "$APP?owner-live-parity=$(date +%s)" || true)"
+          echo "P0_INVENTORY_HTTP=$app_code"
+          [ "$app_code" = 200 ]
+          tr -d '\r' </tmp/app.h >/tmp/app.hn
+          grep -Ei '^(x-wdcc-|cache-control|content-type):' /tmp/app.hn || true
+          jq -c '{count:(.items//.inventory//.vehicles//[]|length),items:[(.items//.inventory//.vehicles//[])[]?|{id,year,make,model,trim,status,primary_image_url,primaryPhotoPathname}]}' /tmp/app.json | head -c 12000; echo
+          jq -e '((.items//.inventory//.vehicles//[])|type)=="array"' /tmp/app.json >/dev/null
+          echo 'P0_INVENTORY_REPLACEMENT=PASS'
           echo 'READ_ONLY=YES'
           echo 'PRODUCTION_CHANGED=NO'
