@@ -42,7 +42,7 @@ export async function GET(request:Request){
     let data:any=null;
     try{data=text?JSON.parse(text):null;}catch{}
     const email=String(data?.user?.email||"").toLowerCase();
-    if(!upstream.ok||!data?.user||!["admin@internal.wedontcarecars.com","dealer@internal.wedontcarecars.com"].includes(email))return Response.json({authenticated:false},{headers:{"cache-control":"private, no-store"}});
+    if(!upstream.ok||!data?.user||!["admin@internal.wedontcarecars.com","dealer-v2@internal.wedontcarecars.com"].includes(email))return Response.json({authenticated:false},{headers:{"cache-control":"private, no-store"}});
 
     const access=await accessUser(email);
     if(!access)return Response.json({authenticated:false,error:"portal_access_not_configured"},{status:403,headers:{"cache-control":"private, no-store"}});
