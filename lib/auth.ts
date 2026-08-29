@@ -69,7 +69,8 @@ async function neonCurrentUser(){
     const roles=admin?new Set(["platform_admin","tenant_admin","admin"]):new Set(["dealer_agent","dealer"]);
     const state=await readState();
     const keys=new Set([email,username]);
-    return state.users.find(user=>active(user)&&roles.has(String(user.role||"").toLowerCase())&&identifiers(user).some(value=>keys.has(value)))||null;
+    const user=state.users.find(user=>active(user)&&roles.has(String(user.role||"").toLowerCase())&&identifiers(user).some(value=>keys.has(value)));
+    return user?{...user,email}:null;
   }catch{return null;}
 }
 export function sessionCookieValue(user:User){return token(user);}
