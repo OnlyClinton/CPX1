@@ -35,12 +35,11 @@ export function isWdccVisualReviewFixture(){
   if(typeof window==="undefined")return false;
   try{
     const p=new URL(window.location.href).searchParams;
-    if(p.get("owner-review")==="0"){sessionStorage.removeItem(REVIEW_KEY);return false}
-    if(p.get("owner-review")==="1"||p.get("visual-fixture")==="verified-real"){
-      sessionStorage.setItem(REVIEW_KEY,"1");
-      return true;
-    }
-    return sessionStorage.getItem(REVIEW_KEY)==="1";
+    // Proof data is opt-in per URL only. Clear the legacy sticky key so a browser
+    // that visited a proof link cannot carry NOT-LIVE fixture inventory into a
+    // normal storefront review session.
+    sessionStorage.removeItem(REVIEW_KEY);
+    return p.get("owner-review")==="1"||p.get("visual-fixture")==="verified-real";
   }catch{return false}
 }
 
