@@ -1,0 +1,44 @@
+name: WDCC V32 Post MFE Repair Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-post-mfe-repair-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+      MFE_CHECK_ID: chk_cbccb39b-098f-491c-ad4c-803b76aebcbc
+      TYPECHECK_ID: chk_2eff227c-8c9a-41d1-8f8f-17d349241213
+      LINT_ID: chk_8e7ba426-a0fd-4ef7-9873-6d47d05dfab2
+    steps:
+      - name: Verify post-repair project/check state only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          curl -fsS "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" "${auth[@]}" >/tmp/project.json
+          curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}" >/tmp/checks.json
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.id==env.OLD_DEPLOYMENT_ID and .projectId==env.PROJECT_ID' <<<"$live" >/dev/null
+          ! jq -e --arg id "$MFE_CHECK_ID" '.checks[]? | select(.id==$id)' /tmp/checks.json >/dev/null
+          jq -e --arg id "$TYPECHECK_ID" '.checks[] | select(.id==$id and .blocks=="deployment-alias")' /tmp/checks.json >/dev/null
+          jq -e --arg id "$LINT_ID" '.checks[] | select(.id==$id)' /tmp/checks.json >/dev/null
+          echo "MFE_JOB_METADATA=$(jq -r 'if .jobs["mfe-config-present"] then "PRESENT" else "ABSENT" end' /tmp/project.json)"
+          echo "PROJECT_JOBS=$(jq -c '.jobs // {}' /tmp/project.json)"
+          echo 'MFE_CHECK_DEFINITION=ABSENT'
+          echo 'TYPECHECK_BLOCKER=PRESENT'
+          echo 'LINT=PRESENT'
+          echo 'PRODUCTION_ALIAS_UNCHANGED=YES'
+          echo 'READ_ONLY=YES'
