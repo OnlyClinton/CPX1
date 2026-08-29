@@ -1,0 +1,74 @@
+name: WDCC Vercel Neon Source Discovery
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-vercel-neon-source-discovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scan WDCC project production envs without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install -g vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"
+          cd "$work"
+          npm init -y >/dev/null 2>&1
+          npm install dotenv@16 >/dev/null 2>&1
+          projects=(
+            'wdcc-cpx-launch|prj_a3oclCcy4sbA2tge4BX7VAKXE4KR'
+            'wdcc-dealer-portal|prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB'
+            'wdcc-v32-storefront|prj_We7xkAkB5Qy31Pt17USSkQFE0u7h'
+            'wedontcarecars|prj_Ov6OomlySBxvTBf0j5cqcAQHDiPK'
+            'wdcc-lead-email-stage|prj_eZGqe21T4dHDBXGyRAOHHMhgy9cf'
+            'wdcc-live-lead-retest|prj_crRWpey1tIEsuP9wu5ZwdDACtJNP'
+            'wdcc-lead-auth-rotate|prj_sysj9siNz02JMcImjAM0xfYG8fzP'
+            'wdcc-lead-auth-bootstrap|prj_KQ46SBFgt4HVrajf5Cx5jmpklNT7'
+            'wdcc-lead-shim-stage|prj_V85PRKctITB4pHYOIb7Gk40bBrQ5'
+            'wdcc-dealer-crm-stage|prj_AtAZFnVg7RQIVM4934ejNq9MYnOb'
+            'wdcc-crm-service-bootstrap-2|prj_T9gvwSkKAFxO1ea9FV2V1Yfhc2Sb'
+            'wdcc-growth-os-stage|prj_M5pVkDG2Ey9ljqbfpFO4CFmpgIDF'
+            'wdcc-growth-os-live-test|prj_JqnkOEzvWzcacc2SbmpDXjGzZDxM'
+          )
+          for entry in "${projects[@]}"; do
+            name="${entry%%|*}"; pid="${entry#*|}"
+            dir="$work/p-$pid"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
+            file="$dir/prod.env"
+            if (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
+              PROJECT_NAME="$name" ENV_FILE="$file" node - <<'NODE'
+              const fs=require('fs'),dotenv=require('dotenv');
+              const env=dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
+              const dbKeys=['WDCC_DATABASE_URL','DATABASE_URL','POSTGRES_URL','NEON_DATABASE_URL'];
+              const authKeys=['WDCC_NEON_AUTH_URL','NEON_AUTH_URL'];
+              let db=null;
+              for(const k of dbKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(['postgres:','postgresql:'].includes(u.protocol)){db={key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')};break}}catch{}}
+              let auth=null;
+              for(const k of authKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(u.protocol==='https:'&&u.hostname.includes('.neonauth.')){auth={key:k,host:u.hostname,path:u.pathname};break}}catch{}}
+              const cron=(env.CRON_SECRET||env.WDCC_CRON_SECRET||'').trim();
+              const cronUsable=cron.length>=32&&!/^@/.test(cron)&&!/^\$/.test(cron)&&!/^VERCEL_/i.test(cron);
+              console.log(JSON.stringify({project:process.env.PROJECT_NAME,db,auth,cronUsable,keys:{WDCC_DATABASE_URL:Boolean(env.WDCC_DATABASE_URL),DATABASE_URL:Boolean(env.DATABASE_URL),POSTGRES_URL:Boolean(env.POSTGRES_URL),WDCC_NEON_AUTH_URL:Boolean(env.WDCC_NEON_AUTH_URL),CRON_SECRET:Boolean(env.CRON_SECRET)}}));
+              NODE
+            else
+              echo "{\"project\":\"$name\",\"pull\":\"failed\"}"
+            fi
+          done
+          echo 'SECRET_VALUES_PRINTED=NO'
+          echo 'READ_ONLY=YES'
