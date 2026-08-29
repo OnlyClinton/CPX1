@@ -1,0 +1,35 @@
+/* WDCC frozen dealer brand lock — preview-only branch.
+   Keeps dealer identity visible on desktop and mobile without touching auth/data/runtime behavior. */
+html body main.dealerDashboardLocked .dcTop .brand{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+html body main.dealerDashboardLocked .dcTop .brand>img{
+  display:none!important;
+}
+html body main.dealerDashboardLocked .dcTop .brand::before{
+  content:""!important;
+  display:block!important;
+  flex:0 0 52px!important;
+  width:52px!important;
+  height:52px!important;
+  min-width:52px!important;
+  min-height:52px!important;
+  border-radius:50%!important;
+  background:url('/wdcc-owner-logo') center/contain no-repeat!important;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.28))!important;
+}
+@media(max-width:760px){
+  html body main.dealerDashboardLocked .dcTop .brand{
+    gap:7px!important;
+    min-width:0!important;
+  }
+  html body main.dealerDashboardLocked .dcTop .brand::before{
+    flex-basis:42px!important;
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    min-height:42px!important;
+  }
+}
