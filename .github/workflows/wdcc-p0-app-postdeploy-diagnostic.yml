@@ -1,0 +1,43 @@
+name: WDCC P0 App Postdeploy Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wdcc-p0-app-postdeploy-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe isolated P0 app without mutation
+        shell: bash
+        env:
+          APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+        run: |
+          set -u
+          health="$(curl --http1.1 -sS -o /tmp/health -w '%{http_code}' "$APP_URL/api/health?diag=$GITHUB_RUN_ID" || true)"
+          login="$(curl --http1.1 -sS -o /tmp/login -w '%{http_code}' "$APP_URL/dealer/login?diag=$GITHUB_RUN_ID" || true)"
+          editor="$(curl --http1.1 -sS -o /tmp/editor -w '%{http_code}' "$APP_URL/dealer/inventory/new?diag=$GITHUB_RUN_ID" || true)"
+          invalid="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data '{"username":"dealer","password":"__wdcc_invalid_probe__"}' -o /tmp/invalid -w '%{http_code}' "$APP_URL/api/auth/login" || true)"
+          echo "P0_DIAG_HEALTH_HTTP=$health"
+          echo "P0_DIAG_LOGIN_PAGE_HTTP=$login"
+          echo "P0_DIAG_EDITOR_PAGE_HTTP=$editor"
+          echo "P0_DIAG_INVALID_LOGIN_HTTP=$invalid"
+          echo '--- health ---'; cat /tmp/health || true; echo
+          echo '--- invalid login ---'; cat /tmp/invalid || true; echo
+          {
+            echo '### Isolated P0 app postdeploy diagnostic'
+            echo "- health: HTTP $health"
+            echo "- dealer login page: HTTP $login"
+            echo "- Add Vehicle page: HTTP $editor"
+            echo "- invalid login: HTTP $invalid"
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "$health" = 200
+          jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/health >/dev/null
+          test "$login" = 200
+          test "$editor" = 200
+          test "$invalid" = 401 || test "$invalid" = 429
