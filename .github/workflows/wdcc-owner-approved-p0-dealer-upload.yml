@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: c811687bd30a9cf212b95d75dc3cf03a9ffdc2fd
+  P0_SHA: b0631c8cc59e5e8f00685dc0f2afef440d6f5935
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-B0631C8C-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -76,6 +76,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$P0_SHA"
           git merge-base --is-ancestor "$APPROVED_VISUAL_SHA" HEAD || { git fetch --depth=20 origin "$APPROVED_VISUAL_SHA"; git merge-base --is-ancestor "$APPROVED_VISUAL_SHA" HEAD; }
           grep -Fq 'ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth' app/api/auth/login/route.ts
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/login/route.ts
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/login/route.ts
+          ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
           ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
@@ -211,7 +215,7 @@ jobs:
           if(!state.tenants.some(t=>String(t?.id)==='wdcc')){state.tenants.push({id:'wdcc',name:'We Don’t Care Cars',status:'active'});changed=true;}
           const bridge=[
             {id:'wdcc-admin-neon-bridge',tenantId:'wdcc',email:'admin@internal.wedontcarecars.com',username:'admin',loginAlias:'admin',aliases:['admin'],displayName:'WDCC Admin',role:'platform_admin',status:'active'},
-            {id:'wdcc-dealer-neon-bridge',tenantId:'wdcc',email:'dealer@internal.wedontcarecars.com',username:'dealer',loginAlias:'dealer',aliases:['dealer'],displayName:'WDCC Dealer',role:'dealer_agent',status:'active'}
+            {id:'wdcc-dealer-neon-bridge',tenantId:'wdcc',email:'dealer-v2@internal.wedontcarecars.com',username:'dealer',loginAlias:'dealer',aliases:['dealer'],displayName:'WDCC Dealer',role:'dealer_agent',status:'active'}
           ];
           for(const u of bridge)if(!state.users.some(x=>String(x?.id)===u.id)){state.users.push(u);changed=true;}
           const now=new Date().toISOString();
@@ -456,7 +460,7 @@ jobs:
             echo '### WDCC P0 DEALER + VEHICLE UPLOAD — PASS'
             echo "Dealer child SHA: $P0_SHA"
             echo 'Dealer portal: LIVE / healthy'
-            echo 'Existing Neon credential authority: PRESERVED'
+            echo 'Managed Neon Auth authority: PRESERVED'
             echo 'Add/Edit vehicle create: PASS'
             echo 'Cloudflare photo upload + media readback: PASS'
             echo 'Photo checkpoint + publish: PASS'
