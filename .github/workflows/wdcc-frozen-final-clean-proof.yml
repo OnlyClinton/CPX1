@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/wdcc-owner-final-logo-clean-20260829
+      - fix/wdcc-v32-hybrid-20260829
   workflow_dispatch:
 
 permissions:
