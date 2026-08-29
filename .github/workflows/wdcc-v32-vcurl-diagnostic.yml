@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Make one authenticated full-URL stage request
+      - name: Make one authenticated protected stage request
         shell: bash
         run: |
           set -euo pipefail
@@ -32,9 +32,9 @@ jobs:
           work="$(mktemp -d)"; mkdir -p "$work/.vercel"
           printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > "$work/.vercel/project.json"
           cd "$work"
-          vercel curl "https://$STAGED_URL/api/health?vcurl-diag=2" --token="$VERCEL_TOKEN" --scope="$TEAM" > /tmp/health.json
+          vercel --token="$VERCEL_TOKEN" --scope="$TEAM" curl '/api/health?vcurl-diag=3' --deployment "https://$STAGED_URL" > /tmp/health.json
           jq -c '{ok,state,storage,authority,release}' /tmp/health.json
           jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/health.json >/dev/null
-          echo 'FULL_URL_VERCEL_CURL=PASS'
+          echo 'AUTHENTICATED_VERCEL_CURL=PASS'
           echo 'READ_ONLY=YES'
           echo 'PRODUCTION_CHANGED=NO'
