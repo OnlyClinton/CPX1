@@ -44,6 +44,7 @@ jobs:
           test -s app/wdccCorrectLogoData.ts
           grep -Fq 'Exact owner-approved WDCC round emblem' app/wdccCorrectLogoData.ts
           test -s .github/support/wdcc-final-brand-proof.mjs
+          test -s .github/support/wdcc-polished-visual-proof.mjs
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
       - name: Build exact candidate
@@ -115,6 +116,13 @@ jobs:
         run: |
           set -euo pipefail
           node .github/support/wdcc-final-brand-proof.mjs
+      - name: Prove visual polish and decoded media
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/support/wdcc-polished-visual-proof.mjs
       - name: Require exact branch head
         shell: bash
         run: |
