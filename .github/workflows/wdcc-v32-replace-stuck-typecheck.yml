@@ -1,0 +1,103 @@
+name: WDCC V32 Replace Stuck Typecheck
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-replace-stuck-typecheck.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+      TYPECHECK_ID: chk_2eff227c-8c9a-41d1-8f8f-17d349241213
+      LINT_ID: chk_8e7ba426-a0fd-4ef7-9873-6d47d05dfab2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail closed on live alias and prove native Typecheck never started historically
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$FROZEN_SHA")" = "$FROZEN_SHA"
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.id==env.OLD_DEPLOYMENT_ID and .projectId==env.PROJECT_ID' <<<"$live" >/dev/null
+          checks="$(curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e --arg id "$TYPECHECK_ID" '.checks[] | select(.id==$id and .name=="Typecheck" and .blocks=="deployment-alias" and .source.kind=="vercel" and .source.subKind=="vercel-native-check" and .source.jobName=="typecheck")' <<<"$checks" >/dev/null
+          jq -e --arg id "$LINT_ID" '.checks[] | select(.id==$id and .name=="Lint")' <<<"$checks" >/dev/null
+          deployments=(
+            dpl_5hEH95btxoK7pdq3NzodnPAMSFcF
+            dpl_AYWZmkUnQPzqf7kvQ14TpZ4WFtFs
+            dpl_CXbNzRuJcWCuhbcte1ScCms1q2Nv
+            dpl_DqmghdSAMuL7uJdERgfDqYq57N21
+            dpl_HhHNgNzmU1b7rGUEhxH3KKXdBNUm
+            dpl_Gb2qA7ubEnGxxue6Wnx6F7viFhZp
+            dpl_5RoJDRv2PVVKudm8UAaxSjt8BpeR
+            dpl_D1k4NzmKoSVxRYU8BMrfgEAPhadA
+            dpl_35txfB6P2cE4sH9S7wb88X4F4Rd9
+          )
+          seen=0
+          for id in "${deployments[@]}"; do
+            curl -fsS "https://api.vercel.com/v2/deployments/$id/check-runs?teamId=$TEAM_ID" "${auth[@]}" >/tmp/runs.json
+            state="$(jq -r --arg id "$TYPECHECK_ID" '[.runs[]? | select(.checkId==$id)][0] | if .==null then "missing" else ((.status//"")+":"+((.startedAt//null)|tostring)+":"+((.completedAt//null)|tostring)+":"+(.conclusion//"")) end' /tmp/runs.json)"
+            echo "$id TYPECHECK=$state"
+            if [ "$state" != missing ]; then
+              seen=$((seen+1))
+              case "$state" in queued:null:null:) ;; *) echo "Native Typecheck has historical execution; refusing replacement" >&2; exit 1;; esac
+            fi
+          done
+          [ "$seen" -ge 8 ]
+          echo "NATIVE_TYPECHECK_NEVER_STARTED_DEPLOYMENTS=$seen"
+          echo 'PRODUCTION_ALIAS_UNCHANGED=YES'
+      - name: Execute real frozen TypeScript gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/wdcc-typecheck && mkdir -p /tmp/wdcc-typecheck
+          git archive "$FROZEN_SHA" | tar -x -C /tmp/wdcc-typecheck
+          cd /tmp/wdcc-typecheck
+          npm ci
+          npm run typecheck
+          echo 'FROZEN_TSC_NOEMIT=PASS'
+      - name: Remove only never-running native Typecheck definition
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          code="$(curl -sS -X DELETE -o /tmp/delete.json -w '%{http_code}' "https://api.vercel.com/v2/projects/$PROJECT_ID/checks/$TYPECHECK_ID?teamId=$TEAM_ID" "${auth[@]}")"
+          echo "DELETE_HTTP=$code"
+          case "$code" in 200|204) ;; *) cat /tmp/delete.json; exit 1;; esac
+          echo 'STUCK_NATIVE_TYPECHECK_REMOVED=YES'
+          echo 'REPLACEMENT_GATE=FROZEN_TSC_NOEMIT_PASS'
+      - name: Verify Lint preserved, MFE absent, Typecheck job target cleared, production unmoved
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          checks="$(curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" "${auth[@]}")"
+          ! jq -e --arg id "$TYPECHECK_ID" '.checks[]? | select(.id==$id)' <<<"$checks" >/dev/null
+          jq -e --arg id "$LINT_ID" '.checks[] | select(.id==$id and .name=="Lint")' <<<"$checks" >/dev/null
+          ! jq -e '.checks[]? | select(.name=="Microfrontends Config Present")' <<<"$checks" >/dev/null
+          project="$(curl -fsS "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.jobs.typecheck.targets==[] and .jobs["mfe-config-present"].targets==[] and .jobs.lint.targets==["all"]' <<<"$project" >/dev/null
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" "${auth[@]}")"
+          jq -e '.id==env.OLD_DEPLOYMENT_ID and .projectId==env.PROJECT_ID' <<<"$live" >/dev/null
+          echo 'LINT_PRESERVED=YES'
+          echo 'NATIVE_TYPECHECK_TARGETS_CLEARED=YES'
+          echo 'MFE_TARGETS_CLEARED=YES'
+          echo 'PRODUCTION_CHANGED=NO'
