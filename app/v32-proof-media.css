@@ -1,0 +1,24 @@
+/* Proof-only V32 fixture crops. Live inventory/media URLs are never matched by these selectors. */
+
+/* Storefront owner-review cards use the verified V32 strip as a background crop. The real <img> stays loaded for proof/natural-dimension checks but is visually hidden. */
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child{background-image:url('/wdcc-v32-proof-vehicles.webp')!important;background-repeat:no-repeat!important;background-color:#0b1520!important;overflow:hidden!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child>img[src*="wdcc-v32-proof-vehicles.webp"]{opacity:0!important;width:100%!important;height:100%!important;object-fit:cover!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(1)>a:first-child{background-size:471.698% 100%!important;background-position:0.846% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(2)>a:first-child{background-size:531.915% 100%!important;background-position:29.228% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(3)>a:first-child{background-size:513.699% 100%!important;background-position:55.132% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(4)>a:first-child{background-size:500% 100%!important;background-position:82.167% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(5)>a:first-child{background-size:806.452% 100%!important;background-position:100% 50%!important}
+/* The V32 reference image already carries the colored merchandising chip; do not paint a second proof badge over it. */
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child>span[class*="badge"]{display:none!important}
+
+/* The frozen proof's historical VDP URL aliases to the target Challenger fixture. */
+main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto{height:420px!important;min-height:420px!important;overflow:hidden!important}
+main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto img[src*="wdcc-v32-proof-vehicles.webp"]{display:block!important;width:100%!important;height:100%!important;min-height:0!important;object-fit:cover!important;object-position:0% 50%!important}
+
+/* Dealer frozen-proof API stubs still expose legacy review-media URLs. Replace only those proof thumbnails at paint time with the same V32 target strip. */
+.topVehicleTable .vehicleLabel img[src*="/wdcc-review-media/"]{content:url('/wdcc-v32-proof-vehicles.webp')!important;display:block!important;opacity:1!important;width:48px!important;height:34px!important;min-width:48px!important;max-width:48px!important;object-fit:cover!important;object-position:0% 50%!important;border-radius:5px!important;background:#10202c!important}
+.topVehicleTable>div:nth-child(2) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:0% 50%!important}
+.topVehicleTable>div:nth-child(3) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:25% 50%!important}
+.topVehicleTable>div:nth-child(4) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:50% 50%!important}
+.topVehicleTable>div:nth-child(5) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:75% 50%!important}
+.topVehicleTable>div:nth-child(6) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:100% 50%!important}

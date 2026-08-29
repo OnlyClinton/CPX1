@@ -1,0 +1,14 @@
+/* Final V32 card proportion lock. Keeps each vehicle photo in the same ~8:5 frame as the V32 reference and prevents adjacent proof-strip bleed. */
+@media(min-width:901px){
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{
+    height:auto!important;
+    aspect-ratio:1.58!important;
+    overflow:hidden!important;
+    background:#0b1520!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child>img{
+    width:100%!important;
+    height:100%!important;
+    object-fit:cover!important;
+  }
+}

@@ -1,0 +1,98 @@
+/* WDCC OWNER CONTRACT LOCK — isolated preview lane only.
+   Narrow authority for owner-supplied 9194 / 50869 / 51074 / 10668 / 10667.
+   Visual-only: no auth, data, provider, persistence, schema, DNS, alias, or production behavior. */
+
+/* Exact owner headline color order. */
+html body main.reference-home.locked-storefront .rh-copy h1 .red{color:var(--wdcc-red)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .blue{color:var(--wdcc-blue)!important}
+html body main.reference-home.locked-storefront .rh-copy h1 .white{color:#fff!important}
+
+/* Newest storefront contract: horizontal WDCC wordmark in persistent public chrome.
+   The round badge remains exclusive to the intro/dealer identity. */
+html body .wdcc-public-header .rh-header-inner{grid-template-columns:160px minmax(0,1fr) auto!important}
+html body .wdcc-public-header .rh-logo{width:142px!important;height:74px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;overflow:visible!important}
+html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{display:block!important;visibility:visible!important;opacity:1!important;width:132px!important;height:auto!important;max-width:132px!important;max-height:58px!important;object-fit:contain!important;transform:none!important;filter:none!important}
+
+/* Trust symbols must not inherit the generic trust-copy span treatment. */
+html body main.reference-home.locked-storefront .rh-trust-grid .trust-symbol,
+html body main.reference-home.locked-storefront .rh-trust-grid .trust-avatar{margin-top:0!important;width:34px!important;height:34px!important;display:grid!important;place-items:center!important;font-size:10px!important;line-height:1!important}
+
+/* Missing listing media is explicit and never replaced by storefront hero artwork. */
+html body .editVehicleApp .previewImage.previewImageEmpty{display:grid!important;place-items:center!important;background:linear-gradient(145deg,#0a1722,#132a3a)!important;min-height:220px!important}
+html body .editVehicleApp .previewPhotoComingSoon{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;min-height:220px!important;color:#dbe5ec!important;font-size:12px!important;font-weight:950!important;letter-spacing:.12em!important;text-align:center!important}
+
+/* Public VDP follows the same image/spec language as inventory cards. */
+html body .vehiclePage .vehicleLayout{display:grid!important;grid-template-columns:minmax(0,1.22fr) minmax(360px,.78fr)!important;gap:24px!important;align-items:start!important}
+html body .vehiclePage .vehiclePhoto{aspect-ratio:16/10!important;min-height:0!important;border-radius:12px!important;overflow:hidden!important;background:#0b1721!important}
+html body .vehiclePage .vehiclePhoto>img{width:100%!important;height:100%!important;object-fit:cover!important}
+html body .vehiclePage .vehiclePhotoMissing{display:grid!important;place-items:center!important;width:100%!important;height:100%!important;min-height:360px!important;background:linear-gradient(145deg,#0a1722,#173044)!important;color:#e4edf3!important;font-size:12px!important;font-weight:950!important;letter-spacing:.12em!important}
+html body .vehiclePage .vehicleGallery{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:8px!important;margin-top:9px!important}
+html body .vehiclePage .vehicleGallery button{padding:0!important;border:2px solid transparent!important;border-radius:7px!important;overflow:hidden!important;aspect-ratio:4/3!important;background:#0b1721!important;cursor:pointer!important}
+html body .vehiclePage .vehicleGallery button.active{border-color:var(--wdcc-red)!important}
+html body .vehiclePage .vehicleGallery img{width:100%!important;height:100%!important;object-fit:cover!important}
+html body .vehiclePage .vehicleFacts{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+html body .vehiclePage .vehicleFeatures{margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e0e5e8!important}
+html body .vehiclePage .vehicleFeatures h3,html body .vehiclePage .vehicleDescriptionBlock h3{font-size:14px!important;margin:0 0 10px!important}
+html body .vehiclePage .vehicleFeatures>div{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+html body .vehiclePage .vehicleFeatures span{font-size:12px!important;color:#43515c!important}
+html body .vehiclePage .vehicleDescriptionBlock{margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e0e5e8!important}
+
+/* 10668 desktop: three operational panels in one primary row, actions beneath. */
+@media(min-width:1100px){
+  html body main.dealerDashboardLocked .dashboardContent{display:grid!important;grid-template-columns:minmax(245px,.82fr) minmax(420px,1.28fr) minmax(230px,.70fr)!important;grid-template-areas:"title title title" "error error error" "metrics metrics metrics" "inventory vehicles activity" "ops ops ops"!important;gap:10px!important;align-content:start!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dcTitle{grid-area:title!important;margin-bottom:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dcError{grid-area:error!important;margin:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashMetrics{grid-area:metrics!important;margin:0!important}
+  html body main.dealerDashboardLocked .dashboardContent>.dashboardGridLocked{display:contents!important}
+  html body main.dealerDashboardLocked .inventoryOverview{grid-area:inventory!important;min-height:270px!important;padding:14px!important}
+  html body main.dealerDashboardLocked .recentVehicles{grid-area:vehicles!important;min-height:270px!important;padding:14px!important}
+  html body main.dealerDashboardLocked .activityLocked{grid-area:activity!important;min-height:270px!important;margin:0!important;padding:14px!important;overflow:hidden!important;align-self:stretch!important;transform:translateY(-10px)!important;height:calc(100% + 10px)!important}
+  html body main.dealerDashboardLocked .opsCards{grid-area:ops!important;margin:0!important}
+  html body main.dealerDashboardLocked .activityLocked>a{min-height:41px!important;grid-template-columns:18px minmax(0,1fr) auto!important;gap:5px!important}
+}
+
+/* 10667 desktop editor: one dealer identity in the top bar. */
+@media(min-width:768px){
+  html body .editVehicleApp .editTop .topBrand{display:flex!important;align-items:center!important;gap:9px!important;margin-right:auto!important;min-width:235px!important}
+  html body .editVehicleApp .editTop .topBrand>img{display:block!important;width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;max-width:52px!important;max-height:52px!important;object-fit:contain!important;border-radius:50%!important;clip-path:circle(48% at 50% 50%)!important}
+  html body .editVehicleApp .editTop .topBrand b{font-size:12px!important;line-height:1.1!important}
+  html body .editVehicleApp .editTop .topBrand span{font-size:8px!important;margin-top:3px!important;color:#aebbc5!important}
+}
+
+/* 9194 mobile: compact 64px chrome, horizontal wordmark, intentional 2x2 benefit bridge. */
+@media(max-width:767px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important;top:0!important}
+  html body .wdcc-public-header .rh-header-inner{height:64px!important;min-height:64px!important;grid-template-columns:44px minmax(0,1fr) 44px!important;grid-template-rows:64px!important;padding:0 10px!important}
+  html body .wdcc-public-header .rh-logo{grid-column:2!important;justify-self:center!important;width:122px!important;height:64px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+  html body .wdcc-public-header .rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{width:112px!important;height:auto!important;max-width:112px!important;max-height:48px!important;object-fit:contain!important}
+  html body .wdcc-public-header .rh-menu,html body .wdcc-public-header .rh-call{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important}
+  html body .wdcc-public-header .rh-nav{top:64px!important}
+
+  html body main.reference-home.locked-storefront .rh-hero{height:500px!important;min-height:500px!important;padding:0!important;overflow:hidden!important}
+  html body main.reference-home.locked-storefront .rh-hero-art{height:100%!important;inset:0!important;object-position:64% 48%!important;filter:saturate(1.2) contrast(1.06) brightness(1.06)!important}
+  html body main.reference-home.locked-storefront .rh-hero-shade{height:100%!important;background:linear-gradient(180deg,rgba(2,7,12,.02) 0%,rgba(2,7,12,.12) 28%,rgba(2,7,12,.64) 60%,rgba(2,7,12,.98) 100%),linear-gradient(90deg,rgba(2,7,12,.44),rgba(2,7,12,.05) 78%)!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{height:500px!important;min-height:500px!important;display:flex!important;align-items:flex-end!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding:95px 15px 17px!important;background:transparent!important}
+  html body main.reference-home.locked-storefront .rh-kicker{margin-bottom:6px!important}
+  html body main.reference-home.locked-storefront .rh-copy h1{font-size:clamp(34px,10vw,40px)!important;line-height:.89!important}
+  html body main.reference-home.locked-storefront .rh-proof-copy{font-size:9.5px!important;line-height:1.28!important;margin:9px 0 0!important}
+  html body main.reference-home.locked-storefront .rh-hero-actions{margin-top:11px!important;gap:6px!important}
+  html body main.reference-home.locked-storefront .rh-btn{min-height:43px!important}
+  html body main.reference-home.locked-storefront .rh-phone{margin-top:8px!important}
+
+  html body main.reference-home.locked-storefront .rh-benefits{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body main.reference-home.locked-storefront .rh-benefit{min-height:76px!important;padding:8px 8px!important}
+  html body main.reference-home.locked-storefront .rh-inventory{padding-top:16px!important;padding-bottom:22px!important}
+  html body main.reference-home.locked-storefront .rh-section-head{margin-bottom:7px!important}
+  html body main.reference-home.locked-storefront .rh-finance{padding-top:21px!important;padding-bottom:24px!important}
+  html body main.reference-home.locked-storefront .rh-steps{grid-template-columns:1fr!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body .editVehicleApp .previewImage.previewImageEmpty,html body .editVehicleApp .previewPhotoComingSoon{min-height:170px!important}
+
+  html body .vehiclePage .vehicleLayout{grid-template-columns:1fr!important;gap:14px!important}
+  html body .vehiclePage .vehiclePhotoMissing{min-height:230px!important}
+  html body .vehiclePage .vehicleGallery{display:flex!important;overflow-x:auto!important;gap:7px!important;scroll-snap-type:x mandatory!important;padding-bottom:3px!important}
+  html body .vehiclePage .vehicleGallery button{flex:0 0 82px!important;scroll-snap-align:start!important}
+  html body .vehiclePage .vehicleFacts{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  html body .vehiclePage .vehicleFeatures>div{grid-template-columns:1fr!important}
+}

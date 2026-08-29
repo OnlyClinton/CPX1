@@ -1,0 +1,78 @@
+/* WDCC owner mock convergence — branch/preview only.
+   Desktop target: 51076 dealer portal. Mobile target: the paired 51076 phone layout.
+   Removes the circular badge from dealer UI chrome and restores the horizontal WDCC wordmark. */
+
+:root{--owner-red:#ef2435;--owner-blue:#1f7cff;--owner-bg:#020912;--owner-panel:#071724;--owner-line:#173247}
+
+/* Horizontal WDCC wordmark: WD white / CC red / owner tagline. */
+.targetDealerTopBrand>img,.sideBrand>img,.targetDealerLoginHero>img,
+html body main.inventoryContract header.dcTop .brand>img,
+html body .editVehicleApp .editTop .topBrand>img,
+html body .refDealerBrand>img,
+html body .leadCommandBrand>img{display:none!important}
+.targetDealerTopBrand:before,.sideBrand:before,.targetDealerLoginHero:before,
+html body main.inventoryContract header.dcTop .brand:before,
+html body .editVehicleApp .editTop .topBrand:before,
+html body .refDealerBrand:before,
+html body .leadCommandBrand:before{
+  content:"WDCC"!important;display:inline-block!important;width:auto!important;height:auto!important;background:linear-gradient(90deg,#fff 0 50%,var(--owner-red) 50% 100%)!important;-webkit-background-clip:text!important;background-clip:text!important;color:transparent!important;font-family:Arial Black,Inter,system-ui,sans-serif!important;font-size:31px!important;font-style:italic!important;font-weight:1000!important;line-height:.78!important;letter-spacing:-.09em!important;white-space:nowrap!important;filter:none!important
+}
+.targetDealerTopBrand:after,.sideBrand:after,.targetDealerLoginHero:after,
+html body main.inventoryContract header.dcTop .brand:after,
+html body .editVehicleApp .editTop .topBrand:after,
+html body .refDealerBrand:after,
+html body .leadCommandBrand:after{
+  content:"WE DON'T CARE CARS"!important;display:block!important;color:#fff!important;font-size:6px!important;font-weight:950!important;line-height:1!important;letter-spacing:.035em!important;white-space:nowrap!important
+}
+.targetDealerTopBrand,.sideBrand,html body main.inventoryContract header.dcTop .brand,html body .editVehicleApp .editTop .topBrand,html body .refDealerBrand,html body .leadCommandBrand{position:relative!important;align-content:center!important}
+.targetDealerTopBrand{display:grid!important;grid-template-columns:auto 1fr!important;grid-template-rows:auto auto!important;column-gap:16px!important;min-width:280px!important}
+.targetDealerTopBrand:before{grid-row:1/3!important;align-self:center!important}
+.targetDealerTopBrand:after{grid-row:2!important;grid-column:1!important;align-self:end!important;margin-top:5px!important}
+.targetDealerTopBrand>div{grid-column:2!important;grid-row:1/3!important;align-self:center!important;border-left:1px solid #294052!important;padding-left:16px!important}
+.sideBrand{display:grid!important;grid-template-rows:auto auto!important;justify-items:start!important;padding:10px 12px 17px!important;gap:5px!important}
+.sideBrand>span{display:none!important}
+.targetDealerLoginHero:before{position:absolute!important;left:32px!important;top:30px!important;font-size:38px!important;z-index:3!important}
+.targetDealerLoginHero:after{position:absolute!important;left:34px!important;top:61px!important;z-index:3!important}
+
+/* Desktop dashboard mirrors the dark owner board instead of the white operational fallback. */
+.targetDealerApp{background:#020912!important;color:#fff!important;padding-bottom:18px!important}
+.targetDealerTop{height:72px!important;background:#030c15!important;border-bottom:1px solid #173247!important;padding:0 24px!important;grid-template-columns:minmax(330px,1fr) auto auto auto!important;gap:15px!important}
+.targetDealerTop>a{height:38px!important;display:flex!important;align-items:center!important;padding:0 14px!important;border:1px solid #4f1f2a!important;background:#07131e!important;color:#ff5362!important;border-radius:4px!important}
+.targetDealerTop>span{color:#c0c9d0!important}
+.targetDealerTop>button{height:38px!important;padding:0 13px!important;background:#07131e!important;border-color:#294052!important;color:#fff!important}
+.targetDealerFrame{max-width:1500px!important;grid-template-columns:178px minmax(0,1fr)!important;min-height:calc(100svh - 72px)!important}
+.targetDealerSide{position:relative!important;background:#04111c!important;border-right:1px solid #173247!important;padding:8px 8px 170px!important}
+.targetDealerSide nav{gap:3px!important}.targetDealerSide nav a{min-height:39px!important;color:#c0cad2!important;padding:0 12px!important;font-size:9px!important}.targetDealerSide nav a.active{background:#a81625!important;color:#fff!important;border-left:3px solid #ff3042!important}
+.targetDealerSide:after{content:"BAD CREDIT?\A NO CREDIT?\A WE DON'T CARE.\A\A GET PRE-APPROVED →";white-space:pre;position:absolute;left:12px;right:12px;bottom:18px;min-height:132px;padding:14px 11px;border:1px solid #173247;border-radius:5px;background:linear-gradient(180deg,#071522aa,#020912ee),url('/wdcc-hero-v2.webp') 68% center/cover no-repeat;color:#fff;font-size:9px;font-weight:1000;line-height:1.38;letter-spacing:.01em;text-shadow:0 2px 8px #000}
+.targetDealerMain{padding:22px 24px 26px!important;background:#020912!important}
+.targetDealerTitle{margin-bottom:13px!important}.targetDealerTitle h1{font-size:27px!important}.targetDealerTitle p{font-size:9px!important}.targetDealerTitle>div:last-child{background:#06131e!important;border-color:#1e3b52!important;padding:10px 13px!important}
+.targetDealerStats{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}.targetDealerStats article{min-height:92px!important;background:linear-gradient(145deg,#081a29,#05121d)!important;border:1px solid #173247!important;border-radius:6px!important;padding:14px 15px!important}.targetDealerStats span{font-size:8px!important}.targetDealerStats b{font-size:28px!important}.targetDealerStats em{font-size:8px!important;color:#38df75!important}
+.targetDealerCharts{grid-template-columns:1.05fr .95fr!important;gap:10px!important;margin-top:10px!important}.targetDealerCharts>section,.targetDealerLower>section{background:#061520!important;border:1px solid #173247!important;border-radius:6px!important;padding:14px!important}.targetDealerCharts svg{height:150px!important}.sourceChart{grid-template-columns:145px 1fr!important;min-height:170px!important}.donut{width:126px!important;height:126px!important}.donut:after{background:#061520!important}
+.targetDealerLower{grid-template-columns:1.05fr .95fr!important;gap:10px!important;margin-top:10px!important}.targetDealerLower>section{min-height:218px!important}.topVehicleTable>div{border-color:#142c3e!important}.recentActivity>a{border-color:#142c3e!important}
+.targetDealerQuick{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important;margin-top:10px!important}.targetDealerQuick a,.targetDealerQuick a:first-child{min-height:44px!important;background:#116bd0!important;border:1px solid #287ed9!important;border-radius:4px!important;color:#fff!important;font-size:8px!important}
+.targetDealerMobile{display:none!important}
+
+/* Other dealer pages: stop restoring the round badge. */
+html body main.inventoryContract header.dcTop .brand:before{font-size:26px!important}
+html body main.inventoryContract header.dcTop .brand:after{position:absolute!important;left:0!important;top:35px!important}
+html body .editVehicleApp .editTop .topBrand:before,html body .refDealerBrand:before,html body .leadCommandBrand:before{font-size:27px!important}
+
+@media(max-width:900px){
+  .targetDealerApp{padding-bottom:0!important;min-height:100svh!important}
+  .targetDealerTop{height:64px!important;min-height:64px!important;display:grid!important;grid-template-columns:44px minmax(0,1fr) 44px!important;padding:0 10px!important;gap:6px!important;background:#020912!important}
+  .targetDealerTop:before{content:"☰";grid-column:1;grid-row:1;display:grid;place-items:center;color:#fff;font-size:24px;font-weight:400}
+  .targetDealerTop:after{content:"☎";grid-column:3;grid-row:1;display:grid;place-items:center;width:40px;height:40px;justify-self:end;border-radius:50%;background:var(--owner-red);color:#fff;font-size:18px}
+  .targetDealerTopBrand{grid-column:2!important;grid-row:1!important;display:grid!important;min-width:0!important;width:128px!important;justify-self:center!important;grid-template-columns:1fr!important;grid-template-rows:auto auto!important;gap:3px!important;text-align:center!important}
+  .targetDealerTopBrand:before{grid-column:1!important;grid-row:1!important;justify-self:center!important;font-size:28px!important}
+  .targetDealerTopBrand:after{grid-column:1!important;grid-row:2!important;justify-self:center!important;margin:0!important;font-size:5.5px!important}
+  .targetDealerTopBrand>div,.targetDealerTop>a,.targetDealerTop>span,.targetDealerTop>button{display:none!important}
+  .targetDealerFrame{display:block!important;min-height:calc(100svh - 64px)!important}.targetDealerSide{display:none!important}
+  .targetDealerMain{padding:14px 10px 26px!important}.targetDealerTitle{align-items:center!important;margin-bottom:10px!important}.targetDealerTitle h1{font-size:25px!important}.targetDealerTitle p{display:none!important}.targetDealerTitle>div:last-child{display:block!important;padding:7px 8px!important;font-size:7px!important}
+  .targetDealerStats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}.targetDealerStats article{min-height:92px!important;padding:13px!important}.targetDealerStats b{font-size:27px!important}
+  .targetDealerCharts{grid-template-columns:1fr!important;gap:8px!important;margin-top:8px!important}.targetDealerCharts>section{padding:12px!important}.targetDealerCharts svg{height:145px!important}.sourceChart{grid-template-columns:124px 1fr!important;min-height:145px!important}.donut{width:108px!important;height:108px!important}
+  .targetDealerLower{grid-template-columns:1fr!important;gap:8px!important;margin-top:8px!important}.targetDealerLower>section:first-child{display:none!important}.targetDealerLower>section:last-child{min-height:0!important;padding:12px!important}
+  .targetDealerQuick{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;margin-top:8px!important}.targetDealerQuick a,.targetDealerQuick a:first-child{display:flex!important;min-height:68px!important;padding:8px 3px!important;background:#0b3153!important;border-color:#164d78!important;font-size:7px!important;line-height:1.15!important}
+  .targetDealerMobile{display:none!important}
+  .targetDealerLoginHero:before{left:18px!important;top:18px!important;font-size:31px!important}.targetDealerLoginHero:after{left:20px!important;top:43px!important;font-size:5.5px!important}
+  html body main.inventoryContract header.dcTop .brand:before{font-size:23px!important}html body main.inventoryContract header.dcTop .brand:after{top:31px!important;font-size:5px!important}
+}
