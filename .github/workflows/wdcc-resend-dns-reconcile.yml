@@ -1,0 +1,191 @@
+name: WDCC Resend DNS Reconcile
+
+on:
+  pull_request:
+    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
+    types: [synchronize, reopened]
+    paths:
+      - '.github/workflows/wdcc-resend-dns-reconcile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-resend-dns-reconcile
+  cancel-in-progress: true
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  DOMAIN: wedontcarecars.com
+  DKIM_NAME: resend._domainkey.wedontcarecars.com
+  DKIM_VALUE: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDd6urYtTrC71ift2X5FHJBNieraLM56mN5ySx7tYKR93cgAzRojx1vVUyXvUFxAWkvZU6idDBa6u+/msATSBYqlte4d2dwcqtphh7COy8QgYLfkVNSJqV0SWsXrnw4LC0pQuWV6ObC7EJxdzBZwNvPmLjPziZRkTMuRkXSFDLTwQIDAQAB
+  SEND_NAME: send.wedontcarecars.com
+  SPF_VALUE: v=spf1 include:amazonses.com ~all
+  MX_VALUE: feedback-smtp.us-east-1.amazonses.com
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - name: Read current Cloudflare DNS and stop on conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+
+          cf_get() {
+            local type="$1" name="$2" out="$3"
+            curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?type=$type&name=$name&per_page=100" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" \
+              -H 'Content-Type: application/json' > "$out"
+            jq -e '.success == true' "$out" >/dev/null
+          }
+
+          cf_get TXT "$DKIM_NAME" dkim.json
+          cf_get TXT "$SEND_NAME" send-txt.json
+          cf_get MX "$SEND_NAME" send-mx.json
+
+          dkim_exact="$(jq --arg v "$DKIM_VALUE" '[.result[] | select(.content == $v)] | length' dkim.json)"
+          dkim_other="$(jq --arg v "$DKIM_VALUE" '[.result[] | select(.content != $v)] | length' dkim.json)"
+          spf_exact="$(jq --arg v "$SPF_VALUE" '[.result[] | select(.content == $v)] | length' send-txt.json)"
+          spf_other="$(jq --arg v "$SPF_VALUE" '[.result[] | select((.content | startswith("v=spf1")) and .content != $v)] | length' send-txt.json)"
+          mx_exact="$(jq --arg v "$MX_VALUE" '[.result[] | select((.content | ascii_downcase) == ($v | ascii_downcase) and (.priority // 0) == 10)] | length' send-mx.json)"
+          mx_other="$(jq --arg v "$MX_VALUE" '[.result[] | select(((.content | ascii_downcase) != ($v | ascii_downcase)) or ((.priority // 0) != 10))] | length' send-mx.json)"
+
+          if [ "$dkim_other" -gt 0 ]; then
+            echo 'CONFLICT_DKIM=YES' >> "$GITHUB_STEP_SUMMARY"
+            exit 31
+          fi
+          if [ "$spf_other" -gt 0 ]; then
+            echo 'CONFLICT_SPF_AT_SEND=YES' >> "$GITHUB_STEP_SUMMARY"
+            exit 32
+          fi
+          if [ "$mx_other" -gt 0 ]; then
+            echo 'CONFLICT_MX_AT_SEND=YES' >> "$GITHUB_STEP_SUMMARY"
+            exit 33
+          fi
+
+          echo "DKIM_EXACT_COUNT=$dkim_exact" >> "$GITHUB_ENV"
+          echo "SPF_EXACT_COUNT=$spf_exact" >> "$GITHUB_ENV"
+          echo "MX_EXACT_COUNT=$mx_exact" >> "$GITHUB_ENV"
+          echo 'DNS_CONFLICT_SCAN=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WEBSITE_DNS_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'WORKER_ROUTES_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Add only missing Resend records
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          create_record() {
+            local body="$1" label="$2"
+            code="$(curl -sS -o response.json -w '%{http_code}' -X POST "$CF_API/zones/$ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CF_ZONE_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data "$body")"
+            if [ "$code" != 200 ]; then
+              echo "${label}_CREATE=FAIL_HTTP_${code}" >> "$GITHUB_STEP_SUMMARY"
+              jq -c '{success,errors}' response.json >&2 || true
+              exit 40
+            fi
+            jq -e '.success == true' response.json >/dev/null
+            echo "${label}_CREATE=PASS" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          if [ "${DKIM_EXACT_COUNT:-0}" -eq 0 ]; then
+            body="$(jq -n --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:3600}')"
+            create_record "$body" DKIM
+          else
+            echo 'DKIM_CREATE=NOOP_ALREADY_PRESENT' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "${SPF_EXACT_COUNT:-0}" -eq 0 ]; then
+            body="$(jq -n --arg name "$SEND_NAME" --arg content "$SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:3600}')"
+            create_record "$body" SPF
+          else
+            echo 'SPF_CREATE=NOOP_ALREADY_PRESENT' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "${MX_EXACT_COUNT:-0}" -eq 0 ]; then
+            body="$(jq -n --arg name "$SEND_NAME" --arg content "$MX_VALUE" '{type:"MX",name:$name,content:$content,priority:10,ttl:3600}')"
+            create_record "$body" MX
+          else
+            echo 'MX_CREATE=NOOP_ALREADY_PRESENT' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo 'RESEND_DNS_RECONCILE=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm public DNS propagation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 18); do
+            dkim="$(dig +short TXT "$DKIM_NAME" @1.1.1.1 | tr -d '" \n\r' || true)"
+            spf="$(dig +short TXT "$SEND_NAME" @1.1.1.1 | tr -d '"\r' || true)"
+            mx="$(dig +short MX "$SEND_NAME" @1.1.1.1 | tr '[:upper:]' '[:lower:]' || true)"
+            if printf '%s' "$dkim" | grep -Fq "$(printf '%s' "$DKIM_VALUE" | tr -d ' ')" \
+              && printf '%s\n' "$spf" | grep -Fq "$SPF_VALUE" \
+              && printf '%s\n' "$mx" | grep -Fqi "10 $MX_VALUE."; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" != 1 ]; then
+            echo 'PUBLIC_DNS_PROPAGATION=PENDING' >> "$GITHUB_STEP_SUMMARY"
+            exit 50
+          fi
+          echo 'PUBLIC_DNS_PROPAGATION=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Resend verification when key scope permits
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${RESEND_API_KEY:-}" ]; then
+            echo 'RESEND_DOMAIN_API=SKIP_NO_KEY' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          code="$(curl -sS -o domains.json -w '%{http_code}' https://api.resend.com/domains \
+            -H "Authorization: Bearer $RESEND_API_KEY")"
+          if [ "$code" != 200 ]; then
+            echo "RESEND_DOMAIN_API=UNAVAILABLE_HTTP_${code}" >> "$GITHUB_STEP_SUMMARY"
+            echo 'RESEND_VERIFY_TRIGGER=MANUAL_OR_AUTOMATIC_REQUIRED' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          domain_id="$(jq -r --arg d "$DOMAIN" '.data[]? | select(.name == $d) | .id' domains.json | head -n1)"
+          status="$(jq -r --arg d "$DOMAIN" '.data[]? | select(.name == $d) | .status' domains.json | head -n1)"
+          test -n "$domain_id"
+          echo "RESEND_DOMAIN_STATUS_BEFORE=${status:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$status" != verified ]; then
+            verify_code="$(curl -sS -o verify.json -w '%{http_code}' -X POST "https://api.resend.com/domains/$domain_id/verify" \
+              -H "Authorization: Bearer $RESEND_API_KEY" \
+              -H 'Content-Type: application/json')"
+            if [ "$verify_code" != 200 ]; then
+              echo "RESEND_VERIFY_TRIGGER=FAIL_HTTP_${verify_code}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo 'RESEND_VERIFY_TRIGGER=PASS' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'RESEND_VERIFY_TRIGGER=NOOP_ALREADY_VERIFIED' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          final="$status"
+          for i in $(seq 1 24); do
+            curl -fsS "https://api.resend.com/domains/$domain_id" \
+              -H "Authorization: Bearer $RESEND_API_KEY" > domain.json
+            final="$(jq -r '.status // "unknown"' domain.json)"
+            if [ "$final" = verified ]; then break; fi
+            sleep 5
+          done
+          echo "RESEND_DOMAIN_STATUS_AFTER=$final" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$final" != verified ]; then exit 60; fi
