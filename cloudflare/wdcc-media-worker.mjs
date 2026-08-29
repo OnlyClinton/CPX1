@@ -42,7 +42,7 @@ export class WDCCMedia{
     if(request.method==="GET"||request.method==="HEAD"){
       try{
         const meta=this.meta();if(!meta)return new Response("Not found",{status:404,headers:{"cache-control":"no-store"}});
-        const headers={"Content-Type":String(meta.content_type),"Content-Length":String(meta.bytes),"Cache-Control":"public, max-age=3600","ETag":`\"${meta.sha256}\"`,`X-WDCC-Media-SHA256`:String(meta.sha256)};
+        const headers={"Content-Type":String(meta.content_type),"Content-Length":String(meta.bytes),"Cache-Control":"public, max-age=3600","ETag":`\"${meta.sha256}\"`,"X-WDCC-Media-SHA256":String(meta.sha256)};
         if(request.method==="HEAD")return new Response(null,{status:200,headers});
         const out=new Uint8Array(Number(meta.bytes));let offset=0,seen=0;
         for(const row of this.sql.exec("SELECT idx,data FROM media_chunks ORDER BY idx ASC")){

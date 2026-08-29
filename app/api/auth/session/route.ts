@@ -1,4 +1,4 @@
-import {currentUser,sessionCookieHeader} from "../../../../lib/auth";
+import {currentUser} from "../../../../lib/auth";
 import {readState,type User} from "../../../../lib/store";
 
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
@@ -32,8 +32,8 @@ function copyCookies(upstream:Response,headers:Headers){
 
 export async function GET(request:Request){
   try{
-    const wdccUser=await currentUser().catch(()=>null);
-    if(wdccUser)return responseFor(wdccUser);
+    const user=await currentUser().catch(()=>null);
+    if(user)return responseFor(user);
 
     const cookie=request.headers.get("cookie")||"";
     if(!cookie)return Response.json({authenticated:false},{headers:{"cache-control":"private, no-store"}});
@@ -44,12 +44,11 @@ export async function GET(request:Request){
     const email=String(data?.user?.email||"").toLowerCase();
     if(!upstream.ok||!data?.user||!["admin@internal.wedontcarecars.com","dealer@internal.wedontcarecars.com"].includes(email))return Response.json({authenticated:false},{headers:{"cache-control":"private, no-store"}});
 
-    const user=await accessUser(email);
-    if(!user)return Response.json({authenticated:false,error:"portal_access_not_configured"},{status:403,headers:{"cache-control":"private, no-store"}});
-    const headers=new Headers();
-    copyCookies(upstream,headers);
-    headers.append("set-cookie",sessionCookieHeader(user));
-    return responseFor(user,email,headers);
+    const access=await accessUser(email);
+    if(!access)return Response.json({authenticated:false,error:"portal_access_not_configured"},{status:403,headers:{"cache-control":"private, no-store"}});
+    const responseHeaders=new Headers();
+    copyCookies(upstream,responseHeaders);
+    return responseFor(access,email,responseHeaders);
   }catch(error){
     console.error("WDCC_NEON_AUTH_SESSION_ERROR",error);
     return Response.json({authenticated:false,error:"auth_service_unavailable"},{status:503,headers:{"cache-control":"no-store"}});
