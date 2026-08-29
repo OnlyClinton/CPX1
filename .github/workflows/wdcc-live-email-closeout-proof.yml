@@ -128,6 +128,7 @@ jobs:
               const message = String(sendJson.message || sendJson.name || 'provider rejected request').replace(/[\r\n]+/g, ' ').slice(0, 300);
               summary(`PROVIDER_ERROR=${message}`);
               summary('EMAIL_GATE=HOLD_PROVIDER_REJECTED');
+              console.error(`RESEND_REJECTED_HTTP_${send.status}: ${message}`);
               process.exit(23);
             }
             const emailId = String(sendJson.id || '');
