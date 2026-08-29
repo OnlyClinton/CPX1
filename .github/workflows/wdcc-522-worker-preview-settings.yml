@@ -1,0 +1,45 @@
+name: WDCC 522 Worker Preview Settings
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-worker-preview-settings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_NAME: wdcc-v2-883f211f345f-proof
+    steps:
+      - name: Get authoritative preview settings only
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/workers/$WORKER_NAME"
+          curl -fsS "$url" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/worker.json
+          jq -e '.success == true' /tmp/worker.json >/dev/null
+          jq -c '{
+            id:(.result.id // null),
+            name:(.result.name // null),
+            subdomain:{
+              enabled:(.result.subdomain.enabled // null),
+              previews_enabled:(.result.subdomain.previews_enabled // null),
+              preview_url_suffix:(.result.subdomain.preview_url_suffix // null),
+              url:(.result.subdomain.url // null)
+            },
+            deployed_on:(.result.deployed_on // null),
+            durable_object_references:((.result.references.durable_objects // []) | length)
+          }' /tmp/worker.json
+          echo 'PRODUCTION_DEPLOYED=NO'
+          echo 'ROUTES_CHANGED=NO'
+          echo 'TRAFFIC_CHANGED=NO'
