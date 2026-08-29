@@ -1,0 +1,60 @@
+name: WDCC V32 READY Stage Smoke
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-ready-stage-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      STAGED_ID: dpl_D1k4NzmKoSVxRYU8BMrfgEAPhadA
+      STAGED_URL: wdcc-v32-storefront-ea9ys9u9v-cpxagency.vercel.app
+      OLD_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Revalidate stage is READY and production alias remains old
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$(curl -fsS "https://api.vercel.com/v13/deployments/$STAGED_ID?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
+          jq -e --arg p "$PROJECT_ID" '.id==env.STAGED_ID and .projectId==$p and .readyState=="READY"' <<<"$stage" >/dev/null
+          live="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
+          jq -e '.id==env.OLD_ID' <<<"$live" >/dev/null
+          echo 'STAGE_READY=YES'
+          echo 'PRODUCTION_ALIAS_UNCHANGED=YES'
+      - name: Authenticated smoke READY stage with vercel curl
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"; mkdir -p "$work/.vercel"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > "$work/.vercel/project.json"
+          cd "$work"
+          vcurl(){ vercel curl "$1" --deployment "$STAGED_URL" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>/tmp/vcurl.err; }
+          vcurl '/?ready-stage=1' > /tmp/root.html
+          grep -Fqi 'BAD CREDIT' /tmp/root.html
+          vcurl '/inventory?ready-stage=1' > /tmp/inventory.html
+          vcurl '/api/inventory?ready-stage=1' > /tmp/inventory.json
+          jq -e '.count==5 and (.items|length)==5 and (.mockupPreview!=true) and ([.items[].status]|all(.=="published"))' /tmp/inventory.json >/dev/null
+          vcurl '/api/health?ready-stage=1' > /tmp/health.json
+          jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/health.json >/dev/null
+          vcurl '/dealer?ready-stage=1' > /tmp/dealer.html
+          vcurl '/dealer/inventory/new?ready-stage=1' > /tmp/add.html
+          vcurl '/api/auth/session?ready-stage=1' > /tmp/session.json
+          jq -e '.authenticated==false' /tmp/session.json >/dev/null
+          echo 'READY_STAGE_SMOKE=PASS'
+          echo 'PRODUCTION_CHANGED=NO'
