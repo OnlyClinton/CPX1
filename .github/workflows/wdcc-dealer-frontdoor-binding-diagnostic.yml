@@ -54,12 +54,16 @@ jobs:
           auth_probe(){
             label="$1"; base="$2"; jar="/tmp/${label}.jar"
             jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > "/tmp/${label}-login.json"
-            login_code="$(curl --http1.1 -sS -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @"/tmp/${label}-login.json" -o "/tmp/${label}-login-out.json" -w '%{http_code}' "$base/api/auth/login")"
+            login_code="$(curl --http1.1 -sS -D "/tmp/${label}-auth.hdr" -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @"/tmp/${label}-login.json" -o "/tmp/${label}-login-out.json" -w '%{http_code}' "$base/api/auth/login")"
             session_code="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-session.json" -w '%{http_code}' "$base/api/auth/session")"
+            protected_code="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-protected.json" -w '%{http_code}' "$base/api/dealer/vehicle-logs?diag=$GITHUB_RUN_ID")"
             echo "${label}_REAL_LOGIN_HTTP=$login_code"
             jq -c 'if .ok==true then {ok,role} else {ok,error} end' "/tmp/${label}-login-out.json" || true
+            echo "${label}_SET_COOKIE_NAMES=$(awk 'BEGIN{IGNORECASE=1} /^set-cookie:/{sub(/^set-cookie:[[:space:]]*/,"");split($0,a,"=");gsub(/\r/,"",a[1]);printf "%s%s",sep,a[1];sep=","}' "/tmp/${label}-auth.hdr")"
             echo "${label}_SESSION_HTTP=$session_code"
-            jq -c '{authenticated,user:{role:.user.role}}' "/tmp/${label}-session.json" || true
+            jq -c '{authenticated,user:{email:.user.email,role:.user.role}}' "/tmp/${label}-session.json" || true
+            echo "${label}_PROTECTED_VEHICLE_LOGS_HTTP=$protected_code"
+            jq -c '{ok,error}' "/tmp/${label}-protected.json" 2>/dev/null || true
             rm -f "$jar"
           }
 
