@@ -1,0 +1,68 @@
+name: WDCC 522 Frozen Vercel Backend Preview
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-vercel-backend-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      VERCEL_SCOPE: cpxagency
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Extract exact frozen candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/wdcc-vercel-frozen && mkdir -p /tmp/wdcc-vercel-frozen
+          git archive "$FROZEN_SHA" | tar -x -C /tmp/wdcc-vercel-frozen
+          mkdir -p /tmp/wdcc-vercel-frozen/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > /tmp/wdcc-vercel-frozen/.vercel/project.json
+      - name: Deploy frozen SHA to Vercel Preview only
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install -g vercel@59.5.0 >/dev/null
+          cd /tmp/wdcc-vercel-frozen
+          VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" \
+            vercel deploy --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee /tmp/vercel-preview.log
+          url="$(grep -Eo 'https://[^ ]+\.vercel\.app' /tmp/vercel-preview.log | tail -n1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "VERCEL_PREVIEW_URL=$url"
+          echo 'PRODUCTION_PROMOTED=NO'
+          echo 'PRODUCTION_ALIAS_CHANGED=NO'
+      - name: Inspect frozen preview health boundary
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code="$(curl --http1.1 -sS -L -D /tmp/health.headers -o /tmp/health.body -w '%{http_code}' "$PREVIEW_URL/api/health?proof=522-frozen-vercel-preview" || true)"
+          tr -d '\r' </tmp/health.headers >/tmp/health.norm || true
+          echo "PREVIEW_HEALTH_HTTP=$code"
+          grep -Ei '^(x-wdcc-data-authority|x-wdcc-backend|content-type|server):' /tmp/health.norm || true
+          jq -c '{ok,degraded,state,authority,provider,release,database:{configured:.database.configured,database:.database.database,host:.database.host},reasons,error}' /tmp/health.body 2>/dev/null || head -c 1000 /tmp/health.body
+          echo
+          grep -qi '^x-wdcc-data-authority: neon' /tmp/health.norm
+          echo 'FROZEN_VERCEL_PREVIEW_AUTHORITY=PASS'
+          echo 'PRODUCTION_PROMOTED=NO'
