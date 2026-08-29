@@ -1,0 +1,83 @@
+name: WDCC Resend Unsuppress And Retest
+
+on:
+  pull_request:
+    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
+    types: [synchronize, reopened]
+    paths:
+      - '.github/workflows/wdcc-resend-unsuppress-and-retest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-resend-unsuppress-and-retest
+  cancel-in-progress: true
+
+env:
+  TARGET_EMAIL: sean@wedontcarecars.com
+  FROM_EMAIL: WDCC Leads <leads@wedontcarecars.com>
+  FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+
+jobs:
+  retest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Remove only bounce suppression and send one fresh proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RESEND_API_KEY:-}"
+          work="$(mktemp -d)"
+          cd "$work"
+          npm init -y >/dev/null 2>&1
+          npm install resend@latest >/dev/null 2>&1
+          node --input-type=module <<'NODE'
+          import { Resend } from 'resend';
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const email = process.env.TARGET_EMAIL;
+          const current = await resend.suppressions.get(email);
+          if (current.error) throw new Error(`suppression lookup: ${current.error.message}`);
+          if (!current.data) throw new Error('expected bounce suppression was not present');
+          if (current.data.origin !== 'bounce') throw new Error(`refusing to remove non-bounce suppression: ${current.data.origin}`);
+          const removed = await resend.suppressions.remove(email);
+          if (removed.error) throw new Error(`suppression remove: ${removed.error.message}`);
+          console.log('SUPPRESSION_REMOVED=YES origin=bounce');
+
+          const subject = `WDCC live email closeout — ${process.env.FROZEN_CANDIDATE_SHA.slice(0,12)} — v3`;
+          const sent = await resend.emails.send({
+            from: process.env.FROM_EMAIL,
+            to: [email],
+            subject,
+            text: `WDCC live provider proof for frozen candidate ${process.env.FROZEN_CANDIDATE_SHA}. No reply required.`,
+            headers: {'Idempotency-Key': `wdcc-live-email-${process.env.FROZEN_CANDIDATE_SHA}-v3`}
+          });
+          if (sent.error) throw new Error(`send: ${sent.error.message}`);
+          const id = sent.data?.id;
+          if (!id) throw new Error('no provider id');
+          console.log(`RESEND_EMAIL_ID=${id}`);
+          for (let i=0;i<30;i++) {
+            const r = await resend.emails.get(id);
+            if (r.error) throw new Error(`get email: ${r.error.message}`);
+            const event = String(r.data?.last_event || '');
+            if (['delivered','opened','clicked'].includes(event)) {
+              console.log(`LAST_EVENT=${event}`);
+              console.log('EMAIL_GATE=GREEN');
+              process.exit(0);
+            }
+            if (['bounced','failed','complained','suppressed'].includes(event)) {
+              console.error(`LAST_EVENT=${event}`);
+              process.exit(25);
+            }
+            await new Promise(r=>setTimeout(r,2000));
+          }
+          console.error('LAST_EVENT=not_terminal');
+          process.exit(26);
+          NODE
