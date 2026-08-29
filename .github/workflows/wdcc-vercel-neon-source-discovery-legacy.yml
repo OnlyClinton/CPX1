@@ -1,0 +1,73 @@
+name: WDCC Legacy Vercel Neon Source Discovery
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-vercel-neon-source-discovery-legacy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scan legacy WDCC project production envs without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install -g vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"; cd "$work"; npm init -y >/dev/null 2>&1; npm install dotenv@16 >/dev/null 2>&1
+          cat > "$work/inspect.cjs" <<'NODE'
+          const fs=require('fs'),dotenv=require('dotenv');
+          const env=dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
+          const dbKeys=['WDCC_DATABASE_URL','DATABASE_URL','POSTGRES_URL','NEON_DATABASE_URL','POSTGRES_PRISMA_URL','POSTGRES_URL_NON_POOLING'];
+          const authKeys=['WDCC_NEON_AUTH_URL','NEON_AUTH_URL'];
+          let db=null;
+          for(const k of dbKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(['postgres:','postgresql:'].includes(u.protocol)){db={key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')};break}}catch{}}
+          let auth=null;
+          for(const k of authKeys){const v=(env[k]||'').trim();try{const u=new URL(v);if(u.protocol==='https:'&&u.hostname.includes('.neonauth.')){auth={key:k,host:u.hostname,path:u.pathname};break}}catch{}}
+          const allKeys=Object.keys(env).filter(k=>/NEON|POSTGRES|DATABASE|AUTH_URL|CRON_SECRET/i.test(k)).sort();
+          console.log(JSON.stringify({project:process.env.PROJECT_NAME,db,auth,matchingKeys:allKeys}));
+          NODE
+          projects=(
+            'wdcc-stopgap-hero-preview|prj_yeBV2rjLHTo65R4NyIWlzgAw2hXj'
+            'wdcc-direct-slot-check|prj_KDl8tP1kAvPq4fRngaCYSv98i3Ap'
+            'wdcc-direct-schema-test|prj_9FqpXCqeSvfZftZxxhqtp3UZsg0e'
+            'wdcc-v89-premium-preview|prj_YWIPeSygw6Q9Yu9ZbASN7dGH4pb1'
+            'wdcc-repair-preview|prj_IC0jHz0ZMMoCkris3J4Fgn8zHDUu'
+            'wdcc-recovery-post-qa|prj_Hj6DbzTrgrfjcBdSbGsmdTXiELBx'
+            'wdcc-phoenix-proxy-probe|prj_tSmjEIAiaM4iTEPjKGLETR10CYwg'
+            'wdcc-public-media|prj_Hpdja1v7oFiUSteCa9ZW9xoxQKRB'
+            'wdcc-dealer-backend-proxy-probe|prj_qXtUegIBWGqghxBBuzfzcdo4Huxr'
+            'wdcc-crm-jwt-probe|prj_UB9evbz7uBpYZPvnX3eP2LJbkB2Z'
+            'wdcc-crm-auth-bootstrap|prj_GLkeF6Y4UHUCS0sLUFbqxYwQOYtB'
+            'wdcc-crm-rpc-probe|prj_VbayHCljgHlFVhDvaOJtaPUmOEob'
+            'wdcc-crm-leads-probe|prj_jUZ7jOxHxpHsk6rpNQ3kpfdaPSZm'
+            'wdcc-lead-passwordless-probe|prj_ampknuGTbfxVOwgV00VkcMEZbUKu'
+            'wdcc-lead-dataapi-probe|prj_K9uzS972vjcfHO7hlUftwmU8stb8'
+            'wdcc-v34-mockup-lock-preview|prj_GhImC4FRWnbTv8iea63Q8qa6Cknp'
+            'wdcc-v33-recovery|prj_7weJPpUCePRMyJXi6mwvbIlTftam'
+            'wdcc-source-drop-20260805035559|prj_2nVffALurxKKueKhMyCC797NHlMI'
+            'public_html|prj_1AfvVtkurPE9lZJVJN95Zrznbk1K'
+            'wedontcarecars-splash|prj_zpJJl0sDAjntBwTCMe8Dv5MNy7Sz'
+          )
+          for entry in "${projects[@]}"; do
+            name="${entry%%|*}"; pid="${entry#*|}"; dir="$work/p-$pid"; mkdir -p "$dir/.vercel"
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
+            file="$dir/prod.env"
+            if (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then PROJECT_NAME="$name" ENV_FILE="$file" node "$work/inspect.cjs"; else echo "{\"project\":\"$name\",\"pull\":\"failed\"}"; fi
+          done
+          echo 'SECRET_VALUES_PRINTED=NO'
+          echo 'READ_ONLY=YES'
