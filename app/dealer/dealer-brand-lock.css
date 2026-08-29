@@ -19,7 +19,6 @@ html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.br
   display:block!important;
   visibility:visible!important;
   opacity:1!important;
-  content:url('/wdcc-owner-logo')!important;
   flex:0 0 52px!important;
   width:52px!important;
   height:52px!important;
@@ -28,7 +27,9 @@ html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.br
   max-width:52px!important;
   max-height:52px!important;
   object-fit:contain!important;
+  object-position:center!important;
   border-radius:50%!important;
+  transform:none!important;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.28))!important;
 }
 @media(max-width:760px){
