@@ -41,7 +41,7 @@ export default function ReferenceCloneHome(){
      <article className="rh-benefit"><span className="rh-icon">▣</span><div><strong>DRIVE TODAY</strong><small>Move from interest to the road.</small></div></article>
      <article className="rh-benefit"><span className="rh-icon">◇</span><div><strong>BUILD YOUR CREDIT</strong><small>Ask what programs may apply.</small></div></article>
    </div></section>
-   <section className="rh-inventory"><div className="rh-section-head"><div><h2>FEATURED INVENTORY</h2></div><Link className="rh-view-all" href="/inventory">VIEW ALL INVENTORY →</Link></div>
+   <section className="rh-inventory"><div className="rh-section-head"><div><small>FEATURED INVENTORY</small><h2>Vehicles ready now.</h2><p>{recoveryMode?"Last verified vehicles shown. Confirm current availability with Sean.":"Cash price and down payment shown clearly."}</p></div><Link className="rh-view-all" href="/inventory">VIEW ALL INVENTORY →</Link></div>
      {fixtureMode&&<div className="wdccOwnerReviewBanner" role="status">{WDCC_VISUAL_REVIEW_LABEL}</div>}
      {recoveryMode&&<div className="wdccRecoveryInventoryBanner" role="status"><strong>VERIFIED RECOVERY INVENTORY</strong><span>Provider sync is temporarily unavailable. Confirm availability with Sean · 813-516-4752.</span></div>}
      {inventoryState==="loading"&&<div className="rh-inventory-state">Loading current inventory…</div>}
