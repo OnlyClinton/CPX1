@@ -1,0 +1,49 @@
+name: WDCC P0 Child Media Mobile Proof
+
+on:
+  pull_request:
+    branches:
+      - proof/wdcc-p0-child-build-cb59d203
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact storefront/media patch and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "$(git rev-parse HEAD)" = 'cb59d20359460fa4adcfb13164a35e5a53570d4b'
+          grep -Fq 'https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2004-nissan-350z.jpg' app/WdccVehicleCard.tsx
+          grep -Fq 'https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2016-ford-f150-limited.jpg' app/WdccVehicleCard.tsx
+          grep -Fq 'https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-honda-pilot.jpg' app/WdccVehicleCard.tsx
+          grep -Fq 'https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-kia-sportage.jpg' app/WdccVehicleCard.tsx
+          grep -Fq 'https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-toyota-rav4.jpg' app/WdccVehicleCard.tsx
+          grep -Fq 'LiveStorefrontPolish' app/page.tsx
+          grep -Fq 'width:104px!important' app/WdccPublicChrome.module.css
+          grep -Fq 'grid-template-columns:repeat(2,minmax(0,1fr))' app/LiveStorefrontPolish.tsx
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/login/route.ts
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          grep -Fq 'export async function setSession(user:User)' lib/auth.ts
+          node --check cloudflare/wdcc-media-worker.mjs
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          echo 'WDCC_P0_CHILD_MEDIA_MOBILE_PROOF=PASS'
