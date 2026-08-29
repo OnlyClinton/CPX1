@@ -5,7 +5,7 @@ import {readState,type User} from "./store";
 export const SESSION_COOKIE="__Host-wdcc_session";
 const SESSION_MAX_AGE=4*60*60;
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
-const PORTAL_EMAILS=new Set(["admin@internal.wedontcarecars.com","dealer@internal.wedontcarecars.com"]);
+const PORTAL_EMAILS=new Set(["admin@internal.wedontcarecars.com","dealer-v2@internal.wedontcarecars.com"]);
 
 function secret(){
   const value=process.env.SESSION_SECRET||"";
