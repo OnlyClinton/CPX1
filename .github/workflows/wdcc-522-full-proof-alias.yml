@@ -1,0 +1,186 @@
+name: WDCC 522 Alias Full Proof
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-full-proof-alias.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-522-alias-full-proof
+  cancel-in-progress: true
+
+env:
+  FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+  WDCC_GATE_SCORER_SHA256: 77153296fbdadf7e17dffd0c44e44783504e0f35b5ca8b23c6d061b3789af25a
+  WDCC_GATE_FINGERPRINTS_SHA256: 87dcb891d40d7f396eb583a331d999bb8c92dab93bb2b2ea13c32b62e27a7065
+  WDCC_GATE_MEDIA_EVIDENCE_SHA256: 246e7ad3b790d3cacec9ed0008bf5d665d758aeec4155d9cd5057282f008de68
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prove exact frozen ancestor and acceptance contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$FROZEN_CANDIDATE_SHA" HEAD
+          test "$(sha256sum .github/support/wdcc-mockup-95-score.mjs | awk '{print $1}')" = "$WDCC_GATE_SCORER_SHA256"
+          test "$(sha256sum .github/support/wdcc-mockup-fingerprints.mjs | awk '{print $1}')" = "$WDCC_GATE_FINGERPRINTS_SHA256"
+          test "$(sha256sum .github/support/wdcc-dealer-media-evidence.mjs | awk '{print $1}')" = "$WDCC_GATE_MEDIA_EVIDENCE_SHA256"
+          echo "FROZEN_CANDIDATE_SHA=$FROZEN_CANDIDATE_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build exact frozen candidate payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive "$FROZEN_CANDIDATE_SHA" | tar -x -C /tmp/wdcc-frozen
+        env:
+          TMPDIR: /tmp
+      - name: Build candidate in isolated directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0 playwright@1.55.0 yaml
+          node --test .github/support/wdcc-dealer-media-evidence.test.mjs
+          node .github/support/wdcc-mockup-95-score.mjs --self-test
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Create exact-SHA no-route config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          node - <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));
+          c.name=`wdcc-v2-${process.env.FROZEN_CANDIDATE_SHA.slice(0,12)}-proof`;
+          c.workers_dev=true;
+          c.preview_urls=true;
+          c.vars={...(c.vars||{}),WDCC_MOCKUP_PREVIEW:'1'};
+          delete c.route; delete c.routes;
+          fs.writeFileSync('wrangler.corrected.jsonc',JSON.stringify(c,null,2)+'\n');
+          NODE
+          ! grep -qi 'wedontcarecars.com' wrangler.corrected.jsonc
+      - name: Upload immutable version with supported preview alias
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          alias="proof883f"
+          export WRANGLER_OUTPUT_FILE_PATH=/tmp/wrangler-version-upload.ndjson
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
+          npx wrangler versions upload --config wrangler.corrected.jsonc --preview-alias "$alias" 2>&1 | tee /tmp/versions-upload.log
+          test -s "$WRANGLER_OUTPUT_FILE_PATH"
+          version_record="$(jq -cs '[.[] | select(.type=="version-upload" and .version==1)][0]' "$WRANGLER_OUTPUT_FILE_PATH")"
+          version_id="$(jq -r '.version_id // empty' <<<"$version_record")"
+          worker_name="$(jq -r '.worker_name // empty' <<<"$version_record")"
+          test -n "$version_id"; test -n "$worker_name"
+          expected_worker="wdcc-v2-${FROZEN_CANDIDATE_SHA:0:12}-proof"
+          test "$worker_name" = "$expected_worker"
+          sub_json="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          subdomain="$(jq -r '.result.subdomain // empty' <<<"$sub_json")"
+          test -n "$subdomain"
+          url="https://${alias}-${worker_name}.${subdomain}.workers.dev"
+          code=000
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -L -o /tmp/preview-probe -w '%{http_code}' "$url/?preview-probe=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          [ "$code" = 200 ]
+          {
+            echo "url=$url"
+            echo "version_id=$version_id"
+            echo "version_prefix=$alias"
+            echo "worker_name=$worker_name"
+          } >> "$GITHUB_OUTPUT"
+          cp /tmp/wdcc-frozen/.next/BUILD_ID /tmp/frozen-BUILD_ID
+          printf '%s\n' "$url" > /tmp/mockup-v2-preview-url.txt
+          printf 'upload_mode=wrangler-versions-upload-not-deployed\nurl_resolution=cloudflare-preview-alias\nurl=%s\nworker_name=%s\npreview_alias=%s\ncloudflare_version_id=%s\nfrozen_sha=%s\n' "$url" "$worker_name" "$alias" "$version_id" "$FROZEN_CANDIDATE_SHA" > /tmp/mockup-v2-preview-version.txt
+          echo 'PRODUCTION_DEPLOYED=NO'
+          echo 'ROUTES_CHANGED=NO'
+      - name: Extract frozen acceptance steps verbatim
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import YAML from 'yaml';
+          const doc=YAML.parse(fs.readFileSync('.github/workflows/wdcc-mockup-convergence-v2-proof.yml','utf8'));
+          const steps=doc.jobs.proof.steps;
+          for (const [name,file] of [
+            ['Prove remote build identity','/tmp/remote.sh'],
+            ['Render owner-board proof and fail on regressions','/tmp/render.sh'],
+            ['Enforce objective 95/100 mockup score','/tmp/score.sh']
+          ]) {
+            const step=steps.find(s=>s.name===name);
+            if(!step?.run) throw new Error(`missing frozen step: ${name}`);
+            fs.writeFileSync(file,step.run+'\n',{mode:0o700});
+          }
+          NODE
+      - name: Prove remote build identity using frozen contract
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.upload.outputs.url }}
+          CLOUDFLARE_VERSION_ID: ${{ steps.upload.outputs.version_id }}
+          CLOUDFLARE_VERSION_PREFIX: ${{ steps.upload.outputs.version_prefix }}
+          CLOUDFLARE_WORKER_NAME: ${{ steps.upload.outputs.worker_name }}
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          GITHUB_SHA="$FROZEN_CANDIDATE_SHA" bash /tmp/remote.sh
+      - name: Render owner-board proof using frozen contract
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.upload.outputs.url }}
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          GITHUB_SHA="$FROZEN_CANDIDATE_SHA" bash /tmp/render.sh
+      - name: Enforce frozen objective 95/100 gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-frozen
+          GITHUB_SHA="$FROZEN_CANDIDATE_SHA" bash /tmp/score.sh
+      - name: Stage proof artifacts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p proof-artifacts
+          cp -r /tmp/wdcc-frozen/mockup-v2-proof proof-artifacts/ 2>/dev/null || true
+          cp /tmp/wdcc-frozen/mockup-v2-integrity.txt proof-artifacts/ 2>/dev/null || true
+          cp /tmp/wdcc-frozen/mockup-v2-score.json proof-artifacts/ 2>/dev/null || true
+          cp /tmp/mockup-v2-preview-url.txt proof-artifacts/ 2>/dev/null || true
+          cp /tmp/mockup-v2-preview-version.txt proof-artifacts/ 2>/dev/null || true
+          echo "FROZEN_CANDIDATE_SHA=$FROZEN_CANDIDATE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "PRODUCTION_DEPLOYED=NO" >> "$GITHUB_STEP_SUMMARY"
+          echo "ROUTES_CHANGED=NO" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-522-alias-proof-${{ github.sha }}
+          path: proof-artifacts
+          if-no-files-found: warn
