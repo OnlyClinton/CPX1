@@ -1,8 +1,9 @@
 name: WDCC Live Email Closeout Proof
 
 on:
-  push:
-    branches: [proof/wdcc-live-email-closeout-20260829]
+  pull_request:
+    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
+    types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/wdcc-live-email-closeout-proof.yml'
   workflow_dispatch:
@@ -30,14 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          ref: proof/wdcc-live-email-closeout-20260829
+          fetch-depth: 0
 
       - name: Prove workflow-only lineage
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$FROZEN_CANDIDATE_SHA"
-          changed="$(git diff --name-only HEAD^ HEAD)"
+          git cat-file -e "$FROZEN_CANDIDATE_SHA^{commit}"
+          changed="$(git diff --name-only "$FROZEN_CANDIDATE_SHA" HEAD)"
           test "$changed" = '.github/workflows/wdcc-live-email-closeout-proof.yml'
           echo "FROZEN_CANDIDATE_SHA=$FROZEN_CANDIDATE_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo 'CANDIDATE_CODE_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
@@ -87,7 +89,6 @@ jobs:
             console.error('Configured WDCC From identity is not on wedontcarecars.com.');
             process.exit(3);
           }
-          console.log(`from=${from}`);
           NODE
 
           from_value="$(node -e 'process.stdout.write(String(process.env.WDCC_LEAD_FROM_EMAIL||""))')"
