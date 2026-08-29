@@ -37,6 +37,7 @@ jobs:
           test -s app/wdcc-owner-board-final.css
           test -s app/wdcc-round-header-contract.css
           test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           grep -Fq 'wdcc-owner-board-final.css' app/layout.tsx
           grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
@@ -52,6 +53,7 @@ jobs:
           grep -Fq '51076' app/wdcc-round-header-contract.css
           grep -Fq '51522' app/wdcc-round-header-contract.css
           grep -Fq '51073' app/wdcc-round-header-contract.css
+          grep -Fq 'Vehicles ready now.' app/ReferenceCloneHome.tsx
           grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
@@ -132,7 +134,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           test -s owner-board-proof/result.json
           node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
