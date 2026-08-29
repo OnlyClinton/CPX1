@@ -158,3 +158,5 @@ jobs:
             echo '- Existing unrelated DNS: preserved'
             echo '- Site routes/deployments: untouched'
           } >> "$GITHUB_STEP_SUMMARY"
+
+# retrigger: 2026-08-29T03:45:00-04:00
