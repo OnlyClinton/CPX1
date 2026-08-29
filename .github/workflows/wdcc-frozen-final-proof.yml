@@ -46,8 +46,10 @@ jobs:
           test -s .github/support/wdcc-final-brand-proof.mjs
           test -s .github/support/wdcc-polished-visual-proof.mjs
           test -s .github/support/wdcc-intro-motion-proof.mjs
-          grep -Fq 'li-wheel-front' app/LockedIntro.tsx
-          grep -Fq -- '--li-spin' app/LockedIntro.tsx
+          grep -Fq 'type Phase="show"|"move"|"handoff"|"exit"|"done"' app/LockedIntro.tsx
+          grep -Fq 'data-wdcc-intro-phase={phase}' app/LockedIntro.tsx
+          grep -Fq 'li-handoff' app/LockedIntro.tsx
+          grep -Fq 'scale(1.13)' app/LockedIntro.tsx
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
       - name: Build exact candidate
