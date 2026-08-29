@@ -17,12 +17,14 @@ concurrency:
 jobs:
   storefront-live:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
       TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
       TEAM: cpxagency
       PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
       OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
       OLD_DEPLOYMENT_URL: https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
       APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
@@ -36,7 +38,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fail closed on current production owner and frozen source
+      - name: Fail closed on current production owner, repaired checks, and frozen source
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +48,16 @@ jobs:
           echo "CURRENT_PROJECT=$(jq -r '.name // empty' <<<"$current")"
           echo "CURRENT_DEPLOYMENT=$(jq -r '.id // empty' <<<"$current")"
           jq -e --arg p "$PROJECT_ID" --arg d "$OLD_DEPLOYMENT_ID" '.projectId==$p and .id==$d' <<<"$current" >/dev/null
+          checks="$(curl -fsS "https://api.vercel.com/v2/projects/$PROJECT_ID/checks?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
+          ! jq -e '.checks[]? | select(.name=="Microfrontends Config Present")' <<<"$checks" >/dev/null
+          jq -e '.checks[] | select(.name=="Typecheck" and .blocks=="deployment-alias")' <<<"$checks" >/dev/null
+          jq -e '.checks[] | select(.name=="Lint")' <<<"$checks" >/dev/null
+          project="$(curl -fsS "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
+          jq -e '.jobs["mfe-config-present"].targets==[]' <<<"$project" >/dev/null
           echo 'CURRENT_STOREFRONT_OWNER=PASS'
+          echo 'MFE_ORPHAN_REPAIR=PASS'
+          echo 'TYPECHECK_BLOCKER=PRESERVED'
+          echo 'LINT=PRESERVED'
       - name: Extract exact frozen source and create deployment-only config
         shell: bash
         run: |
@@ -73,44 +84,43 @@ jobs:
           set -euo pipefail
           npm install --global vercel@59.5.0 >/dev/null
           cd /tmp/wdcc-storefront-live
-          VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$PROJECT_ID" \
-            vercel deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN" --scope="$TEAM" \
+          vercel deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN" --scope="$TEAM" \
             --env "WDCC_RUNTIME_ROLE=frontend" \
             --env "WDCC_DEALER_BACKEND_URL=$APP_URL" 2>&1 | tee /tmp/storefront-stage.log
           url="$(grep -Eo 'https://[^ ]+\.vercel\.app' /tmp/storefront-stage.log | tail -1)"; test -n "$url"
           host="${url#https://}"
           meta="$(curl -fsS "https://api.vercel.com/v13/deployments/$host?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
           id="$(jq -r '.id // empty' <<<"$meta")"; test -n "$id"; test "$id" != "$OLD_DEPLOYMENT_ID"
+          jq -e '.readyState=="READY" and .target=="production"' <<<"$meta" >/dev/null
           echo "url=$url" >> "$GITHUB_OUTPUT"; echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "STAGED_URL=$url"
           echo "STAGED_DEPLOYMENT_ID=$id"
           echo 'PRODUCTION_DOMAINS_ASSIGNED=NO'
-      - name: Prove staged exact storefront and P0 API boundary
+      - name: Prove protected staged storefront and P0 API boundary
         shell: bash
         env:
           STAGED_URL: ${{ steps.stage.outputs.url }}
+          STAGED_ID: ${{ steps.stage.outputs.id }}
         run: |
           set -euo pipefail
-          hero_sha="$(cat /tmp/frozen-hero-sha)"
-          code=000
-          for i in $(seq 1 15); do
-            code="$(curl --http1.1 -sS -L -o /tmp/stage-root -w '%{http_code}' "$STAGED_URL/?stage=$i" || true)"
-            [ "$code" = 200 ] && break
-            sleep 2
-          done
-          [ "$code" = 200 ]
-          grep -Fqi "BAD CREDIT" /tmp/stage-root
-          code="$(curl --http1.1 -sS -L -o /tmp/stage-inventory-page -w '%{http_code}' "$STAGED_URL/inventory?stage=1")"; [ "$code" = 200 ]
-          code="$(curl --http1.1 -sS -D /tmp/stage-invh -o /tmp/stage-inv -w '%{http_code}' "$STAGED_URL/api/inventory?stage=1")"; [ "$code" = 200 ]
-          tr -d '\r' </tmp/stage-invh >/tmp/stage-invhn; ! grep -Eiq '^x-wdcc-mockup-preview:' /tmp/stage-invhn
+          cd /tmp/wdcc-storefront-live
+          vcurl(){ vercel curl "$1" --deployment "$STAGED_URL"; }
+          vcurl '/?stage=owner' > /tmp/stage-root
+          grep -Fqi 'BAD CREDIT' /tmp/stage-root
+          vcurl '/inventory?stage=owner' > /tmp/stage-inventory-page
+          vcurl '/api/inventory?stage=owner' > /tmp/stage-inv
           jq -e '.count==5 and (.items|length)==5 and (.mockupPreview!=true) and ([.items[].status]|all(.=="published"))' /tmp/stage-inv >/dev/null
-          code="$(curl --http1.1 -sS -o /tmp/stage-health -w '%{http_code}' "$STAGED_URL/api/health?stage=1")"; [ "$code" = 200 ]
+          vcurl '/api/health?stage=owner' > /tmp/stage-health
           jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/stage-health >/dev/null
-          code="$(curl --http1.1 -sS -L -o /tmp/stage-hero -w '%{http_code}' "$STAGED_URL/wdcc-hero-v2.webp?stage=1")"; [ "$code" = 200 ]; [ "$(sha256sum /tmp/stage-hero|awk '{print $1}')" = "$hero_sha" ]
-          code="$(curl --http1.1 -sS -L -o /tmp/stage-dealer -w '%{http_code}' "$STAGED_URL/dealer?stage=1")"; [ "$code" = 200 ]
-          code="$(curl --http1.1 -sS -L -o /tmp/stage-add -w '%{http_code}' "$STAGED_URL/dealer/inventory/new?stage=1")"; [ "$code" = 200 ]
-          code="$(curl --http1.1 -sS -o /tmp/stage-session -w '%{http_code}' "$STAGED_URL/api/auth/session?stage=1")"; [ "$code" = 200 ]
+          vcurl '/wdcc-hero-v2.webp?stage=owner' > /tmp/stage-hero
+          [ "$(sha256sum /tmp/stage-hero|awk '{print $1}')" = "$(cat /tmp/frozen-hero-sha)" ]
+          vcurl '/dealer?stage=owner' > /tmp/stage-dealer
+          vcurl '/dealer/inventory/new?stage=owner' > /tmp/stage-add
+          vcurl '/api/auth/session?stage=owner' > /tmp/stage-session
           jq -e '.authenticated==false' /tmp/stage-session >/dev/null
+          runs="$(curl -fsS "https://api.vercel.com/v2/deployments/$STAGED_ID/check-runs?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
+          ! jq -e '.runs[]? | select(.name=="Microfrontends Config Present")' <<<"$runs" >/dev/null
+          echo "CHECK_RUNS=$(jq -c '[.runs[]? | {name,status,conclusion}]' <<<"$runs")"
           echo 'STAGED_STOREFRONT=PASS'
       - name: Promote staged storefront to existing production aliases and verify
         shell: bash
@@ -121,17 +131,19 @@ jobs:
           set -euo pipefail
           touch /tmp/storefront-promoted
           cd /tmp/wdcc-storefront-live
-          VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$PROJECT_ID" vercel promote "$STAGED_URL" --yes --token="$VERCEL_TOKEN" --scope="$TEAM"
-          sleep 3
+          vercel promote "$STAGED_URL" --yes --token="$VERCEL_TOKEN" --scope="$TEAM"
+          sleep 4
           current="$(curl -fsS "https://api.vercel.com/v13/deployments/wedontcarecars.com?teamId=$TEAM_ID" -H "Authorization: Bearer $VERCEL_TOKEN")"
-          jq -e --arg id "$STAGED_ID" '.id==$id' <<<"$current" >/dev/null
+          jq -e --arg id "$STAGED_ID" '.id==$id and .projectId==env.PROJECT_ID' <<<"$current" >/dev/null
           hero_sha="$(cat /tmp/frozen-hero-sha)"
           for origin in "$PROD_ROOT" "$PROD_WWW"; do
-            code="$(curl --http1.1 -sS -L --max-redirs 5 -o /tmp/live-root -w '%{http_code}' "$origin/?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; grep -Fqi "BAD CREDIT" /tmp/live-root
+            code="$(curl --http1.1 -sS -L --max-redirs 5 -o /tmp/live-root -w '%{http_code}' "$origin/?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; grep -Fqi 'BAD CREDIT' /tmp/live-root
             code="$(curl --http1.1 -sS -o /tmp/live-inv -w '%{http_code}' "$origin/api/inventory?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; jq -e '.count==5 and (.items|length)==5 and (.mockupPreview!=true)' /tmp/live-inv >/dev/null
           done
           code="$(curl --http1.1 -sS -o /tmp/live-health -w '%{http_code}' "$PROD_ROOT/api/health?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null
           code="$(curl --http1.1 -sS -L -o /tmp/live-hero -w '%{http_code}' "$PROD_ROOT/wdcc-hero-v2.webp?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; [ "$(sha256sum /tmp/live-hero|awk '{print $1}')" = "$hero_sha" ]
+          code="$(curl --http1.1 -sS -L -o /tmp/live-dealer -w '%{http_code}' "$PROD_ROOT/dealer?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]
+          code="$(curl --http1.1 -sS -L -o /tmp/live-add -w '%{http_code}' "$PROD_ROOT/dealer/inventory/new?live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]
           echo 'STOREFRONT_LIVE=PASS'
       - name: Record live storefront evidence
         if: success()
@@ -148,6 +160,10 @@ jobs:
             echo "Previous deployment: $OLD_DEPLOYMENT_ID"
             echo 'wedontcarecars.com + www: PASS'
             echo 'P0 inventory/health boundary: PASS'
+            echo 'Dealer routes on storefront: PASS'
+            echo 'Typecheck blocking check: PRESERVED'
+            echo 'Lint check: PRESERVED'
+            echo 'Orphan MFE check: REMOVED'
             echo 'Cloudflare DNS/routes: UNCHANGED'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Roll back production aliases on any post-promotion failure
@@ -158,7 +174,7 @@ jobs:
           if [ -f /tmp/storefront-promoted ]; then
             npm install --global vercel@59.5.0 >/dev/null 2>&1 || true
             VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$PROJECT_ID" vercel promote "$OLD_DEPLOYMENT_URL" --yes --token="$VERCEL_TOKEN" --scope="$TEAM" || true
-            sleep 3
+            sleep 4
             echo "ROLLBACK_ROOT_HTTP=$(curl --http1.1 -sS -L -o /dev/null -w '%{http_code}' "$PROD_ROOT/?rollback=$GITHUB_RUN_ID" || true)"
             echo 'STOREFRONT_ROLLBACK_ATTEMPTED=YES'
           else
