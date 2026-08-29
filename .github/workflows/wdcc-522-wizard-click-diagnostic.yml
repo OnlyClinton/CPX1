@@ -1,0 +1,64 @@
+name: WDCC 522 Wizard Click Diagnostic
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-wizard-click-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      REMOTE_URL: https://proof883f-wdcc-v2-883f211f345f-proof.clico-global.workers.dev
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect wizard state before and after Photos click
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"; cd "$work"
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1440,height:1200}});
+          const session={authenticated:true,user:{id:'visual-proof',username:'Dealer',role:'dealer'}};
+          await page.route('**/api/auth/session**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session)}));
+          const errors=[];
+          page.on('pageerror',e=>errors.push(String(e)));
+          page.on('console',m=>{if(m.type()==='error')errors.push(`console:${m.text()}`)});
+          const response=await page.goto(`${process.env.REMOTE_URL}/dealer/inventory/new?visual-proof=diag`,{waitUntil:'networkidle',timeout:30000});
+          console.log(`HTTP=${response?.status()}`);
+          const app=page.locator('.editVehicleApp');
+          await app.waitFor({state:'visible',timeout:10000});
+          console.log(`CLASS_BEFORE=${await app.getAttribute('class')}`);
+          console.log(`STEPPER_COUNT=${await page.locator('.stepper > button').count()}`);
+          console.log(`PHOTOS_COUNT_BEFORE=${await page.locator('[data-wizard-stage="photos"]').count()}`);
+          const photosButton=page.locator('.stepper > button').nth(2);
+          console.log(`BUTTON_TEXT=${await photosButton.innerText()}`);
+          console.log(`BUTTON_VISIBLE=${await photosButton.isVisible()} ENABLED=${await photosButton.isEnabled()}`);
+          await photosButton.click({timeout:10000});
+          await page.waitForTimeout(500);
+          console.log(`CLASS_AFTER=${await app.getAttribute('class')}`);
+          console.log(`PHOTOS_COUNT_AFTER=${await page.locator('[data-wizard-stage="photos"]').count()}`);
+          console.log(`PHOTOS_VISIBLE_AFTER=${await page.locator('[data-wizard-stage="photos"]').isVisible().catch(()=>false)}`);
+          console.log(`ERRORS=${JSON.stringify(errors.slice(0,10))}`);
+          await page.screenshot({path:'/tmp/wizard-after.png',fullPage:true});
+          await browser.close();
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-522-wizard-click-diagnostic
+          path: /tmp/wizard-after.png
+          if-no-files-found: warn
