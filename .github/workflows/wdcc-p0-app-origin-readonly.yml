@@ -1,0 +1,28 @@
+name: WDCC P0 App Origin Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-p0-app-origin-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect trusted origin and route strings only
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-proof-04c5d526" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /tmp/app.raw
+          echo "SHA256=$(sha256sum /tmp/app.raw|awk '{print $1}') BYTES=$(wc -c </tmp/app.raw)"
+          strings /tmp/app.raw | grep -Ei 'wedontcarecars\.com|origin|/api/(lead|inventory|auth|upload|media)|trusted|cors' | head -n 220 || true
+          echo 'READ_ONLY=YES'
