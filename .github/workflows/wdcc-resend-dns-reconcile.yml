@@ -51,23 +51,27 @@ jobs:
           cf_get TXT "$SEND_NAME" send-txt.json
           cf_get MX "$SEND_NAME" send-mx.json
 
-          dkim_exact="$(jq --arg v "$DKIM_VALUE" '[.result[] | select(.content == $v)] | length' dkim.json)"
-          dkim_other="$(jq --arg v "$DKIM_VALUE" '[.result[] | select(.content != $v)] | length' dkim.json)"
-          spf_exact="$(jq --arg v "$SPF_VALUE" '[.result[] | select(.content == $v)] | length' send-txt.json)"
-          spf_other="$(jq --arg v "$SPF_VALUE" '[.result[] | select((.content | startswith("v=spf1")) and .content != $v)] | length' send-txt.json)"
+          jq_norm='def normtxt: gsub("^\\\"";"") | gsub("\\\"$";"") | gsub("\\\"[[:space:]]*\\\"";"");'
+          dkim_exact="$(jq --arg v "$DKIM_VALUE" "$jq_norm [.result[] | select((.content|normtxt) == ($v|normtxt))] | length" dkim.json)"
+          dkim_other="$(jq --arg v "$DKIM_VALUE" "$jq_norm [.result[] | select((.content|normtxt) != ($v|normtxt))] | length" dkim.json)"
+          spf_exact="$(jq --arg v "$SPF_VALUE" "$jq_norm [.result[] | select((.content|normtxt) == ($v|normtxt))] | length" send-txt.json)"
+          spf_other="$(jq --arg v "$SPF_VALUE" "$jq_norm [.result[] | select(((.content|normtxt) | startswith(\"v=spf1\")) and ((.content|normtxt) != ($v|normtxt)))] | length" send-txt.json)"
           mx_exact="$(jq --arg v "$MX_VALUE" '[.result[] | select((.content | ascii_downcase) == ($v | ascii_downcase) and (.priority // 0) == 10)] | length' send-mx.json)"
           mx_other="$(jq --arg v "$MX_VALUE" '[.result[] | select(((.content | ascii_downcase) != ($v | ascii_downcase)) or ((.priority // 0) != 10))] | length' send-mx.json)"
 
           if [ "$dkim_other" -gt 0 ]; then
             echo 'CONFLICT_DKIM=YES' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.result[] | "EXISTING_DKIM_ID=\(.id) EXISTING_DKIM_CONTENT=\(.content)"' dkim.json >&2
             exit 31
           fi
           if [ "$spf_other" -gt 0 ]; then
             echo 'CONFLICT_SPF_AT_SEND=YES' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.result[] | select(.content|startswith("v=spf1")) | "EXISTING_SPF_ID=\(.id) EXISTING_SPF_CONTENT=\(.content)"' send-txt.json >&2
             exit 32
           fi
           if [ "$mx_other" -gt 0 ]; then
             echo 'CONFLICT_MX_AT_SEND=YES' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.result[] | "EXISTING_MX_ID=\(.id) EXISTING_MX=\(.priority) \(.content)"' send-mx.json >&2
             exit 33
           fi
 
