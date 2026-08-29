@@ -32,6 +32,22 @@ html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.br
   transform:none!important;
   filter:drop-shadow(0 2px 5px rgba(0,0,0,.28))!important;
 }
+
+/* Dealer operational canvas is light inside the dark shell. Late legacy rules had
+   turned the canvas dark while leaving the Dashboard title dark, making it unreadable. */
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcContent.dashboardContent{
+  background:#f6f7f9!important;
+  color:#172129!important;
+}
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcContent.dashboardContent>.dcTitle h1{
+  color:#111820!important;
+  opacity:1!important;
+  text-shadow:none!important;
+}
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcContent.dashboardContent>.dcTitle p{
+  color:#68747e!important;
+}
+
 @media(max-width:760px){
   html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand,
   html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand{
@@ -47,5 +63,8 @@ html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.br
     min-height:42px!important;
     max-width:42px!important;
     max-height:42px!important;
+  }
+  html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked .dcShell>.dcContent.dashboardContent{
+    background:#f6f7f9!important;
   }
 }
