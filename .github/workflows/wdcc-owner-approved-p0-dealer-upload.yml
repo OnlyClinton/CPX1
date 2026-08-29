@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: fd342ce9258c0479936e10854efc068378be8864
+  P0_SHA: 4c7899bafe6174863837888d9229d006ae2e5280
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-FD342CE9-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-4C7899BA-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -83,6 +83,8 @@ jobs:
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' lib/auth.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
+          grep -Fq 'export async function setSession(user:User)' lib/auth.ts
+          ! grep -Fq 'export function setSession(user:User)' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
           ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
