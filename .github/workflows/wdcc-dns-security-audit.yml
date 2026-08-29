@@ -1,0 +1,75 @@
+name: WDCC DNS Security Audit
+
+on:
+  push:
+    branches:
+      - ops/resend-dns-verify-20260829
+    paths:
+      - '.github/workflows/wdcc-dns-security-audit.yml'
+
+permissions:
+  contents: read
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+    steps:
+      - name: Read live zone DNS and DNSSEC
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+          auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "$CF_API/zones/$ZONE_ID" "${auth[@]}" > zone.json
+          jq -e '.success==true and .result.name=="wedontcarecars.com"' zone.json >/dev/null
+          curl -fsS "$CF_API/zones/$ZONE_ID/dns_records?per_page=500" "${auth[@]}" > dns.json
+          jq -e '.success==true' dns.json >/dev/null
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" "${auth[@]}" > dnssec.json || true
+
+      - name: Emit mail and hardening inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          norm='def n: if type=="string" then sub("^\\\"";"")|sub("\\\"$";"") else . end;'
+          {
+            echo '### WDCC live DNS security audit'
+            echo ''
+            echo '#### Zone'
+            jq -r '.result | "status=\(.status) nameservers=\(.name_servers|join(","))"' zone.json
+            if jq -e '.success==true' dnssec.json >/dev/null 2>&1; then
+              jq -r '.result | "dnssec_status=\(.status) algorithm=\(.algorithm // "-") digest_type=\(.digest_type // "-")"' dnssec.json
+            else
+              echo 'dnssec_status=UNREADABLE'
+            fi
+            echo ''
+            echo '#### Apex MX'
+            jq -r '.result[] | select(.type=="MX" and .name=="wedontcarecars.com") | "MX \(.name) priority=\(.priority) -> \(.content) ttl=\(.ttl)"' dns.json
+            echo ''
+            echo '#### Apex SPF / Proton verification'
+            jq -r "$norm .result[] | select(.type==\"TXT\" and .name==\"wedontcarecars.com\") | (.content|n) as \$c | select((\$c|startswith(\"v=spf1\")) or (\$c|contains(\"protonmail-verification\"))) | \"TXT \(.name) -> \\(\$c) ttl=\(.ttl)\"" dns.json
+            echo ''
+            echo '#### Proton DKIM selectors'
+            jq -r '.result[] | select(.name=="protonmail._domainkey.wedontcarecars.com" or .name=="protonmail2._domainkey.wedontcarecars.com" or .name=="protonmail3._domainkey.wedontcarecars.com") | "\(.type) \(.name) -> \(.content) ttl=\(.ttl) proxied=\(.proxied // false)"' dns.json
+            echo ''
+            echo '#### DMARC'
+            jq -r "$norm .result[] | select(.type==\"TXT\" and .name==\"_dmarc.wedontcarecars.com\") | (.content|n) as \$c | \"TXT \(.name) -> \\(\$c) ttl=\(.ttl)\"" dns.json
+            echo ''
+            echo '#### Resend isolated sending subdomain'
+            jq -r "$norm .result[] | select(.name==\"send.wedontcarecars.com\" or .name==\"resend._domainkey.wedontcarecars.com\") | (.content|n) as \$c | \"\(.type) \(.name) priority=\(.priority // \"-\") -> \\(\$c) ttl=\(.ttl)\"" dns.json
+            echo ''
+            echo '#### CAA'
+            jq -r '.result[] | select(.type=="CAA") | "CAA \(.name) flags=\(.data.flags // "-") tag=\(.data.tag // "-") value=\(.data.value // .content) ttl=\(.ttl)"' dns.json
+            echo ''
+            echo '#### Transport-reporting records'
+            jq -r "$norm .result[] | select(.name==\"_mta-sts.wedontcarecars.com\" or .name==\"_smtp._tls.wedontcarecars.com\" or .name==\"mta-sts.wedontcarecars.com\") | (.content|n) as \$c | \"\(.type) \(.name) -> \\(\$c) ttl=\(.ttl) proxied=\(.proxied // false)\"" dns.json
+            echo ''
+            echo '#### Wildcards'
+            jq -r '.result[] | select(.name|startswith("*.")) | "\(.type) \(.name) -> \(.content) ttl=\(.ttl) proxied=\(.proxied // false)"' dns.json
+          } | tee audit.txt >> "$GITHUB_STEP_SUMMARY"
