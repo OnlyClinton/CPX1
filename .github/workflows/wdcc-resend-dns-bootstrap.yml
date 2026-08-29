@@ -74,12 +74,7 @@ jobs:
             exit 23
           fi
 
-          if jq -e '.result[] | select(.type == "A" or .type == "AAAA")' send-before.json >/dev/null; then
-            echo "WARNING: A/AAAA also exists at $SEND_NAME; preserving it because it can coexist with MX/TXT."
-            jq -r '.result[] | select(.type == "A" or .type == "AAAA") | [.type,.name,.content] | @tsv' send-before.json
-          fi
-
-      - name: Create only missing exact Resend records
+      - name: Ensure exact records with Auto TTL
         shell: bash
         run: |
           set -euo pipefail
@@ -87,33 +82,56 @@ jobs:
 
           create_record() {
             local payload="$1"
-            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
-              --data "$payload" > create.json
-            jq -e '.success==true' create.json >/dev/null
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" --data "$payload" > write.json
+            jq -e '.success==true' write.json >/dev/null
           }
 
-          if ! jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v))' dkim-before.json >/dev/null; then
-            payload="$(jq -nc --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
-            create_record "$payload"
-            echo "CREATED_DKIM=1" >> "$GITHUB_ENV"
+          patch_record() {
+            local id="$1" payload="$2"
+            curl -fsS -X PATCH "$CF_API/zones/$ZONE_ID/dns_records/$id" "${auth[@]}" --data "$payload" > write.json
+            jq -e '.success==true' write.json >/dev/null
+          }
+
+          dkim_id="$(jq -r --arg v "$DKIM_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v)) | .id' dkim-before.json | head -n1)"
+          if [ -z "$dkim_id" ]; then
+            create_record "$(jq -nc --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+            echo "DKIM_ACTION=created" >> "$GITHUB_ENV"
           else
-            echo "CREATED_DKIM=0" >> "$GITHUB_ENV"
+            dkim_ttl="$(jq -r --arg id "$dkim_id" '.result[] | select(.id==$id) | .ttl' dkim-before.json)"
+            if [ "$dkim_ttl" != "1" ]; then
+              patch_record "$dkim_id" "$(jq -nc --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+              echo "DKIM_ACTION=ttl-normalized" >> "$GITHUB_ENV"
+            else
+              echo "DKIM_ACTION=unchanged" >> "$GITHUB_ENV"
+            fi
           fi
 
-          if ! jq -e --arg v "$SEND_MX_VALUE" '.result[] | select(.type=="MX" and .content==$v and .priority==10)' send-before.json >/dev/null; then
-            payload="$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_MX_VALUE" '{type:"MX",name:$name,content:$content,ttl:1,priority:10}')"
-            create_record "$payload"
-            echo "CREATED_MX=1" >> "$GITHUB_ENV"
+          mx_id="$(jq -r --arg v "$SEND_MX_VALUE" '.result[] | select(.type=="MX" and .content==$v and .priority==10) | .id' send-before.json | head -n1)"
+          if [ -z "$mx_id" ]; then
+            create_record "$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_MX_VALUE" '{type:"MX",name:$name,content:$content,ttl:1,priority:10}')"
+            echo "MX_ACTION=created" >> "$GITHUB_ENV"
           else
-            echo "CREATED_MX=0" >> "$GITHUB_ENV"
+            mx_ttl="$(jq -r --arg id "$mx_id" '.result[] | select(.id==$id) | .ttl' send-before.json)"
+            if [ "$mx_ttl" != "1" ]; then
+              patch_record "$mx_id" "$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_MX_VALUE" '{type:"MX",name:$name,content:$content,ttl:1,priority:10}')"
+              echo "MX_ACTION=ttl-normalized" >> "$GITHUB_ENV"
+            else
+              echo "MX_ACTION=unchanged" >> "$GITHUB_ENV"
+            fi
           fi
 
-          if ! jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v))' send-before.json >/dev/null; then
-            payload="$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
-            create_record "$payload"
-            echo "CREATED_SPF=1" >> "$GITHUB_ENV"
+          spf_id="$(jq -r --arg v "$SEND_SPF_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v)) | .id' send-before.json | head -n1)"
+          if [ -z "$spf_id" ]; then
+            create_record "$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+            echo "SPF_ACTION=created" >> "$GITHUB_ENV"
           else
-            echo "CREATED_SPF=0" >> "$GITHUB_ENV"
+            spf_ttl="$(jq -r --arg id "$spf_id" '.result[] | select(.id==$id) | .ttl' send-before.json)"
+            if [ "$spf_ttl" != "1" ]; then
+              patch_record "$spf_id" "$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+              echo "SPF_ACTION=ttl-normalized" >> "$GITHUB_ENV"
+            else
+              echo "SPF_ACTION=unchanged" >> "$GITHUB_ENV"
+            fi
           fi
 
       - name: Verify exact Cloudflare state
@@ -122,10 +140,8 @@ jobs:
           set -euo pipefail
           auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
 
-          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
-            --data-urlencode "name=$DKIM_NAME" > dkim-after.json
-          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
-            --data-urlencode "name=$SEND_NAME" > send-after.json
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" --data-urlencode "name=$DKIM_NAME" > dkim-after.json
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" --data-urlencode "name=$SEND_NAME" > send-after.json
 
           jq -e --arg v "$DKIM_VALUE" '.success==true and any(.result[]; .type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v) and .ttl==1)' dkim-after.json >/dev/null
           jq -e --arg v "$SEND_MX_VALUE" '.success==true and any(.result[]; .type=="MX" and .content==$v and .priority==10 and .ttl==1)' send-after.json >/dev/null
@@ -134,10 +150,11 @@ jobs:
           {
             echo '### WDCC Resend DNS bootstrap'
             echo ''
-            echo "- DKIM exact: PASS (created=${CREATED_DKIM:-0})"
-            echo "- send MX exact, priority 10: PASS (created=${CREATED_MX:-0})"
-            echo "- send SPF exact: PASS (created=${CREATED_SPF:-0})"
-            echo '- TTL: Auto (Cloudflare API ttl=1)'
+            echo "- DKIM: PASS (${DKIM_ACTION:-unknown})"
+            echo "- send MX priority 10: PASS (${MX_ACTION:-unknown})"
+            echo "- send SPF: PASS (${SPF_ACTION:-unknown})"
+            echo '- TTL: Auto on all three records'
+            echo '- Conflicting records: none detected at target labels'
             echo '- Existing unrelated DNS: preserved'
             echo '- Site routes/deployments: untouched'
           } >> "$GITHUB_STEP_SUMMARY"
