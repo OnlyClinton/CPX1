@@ -1,0 +1,60 @@
+name: WDCC 95 Preview Deploy
+
+on:
+  push:
+    branches:
+      - release/wdcc-2vfd-cinematic-95-preview-20260829
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require preview authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          test "$GITHUB_REF_NAME" = "release/wdcc-2vfd-cinematic-95-preview-20260829"
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+      - name: Link exact storefront project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull preview environment
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+      - name: Build preview
+        run: vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+      - name: Deploy immutable preview only
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_STEP_SUMMARY"
+          echo "EXACT_SHA=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "PRODUCTION_ALIAS_WRITE=NONE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke exact preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$PREVIEW_URL" > /tmp/home.html
+          grep -qi "we don.t care" /tmp/home.html
+          grep -q "wdcc-hero-v2.webp" /tmp/home.html
+          echo "PREVIEW_SMOKE=PASS" >> "$GITHUB_STEP_SUMMARY"
