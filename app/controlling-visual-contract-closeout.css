@@ -6,51 +6,22 @@
  */
 
 /* Pinned public chrome + large owner-approved round persistent logo. */
-html body [data-wdcc-public-chrome="utility"].wdcc-public-utility{
-  position:sticky!important;top:0!important;z-index:1300!important;
-}
-html body [data-wdcc-public-chrome="header"].wdcc-public-header{
-  position:sticky!important;top:30px!important;z-index:1290!important;overflow:visible!important;
-}
+html body [data-wdcc-public-chrome="utility"].wdcc-public-utility{position:sticky!important;top:0!important;z-index:1300!important}
+html body [data-wdcc-public-chrome="header"].wdcc-public-header{position:sticky!important;top:30px!important;z-index:1290!important;overflow:visible!important}
 html body [data-wdcc-public-chrome="header"] .rh-header-inner{overflow:visible!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo{
-  position:relative!important;overflow:visible!important;isolation:isolate!important;z-index:12!important;
-  width:112px!important;min-width:112px!important;max-width:112px!important;height:60px!important;min-height:60px!important;max-height:60px!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo::before,
-html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
-html body [data-wdcc-public-chrome="header"] .rh-logo-round[data-wdcc-logo-render="owner-approved-round"]{
-  display:block!important;position:absolute!important;z-index:3!important;left:50%!important;top:50%!important;
-  width:108px!important;min-width:108px!important;max-width:108px!important;height:108px!important;min-height:108px!important;max-height:108px!important;
-  transform:translate(-50%,-50%)!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;
-  filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))!important;pointer-events:none!important;
-}
-html body [data-wdcc-public-chrome="header"] .rh-logo-legacy-wordmark[data-wdcc-logo-art="owner-wordmark"]{
-  position:absolute!important;left:50%!important;top:50%!important;width:108px!important;height:108px!important;min-width:108px!important;max-width:108px!important;min-height:108px!important;max-height:108px!important;
-  transform:translate(-50%,-50%)!important;opacity:0!important;pointer-events:none!important;
-}
+html body [data-wdcc-public-chrome="header"] .rh-logo{position:relative!important;overflow:visible!important;isolation:isolate!important;z-index:12!important;width:112px!important;min-width:112px!important;max-width:112px!important;height:60px!important;min-height:60px!important;max-height:60px!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo::before,html body [data-wdcc-public-chrome="header"] .rh-logo::after{content:none!important;display:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo-round[data-wdcc-logo-render="owner-approved-round"]{display:block!important;position:absolute!important;z-index:3!important;left:50%!important;top:50%!important;width:108px!important;min-width:108px!important;max-width:108px!important;height:108px!important;min-height:108px!important;max-height:108px!important;transform:translate(-50%,-50%)!important;object-fit:contain!important;object-position:center!important;border-radius:50%!important;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))!important;pointer-events:none!important}
+html body [data-wdcc-public-chrome="header"] .rh-logo-legacy-wordmark[data-wdcc-logo-art="owner-wordmark"]{position:absolute!important;left:50%!important;top:50%!important;width:108px!important;height:108px!important;min-width:108px!important;max-width:108px!important;min-height:108px!important;max-height:108px!important;transform:translate(-50%,-50%)!important;opacity:0!important;pointer-events:none!important}
 
-/* Public inventory contract: three columns on desktop, one compact row per vehicle on phone. */
-@media(min-width:768px){
-  html body main.inventoryPage .inventoryGrid.wdccVehicleGrid:not(.wdccListView){
-    display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important;
-  }
-}
+@media(min-width:768px){html body main.inventoryPage .inventoryGrid.wdccVehicleGrid:not(.wdccListView){display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}}
 
 /* Dealer wizard controls should look like the product, never browser defaults. */
-html body main.editVehicleApp .wizardNav{
-  display:grid!important;grid-template-columns:auto minmax(150px,220px)!important;justify-content:space-between!important;align-items:center!important;gap:10px!important;
-  margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e1e6ea!important;
-}
-html body main.editVehicleApp .wizardNav button{
-  min-height:44px!important;padding:0 18px!important;border-radius:6px!important;border:1px solid #c9d2d9!important;
-  background:#fff!important;color:#101820!important;font:850 10px/1 Inter,system-ui,sans-serif!important;box-shadow:none!important;
-}
-html body main.editVehicleApp .wizardNav .next,
-html body main.editVehicleApp .wizardNav .publish{background:#ef1f2f!important;color:#fff!important;border-color:#ef1f2f!important}
+html body main.editVehicleApp .wizardNav{display:grid!important;grid-template-columns:auto minmax(150px,220px)!important;justify-content:space-between!important;align-items:center!important;gap:10px!important;margin-top:18px!important;padding-top:16px!important;border-top:1px solid #e1e6ea!important}
+html body main.editVehicleApp .wizardNav button{min-height:44px!important;padding:0 18px!important;border-radius:6px!important;border:1px solid #c9d2d9!important;background:#fff!important;color:#101820!important;font:850 10px/1 Inter,system-ui,sans-serif!important;box-shadow:none!important}
+html body main.editVehicleApp .wizardNav .next,html body main.editVehicleApp .wizardNav .publish{background:#ef1f2f!important;color:#fff!important;border-color:#ef1f2f!important}
 html body main.editVehicleApp .wizardNav.final{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 
-/* VDP readability + latest supplied-board mobile storefront density. */
 @media(max-width:767px){
   html body [data-wdcc-public-chrome="utility"].wdcc-public-utility{display:none!important;height:0!important;min-height:0!important;max-height:0!important;visibility:hidden!important;opacity:0!important}
   html body [data-wdcc-public-chrome="header"].wdcc-public-header{top:0!important;height:64px!important;min-height:64px!important;max-height:64px!important}
@@ -58,38 +29,33 @@ html body main.editVehicleApp .wizardNav.final{grid-template-columns:repeat(3,mi
   html body [data-wdcc-public-chrome="header"] .rh-logo{width:64px!important;min-width:64px!important;max-width:64px!important;height:64px!important;min-height:64px!important;max-height:64px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo-round[data-wdcc-logo-render="owner-approved-round"]{width:60px!important;min-width:60px!important;max-width:60px!important;height:60px!important;min-height:60px!important;max-height:60px!important}
   html body [data-wdcc-public-chrome="header"] .rh-logo-legacy-wordmark[data-wdcc-logo-art="owner-wordmark"]{width:60px!important;height:60px!important;min-width:60px!important;max-width:60px!important;min-height:60px!important;max-height:60px!important}
-  html body [data-wdcc-public-chrome="header"] .rh-menu,
-  html body [data-wdcc-public-chrome="header"] .rh-call,
-  html body [data-wdcc-public-chrome="header"] .rh-nav a{pointer-events:auto!important}
+  html body [data-wdcc-public-chrome="header"] .rh-menu,html body [data-wdcc-public-chrome="header"] .rh-call,html body [data-wdcc-public-chrome="header"] .rh-nav a{pointer-events:auto!important}
   html body [data-wdcc-public-chrome="header"] .rh-nav{top:64px!important;z-index:1305!important}
 
-  /* Latest owner board: compact four-across benefit bridge, not a 2×2 tile block. */
-  html body main.reference-home.locked-storefront .rh-benefits{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:0!important}
-  html body main.reference-home.locked-storefront .rh-benefit{min-height:76px!important;padding:8px 5px!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:4px!important}
-  html body main.reference-home.locked-storefront .rh-benefit .rh-icon{width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;font-size:13px!important;margin:0!important}
-  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:7.5px!important;line-height:1.08!important}
-  html body main.reference-home.locked-storefront .rh-benefit small{font-size:6.5px!important;line-height:1.15!important;margin-top:1px!important}
+  /* Deliberately over-specific because superseded global layers also use !important. */
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefits.rh-benefits{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:0!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit{min-height:76px!important;padding:8px 5px!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:4px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit .rh-icon{width:26px!important;height:26px!important;min-width:26px!important;min-height:26px!important;font-size:13px!important;margin:0!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit strong{font-size:7.5px!important;line-height:1.08!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-benefit.rh-benefit small{font-size:6.5px!important;line-height:1.15!important;margin-top:1px!important}
 
-  /* Latest owner board: eyebrow + strong section title + compact explanatory copy. */
-  html body main.reference-home.locked-storefront .rh-section-head{align-items:end!important;margin-bottom:10px!important}
-  html body main.reference-home.locked-storefront .rh-section-head small{display:block!important;font-size:8px!important;letter-spacing:.08em!important}
-  html body main.reference-home.locked-storefront .rh-section-head h2{font-size:25px!important;line-height:1!important;margin:2px 0 3px!important}
-  html body main.reference-home.locked-storefront .rh-section-head p{display:block!important;font-size:9px!important;line-height:1.3!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head{align-items:end!important;margin-bottom:10px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head small{display:block!important;font-size:8px!important;letter-spacing:.08em!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head h2{font-size:25px!important;line-height:1!important;margin:2px 0 3px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-section-head.rh-section-head p{display:block!important;font-size:9px!important;line-height:1.3!important}
 
-  /* Latest owner board: roughly three readable Featured cards visible on a 390px phone. */
-  html body main.reference-home.locked-storefront .rh-grid{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-behavior:smooth!important;scroll-padding-inline:10px!important;padding:0 10px 3px!important;gap:7px!important;-webkit-overflow-scrolling:touch!important}
-  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 29.5vw!important;flex-basis:29.5vw!important;width:29.5vw!important;min-width:108px!important;max-width:124px!important;scroll-snap-align:start!important;scroll-snap-stop:always!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>a:first-child{aspect-ratio:1.18!important;min-height:0!important;max-height:none!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div{padding:7px 7px 8px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>p:first-child{font-size:6px!important;margin:0!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>a{font-size:9.5px!important;line-height:1.08!important;min-height:20px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>strong{font-size:15px!important;margin-top:5px!important;display:block!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>p:nth-of-type(2){font-size:6.5px!important;margin:3px 0 0!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>div{gap:2px!important;margin-top:5px!important}
-  html body main.reference-home.locked-storefront .rh-grid>article>div>div>span{font-size:5.5px!important;min-height:16px!important;padding:0 3px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important;scroll-snap-type:x mandatory!important;scroll-behavior:smooth!important;scroll-padding-inline:10px!important;padding:0 10px 3px!important;gap:7px!important;-webkit-overflow-scrolling:touch!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article{flex:0 0 29.5vw!important;flex-grow:0!important;flex-shrink:0!important;flex-basis:29.5vw!important;width:29.5vw!important;min-width:108px!important;max-width:124px!important;scroll-snap-align:start!important;scroll-snap-stop:always!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>a:first-child{aspect-ratio:1.18!important;min-height:0!important;max-height:none!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div{padding:7px 7px 8px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>p:first-child{font-size:6px!important;margin:0!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>a{font-size:9.5px!important;line-height:1.08!important;min-height:20px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>strong{font-size:15px!important;margin-top:5px!important;display:block!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>p:nth-of-type(2){font-size:6.5px!important;margin:3px 0 0!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>div{gap:2px!important;margin-top:5px!important}
+  html body main.reference-home.reference-home.locked-storefront.locked-storefront .rh-grid.rh-grid>article>div>div>span{font-size:5.5px!important;min-height:16px!important;padding:0 3px!important}
 
   html body main.inventoryPage .inventoryGrid.wdccVehicleGrid:not(.wdccListView){display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
-
   html body main.editVehicleApp form.editLayout section.editMain div.sectionBlock div.fieldGrid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
   html body main.editVehicleApp .wizardNav{grid-template-columns:1fr 1fr!important;gap:8px!important;margin-top:12px!important;padding-top:12px!important}
   html body main.editVehicleApp .wizardNav button{min-height:46px!important;font-size:11px!important}
@@ -98,12 +64,5 @@ html body main.editVehicleApp .wizardNav.final{grid-template-columns:repeat(3,mi
   html body main.vehiclePage.wdcc-public-page section.vehicleSection .vehicleLayout section.vehicleSummary h2{font-size:24px!important;line-height:1.05!important}
 }
 
-/* Prevent decorative layers from stealing dealer interaction while preserving modal behavior. */
-html body main.editVehicleApp *::before,
-html body main.editVehicleApp *::after{pointer-events:none!important}
-html body main.editVehicleApp button,
-html body main.editVehicleApp a,
-html body main.editVehicleApp input,
-html body main.editVehicleApp select,
-html body main.editVehicleApp textarea,
-html body main.editVehicleApp [role="button"]{pointer-events:auto!important}
+html body main.editVehicleApp *::before,html body main.editVehicleApp *::after{pointer-events:none!important}
+html body main.editVehicleApp button,html body main.editVehicleApp a,html body main.editVehicleApp input,html body main.editVehicleApp select,html body main.editVehicleApp textarea,html body main.editVehicleApp [role="button"]{pointer-events:auto!important}
