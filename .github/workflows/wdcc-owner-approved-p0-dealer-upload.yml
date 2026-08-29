@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: 4c7899bafe6174863837888d9229d006ae2e5280
+  P0_SHA: c0e57e76ecc5ed8c223080bdb5838ad4f60fb3f0
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-4C7899BA-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C0E57E76-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -83,6 +83,7 @@ jobs:
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' lib/auth.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
+          grep -Fq 'return user?{...user,email}:null;' lib/auth.ts
           grep -Fq 'export async function setSession(user:User)' lib/auth.ts
           ! grep -Fq 'export function setSession(user:User)' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
