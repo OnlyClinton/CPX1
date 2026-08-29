@@ -1,0 +1,51 @@
+/* WDCC frozen dealer brand lock — preview-only branch.
+   Keeps dealer identity visible on desktop and mobile without touching auth/data/runtime behavior. */
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand,
+html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand::before,
+html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand::before{
+  content:none!important;
+  display:none!important;
+  width:0!important;
+  height:0!important;
+  background:none!important;
+}
+html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand>img,
+html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand>img{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  flex:0 0 52px!important;
+  width:52px!important;
+  height:52px!important;
+  min-width:52px!important;
+  min-height:52px!important;
+  max-width:52px!important;
+  max-height:52px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  border-radius:50%!important;
+  transform:none!important;
+  filter:drop-shadow(0 2px 5px rgba(0,0,0,.28))!important;
+}
+@media(max-width:760px){
+  html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand,
+  html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand{
+    gap:7px!important;
+    min-width:0!important;
+  }
+  html body main.dcPage.dealerDashboardLocked.dealerDashboardLocked header.dcTop .brand.brand>img,
+  html body main.dcPage.inventoryContract.inventoryContract header.dcTop .brand.brand>img{
+    flex-basis:42px!important;
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    min-height:42px!important;
+    max-width:42px!important;
+    max-height:42px!important;
+  }
+}

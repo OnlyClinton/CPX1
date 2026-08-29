@@ -1,0 +1,17 @@
+/* Final mobile storefront card geometry for the owner phone mock.
+   Preview-only. Overrides the older compact multi-card rail with one dominant card. */
+@media(max-width:900px){
+  html body main.reference-home.locked-storefront .rh-grid{
+    padding:0 24px 8px!important;
+    scroll-padding-inline:24px!important;
+    gap:10px!important;
+  }
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 calc(100vw - 48px)!important;
+    flex-basis:calc(100vw - 48px)!important;
+    width:calc(100vw - 48px)!important;
+    min-width:calc(100vw - 48px)!important;
+    max-width:calc(100vw - 48px)!important;
+    scroll-snap-align:center!important;
+  }
+}
