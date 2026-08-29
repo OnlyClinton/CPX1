@@ -1,0 +1,73 @@
+/* WDCC DEALER VISUAL QA FIX — preview-only corrective layer.
+   Keeps the owner-approved dealer identity while fixing captured shell geometry and legibility. */
+
+html body:has(main.dcPage.dealerDashboardLocked){background:#07121c!important}
+html body main.dcPage.dealerDashboardLocked .dcShell{
+  margin:0!important;
+  padding:0!important;
+  padding-top:0!important;
+  align-items:stretch!important;
+  min-height:calc(100svh - 68px)!important;
+  background:#07121c!important;
+}
+html body main.dcPage.dealerDashboardLocked .dcShell::before,
+html body main.dcPage.dealerDashboardLocked .dcShell::after{content:none!important;display:none!important}
+html body main.dcPage.dealerDashboardLocked .dcSide{
+  align-self:stretch!important;
+  min-height:calc(100svh - 68px)!important;
+}
+html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{
+  align-self:stretch!important;
+  align-content:start!important;
+  min-height:calc(100svh - 68px)!important;
+  margin:0!important;
+  padding-top:18px!important;
+  padding-bottom:22px!important;
+  background:#07121c!important;
+}
+
+/* Make the primary inventory action unmistakable on desktop without changing navigation behavior. */
+@media(min-width:761px){
+  html body main.dcPage.dealerDashboardLocked .dcSide nav a[href="/dealer/inventory/new"]{
+    margin:3px 0 7px!important;
+    border:1px solid #ef1f2f!important;
+    background:#0b2130!important;
+    color:#fff!important;
+    box-shadow:inset 3px 0 0 #ef1f2f!important;
+    font-weight:900!important;
+  }
+}
+
+/* If provider media is slow during first paint, thumbnails remain branded rather than empty black boxes. */
+html body main.dcPage.dealerDashboardLocked .miniThumb{
+  background-color:#10202c!important;
+  background-image:url('/wdcc-logo-transparent.webp')!important;
+  background-position:center!important;
+  background-repeat:no-repeat!important;
+  background-size:72% auto!important;
+}
+html body main.dcPage.dealerDashboardLocked .miniThumb img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  background:#10202c!important;
+}
+
+@media(max-width:760px){
+  html body main.dcPage.dealerDashboardLocked{padding-bottom:82px!important}
+  html body main.dcPage.dealerDashboardLocked .dcShell{min-height:calc(100svh - 68px)!important}
+  html body main.dcPage.dealerDashboardLocked .dcContent.dashboardContent{
+    min-height:calc(100svh - 68px)!important;
+    padding:14px 12px 108px!important;
+  }
+  html body main.dcPage.dealerDashboardLocked .dashMobileNav{
+    height:68px!important;
+    min-height:68px!important;
+  }
+  html body main.dcPage.dealerDashboardLocked .dashMobileNav .add{
+    width:50px!important;
+    height:50px!important;
+    margin-top:-9px!important;
+  }
+}
