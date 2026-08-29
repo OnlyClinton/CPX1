@@ -417,27 +417,58 @@ jobs:
 
           npx wrangler versions deploy "$NEW_VERSION@100%" --name "$FRONTDOOR_WORKER" -y --message "Owner-approved P0 dealer upload $P0_SHA"
           promoted=1
-          ok=0
-          for i in $(seq 1 20); do
-            code="$(curl --http1.1 -sS -D /tmp/live-dh -o /tmp/live-health -w '%{http_code}' "$DEALER_ROOT/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
-            if [ "$code" = 200 ] && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-dh && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null; then ok=1;break;fi
+
+          # A successful versions deploy is control-plane confirmation, not proof that
+          # every public edge is already serving the new version. Require three
+          # consecutive exact-version rounds before any authenticated/write traffic.
+          stable=0
+          for i in $(seq 1 30); do
+            health_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-dh -o /tmp/live-health -w '%{http_code}' "$DEALER_ROOT/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
+            login_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-login-headers -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID-$i" || true)"
+            login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/live-login-headers)"
+            new_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-new-headers -o /tmp/live-new-page -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?p0=$GITHUB_RUN_ID-$i" || true)"
+
+            health_exact=0; login_exact=0; new_exact=0
+            if [ "$health_code" = 200 ]               && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-dh               && grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-dh               && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do" and .session=="neon"' /tmp/live-health >/dev/null; then health_exact=1; fi
+            if [ "$login_code" = 307 ]               && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-login-headers               && grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-login-headers; then
+              case "$login_location" in "/login"|"$DEALER_ROOT/login") login_exact=1;; esac
+            fi
+            if [ "$new_code" = 200 ]               && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-new-headers               && grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-new-headers; then new_exact=1; fi
+
+            if [ "$health_exact" = 1 ] && [ "$login_exact" = 1 ] && [ "$new_exact" = 1 ]; then
+              stable=$((stable+1))
+              echo "P0 live edge exact-version stabilization round $stable/3"
+              [ "$stable" -ge 3 ] && break
+            else
+              stable=0
+              echo "P0 live edge not stable yet: health=$health_code/$health_exact login=$login_code/$login_exact location=$login_location new=$new_code/$new_exact"
+            fi
             sleep 2
           done
-          test "$ok" = 1
-          live_login_code="$(curl --http1.1 -sS -D /tmp/live-login-headers -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")"
-          test "$live_login_code" = 307
-          live_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/live-login-headers)"
-          case "$live_login_location" in "/login"|"$DEALER_ROOT/login") ;; *) echo "unexpected live dealer login redirect: $live_login_location" >&2; exit 1;; esac
-          test "$(curl --http1.1 -sS -o /tmp/live-new-page -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
+          if [ "$stable" -lt 3 ]; then
+            echo 'P0 live edge failed exact-version stabilization; rollback required' >&2
+            exit 1
+          fi
+          echo 'P0_LIVE_EDGE_STABLE=PASS'
 
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
           jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/live-login-body.json
-          test "$(curl --http1.1 -sS -c /tmp/live.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/live-login-body.json -o /tmp/live-login.json -w '%{http_code}' "$DEALER_ROOT/api/auth/login")" = 200
+          live_auth_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-auth-headers -c /tmp/live.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/live-login-body.json -o /tmp/live-login.json -w '%{http_code}' "$DEALER_ROOT/api/auth/login")"
+          test "$live_auth_code" = 200
+          grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-auth-headers
+          grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-auth-headers
           jq -e '.ok==true and (.role=="dealer_agent" or .role=="dealer")' /tmp/live-login.json >/dev/null
-          test "$(curl --http1.1 -sS -b /tmp/live.jar -o /tmp/live-session.json -w '%{http_code}' "$DEALER_ROOT/api/auth/session")" = 200
+          live_session_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-session-headers -b /tmp/live.jar -o /tmp/live-session.json -w '%{http_code}' "$DEALER_ROOT/api/auth/session")"
+          test "$live_session_code" = 200
+          grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-session-headers
+          grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-session-headers
           jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/live-session.json >/dev/null
+          echo 'P0_LIVE_NEON_SESSION_EXACT_EDGE=PASS'
           stock="WDCC-QA-P0-LIVE-$GITHUB_RUN_ID"
-          test "$(curl --http1.1 -sS -X POST -b /tmp/live.jar -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"Live P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":101,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/live-create.json -w '%{http_code}' "$DEALER_ROOT/api/inventory")" = 201
+          live_create_code="$(curl --http1.1 -sS -H 'Connection: close' -D /tmp/live-create-headers -X POST -b /tmp/live.jar -H 'Content-Type: application/json' --data "{\"year\":2021,\"make\":\"WDCC\",\"model\":\"Live P0 Upload Proof\",\"price\":19999,\"downPayment\":1000,\"mileage\":101,\"stock\":\"$stock\",\"internalOnly\":true,\"description\":\"automated temporary qa vehicle\"}" -o /tmp/live-create.json -w '%{http_code}' "$DEALER_ROOT/api/inventory")"
+          test "$live_create_code" = 201
+          grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-create-headers
+          grep -qi "^x-wdcc-dealer-app-sha: $P0_SHA" /tmp/live-create-headers
           qa_id="$(jq -r '.item.id // empty' /tmp/live-create.json)"; test -n "$qa_id"
           test "$(curl --http1.1 -sS -X POST -b /tmp/live.jar -F "vehicleId=$qa_id" -F "requestId=p0-live-$GITHUB_RUN_ID" -F 'file=@public/wdcc-logo-transparent.webp;type=image/webp' -o /tmp/live-upload.json -w '%{http_code}' "$DEALER_ROOT/api/upload")" = 200
           media_path="$(jq -r '.pathname // empty' /tmp/live-upload.json)"; test -n "$media_path"
