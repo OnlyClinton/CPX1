@@ -51,7 +51,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           test -s owner-board-proof/result.json
           node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
@@ -68,7 +69,7 @@ jobs:
           console.log(`PASS: ${r.pass}`);
           console.log(`Board surfaces: ${Object.keys(r.boards||{}).length}`);
           console.log(`Browser writes: ${(r.writes||[]).length}`);
-          console.log('Contract: round persistent header · mobile featured snap · 3-column desktop inventory · single-column mobile dealer editor · pointer-safe controls');
+          console.log('Contract: round persistent header · 4-across mobile benefits · ~3-card mobile Featured rail · 3-column desktop inventory · single-column mobile dealer editor · pointer-safe controls');
           NODE
           else
             echo 'OWNER_MATRIX_ELIGIBLE: NO' >> "$GITHUB_STEP_SUMMARY"
