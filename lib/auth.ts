@@ -5,7 +5,7 @@ import {readState,type User} from "./store";
 export const SESSION_COOKIE="__Host-wdcc_session";
 const SESSION_MAX_AGE=4*60*60;
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
-const PORTAL_EMAILS=new Set(["admin@internal.wedontcarecars.com","dealer@internal.wedontcarecars.com"]);
+const PORTAL_EMAILS=new Set(["admin@internal.wedontcarecars.com","dealer-v2@internal.wedontcarecars.com"]);
 
 function secret(){
   const value=process.env.SESSION_SECRET||"";
@@ -85,7 +85,7 @@ export async function currentUser(){
   }
   return neonCurrentUser();
 }
-export async function setSession(user:User){
+export function setSession(user:User){
   const jar=await cookies();
   jar.set(SESSION_COOKIE,sessionCookieValue(user),{httpOnly:true,secure:true,sameSite:"strict",path:"/",maxAge:SESSION_MAX_AGE});
 }
