@@ -31,7 +31,6 @@ jobs:
           curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
           zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
           test -n "$zone"
-
           curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
           curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
 
@@ -57,12 +56,16 @@ jobs:
             label="$1"; url="$2"; out="/tmp/${label}.body"; hdr="/tmp/${label}.hdr"
             code="$(curl --http1.1 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$url" || true)"
             echo "=== $label HTTP $code ==="
-            grep -iE '^(server|cf-ray|location|x-wdcc-|x-vercel-id|x-matched-path):' "$hdr" || true
+            grep -iE '^(server|cf-ray|location|x-wdcc-[^:]+|x-vercel-id|x-matched-path):' "$hdr" || true
             head -c 1200 "$out" || true
             echo
           }
-          probe PUBLIC_DEALER "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
-          probe DIRECT_APP "$APP_URL/api/health?diag=$GITHUB_RUN_ID"
-          probe FAILED_P0_VERSION "$FAILED_P0_VERSION_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
+          probe PUBLIC_HEALTH "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
+          probe DIRECT_APP_HEALTH "$APP_URL/api/health?diag=$GITHUB_RUN_ID"
+          probe FAILED_P0_HEALTH "$FAILED_P0_VERSION_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
+          probe DIRECT_APP_DEALER_LOGIN "$APP_URL/dealer/login?diag=$GITHUB_RUN_ID"
+          probe FAILED_P0_DEALER_LOGIN "$FAILED_P0_VERSION_PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
+          probe FAILED_P0_LOGIN_PAGE "$FAILED_P0_VERSION_PREVIEW/login?diag=$GITHUB_RUN_ID"
+          probe FAILED_P0_ADD_VEHICLE "$FAILED_P0_VERSION_PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
 
           echo 'DIAGNOSTIC_READ_ONLY=PASS'
