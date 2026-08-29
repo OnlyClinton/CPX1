@@ -138,6 +138,7 @@ jobs:
             }
             summary('LIVE_RESEND_SEND=ACCEPTED');
             summary(`RESEND_EMAIL_ID=${emailId}`);
+            console.log(`RESEND_EMAIL_ID=${emailId}`);
 
             let lastEvent = '';
             for (let i = 0; i < 30; i++) {
@@ -150,11 +151,13 @@ jobs:
                 if (['delivered','opened','clicked'].includes(lastEvent)) {
                   summary(`LAST_EVENT=${lastEvent}`);
                   summary('EMAIL_GATE=GREEN');
+                  console.log(`LAST_EVENT=${lastEvent}`);
                   return;
                 }
                 if (['bounced','failed','complained','suppressed'].includes(lastEvent)) {
                   summary(`LAST_EVENT=${lastEvent}`);
                   summary('EMAIL_GATE=HOLD_DELIVERY_FAILURE');
+                  console.error(`LAST_EVENT=${lastEvent}`);
                   process.exit(25);
                 }
               }
@@ -162,6 +165,7 @@ jobs:
             }
             summary(`LAST_EVENT=${lastEvent || 'not_terminal'}`);
             summary('EMAIL_GATE=HOLD_DELIVERY_NOT_CONFIRMED');
+            console.error(`LAST_EVENT=${lastEvent || 'not_terminal'}`);
             process.exit(26);
           })().catch(err => {
             summary(`PROOF_ERROR=${String(err && err.message || err).replace(/[\r\n]+/g,' ').slice(0,300)}`);
