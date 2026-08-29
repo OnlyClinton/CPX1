@@ -1,0 +1,38 @@
+name: WDCC Record Owner Visual Approval
+
+on:
+  push:
+    branches:
+      - control/wdcc-owner-approve-e0f928c3
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record exact approved SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          APPROVED_SHA: e0f928c301d88721f99da188943514432c0603fb
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$REPO/actions/variables/WDCC_OWNER_VISUAL_APPROVED_SHA"
+          code="$(curl -sS -o /tmp/get.json -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$api")"
+          if [ "$code" = 200 ]; then
+            code="$(curl -sS -o /tmp/write.json -w '%{http_code}' -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' "$api" -d "{\"name\":\"WDCC_OWNER_VISUAL_APPROVED_SHA\",\"value\":\"$APPROVED_SHA\"}")"
+          elif [ "$code" = 404 ]; then
+            code="$(curl -sS -o /tmp/write.json -w '%{http_code}' -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' "https://api.github.com/repos/$REPO/actions/variables" -d "{\"name\":\"WDCC_OWNER_VISUAL_APPROVED_SHA\",\"value\":\"$APPROVED_SHA\"}")"
+          else
+            cat /tmp/get.json >&2
+            exit 1
+          fi
+          cat /tmp/write.json || true
+          case "$code" in 201|204) ;; *) echo "variable write failed status=$code" >&2; exit 1;; esac
+          verify="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$api")"
+          test "$(printf '%s' "$verify" | jq -r '.value')" = "$APPROVED_SHA"
+          echo "OWNER_VISUAL_APPROVAL_RECORDED=$APPROVED_SHA"
