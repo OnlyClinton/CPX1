@@ -6,12 +6,21 @@ if(!base||!sha||!base.includes(sha))throw new Error(`NOT_EXACT_SHA ${base||''} $
 const out='frozen-final-proof';fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true});
 
+async function openIntro(page,prefix){
+  let response=null;
+  for(let i=0;i<15;i++){
+    response=await page.goto(`${base}/?owner-animation=1&intro-proof=${Date.now()}-${i}`,{waitUntil:'domcontentloaded',timeout:30000}).catch(()=>null);
+    if(response?.status()===200)return;
+    await page.waitForTimeout(1000);
+  }
+  throw new Error(`${prefix.toUpperCase()}_INTRO_HTTP_${response?.status()||0}`);
+}
+
 async function prove(viewport,prefix){
   const context=await browser.newContext({viewport,deviceScaleFactor:1,reducedMotion:'no-preference'});
   const page=await context.newPage();
   try{
-    const response=await page.goto(`${base}/?owner-animation=1&intro-proof=${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
-    if(response?.status()!==200)throw new Error(`${prefix.toUpperCase()}_INTRO_HTTP_${response?.status()||0}`);
+    await openIntro(page,prefix);
     await page.locator('.li[data-wdcc-intro-ready="true"]').waitFor({state:'visible',timeout:12000});
     await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-phase')==='move',null,{timeout:5000});
     await page.waitForTimeout(420);
