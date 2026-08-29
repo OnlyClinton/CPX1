@@ -1,0 +1,61 @@
+name: WDCC Dealer Frontdoor Binding Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-binding-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DEALER_ROOT: https://dealer.wedontcarecars.com
+      APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+      FAILED_P0_VERSION_PREVIEW: https://ca5b9c4a-wdcc-dealer-frontdoor.clico-global.workers.dev
+    steps:
+      - name: Read Cloudflare binding and public-edge evidence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json')
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$zone"
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=dealer.wedontcarecars.com" "${auth[@]}" > /tmp/dns.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/deployments" "${auth[@]}" > /tmp/deployments.json || printf '{"success":false,"result":[]}' > /tmp/deployments.json
+
+          echo '=== DEALER WORKER ROUTES ==='
+          jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
+          echo '=== DEALER CUSTOM DOMAINS ==='
+          jq -c '.result[]? | select(((.hostname // .domain // "") | contains("dealer.wedontcarecars.com")) or ((.service // .script // .script_name // "") == "wdcc-dealer-frontdoor")) | {hostname,domain,service,script,script_name,environment}' /tmp/domains.json || true
+          echo '=== DEALER DNS ==='
+          jq -c '.result[]? | {type,name,content,proxied}' /tmp/dns.json || true
+          echo '=== FRONTDOOR DEPLOYMENTS ==='
+          jq -c '.result.deployments[]? // .result[]? | {id,created_on,annotations,versions}' /tmp/deployments.json || true
+
+          probe(){
+            label="$1"; url="$2"; out="/tmp/${label}.body"; hdr="/tmp/${label}.hdr"
+            code="$(curl --http1.1 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$url" || true)"
+            echo "=== $label HTTP $code ==="
+            grep -iE '^(server|cf-ray|location|x-wdcc-|x-vercel-id|x-matched-path):' "$hdr" || true
+            head -c 1200 "$out" || true
+            echo
+          }
+          probe PUBLIC_DEALER "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
+          probe DIRECT_APP "$APP_URL/api/health?diag=$GITHUB_RUN_ID"
+          probe FAILED_P0_VERSION "$FAILED_P0_VERSION_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
+
+          echo 'DIAGNOSTIC_READ_ONLY=PASS'
