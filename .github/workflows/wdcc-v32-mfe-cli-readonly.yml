@@ -1,0 +1,51 @@
+name: WDCC V32 MFE CLI Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-mfe-cli-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      PROJECT_NAME: wdcc-v32-storefront
+      OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect project checks and pull MFE config in temp directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"; mkdir -p "$work/.vercel"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > "$work/.vercel/project.json"
+          cd "$work"
+          echo '=== BLOCKING CHECKS ==='
+          vercel project checks "$PROJECT_NAME" --blocks deployment-alias --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 || true
+          echo '=== ALL CHECKS ==='
+          vercel project checks "$PROJECT_NAME" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 || true
+          echo '=== MFE PULL CURRENT DEPLOYMENT ==='
+          vercel mf pull --dpl "$OLD_DEPLOYMENT_ID" --token="$VERCEL_TOKEN" --scope="$TEAM" 2>&1 || true
+          echo '=== TEMP FILES ==='
+          find "$work" -maxdepth 3 -type f -printf '%P %s bytes\n' | sort
+          for f in microfrontends.json microfrontends.jsonc .vercel/microfrontends.json .vercel/microfrontends.jsonc; do
+            if [ -f "$f" ]; then
+              echo "MFE_FILE=$f SHA256=$(sha256sum "$f"|awk '{print $1}')"
+              node -e 'const fs=require("fs"); const p=process.argv[1]; const c=JSON.parse(fs.readFileSync(p,"utf8")); console.log(JSON.stringify({version:c.version,applications:Object.keys(c.applications||{}),options:c.options||null}))' "$f" || true
+            fi
+          done
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
