@@ -1,0 +1,57 @@
+name: WDCC P0 Step16 No-Promote Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/wdcc-p0-step16-no-promote-20260829
+    paths:
+      - '.github/workflows/wdcc-p0-step16-no-promote-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PREVIEW: https://5714ffed-wdcc-dealer-frontdoor.clico-global.workers.dev
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - name: Prove immutable frontdoor login/session authorization without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+
+          probe(){
+            label="$1"; url="$2"
+            code="$(curl --http1.1 -sS -D "/tmp/$label.h" -o "/tmp/$label.b" -w '%{http_code}' "$url" || true)"
+            echo "$label HTTP=$code"
+            grep -iE '^(location|x-wdcc-dealer-frontdoor|x-wdcc-dealer-app-sha):' "/tmp/$label.h" || true
+          }
+          probe HEALTH "$PREVIEW/api/health?diag=$GITHUB_RUN_ID"
+          probe LOGIN_PAGE "$PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
+          probe NEW_PAGE "$PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
+
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/login-body.json
+          login_code="$(curl --http1.1 -sS -D /tmp/login.h -c /tmp/dealer.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/login-body.json -o /tmp/login.json -w '%{http_code}' "$PREVIEW/api/auth/login")"
+          echo "LOGIN_API HTTP=$login_code"
+          jq -c '{ok:(.ok//false),role:(.role//null),error:(.error//null)}' /tmp/login.json || true
+          awk 'BEGIN{IGNORECASE=1} /^set-cookie:/{line=$0; sub(/\r$/, "", line); split(line,a,"="); name=a[1]; sub(/^set-cookie:[[:space:]]*/,"",name); print "SET_COOKIE_NAME=" name}' /tmp/login.h || true
+
+          session_code="$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/session.json -w '%{http_code}' "$PREVIEW/api/auth/session")"
+          echo "SESSION_API HTTP=$session_code"
+          jq -c '{authenticated:(.authenticated//false),role:(.user.role//null),error:(.error//null)}' /tmp/session.json || true
+
+          logs_code="$(curl --http1.1 -sS -b /tmp/dealer.jar -o /tmp/vehicle-logs.json -w '%{http_code}' "$PREVIEW/api/dealer/vehicle-logs")"
+          echo "PROTECTED_VEHICLE_LOGS HTTP=$logs_code"
+          jq -c '{ok:(.ok//false),error:(.error//null),revision:(.revision//null)}' /tmp/vehicle-logs.json || true
+
+          test "$login_code" = 200
+          test "$session_code" = 200
+          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/session.json >/dev/null
+          test "$logs_code" = 200
+          echo 'STEP16_AUTHORIZATION_PREVIEW=PASS'
+          rm -f /tmp/login-body.json /tmp/dealer.jar
