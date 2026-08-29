@@ -1,4 +1,8 @@
 /* WDCC frozen public brand lock — exact review branch only. */
+html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo{
+  transform:none!important;
+  scale:1!important;
+}
 html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo::before,
 html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo::after{
   content:none!important;
@@ -16,6 +20,7 @@ html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="
   color:#fff!important;
   line-height:.82!important;
   transform:none!important;
+  scale:1!important;
 }
 html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>strong{
   display:block!important;
@@ -42,10 +47,22 @@ html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="
   white-space:nowrap!important;
 }
 @media(max-width:767px){
+  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo{
+    width:122px!important;
+    height:64px!important;
+    min-width:122px!important;
+    max-width:122px!important;
+    transform:none!important;
+    scale:1!important;
+  }
   html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark[data-wdcc-logo-art="owner-wordmark"]{
     width:112px!important;
     height:48px!important;
+    min-width:112px!important;
+    max-width:112px!important;
     align-items:center!important;
+    transform:none!important;
+    scale:1!important;
   }
   html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>strong{
     font-size:28px!important;
