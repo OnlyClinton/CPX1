@@ -57,8 +57,9 @@ export default function LockedIntro(){
   };
 
   if(phase==="done")return null;
+  const legacyPhase=phase==="impact"?"move":"handoff";
 
-  return <div className={`li li-${phase}${ready?" li-ready":""}`} data-wdcc-intro-ready={ready?"true":"false"} data-wdcc-intro-motion={reduced?"reduced":"full"} data-wdcc-intro-phase={phase} aria-label="WDCC opening intro" onWheel={finish} onTouchMove={finish} onClick={finish}>
+  return <div className={`li li-${phase}${ready?" li-ready":""}`} data-wdcc-intro-ready={ready?"true":"false"} data-wdcc-intro-motion={reduced?"reduced":"full"} data-wdcc-intro-phase={legacyPhase} data-wdcc-intro-v32-phase={phase} data-wdcc-intro-benchmark="wdcc-v32-storefront" aria-label="WDCC opening intro" onWheel={finish} onTouchMove={finish} onClick={finish}>
     <style>{`
       .wdcc-intro-active{overflow:hidden!important}
       .li{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:#020305;isolation:isolate;opacity:1;visibility:visible;transition:opacity .42s cubic-bezier(.22,1,.36,1),visibility .42s linear}
