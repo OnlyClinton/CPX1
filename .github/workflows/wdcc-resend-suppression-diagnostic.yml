@@ -1,0 +1,65 @@
+name: WDCC Resend Suppression Diagnostic
+
+on:
+  pull_request:
+    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
+    types: [synchronize, reopened]
+    paths:
+      - '.github/workflows/wdcc-resend-suppression-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-resend-suppression-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TARGET_EMAIL: sean@wedontcarecars.com
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Retrieve suppression only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RESEND_API_KEY:-}"
+          work="$(mktemp -d)"
+          cd "$work"
+          npm init -y >/dev/null 2>&1
+          npm install resend@latest >/dev/null 2>&1
+          node --input-type=module <<'NODE'
+          import { Resend } from 'resend';
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          try {
+            const { data, error } = await resend.suppressions.get(process.env.TARGET_EMAIL);
+            if (error) {
+              console.error(`SUPPRESSION_LOOKUP_ERROR=${JSON.stringify({name:error.name,statusCode:error.statusCode,message:error.message})}`);
+              process.exit(20);
+            }
+            if (!data) {
+              console.log('SUPPRESSION_PRESENT=NO');
+              process.exit(0);
+            }
+            const safe = {
+              id: data.id,
+              email: data.email,
+              origin: data.origin,
+              source_id: data.source_id,
+              created_at: data.created_at
+            };
+            console.log('SUPPRESSION_PRESENT=YES');
+            console.log(`SUPPRESSION_SAFE_DETAIL=${JSON.stringify(safe)}`);
+          } catch (error) {
+            console.error(`SUPPRESSION_LOOKUP_EXCEPTION=${JSON.stringify({name:error?.name,message:error?.message})}`);
+            process.exit(21);
+          }
+          NODE
