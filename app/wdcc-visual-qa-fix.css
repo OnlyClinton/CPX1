@@ -1,0 +1,91 @@
+/* WDCC VISUAL QA FIX — preview-only corrective layer.
+   Fixes captured layout defects without changing auth, data, provider, route, DNS or production behavior. */
+
+/* Vehicle detail facts must read as discrete facts, not one concatenated sentence. */
+html body .vehiclePage .vehicleFacts{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px 10px!important;
+  margin:14px 0 0!important;
+}
+html body .vehiclePage .vehicleFacts>span{
+  min-width:0!important;
+  display:grid!important;
+  align-content:start!important;
+  gap:3px!important;
+  padding:9px 10px!important;
+  border:1px solid #dce3e7!important;
+  border-radius:6px!important;
+  background:#f7f9fa!important;
+}
+html body .vehiclePage .vehicleFacts>span>small{
+  display:block!important;
+  margin:0!important;
+  color:#71808a!important;
+  font-size:7.5px!important;
+  line-height:1.1!important;
+  font-weight:950!important;
+  letter-spacing:.07em!important;
+  text-transform:uppercase!important;
+}
+html body .vehiclePage .vehicleFacts>span>b{
+  display:block!important;
+  min-width:0!important;
+  margin:0!important;
+  color:#111920!important;
+  font-size:11.5px!important;
+  line-height:1.22!important;
+  font-weight:900!important;
+  overflow-wrap:anywhere!important;
+  word-break:normal!important;
+}
+html body .vehiclePage .vehicleActionsPrimary .cta.dark{
+  background:#071522!important;
+  color:#fff!important;
+  border:1px solid #294457!important;
+  box-shadow:none!important;
+}
+html body .vehiclePage .vehicleActionsPrimary .cta.dark:hover{
+  background:#0b2130!important;
+}
+
+/* Review fixtures must never visually claim that a historical record is currently available. */
+html body .wdccOwnerReviewBanner~.rh-grid>article>a:first-child>span:last-child{
+  background:#8a6a00!important;
+  color:#fff!important;
+  font-size:0!important;
+}
+html body .wdccOwnerReviewBanner~.rh-grid>article>a:first-child>span:last-child::after{
+  content:"REVIEW RECORD";
+  font-size:6.4px!important;
+  line-height:1!important;
+  font-weight:950!important;
+  letter-spacing:.04em!important;
+}
+html body .wdccRecoveryInventoryBanner~.rh-grid>article>a:first-child>span:last-child{
+  background:#55636d!important;
+  color:#fff!important;
+  font-size:0!important;
+}
+html body .wdccRecoveryInventoryBanner~.rh-grid>article>a:first-child>span:last-child::after{
+  content:"VERIFIED RECORD";
+  font-size:6.4px!important;
+  line-height:1!important;
+  font-weight:950!important;
+  letter-spacing:.04em!important;
+}
+
+@media(max-width:767px){
+  html body .vehiclePage .vehicleFacts{gap:7px!important}
+  html body .vehiclePage .vehicleFacts>span{padding:8px!important}
+  html body .vehiclePage .vehicleFacts>span>b{font-size:10.5px!important}
+  html body .vehiclePage .vehicleActionsPrimary{grid-template-columns:1fr 1fr!important;gap:7px!important}
+
+  /* Tighten long mobile sections while preserving the owner-board hierarchy. */
+  html body main.reference-home.locked-storefront .rh-step{min-height:60px!important;padding:8px 10px!important;gap:8px!important}
+  html body main.reference-home.locked-storefront .rh-step small{font-size:7.8px!important;line-height:1.28!important}
+  html body main.reference-home.locked-storefront .rh-benefit strong{font-size:8px!important}
+  html body main.reference-home.locked-storefront .rh-benefit small{font-size:7.2px!important;line-height:1.25!important}
+  html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:7px!important;line-height:1.25!important}
+  html body .wdcc-public-footer .rh-footer-inner{font-size:7.8px!important}
+}
