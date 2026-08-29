@@ -298,7 +298,7 @@ jobs:
               s.vehicles=(s.vehicles||[]).filter(v=>String(v?.id)!==id);
               s.audit=(s.audit||[]).filter(a=>String(a?.vehicleId||'')!==id);
               s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();fs.writeFileSync('/tmp/cleanup-next.json',JSON.stringify(s,null,2)+'\n');
-              NODE
+          NODE
               curl --http1.1 -sS -X PUT -H "Authorization: Bearer $state_token" -H 'Content-Type: application/json' --data-binary @/tmp/cleanup-next.json "$STATE_URL/state" -o /tmp/cleanup-put.json
             fi
             if [ -n "$media_path" ]; then enc="$(P="$media_path" python -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["P"]))')"; curl --http1.1 -sS -X DELETE -H "Authorization: Bearer $media_token" "$MEDIA_URL/media?p=$enc" -o /tmp/cleanup-media.json; fi
@@ -403,7 +403,7 @@ jobs:
               curl --http1.1 -sS -H "Authorization: Bearer $state_token" "$STATE_URL/state" -o /tmp/live-clean-state.json
               QA_ID="$qa_id" node - <<'NODE'
               const fs=require('fs');let s=JSON.parse(fs.readFileSync('/tmp/live-clean-state.json','utf8'));const id=process.env.QA_ID;s.vehicles=(s.vehicles||[]).filter(v=>String(v?.id)!==id);s.audit=(s.audit||[]).filter(a=>String(a?.vehicleId||'')!==id);s.revision=Number(s.revision||0)+1;s.updatedAt=new Date().toISOString();fs.writeFileSync('/tmp/live-clean-next.json',JSON.stringify(s,null,2)+'\n');
-              NODE
+          NODE
               curl --http1.1 -sS -X PUT -H "Authorization: Bearer $state_token" -H 'Content-Type: application/json' --data-binary @/tmp/live-clean-next.json "$STATE_URL/state" -o /tmp/live-clean-put.json
             fi
             if [ -n "$media_path" ]; then enc="$(P="$media_path" python -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["P"]))')"; curl --http1.1 -sS -X DELETE -H "Authorization: Bearer $media_token" "$MEDIA_URL/media?p=$enc" -o /tmp/live-clean-media.json; fi
