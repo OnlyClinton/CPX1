@@ -1,0 +1,158 @@
+name: WDCC Mockup V2 Frozen Reproof
+
+on:
+  push:
+    branches: [proof/wdcc-live-email-closeout-20260829-final]
+    paths:
+      - '.github/workflows/wdcc-mockup-v2-reproof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-mockup-v2-frozen-reproof
+  cancel-in-progress: true
+
+env:
+  FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+  WDCC_GATE_SCORER_SHA256: 77153296fbdadf7e17dffd0c44e44783504e0f35b5ca8b23c6d061b3789af25a
+  WDCC_GATE_FINGERPRINTS_SHA256: 87dcb891d40d7f396eb583a331d999bb8c92dab93bb2b2ea13c32b62e27a7065
+  WDCC_GATE_MEDIA_EVIDENCE_SHA256: 246e7ad3b790d3cacec9ed0008bf5d665d758aeec4155d9cd5057282f008de68
+
+jobs:
+  reproof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Checkout frozen candidate and extract original gate scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$FROZEN_SHA"
+          test "$(git rev-parse HEAD)" = "$FROZEN_SHA"
+          npm install --no-save --package-lock=false yaml@2.8.1 >/dev/null
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import YAML from 'yaml';
+          const doc=YAML.parse(fs.readFileSync('.github/workflows/wdcc-mockup-convergence-v2-proof.yml','utf8'));
+          const steps=doc.jobs.proof.steps;
+          for (const name of [
+            'Verify isolated visual scope',
+            'Build exact candidate',
+            'Create SHA-only no-route worker config',
+            'Prove remote build identity',
+            'Render owner-board proof and fail on regressions',
+            'Enforce objective 95/100 mockup score'
+          ]) {
+            const step=steps.find(s=>s.name===name);
+            if(!step?.run) throw new Error(`missing frozen step: ${name}`);
+            fs.writeFileSync(`/tmp/${name.replace(/[^A-Za-z0-9]+/g,'_')}.sh`, step.run);
+          }
+          NODE
+          echo 'FROZEN_GATE_EXTRACTION=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run frozen scope and build gates unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$FROZEN_SHA" bash /tmp/Verify_isolated_visual_scope.sh
+          GITHUB_SHA="$FROZEN_SHA" bash /tmp/Build_exact_candidate.sh
+          GITHUB_SHA="$FROZEN_SHA" bash /tmp/Create_SHA_only_no_route_worker_config.sh
+          echo 'FROZEN_SCOPE_BUILD=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable version and recover preview identity robustly
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker_name="wdcc-v2-${FROZEN_SHA:0:12}"
+          export WRANGLER_OUTPUT_FILE_PATH="$RUNNER_TEMP/wrangler-version-upload.ndjson"
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
+          GITHUB_SHA="$FROZEN_SHA" npx wrangler versions upload --config wrangler.mockup-v2.jsonc 2>&1 | tee "$RUNNER_TEMP/versions-upload.log"
+
+          version_id="$(grep -Eo 'Worker Version ID: [0-9A-Fa-f-]+' "$RUNNER_TEMP/versions-upload.log" | tail -1 | awk '{print $4}')"
+          if [ -z "$version_id" ] && [ -s "$WRANGLER_OUTPUT_FILE_PATH" ]; then
+            version_id="$(jq -rs '[.[]|select(.type=="version-upload")][0].version_id // empty' "$WRANGLER_OUTPUT_FILE_PATH")"
+          fi
+          test -n "$version_id"
+          [[ "$version_id" =~ ^[0-9A-Fa-f-]{8,64}$ ]]
+
+          subdomain="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -r '.result.subdomain // empty')"
+          test -n "$subdomain"
+          version_prefix="${version_id:0:8}"
+          version_prefix="${version_prefix,,}"
+          url="https://${version_prefix}-${worker_name}.${subdomain}.workers.dev"
+
+          code=000
+          for i in $(seq 1 18); do
+            code="$(curl --http1.1 -sS -L -o /dev/null -w '%{http_code}' "$url/?upload-proof=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          [ "$code" = 200 ]
+          {
+            echo "url=$url"
+            echo "version_id=$version_id"
+            echo "version_prefix=$version_prefix"
+            echo "worker_name=$worker_name"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$url" > mockup-v2-preview-url.txt
+          printf 'upload_mode=wrangler-versions-upload-not-deployed\nurl=%s\nworker_name=%s\nversion_prefix=%s\ncloudflare_version_id=%s\nsha=%s\n' "$url" "$worker_name" "$version_prefix" "$version_id" "$FROZEN_SHA" > mockup-v2-preview-version.txt
+          echo 'IMMUTABLE_UPLOAD=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "IMMUTABLE_PREVIEW=$url" >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_DEPLOYMENT=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'CUSTOM_ROUTES_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run frozen remote identity gate unchanged
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.upload.outputs.url }}
+          CLOUDFLARE_VERSION_ID: ${{ steps.upload.outputs.version_id }}
+          CLOUDFLARE_VERSION_PREFIX: ${{ steps.upload.outputs.version_prefix }}
+          CLOUDFLARE_WORKER_NAME: ${{ steps.upload.outputs.worker_name }}
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$FROZEN_SHA" REMOTE_URL="$REMOTE_URL" CLOUDFLARE_VERSION_ID="$CLOUDFLARE_VERSION_ID" CLOUDFLARE_VERSION_PREFIX="$CLOUDFLARE_VERSION_PREFIX" CLOUDFLARE_WORKER_NAME="$CLOUDFLARE_WORKER_NAME" bash /tmp/Prove_remote_build_identity.sh
+          echo 'REMOTE_BUILD_IDENTITY=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run frozen owner-board render unchanged
+        shell: bash
+        env:
+          REMOTE_URL: ${{ steps.upload.outputs.url }}
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$FROZEN_SHA" REMOTE_URL="$REMOTE_URL" bash /tmp/Render_owner_board_proof_and_fail_on_regressions.sh
+          echo 'OWNER_BOARD_RENDER=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce frozen 95/100 score unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$FROZEN_SHA" bash /tmp/Enforce_objective_95_100_mockup_score.sh
+          echo 'FROZEN_95_GATE=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_UNTOUCHED=YES' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wdcc-mockup-v2-frozen-reproof-${{ env.FROZEN_SHA }}
+          path: |
+            mockup-v2-preview-url.txt
+            mockup-v2-preview-version.txt
+            mockup-v2-integrity.txt
+            mockup-v2-proof/
+          if-no-files-found: warn
+          retention-days: 7
