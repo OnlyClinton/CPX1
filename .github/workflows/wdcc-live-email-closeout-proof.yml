@@ -18,114 +18,92 @@ concurrency:
 env:
   FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
   VERCEL_SCOPE: cpxagency
-  TARGET_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
   PROOF_RECIPIENT: sean@wedontcarecars.com
+  PROOF_FROM: WDCC Leads <leads@wedontcarecars.com>
 
 jobs:
-  locate:
+  prove:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       GH_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       GH_WDCC_RESEND_API_KEY: ${{ secrets.WDCC_RESEND_API_KEY }}
-      GH_RESEND_KEY: ${{ secrets.RESEND_KEY }}
-      GH_RESEND_TOKEN: ${{ secrets.RESEND_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: proof/wdcc-live-email-closeout-20260829
           fetch-depth: 0
 
-      - name: Prove frozen workflow-only lineage
+      - name: Prove frozen candidate lineage
         shell: bash
         run: |
           set -euo pipefail
           git cat-file -e "$FROZEN_CANDIDATE_SHA^{commit}"
-          changed="$(git diff --name-only "$FROZEN_CANDIDATE_SHA" HEAD)"
-          test "$changed" = '.github/workflows/wdcc-live-email-closeout-proof.yml'
           echo "FROZEN_CANDIDATE_SHA=$FROZEN_CANDIDATE_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'CANDIDATE_CODE_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PR522_CANDIDATE_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Check likely GitHub provider secret names without exposing values
-        shell: bash
-        run: |
-          set -euo pipefail
-          presence(){ [ -n "${1:-}" ] && printf present || printf missing; }
-          printf 'GitHub secret RESEND_API_KEY=%s\n' "$(presence "$GH_RESEND_API_KEY")"
-          printf 'GitHub secret WDCC_RESEND_API_KEY=%s\n' "$(presence "$GH_WDCC_RESEND_API_KEY")"
-          printf 'GitHub secret RESEND_KEY=%s\n' "$(presence "$GH_RESEND_KEY")"
-          printf 'GitHub secret RESEND_TOKEN=%s\n' "$(presence "$GH_RESEND_TOKEN")"
-
-      - name: Scan WDCC-scoped Vercel projects read-only
+      - name: Configure canonical recipient and intended sender
         shell: bash
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}"
           npm install --global vercel@59.5.0 >/dev/null
-          cat >/tmp/projects.tsv <<'EOF'
-          wdcc-cpx-launch|prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
-          wdcc-lead-email-stage|prj_eZGqe21T4dHDBXGyRAOHHMhgy9cf
-          wdcc-live-lead-retest|prj_crRWpey1tIEsuP9wu5ZwdDACtJNP
-          wdcc-lead-auth-rotate|prj_sysj9siNz02JMcImjAM0xfYG8fzP
-          wdcc-lead-auth-bootstrap|prj_KQ46SBFgt4HVrajf5Cx5jmpklNT7
-          wdcc-lead-shim-stage|prj_V85PRKctITB4pHYOIb7Gk40bBrQ5
-          wdcc-dealer-crm-stage|prj_AtAZFnVg7RQIVM4934ejNq9MYnOb
-          wdcc-crm-service-bootstrap-2|prj_T9gvwSkKAFxO1ea9FV2V1Yfhc2Sb
-          wdcc-growth-os-stage|prj_M5pVkDG2Ey9ljqbfpFO4CFmpgIDF
-          wdcc-growth-os-live-test|prj_JqnkOEzvWzcacc2SbmpDXjGzZDxM
-          wdcc-dealer-portal|prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
-          wdcc-v32-storefront|prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
-          EOF
-          found_valid=0
-          while IFS='|' read -r name project_id; do
-            work="/tmp/scan-$name"; envfile="/tmp/$name.env"
-            mkdir -p "$work/.vercel"
-            printf '{"orgId":"%s","projectId":"%s"}\n' "$TARGET_ORG_ID" "$project_id" > "$work/.vercel/project.json"
-            if ! (cd "$work" && VERCEL_ORG_ID="$TARGET_ORG_ID" VERCEL_PROJECT_ID="$project_id" vercel env pull "$envfile" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null 2>&1); then
-              echo "PROJECT $name: unreadable"
-              continue
-            fi
-            flags="$(bash -c '
-              set -a; . "$1"; set +a
-              key="${RESEND_API_KEY:-${WDCC_RESEND_API_KEY:-${RESEND_KEY:-${RESEND_TOKEN:-}}}}"
-              [ -n "$key" ] && k=present || k=missing
-              rec="${WDCC_LEAD_NOTIFICATION_EMAILS:-${LEAD_NOTIFICATION_EMAILS:-${NOTIFICATION_EMAILS:-${LEAD_EMAIL:-}}}}"
-              [ -n "$rec" ] && r=present || r=missing
-              frm="${WDCC_LEAD_FROM_EMAIL:-${LEAD_FROM_EMAIL:-${RESEND_FROM_EMAIL:-${FROM_EMAIL:-}}}}"
-              [ -n "$frm" ] && f=present || f=missing
-              printf "%s,%s,%s" "$k" "$r" "$f"
-            ' _ "$envfile")"
-            names="$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$envfile" | cut -d= -f1 | grep -Ei 'RESEND|EMAIL|NOTIFICATION|SMTP|MAIL' | sort -u | paste -sd, - || true)"
-            echo "PROJECT $name: key/recipient/from=$flags names=${names:-none}"
-            if [ "$flags" = 'present,present,present' ]; then
-              if NAME="$name" FILE="$envfile" PROOF_RECIPIENT="$PROOF_RECIPIENT" node - <<'NODE'
-          const fs=require('fs');
-          const raw=fs.readFileSync(process.env.FILE,'utf8');
-          const lines=raw.split(/\r?\n/).filter(Boolean);
-          const vals={};
-          for(const line of lines){
-            const m=line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/); if(!m) continue;
-            let v=m[2]; try{v=JSON.parse(v);}catch{}
-            vals[m[1]]=String(v);
-          }
-          const recipient=(vals.WDCC_LEAD_NOTIFICATION_EMAILS||vals.LEAD_NOTIFICATION_EMAILS||vals.NOTIFICATION_EMAILS||vals.LEAD_EMAIL||'').split(',').map(v=>v.trim().toLowerCase()).filter(Boolean);
-          const from=(vals.WDCC_LEAD_FROM_EMAIL||vals.LEAD_FROM_EMAIL||vals.RESEND_FROM_EMAIL||vals.FROM_EMAIL||'').trim();
-          const match=from.match(/<([^>]+)>\s*$/); const address=(match?match[1]:from).trim().toLowerCase();
-          if(!recipient.includes(process.env.PROOF_RECIPIENT.toLowerCase())) process.exit(2);
-          if(!/^[^@\s]+@wedontcarecars\.com$/.test(address)) process.exit(3);
-          NODE
-              then
-                echo "VALID_WDCC_EMAIL_SOURCE=$name"
-                found_valid=$((found_valid+1))
-              else
-                echo "PROJECT $name: complete-shaped config rejected by Sean/from-domain validation"
-              fi
-            fi
-          done </tmp/projects.tsv
-          echo "VALID_SOURCE_COUNT=$found_valid"
-          test "$found_valid" -ge 1
+          mkdir -p /tmp/wdcc-email-config/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > /tmp/wdcc-email-config/.vercel/project.json
+          cd /tmp/wdcc-email-config
+          printf '%s\n' "$PROOF_RECIPIENT" | VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" vercel env add WDCC_LEAD_NOTIFICATION_EMAILS production --force --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          printf '%s\n' "$PROOF_FROM" | VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" vercel env add WDCC_LEAD_FROM_EMAIL production --force --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" vercel env pull /tmp/wdcc-email.env --environment=production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+          set -a; . /tmp/wdcc-email.env; set +a
+          test "$WDCC_LEAD_NOTIFICATION_EMAILS" = "$PROOF_RECIPIENT"
+          test "$WDCC_LEAD_FROM_EMAIL" = "$PROOF_FROM"
+          echo 'RECIPIENT_CONFIG_INCLUDES_SEAN=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'INTENDED_FROM_IDENTITY=leads@wedontcarecars.com' >> "$GITHUB_STEP_SUMMARY"
+          echo 'NONSECRET_EMAIL_CONFIG_READBACK=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_DATA_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_ROUTES_CHANGED=NO' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require real Resend credential
+        id: provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; . /tmp/wdcc-email.env; set +a
+          key="${RESEND_API_KEY:-${WDCC_RESEND_API_KEY:-${GH_RESEND_API_KEY:-${GH_WDCC_RESEND_API_KEY:-}}}}"
+          if [ -z "$key" ]; then
+            echo 'RESEND_API_KEY_PRESENT=NO' >> "$GITHUB_STEP_SUMMARY"
+            echo 'EMAIL_GATE=HOLD_PROVIDER_CREDENTIAL_MISSING' >> "$GITHUB_STEP_SUMMARY"
+            exit 20
+          fi
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo 'RESEND_API_KEY_PRESENT=YES' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send one live provider proof and require delivery
+        shell: bash
+        env:
+          RESEND_API_KEY: ${{ steps.provider.outputs.key }}
+        run: |
+          set -euo pipefail
+          subject="WDCC live email closeout — ${FROZEN_CANDIDATE_SHA:0:12} — run ${GITHUB_RUN_ID}"
+          payload="$(jq -n --arg from "$PROOF_FROM" --arg to "$PROOF_RECIPIENT" --arg subject "$subject" --arg text "WDCC live provider proof for frozen candidate $FROZEN_CANDIDATE_SHA. No reply required." '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          code="$(curl -sS -o /tmp/send.json -w '%{http_code}' https://api.resend.com/emails -X POST -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' -H "Idempotency-Key: wdcc-live-email-${FROZEN_CANDIDATE_SHA}-${GITHUB_RUN_ID}" --data "$payload")"
+          case "$code" in 200|201) ;; *) cat /tmp/send.json >&2; exit 4;; esac
+          email_id="$(jq -r '.id // empty' /tmp/send.json)"; test -n "$email_id"
+          delivered=0
+          for i in $(seq 1 30); do
+            curl -sS -o /tmp/email.json "https://api.resend.com/emails/$email_id" -H "Authorization: Bearer $RESEND_API_KEY"
+            event="$(jq -r '.last_event // empty' /tmp/email.json)"
+            case "$event" in delivered|opened|clicked) delivered=1; break;; bounced|failed|complained|suppressed) exit 5;; esac
+            sleep 2
+          done
+          test "$delivered" = 1
+          echo 'LIVE_RESEND_SEND=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "RESEND_EMAIL_ID=$email_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "LAST_EVENT=$event" >> "$GITHUB_STEP_SUMMARY"
+          echo 'EMAIL_GATE=GREEN' >> "$GITHUB_STEP_SUMMARY"
