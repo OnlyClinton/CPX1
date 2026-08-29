@@ -43,7 +43,7 @@ jobs:
           test -s app/wdcc-owner-logo/route.ts
           test -s app/wdcc-owner-board-final.css
           test -s app/wdcc-round-header-contract.css
-          test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq 'li-smoke' app/LockedIntro.tsx
           grep -Fq '@keyframes liSmokeClear' app/LockedIntro.tsx
@@ -52,6 +52,7 @@ jobs:
           ! grep -Fq 'data-wdcc-logo-art="owner-approved"' app/WdccPublicChrome.tsx
           grep -Fq 'X-WDCC-Logo' app/wdcc-owner-logo/route.ts
           grep -Fq 'OWNER-SUPPLIED BOARD CLOSEOUT' app/wdcc-round-header-contract.css
+          grep -Fq 'Vehicles ready now.' app/ReferenceCloneHome.tsx
           grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
           grep -Fq 'wdcc-round-header-contract.css' app/layout.tsx
           ! grep -Fq 'wdcc-system-v2.css' app/layout.tsx
@@ -163,7 +164,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           test -s owner-board-proof/result.json
           node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
@@ -193,7 +194,7 @@ jobs:
           if [ -s owner-board-proof/result.json ]; then
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const p=require('./owner-board-proof/result.json');
-          console.log(`Owner supplied boards: pass=${p.pass} · board families=${Object.keys(p.boards||{}).length} · writes=${p.writes.length}`);
+          console.log(`Owner supplied boards: pass=${p.pass} · mobile benefits=${p.boards?.homeMobile?.benefits||0} · featured first card=${p.boards?.homeMobile?.cards?.[0]?.w||0}px · writes=${p.writes.length}`);
           NODE
           fi
           echo 'Visual success does not authorize merge or production promotion.' >> "$GITHUB_STEP_SUMMARY"
