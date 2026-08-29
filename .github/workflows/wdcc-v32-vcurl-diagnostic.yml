@@ -1,0 +1,41 @@
+name: WDCC V32 Vercel Curl Diagnostic
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-vcurl-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      STAGED_URL: wdcc-v32-storefront-ea9ys9u9v-cpxagency.vercel.app
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Show CLI syntax and one authenticated stage request
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0 >/dev/null
+          work="$(mktemp -d)"; mkdir -p "$work/.vercel"
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$PROJECT_ID" > "$work/.vercel/project.json"
+          cd "$work"
+          echo '=== CURL HELP ==='
+          vercel curl --help | head -n 120
+          echo '=== REQUEST ==='
+          vercel curl '/api/health?vcurl-diag=1' --deployment "https://$STAGED_URL" --token="$VERCEL_TOKEN" --scope="$TEAM"
+          echo
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
