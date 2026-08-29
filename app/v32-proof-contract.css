@@ -13,4 +13,5 @@
   html body main.reference-home.locked-storefront .rh-hero-art{height:470px!important}
   html body main.reference-home.locked-storefront .rh-hero-inner{height:470px!important;min-height:470px!important}
   html body main.reference-home.locked-storefront .rh-copy{padding:188px 14px 14px!important}
+  html body main.reference-home.locked-storefront .rh-grid>article{flex:0 0 86vw!important;width:86vw!important;min-width:86vw!important;max-width:86vw!important}
 }
