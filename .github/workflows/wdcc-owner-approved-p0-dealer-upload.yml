@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-ATOMIC-SECRETS'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -82,6 +82,7 @@ jobs:
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
           grep -Fq 'WDCC_STATE_SERVICE_URL' lib/wdccAuthority.ts
           grep -Fq 'WDCC_MEDIA_SERVICE_URL' lib/wdccAuthority.ts
+          grep -Fq 'redirect("/login")' app/dealer/login/page.tsx
           node --check cloudflare/wdcc-media-worker.mjs
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
@@ -273,7 +274,10 @@ jobs:
             sleep 2
           done
           if [ "$ok" != 1 ]; then echo 'isolated dealer app health contract did not become ready' >&2; cat /tmp/app-health >&2 || true; exit 1; fi
-          test "$(curl --http1.1 -sS -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")" = 200
+          stage_login_code="$(curl --http1.1 -sS -D /tmp/dealer-login-headers -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")"
+          test "$stage_login_code" = 307
+          stage_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/dealer-login-headers)"
+          case "$stage_login_location" in "/login"|"$APP_URL/login") ;; *) echo "unexpected isolated dealer login redirect: $stage_login_location" >&2; exit 1;; esac
           test "$(curl --http1.1 -sS -o /tmp/dealer-new-page -w '%{http_code}' "$APP_URL/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
           invalid="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data '{"username":"dealer","password":"__wdcc_invalid_probe__"}' -o /tmp/invalid-login -w '%{http_code}' "$APP_URL/api/auth/login")"
           test "$invalid" = 401 || test "$invalid" = 429
@@ -416,7 +420,10 @@ jobs:
             sleep 2
           done
           test "$ok" = 1
-          test "$(curl --http1.1 -sS -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")" = 200
+          live_login_code="$(curl --http1.1 -sS -D /tmp/live-login-headers -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")"
+          test "$live_login_code" = 307
+          live_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/live-login-headers)"
+          case "$live_login_location" in "/login"|"$DEALER_ROOT/login") ;; *) echo "unexpected live dealer login redirect: $live_login_location" >&2; exit 1;; esac
           test "$(curl --http1.1 -sS -o /tmp/live-new-page -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
 
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
