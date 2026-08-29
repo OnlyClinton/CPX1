@@ -280,6 +280,29 @@ jobs:
             sleep 2
           done
           if [ "$ok" != 1 ]; then echo 'isolated dealer app health contract did not become ready' >&2; cat /tmp/app-health >&2 || true; exit 1; fi
+
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          app_auth_ready=0
+          for i in $(seq 1 30); do
+            rm -f /tmp/app-ready.jar
+            jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/app-ready-login-body.json
+            login_code="$(curl --http1.1 -sS -c /tmp/app-ready.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/app-ready-login-body.json -o /tmp/app-ready-login.json -w '%{http_code}' "$APP_URL/api/auth/login" || true)"
+            session_code="$(curl --http1.1 -sS -b /tmp/app-ready.jar -o /tmp/app-ready-session.json -w '%{http_code}' "$APP_URL/api/auth/session" || true)"
+            protected_code="$(curl --http1.1 -sS -b /tmp/app-ready.jar -o /tmp/app-ready-protected.json -w '%{http_code}' "$APP_URL/api/dealer/vehicle-logs?ready=$GITHUB_RUN_ID-$i" || true)"
+            email="$(jq -r '.user.email // empty' /tmp/app-ready-session.json 2>/dev/null || true)"
+            role="$(jq -r '.user.role // empty' /tmp/app-ready-session.json 2>/dev/null || true)"
+            protected_ok="$(jq -r '.ok // false' /tmp/app-ready-protected.json 2>/dev/null || true)"
+            echo "P0_APP_AUTH_READINESS attempt=$i login=$login_code session=$session_code email=${email:-missing} role=${role:-missing} protected=$protected_code protected_ok=$protected_ok"
+            if [ "$login_code" = 200 ] && [ "$session_code" = 200 ] && [ "$email" = 'dealer-v2@internal.wedontcarecars.com' ] && { [ "$role" = 'dealer_agent' ] || [ "$role" = 'dealer' ]; } && [ "$protected_code" = 200 ] && [ "$protected_ok" = true ]; then
+              app_auth_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$app_auth_ready" = 1
+          rm -f /tmp/app-ready.jar /tmp/app-ready-login-body.json /tmp/app-ready-login.json /tmp/app-ready-session.json /tmp/app-ready-protected.json
+          echo 'P0_EXACT_APP_CURRENTUSER_AUTHORITY=PASS'
+
           stage_login_code="$(curl --http1.1 -sS -D /tmp/dealer-login-headers -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")"
           test "$stage_login_code" = 307
           stage_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/dealer-login-headers)"
