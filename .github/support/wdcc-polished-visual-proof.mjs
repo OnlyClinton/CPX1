@@ -33,6 +33,15 @@ async function go(p,path){
  }
  fail('HTTP',{path,status:r?.status()||0});
 }
+async function dismissIntro(p){
+ const intro=p.locator('.li[aria-label="WDCC opening intro"]');
+ if(await intro.count()){
+  const skip=p.getByRole('button',{name:/skip intro/i});
+  await skip.waitFor({state:'visible',timeout:10000});
+  await skip.click();
+  await intro.waitFor({state:'detached',timeout:10000}).catch(async()=>intro.waitFor({state:'hidden',timeout:10000}));
+ }
+}
 async function decodeImages(p,selector,minCount){
  await p.waitForFunction(({selector,minCount})=>document.querySelectorAll(selector).length>=minCount,{selector,minCount},{timeout:30000});
  const result=await p.evaluate(async({selector,minCount})=>{
@@ -63,28 +72,28 @@ async function shot(p,name,fullPage=true){await p.screenshot({path:`${out}/${nam
 const result={sha,url:base,home:{},dealer:{},vdp:{},writes,pass:false};
 try{
  const desktop=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
- const home=await desktop.newPage();watch(home);await go(home,'/?owner-review=1');
- const skip=home.getByRole('button',{name:/skip intro/i});if(await skip.count())await skip.click().catch(()=>{});
+ const home=await desktop.newPage();watch(home);await go(home,'/?owner-review=1');await dismissIntro(home);
+ await home.locator('.wdcc-header-owner-logo[data-wdcc-logo-art="owner-approved-round"]').waitFor({state:'visible',timeout:10000});
  await home.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});
  const homeMedia=await decodeImages(home,'.rh-grid>article img',5);
- const homeCheck=await home.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,cards:document.querySelectorAll('.rh-grid>article').length,headline:[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim())}));
- if(homeCheck.overflow>2||homeCheck.cards!==5)fail('DESKTOP_HOME',homeCheck);result.home.desktop={...homeCheck,media:homeMedia};await shot(home,'desktop-home');
+ const homeCheck=await home.evaluate(()=>({intro:!!document.querySelector('.li[aria-label="WDCC opening intro"]'),header:!!document.querySelector('.wdcc-public-header'),hero:!!document.querySelector('.rh-copy h1'),overflow:document.documentElement.scrollWidth-innerWidth,cards:document.querySelectorAll('.rh-grid>article').length,headline:[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim())}));
+ if(homeCheck.intro||!homeCheck.header||!homeCheck.hero||homeCheck.overflow>2||homeCheck.cards!==5)fail('DESKTOP_HOME',homeCheck);result.home.desktop={...homeCheck,media:homeMedia};await shot(home,'polish-desktop-home');
 
  const vdp=await desktop.newPage();watch(vdp);await go(vdp,'/vehicle/real-2004-nissan-350z?owner-review=1');await vdp.locator('.vehicleLayout').waitFor({state:'visible',timeout:20000});await decodeImages(vdp,'.vehiclePhoto img',1);
  const vdpCheck=await vdp.evaluate(()=>({cols:getComputedStyle(document.querySelector('.vehicleLayout')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,facts:[...document.querySelectorAll('.vehicleFacts>span')].map(x=>({label:x.querySelector('small')?.textContent?.trim(),value:x.querySelector('b')?.textContent?.trim(),display:getComputedStyle(x).display})),heroBg:getComputedStyle(document.querySelector('.vehicleTop'),'::before').backgroundImage,overflow:document.documentElement.scrollWidth-innerWidth}));
- if(vdpCheck.cols!==2||vdpCheck.overflow>2||vdpCheck.facts.length<5||vdpCheck.facts.some(x=>!x.label||!x.value)||vdpCheck.heroBg.includes('wdcc-hero-v2'))fail('DESKTOP_VDP',vdpCheck);result.vdp.desktop=vdpCheck;await shot(vdp,'desktop-vdp');
+ if(vdpCheck.cols!==2||vdpCheck.overflow>2||vdpCheck.facts.length<5||vdpCheck.facts.some(x=>!x.label||!x.value)||vdpCheck.heroBg.includes('wdcc-hero-v2'))fail('DESKTOP_VDP',vdpCheck);result.vdp.desktop=vdpCheck;await shot(vdp,'polish-desktop-vdp');
 
  const dealer=await desktop.newPage();watch(dealer);await wire(dealer);await go(dealer,'/dealer');await dealer.locator('.dealerDashboardLocked').waitFor({state:'visible',timeout:20000});const dealerMedia=await decodeImages(dealer,'.recentVehicles .miniThumb img',5);
  const dealerCheck=await dealer.evaluate(()=>{const h=document.querySelector('.dcTitle h1'),canvas=document.querySelector('.dcContent.dashboardContent');return{title:getComputedStyle(h).color,canvas:getComputedStyle(canvas).backgroundColor,overflow:document.documentElement.scrollWidth-innerWidth}});
- dealerCheck.contrast=contrast(dealerCheck.title,dealerCheck.canvas);if(dealerCheck.contrast<4.5||dealerCheck.overflow>2)fail('DEALER_DESKTOP',dealerCheck);result.dealer.desktop={...dealerCheck,media:dealerMedia};await shot(dealer,'dealer-desktop');await desktop.close();
+ dealerCheck.contrast=contrast(dealerCheck.title,dealerCheck.canvas);if(dealerCheck.contrast<4.5||dealerCheck.overflow>2)fail('DEALER_DESKTOP',dealerCheck);result.dealer.desktop={...dealerCheck,media:dealerMedia};await shot(dealer,'polish-dealer-desktop');await desktop.close();
 
  const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
- const mh=await mobile.newPage();watch(mh);await go(mh,'/?owner-review=1');const mskip=mh.getByRole('button',{name:/skip intro/i});if(await mskip.count())await mskip.click().catch(()=>{});await mh.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});const mMedia=await decodeImages(mh,'.rh-grid>article img',5);
- const mobileHome=await mh.evaluate(()=>{const h=document.querySelector('.rh-section-head h2'),r=h.getBoundingClientRect();return{heading:h.textContent?.trim(),headingHeight:r.height,fontSize:parseFloat(getComputedStyle(h).fontSize),firstCard:document.querySelector('.rh-grid>article')?.getBoundingClientRect().width||0,overflow:document.documentElement.scrollWidth-innerWidth}});
- if(mobileHome.overflow>2||mobileHome.firstCard<300||mobileHome.headingHeight>mobileHome.fontSize*1.45)fail('MOBILE_HOME',mobileHome);result.home.mobile={...mobileHome,media:mMedia};await shot(mh,'mobile-home');
+ const mh=await mobile.newPage();watch(mh);await go(mh,'/?owner-review=1');await dismissIntro(mh);await mh.locator('.wdcc-header-owner-logo[data-wdcc-logo-art="owner-approved-round"]').waitFor({state:'visible',timeout:10000});await mh.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});const mMedia=await decodeImages(mh,'.rh-grid>article img',5);
+ const mobileHome=await mh.evaluate(()=>{const h=document.querySelector('.rh-section-head h2'),r=h.getBoundingClientRect();return{intro:!!document.querySelector('.li[aria-label="WDCC opening intro"]'),header:!!document.querySelector('.wdcc-public-header'),hero:!!document.querySelector('.rh-copy h1'),heading:h.textContent?.trim(),headingHeight:r.height,fontSize:parseFloat(getComputedStyle(h).fontSize),firstCard:document.querySelector('.rh-grid>article')?.getBoundingClientRect().width||0,overflow:document.documentElement.scrollWidth-innerWidth}});
+ if(mobileHome.intro||!mobileHome.header||!mobileHome.hero||mobileHome.overflow>2||mobileHome.firstCard<300||mobileHome.headingHeight>mobileHome.fontSize*1.45)fail('MOBILE_HOME',mobileHome);result.home.mobile={...mobileHome,media:mMedia};await shot(mh,'polish-mobile-home');
 
- const mv=await mobile.newPage();watch(mv);await go(mv,'/vehicle/real-2004-nissan-350z?owner-review=1');await mv.locator('.vehicleLayout').waitFor({state:'visible',timeout:20000});await decodeImages(mv,'.vehiclePhoto img',1);const mobileVdp=await mv.evaluate(()=>({cols:getComputedStyle(document.querySelector('.vehicleLayout')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,factCols:getComputedStyle(document.querySelector('.vehicleFacts')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth}));if(mobileVdp.cols!==1||mobileVdp.factCols!==2||mobileVdp.overflow>2)fail('MOBILE_VDP',mobileVdp);result.vdp.mobile=mobileVdp;await shot(mv,'mobile-vdp');
+ const mv=await mobile.newPage();watch(mv);await go(mv,'/vehicle/real-2004-nissan-350z?owner-review=1');await mv.locator('.vehicleLayout').waitFor({state:'visible',timeout:20000});await decodeImages(mv,'.vehiclePhoto img',1);const mobileVdp=await mv.evaluate(()=>({cols:getComputedStyle(document.querySelector('.vehicleLayout')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,factCols:getComputedStyle(document.querySelector('.vehicleFacts')).gridTemplateColumns.split(/\s+/).filter(Boolean).length,overflow:document.documentElement.scrollWidth-innerWidth}));if(mobileVdp.cols!==1||mobileVdp.factCols!==2||mobileVdp.overflow>2)fail('MOBILE_VDP',mobileVdp);result.vdp.mobile=mobileVdp;await shot(mv,'polish-mobile-vdp');
 
- const md=await mobile.newPage();watch(md);await wire(md);await go(md,'/dealer');await md.locator('.dealerDashboardLocked').waitFor({state:'visible',timeout:20000});const mdMedia=await decodeImages(md,'.recentVehicles .miniThumb img',5);const mobileDealer=await md.evaluate(()=>{const h=document.querySelector('.dcTitle h1'),canvas=document.querySelector('.dcContent.dashboardContent');return{title:getComputedStyle(h).color,canvas:getComputedStyle(canvas).backgroundColor,bottomPadding:parseFloat(getComputedStyle(canvas).paddingBottom),overflow:document.documentElement.scrollWidth-innerWidth}});mobileDealer.contrast=contrast(mobileDealer.title,mobileDealer.canvas);if(mobileDealer.contrast<4.5||mobileDealer.bottomPadding<100||mobileDealer.overflow>2)fail('DEALER_MOBILE',mobileDealer);result.dealer.mobile={...mobileDealer,media:mdMedia};await shot(md,'dealer-mobile',false);await mobile.close();
+ const md=await mobile.newPage();watch(md);await wire(md);await go(md,'/dealer');await md.locator('.dealerDashboardLocked').waitFor({state:'visible',timeout:20000});const mdMedia=await decodeImages(md,'.recentVehicles .miniThumb img',5);const mobileDealer=await md.evaluate(()=>{const h=document.querySelector('.dcTitle h1'),canvas=document.querySelector('.dcContent.dashboardContent');return{title:getComputedStyle(h).color,canvas:getComputedStyle(canvas).backgroundColor,bottomPadding:parseFloat(getComputedStyle(canvas).paddingBottom),overflow:document.documentElement.scrollWidth-innerWidth}});mobileDealer.contrast=contrast(mobileDealer.title,mobileDealer.canvas);if(mobileDealer.contrast<4.5||mobileDealer.bottomPadding<100||mobileDealer.overflow>2)fail('DEALER_MOBILE',mobileDealer);result.dealer.mobile={...mobileDealer,media:mdMedia};await shot(md,'polish-dealer-mobile',false);await mobile.close();
  if(writes.length)fail('WRITES',writes);result.pass=true;fs.writeFileSync(`${out}/polished-result.json`,JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
 }finally{await browser.close();}
