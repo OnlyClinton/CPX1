@@ -1,0 +1,121 @@
+name: WDCC V54 Existing DB Compatibility Stage
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v54-existing-db-compat-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      TEAM: cpxagency
+      TARGET_PROJECT: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      SOURCE_PROJECT: prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB
+      WDCC_NEON_AUTH_URL: https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pull existing DB credential internally and validate shape only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g vercel@59.5.0 >/dev/null
+          rm -rf /tmp/source-env /tmp/v54-db-probe && mkdir -p /tmp/source-env/.vercel /tmp/v54-db-probe
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$SOURCE_PROJECT" > /tmp/source-env/.vercel/project.json
+          (cd /tmp/source-env && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$SOURCE_PROJECT" vercel env pull /tmp/source.env --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null)
+          node - <<'NODE'
+          const fs=require('fs');
+          const text=fs.readFileSync('/tmp/source.env','utf8');
+          const line=text.split(/\r?\n/).find(x=>/^DATABASE_URL=/.test(x))||text.split(/\r?\n/).find(x=>/^POSTGRES_URL=/.test(x));
+          if(!line) throw new Error('SOURCE_DATABASE_URL_MISSING');
+          let value=line.slice(line.indexOf('=')+1).trim();
+          if((value.startsWith('"')&&value.endsWith('"'))||(value.startsWith("'")&&value.endsWith("'"))) value=value.slice(1,-1).replace(/\\n/g,'\n').replace(/\\"/g,'"');
+          const u=new URL(value);
+          if(!['postgres:','postgresql:'].includes(u.protocol)||u.pathname!='/neondb') throw new Error('SOURCE_DATABASE_URL_INVALID');
+          fs.writeFileSync('/tmp/source.dsn',value,{mode:0o600});
+          console.log(JSON.stringify({sourceDbHost:u.hostname,sourceDbName:u.pathname.slice(1),credentialPrinted:false}));
+          NODE
+          git archive "$FROZEN_SHA" | tar -x -C /tmp/v54-db-probe
+          mkdir -p /tmp/v54-db-probe/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$TARGET_PROJECT" > /tmp/v54-db-probe/.vercel/project.json
+          node - <<'NODE'
+          const fs=require('fs'),p='/tmp/v54-db-probe/vercel.json',c=JSON.parse(fs.readFileSync(p,'utf8'));
+          delete c.crons;fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          NODE
+      - name: Stage exact V54 with ephemeral DB/auth/cron overrides only
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          dsn="$(cat /tmp/source.dsn)"
+          cron="$(openssl rand -hex 32)"
+          cd /tmp/v54-db-probe
+          VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$TARGET_PROJECT" \
+            vercel deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN" --scope="$TEAM" \
+            --env "WDCC_DATABASE_URL=$dsn" \
+            --env "WDCC_NEON_AUTH_URL=$WDCC_NEON_AUTH_URL" \
+            --env "WDCC_NEON_AUTH_ORIGIN=https://dealer.wedontcarecars.com" \
+            --env "WDCC_STOREFRONT_ORIGIN=https://wedontcarecars.com" \
+            --env "CRON_SECRET=$cron" 2>&1 | tee /tmp/probe-deploy.log
+          url="$(grep -Eo 'https://[^ ]+\.vercel\.app' /tmp/probe-deploy.log | tail -n1)"; test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "STAGED_URL=$url"
+          echo 'PRODUCTION_DOMAIN_MOVED=NO'
+          echo 'PROJECT_ENV_PERSISTED=NO'
+      - name: Require V54 database/readiness contract
+        shell: bash
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 20); do
+            code="$(curl --http1.1 -sS -D /tmp/h -o /tmp/j -w '%{http_code}' "$URL/api/health?db-compat=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          tr -d '\r' </tmp/h >/tmp/hn
+          echo "HEALTH_HTTP=$code"
+          jq -c '{ok,degraded,state,authority,release,database,session,auth:.integrations.auth,email:.integrations.email,media:.integrations.media,outboxRetry:.integrations.outboxRetry,reasons}' /tmp/j
+          [ "$code" = 200 ]
+          grep -Eiq '^x-wdcc-data-authority:[[:space:]]*neon[[:space:]]*$' /tmp/hn
+          jq -e '.ok==true and .state=="readable" and .authority=="neon" and .release=="WDCC-V54-NEON-AUTHORITY" and .database.configured==true and .integrations.auth.ready==true and .integrations.email.configured==true and .integrations.media.configured==true and .integrations.outboxRetry.configured==true and (.reasons|length)==0' /tmp/j >/dev/null
+          echo 'DATABASE_COMPATIBILITY=PASS'
+      - name: Prove real dealer Neon login and protected session if credential exists
+        shell: bash
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}" || { echo 'DEALER_LOGIN_PROOF=BLOCKED_MISSING_REPO_SECRET'; exit 21; }
+          jar=/tmp/cookies
+          code="$(curl --http1.1 -sS -c "$jar" -H 'content-type: application/json' -H 'origin: https://dealer.wedontcarecars.com' --data-binary "$(jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}')" -o /tmp/login.json -w '%{http_code}' "$URL/api/auth/login")"
+          echo "LOGIN_HTTP=$code"
+          jq -c '{ok,role,tenantId,user:{username:.user.username,role:.user.role,tenantId:.user.tenantId},error}' /tmp/login.json
+          [ "$code" = 200 ]
+          jq -e '.ok==true and .role=="dealer_agent" and .tenantId=="wdcc"' /tmp/login.json >/dev/null
+          scode="$(curl --http1.1 -sS -b "$jar" -o /tmp/session.json -w '%{http_code}' "$URL/api/auth/session")"
+          echo "SESSION_HTTP=$scode"
+          [ "$scode" = 200 ]
+          jq -e '.authenticated==true and .user.role=="dealer_agent" and .user.tenantId=="wdcc"' /tmp/session.json >/dev/null
+          dcode="$(curl --http1.1 -sS -b "$jar" -o /tmp/dashboard.json -w '%{http_code}' "$URL/api/crm/dashboard")"
+          echo "DASHBOARD_HTTP=$dcode"
+          [ "$dcode" = 200 ]
+          jq -e '(.inventory|type)=="array" and (.leads|type)=="array"' /tmp/dashboard.json >/dev/null
+          echo 'DEALER_LOGIN_PROOF=PASS'
+          echo 'PRODUCTION_DOMAIN_MOVED=NO'
