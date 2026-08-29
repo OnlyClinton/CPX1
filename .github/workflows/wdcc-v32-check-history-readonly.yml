@@ -1,0 +1,47 @@
+name: WDCC V32 Check History Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-check-history-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+    steps:
+      - name: Inspect historical check runs only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          deployments=(
+            dpl_5hEH95btxoK7pdq3NzodnPAMSFcF
+            dpl_AYWZmkUnQPzqf7kvQ14TpZ4WFtFs
+            dpl_CXbNzRuJcWCuhbcte1ScCms1q2Nv
+            dpl_DqmghdSAMuL7uJdERgfDqYq57N21
+            dpl_HhHNgNzmU1b7rGUEhxH3KKXdBNUm
+            dpl_Gb2qA7ubEnGxxue6Wnx6F7viFhZp
+            dpl_5RoJDRv2PVVKudm8UAaxSjt8BpeR
+            dpl_35txfB6P2cE4sH9S7wb88X4F4Rd9
+          )
+          for id in "${deployments[@]}"; do
+            echo "=== $id ==="
+            code="$(curl -sS -o /tmp/runs.json -w '%{http_code}' "https://api.vercel.com/v2/deployments/$id/check-runs?teamId=$TEAM_ID" "${auth[@]}")"
+            echo "HTTP=$code"
+            if [ "$code" = 200 ]; then
+              jq -c '[.runs[]? | {name,status,conclusion,createdAt,startedAt,completedAt,checkId}]' /tmp/runs.json
+            else
+              head -c 500 /tmp/runs.json; echo
+            fi
+          done
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
