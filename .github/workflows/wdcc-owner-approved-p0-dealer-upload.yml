@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -107,10 +107,18 @@ jobs:
           node - <<'NODE'
           const fs=require('fs');
           const common={compatibility_date:'2026-08-25',compatibility_flags:['nodejs_compat'],workers_dev:true,preview_urls:true,observability:{enabled:true}};
+          fs.writeFileSync('wdcc-p0-media-compat.mjs',[
+            'import mediaDefault,{WDCCMedia} from "./cloudflare/wdcc-media-worker.mjs";',
+            'import {WDCCState} from "./cloudflare/wdcc-state-worker.mjs";',
+            'export {WDCCState,WDCCMedia};',
+            'export default mediaDefault;',
+            ''
+          ].join('\n'));
           fs.writeFileSync('wrangler.p0-state.jsonc',JSON.stringify({...common,name:process.env.STATE_WORKER,main:'cloudflare/wdcc-state-worker.mjs',durable_objects:{bindings:[{name:'WDCC_STATE',class_name:'WDCCState'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']}]},null,2)+'\n');
-          fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'cloudflare/wdcc-media-worker.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
+          fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'wdcc-p0-media-compat.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']},{tag:'p0-media-v2',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
           fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...common,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
           NODE
+          node --check wdcc-p0-media-compat.mjs
           for f in wrangler.p0-state.jsonc wrangler.p0-media.jsonc wrangler.p0-app.jsonc; do
             ! grep -Eq '"routes?"|"custom_domains?"' "$f"
           done
