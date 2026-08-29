@@ -35,6 +35,16 @@ jobs:
           git archive "$FROZEN_SHA" | tar -x -C /tmp/wdcc-vercel-frozen
           mkdir -p /tmp/wdcc-vercel-frozen/.vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > /tmp/wdcc-vercel-frozen/.vercel/project.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const path='/tmp/wdcc-vercel-frozen/vercel.json';
+          const config=JSON.parse(fs.readFileSync(path,'utf8'));
+          if(!Array.isArray(config.crons)||!config.crons.length) throw new Error('expected frozen cron declaration missing');
+          delete config.crons;
+          fs.writeFileSync(path,JSON.stringify(config,null,2)+'\n');
+          console.log('PREVIEW_ONLY_CONFIG_DELTA=REMOVE_CRONS');
+          console.log('FROZEN_APP_CODE_DELTA=NONE');
+          NODE
       - name: Deploy frozen SHA to Vercel Preview only
         id: deploy
         shell: bash
