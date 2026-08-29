@@ -4,8 +4,8 @@ import {pathToFileURL} from 'node:url';
 /*
   Owner-contract wrapper for the verified historical real-record visual stress lane.
   Controlling contract:
-    - desktop Featured Inventory may remain the compact populated board presentation
-    - phone Featured Inventory is one dominant swipe/snap card
+    - desktop Featured Inventory remains the compact populated board presentation
+    - phone Featured Inventory shows roughly three compact readable swipe/snap cards at 390px
     - full /inventory is THREE columns on desktop and one compact row per vehicle on mobile
     - phone Add/Edit is ONE readable field column at 390px
   It also follows the current dealer shell and explicitly opens Photos before media checks.
@@ -28,7 +28,7 @@ const inventoryContract="for(const spec of [{name:'desktop',viewport:{width:1440
 if(!code.includes(inventoryContract))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${inventoryContract}`);
 
 const densityFrom="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.46||d.cardW<d.viewport*.28||d.secondX>=d.viewport)fail('MOBILE_FEATURED_DENSITY_3294',d)";
-const densityTo="if(d.display!=='flex'||count!==5||d.cardW>d.viewport*.96||d.cardW<d.viewport*.85||d.secondX<d.viewport*.90||d.secondX>d.viewport*1.05)fail('MOBILE_FEATURED_DENSITY_3294',d)";
+const densityTo="if(d.display!=='flex'||count!==5||d.cardW<100||d.cardW>130||d.secondX>=170)fail('MOBILE_FEATURED_DENSITY_3294',d)";
 if(!code.includes(densityFrom))throw new Error(`OWNER_CONTRACT_STRESS_SOURCE_DRIFT: ${densityFrom}`);
 code=code.replace(densityFrom,densityTo);
 
