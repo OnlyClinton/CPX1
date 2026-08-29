@@ -35,7 +35,7 @@ export default function LockedIntro(){
     const exit=window.setTimeout(()=>setPhase("exit"),exitDelay);
     const done=window.setTimeout(()=>{document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},doneDelay);
     return()=>{window.clearTimeout(exit);window.clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active")};
-  },[ready,reduced,phase]);
+  },[ready,reduced]);
 
   useEffect(()=>{
     if(!ready||reduced||phase!=="show")return;
