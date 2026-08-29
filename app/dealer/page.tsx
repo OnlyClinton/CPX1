@@ -1,1 +1,1 @@
-export {default} from"./DealerDashboard";
+export {default} from "./DashboardManager";
