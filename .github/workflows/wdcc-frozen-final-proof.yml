@@ -38,8 +38,9 @@ jobs:
           grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/DashboardManager.tsx
           grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/inventory/InventoryManager.tsx
           grep -Fq 'public-brand-lock.css' app/layout.tsx
-          grep -Fq 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
-          test -s .github/support/wdcc-frozen-final-proof.mjs
+          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
+          grep -Fq 'WE DON&apos;T CARE CARS' app/WdccPublicChrome.tsx
+          test -s .github/support/wdcc-final-brand-proof.mjs
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
       - name: Build exact candidate
@@ -95,7 +96,7 @@ jobs:
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/home.html
-          for asset in wdcc-logo-transparent.webp wdcc-official-logo.webp wdcc-owner-logo; do
+          for asset in wdcc-official-logo.webp wdcc-owner-logo; do
             asset_code=000
             for i in $(seq 1 15); do
               asset_code="$(curl --http1.1 -sS -L -o "/tmp/${asset//\//-}.bin" -w '%{http_code}' "$URL/$asset?warm=$GITHUB_RUN_ID-$i" || true)"
@@ -110,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-frozen-final-proof.mjs
+          node .github/support/wdcc-final-brand-proof.mjs
       - name: Require exact branch head
         shell: bash
         run: |
