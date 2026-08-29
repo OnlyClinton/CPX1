@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: c811687bd30a9cf212b95d75dc3cf03a9ffdc2fd
+  P0_SHA: a6c451c374330ae01b7c5ba7cf4a4571f58095f0
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-A6C451C3'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -82,6 +82,7 @@ jobs:
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
           grep -Fq 'WDCC_STATE_SERVICE_URL' lib/wdccAuthority.ts
           grep -Fq 'WDCC_MEDIA_SERVICE_URL' lib/wdccAuthority.ts
+          grep -Fq 'export {WDCCState} from "./wdcc-state-worker.mjs";' cloudflare/wdcc-media-worker.mjs
           node --check cloudflare/wdcc-media-worker.mjs
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
@@ -108,7 +109,7 @@ jobs:
           const fs=require('fs');
           const common={compatibility_date:'2026-08-25',compatibility_flags:['nodejs_compat'],workers_dev:true,preview_urls:true,observability:{enabled:true}};
           fs.writeFileSync('wrangler.p0-state.jsonc',JSON.stringify({...common,name:process.env.STATE_WORKER,main:'cloudflare/wdcc-state-worker.mjs',durable_objects:{bindings:[{name:'WDCC_STATE',class_name:'WDCCState'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']}]},null,2)+'\n');
-          fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'cloudflare/wdcc-media-worker.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
+          fs.writeFileSync('wrangler.p0-media.jsonc',JSON.stringify({...common,name:process.env.MEDIA_WORKER,main:'cloudflare/wdcc-media-worker.mjs',durable_objects:{bindings:[{name:'WDCC_MEDIA',class_name:'WDCCMedia'}]},migrations:[{tag:'v1',new_sqlite_classes:['WDCCState']},{tag:'v2',new_sqlite_classes:['WDCCMedia']}]},null,2)+'\n');
           fs.writeFileSync('wrangler.p0-app.jsonc',JSON.stringify({...common,name:process.env.APP_WORKER,main:'.open-next/worker.js',assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},vars:{WDCC_RUNTIME_ROLE:'canonical',WDCC_STATE_SERVICE_URL:process.env.STATE_URL,WDCC_MEDIA_SERVICE_URL:process.env.MEDIA_URL}},null,2)+'\n');
           NODE
           for f in wrangler.p0-state.jsonc wrangler.p0-media.jsonc wrangler.p0-app.jsonc; do
