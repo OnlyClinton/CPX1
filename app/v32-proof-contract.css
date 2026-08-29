@@ -1,0 +1,16 @@
+/* Preserve the established exact-head proof dimensions while using the V32 visual treatment. */
+@media(min-width:901px){
+  html body main.reference-home.locked-storefront .rh-hero{height:500px!important;min-height:500px!important}
+  html body main.reference-home.locked-storefront .rh-hero-art{height:500px!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{height:500px!important;min-height:500px!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding:38px 0 46px!important}
+}
+@media(max-width:900px){
+  html body .wdcc-public-header[data-wdcc-public-chrome="header"]{height:64px!important;min-height:64px!important;max-height:64px!important}
+  html body .wdcc-public-header .rh-header-inner{height:64px!important;min-height:64px!important}
+  html body .wdcc-public-header .rh-logo{height:64px!important}
+  html body main.reference-home.locked-storefront .rh-hero{height:470px!important;min-height:470px!important}
+  html body main.reference-home.locked-storefront .rh-hero-art{height:470px!important}
+  html body main.reference-home.locked-storefront .rh-hero-inner{height:470px!important;min-height:470px!important}
+  html body main.reference-home.locked-storefront .rh-copy{padding:188px 14px 14px!important}
+}
