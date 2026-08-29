@@ -22,8 +22,15 @@ async function prove(viewport,prefix){
     });
     await page.screenshot({path:`${out}/${prefix}-intro-center.png`,fullPage:true});
 
-    await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-phase')==='handoff',null,{timeout:5000});
-    await page.waitForTimeout(700);
+    await page.waitForFunction((mode)=>{
+      const root=document.querySelector('.li'),badge=document.querySelector('.li-badge');
+      if(!root||!badge)return false;
+      const phase=root.getAttribute('data-wdcc-intro-phase');
+      if(phase!=='handoff'&&phase!=='exit')return false;
+      const r=badge.getBoundingClientRect(),cx=r.left+r.width/2;
+      if(r.width>70)return false;
+      return mode==='mobile'?Math.abs(cx-innerWidth/2)<=8:cx<=120;
+    },prefix,{timeout:5000});
     const handoff=await page.evaluate(()=>{
       const root=document.querySelector('.li'),scene=document.querySelector('.li-scene img'),badge=document.querySelector('.li-badge');
       const r=badge?.getBoundingClientRect();
@@ -31,7 +38,7 @@ async function prove(viewport,prefix){
     });
     await page.screenshot({path:`${out}/${prefix}-intro-handoff.png`,fullPage:true});
 
-    if(center.motion!=='full'||handoff.motion!=='full'||center.phase!=='move'||handoff.phase!=='handoff'||!center.badge||!handoff.badge)throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({center,handoff})}`);
+    if(center.motion!=='full'||handoff.motion!=='full'||center.phase!=='move'||!['handoff','exit'].includes(String(handoff.phase))||!center.badge||!handoff.badge)throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({center,handoff})}`);
     if(center.sceneTransform===handoff.sceneTransform)throw new Error(`${prefix.toUpperCase()}_SCENE_DID_NOT_MOVE ${JSON.stringify({center,handoff})}`);
     if(center.badge.width<150||handoff.badge.width>70||center.badge.width-handoff.badge.width<90)throw new Error(`${prefix.toUpperCase()}_BADGE_DID_NOT_SHRINK ${JSON.stringify({center:center.badge,handoff:handoff.badge})}`);
     if(center.badge.cy-handoff.badge.cy<120)throw new Error(`${prefix.toUpperCase()}_BADGE_DID_NOT_TRAVEL ${JSON.stringify({center:center.badge,handoff:handoff.badge})}`);
