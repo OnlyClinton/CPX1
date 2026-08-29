@@ -1,0 +1,59 @@
+name: WDCC 522 Version Preview Metadata
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-522-version-preview-metadata.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKER_NAME: wdcc-v2-883f211f345f-proof
+      VERSION_ID: e7dfeb0b-d609-4117-9ecc-f7eaecf9f0aa
+    steps:
+      - name: Inspect exact version metadata only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER_NAME"
+          curl -fsS "$base/versions" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/versions.json
+          jq -e '.success == true' /tmp/versions.json >/dev/null
+          jq -e --arg id "$VERSION_ID" '.result.items[]? | select(.id == $id)' /tmp/versions.json >/dev/null
+          jq -c --arg id "$VERSION_ID" '
+            .result.items[]?
+            | select(.id == $id)
+            | {
+                id,
+                created_on,
+                modified_on,
+                number,
+                metadata: {
+                  hasPreview: (.metadata.hasPreview // .metadata.has_preview // null),
+                  annotations: (.metadata.annotations // {}),
+                  author_email: (.metadata.author_email // null),
+                  source: (.metadata.source // null)
+                }
+              }
+          ' /tmp/versions.json
+
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            -H 'Content-Type: application/json' > /tmp/subdomain.json
+          jq -e '.success == true' /tmp/subdomain.json >/dev/null
+          jq -c '{subdomain:(.result.subdomain // null)}' /tmp/subdomain.json
+          echo 'PRODUCTION_DEPLOYED=NO'
+          echo 'ROUTES_CHANGED=NO'
+          echo 'TRAFFIC_CHANGED=NO'
