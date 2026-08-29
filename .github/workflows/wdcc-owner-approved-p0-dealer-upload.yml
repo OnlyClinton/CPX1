@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: b0631c8cc59e5e8f00685dc0f2afef440d6f5935
+  P0_SHA: fd342ce9258c0479936e10854efc068378be8864
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-B0631C8C-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-FD342CE9-DO-COMPAT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -78,8 +78,10 @@ jobs:
           grep -Fq 'ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth' app/api/auth/login/route.ts
           grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/login/route.ts
           grep -Fq 'dealer-v2@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          grep -Fq 'dealer-v2@internal.wedontcarecars.com' lib/auth.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/login/route.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
+          ! grep -Fq 'dealer@internal.wedontcarecars.com' lib/auth.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
           ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
