@@ -33,8 +33,12 @@ jobs:
         run: |
           set -euo pipefail
           test -s app/dealer/dealer-brand-lock.css
+          test -s app/public-brand-lock.css
           grep -Fq 'dealer-brand-lock.css' app/dealer/layout.tsx
-          grep -Fq "wdcc-owner-logo" app/dealer/dealer-brand-lock.css
+          grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/DashboardManager.tsx
+          grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/inventory/InventoryManager.tsx
+          grep -Fq 'public-brand-lock.css' app/layout.tsx
+          grep -Fq 'src="/wdcc-logo-transparent.webp"' app/WdccPublicChrome.tsx
           test -s .github/support/wdcc-frozen-final-proof.mjs
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
@@ -91,7 +95,7 @@ jobs:
           test "$code" = 200
           local_build="$(tr -d '\r\n' < .next/BUILD_ID)"
           grep -Fq "$local_build" /tmp/home.html
-          for asset in wdcc-logo-transparent.webp wdcc-owner-logo; do
+          for asset in wdcc-logo-transparent.webp wdcc-official-logo.webp wdcc-owner-logo; do
             asset_code=000
             for i in $(seq 1 15); do
               asset_code="$(curl --http1.1 -sS -L -o "/tmp/${asset//\//-}.bin" -w '%{http_code}' "$URL/$asset?warm=$GITHUB_RUN_ID-$i" || true)"
