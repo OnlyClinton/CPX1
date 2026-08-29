@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-APP-VARS'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -235,8 +235,8 @@ jobs:
           set -euo pipefail
           npx wrangler deploy --config wrangler.p0-app.jsonc 2>&1 | tee /tmp/app-deploy.log
           grep -Fq "$APP_URL" /tmp/app-deploy.log
-          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
-          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
+          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" --config wrangler.p0-app.jsonc --keep-vars >/dev/null
+          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" --config wrangler.p0-app.jsonc --keep-vars >/dev/null
           ok=0
           for i in $(seq 1 20); do
             code="$(curl --http1.1 -sS -o /tmp/app-health -w '%{http_code}' "$APP_URL/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
