@@ -1,0 +1,54 @@
+name: WDCC Neon Dealer Principal Rotate
+
+on:
+  push:
+    branches:
+      - diag/wdcc-dealer-frontdoor-binding-20260829
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AUTH_BASE: https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+      NEW_EMAIL: dealer-v2@internal.wedontcarecars.com
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - name: Ensure replacement managed Neon dealer principal is usable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          sign_in(){
+            jar="$1"; out="$2"
+            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,rememberMe:false}' > /tmp/signin.json
+            curl --http1.1 -sS -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/signin.json -o "$out" -w '%{http_code}' "$AUTH_BASE/sign-in/email"
+          }
+          code="$(sign_in /tmp/dealer-v2.jar /tmp/dealer-v2-login.json)"
+          if [ "$code" != 200 ]; then
+            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,name:"WDCC Dealer"}' > /tmp/signup.json
+            signup_code="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data-binary @/tmp/signup.json -o /tmp/signup-result.json -w '%{http_code}' "$AUTH_BASE/sign-up/email")"
+            echo "NEON_DEALER_PRINCIPAL_SIGNUP_HTTP=$signup_code"
+            if [ "$signup_code" != 200 ] && [ "$signup_code" != 201 ]; then
+              jq -c '{code:(.code // null),message:(.message // .error // null)}' /tmp/signup-result.json 2>/dev/null || true
+              exit 1
+            fi
+            rm -f /tmp/dealer-v2.jar /tmp/dealer-v2-login.json
+            code="$(sign_in /tmp/dealer-v2.jar /tmp/dealer-v2-login.json)"
+          else
+            echo 'NEON_DEALER_PRINCIPAL_ALREADY_PRESENT=YES'
+          fi
+          test "$code" = 200
+          session_code="$(curl --http1.1 -sS -b /tmp/dealer-v2.jar -o /tmp/dealer-v2-session.json -w '%{http_code}' "$AUTH_BASE/get-session")"
+          test "$session_code" = 200
+          email="$(jq -r '.user.email // empty' /tmp/dealer-v2-session.json)"
+          test "$email" = "$NEW_EMAIL"
+          echo 'NEON_DEALER_PRINCIPAL_LOGIN=PASS'
+          echo "NEON_DEALER_PRINCIPAL_EMAIL=$NEW_EMAIL"
+          echo 'PASSWORD_VALUE_PRINTED=NO'
+          rm -f /tmp/signin.json /tmp/signup.json /tmp/signup-result.json /tmp/dealer-v2.jar /tmp/dealer-v2-login.json /tmp/dealer-v2-session.json
