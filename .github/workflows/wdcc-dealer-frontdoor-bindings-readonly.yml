@@ -1,0 +1,28 @@
+name: WDCC Dealer Frontdoor Bindings Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-bindings-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect non-secret live frontdoor bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          echo '=== SETTINGS ==='
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/settings" "${auth[@]}" | jq -c '{success,bindings:[.result.bindings[]? | select(.type=="plain_text" or .type=="json") | {name,type,text,json}]}'
+          echo 'READ_ONLY=YES'
