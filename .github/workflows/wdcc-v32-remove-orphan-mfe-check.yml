@@ -23,7 +23,7 @@ jobs:
       LINT_ID: chk_8e7ba426-a0fd-4ef7-9873-6d47d05dfab2
       OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
     steps:
-      - name: Fail closed: prove orphan condition and live alias unchanged
+      - name: "Fail closed: prove orphan condition and live alias unchanged"
         shell: bash
         run: |
           set -euo pipefail
