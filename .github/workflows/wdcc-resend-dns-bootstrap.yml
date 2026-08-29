@@ -50,7 +50,7 @@ jobs:
           jq -e '.success==true' dkim-before.json >/dev/null
           jq -e '.success==true' send-before.json >/dev/null
 
-          if jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type != "TXT" or .content != $v)' dkim-before.json >/dev/null; then
+          if jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type != "TXT" or ((.content | sub("^\\\"";"") | sub("\\\"$";"")) != $v))' dkim-before.json >/dev/null; then
             echo "CONFLICT: unexpected record exists at $DKIM_NAME"
             jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' dkim-before.json
             exit 20
@@ -68,7 +68,7 @@ jobs:
             exit 22
           fi
 
-          if jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type == "TXT" and (.content | startswith("v=spf1")) and .content != $v)' send-before.json >/dev/null; then
+          if jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type == "TXT" and (((.content | sub("^\\\"";"") | sub("\\\"$";"")) | startswith("v=spf1"))) and ((.content | sub("^\\\"";"") | sub("\\\"$";"")) != $v))' send-before.json >/dev/null; then
             echo "CONFLICT: differing SPF exists at $SEND_NAME"
             jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' send-before.json
             exit 23
@@ -92,7 +92,7 @@ jobs:
             jq -e '.success==true' create.json >/dev/null
           }
 
-          if ! jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type=="TXT" and .content==$v)' dkim-before.json >/dev/null; then
+          if ! jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v))' dkim-before.json >/dev/null; then
             payload="$(jq -nc --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
             create_record "$payload"
             echo "CREATED_DKIM=1" >> "$GITHUB_ENV"
@@ -108,7 +108,7 @@ jobs:
             echo "CREATED_MX=0" >> "$GITHUB_ENV"
           fi
 
-          if ! jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type=="TXT" and .content==$v)' send-before.json >/dev/null; then
+          if ! jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v))' send-before.json >/dev/null; then
             payload="$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
             create_record "$payload"
             echo "CREATED_SPF=1" >> "$GITHUB_ENV"
@@ -127,9 +127,9 @@ jobs:
           curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
             --data-urlencode "name=$SEND_NAME" > send-after.json
 
-          jq -e --arg v "$DKIM_VALUE" '.success==true and any(.result[]; .type=="TXT" and .content==$v and .ttl==1)' dkim-after.json >/dev/null
+          jq -e --arg v "$DKIM_VALUE" '.success==true and any(.result[]; .type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v) and .ttl==1)' dkim-after.json >/dev/null
           jq -e --arg v "$SEND_MX_VALUE" '.success==true and any(.result[]; .type=="MX" and .content==$v and .priority==10 and .ttl==1)' send-after.json >/dev/null
-          jq -e --arg v "$SEND_SPF_VALUE" '.success==true and any(.result[]; .type=="TXT" and .content==$v and .ttl==1)' send-after.json >/dev/null
+          jq -e --arg v "$SEND_SPF_VALUE" '.success==true and any(.result[]; .type=="TXT" and ((.content | sub("^\\\"";"") | sub("\\\"$";""))==$v) and .ttl==1)' send-after.json >/dev/null
 
           {
             echo '### WDCC Resend DNS bootstrap'
