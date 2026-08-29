@@ -1,9 +1,8 @@
 name: WDCC Resend V3 Poll
 
 on:
-  pull_request:
-    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
-    types: [synchronize, reopened]
+  push:
+    branches: [proof/wdcc-live-email-closeout-20260829-final]
     paths:
       - '.github/workflows/wdcc-resend-v3-poll.yml'
   workflow_dispatch:
