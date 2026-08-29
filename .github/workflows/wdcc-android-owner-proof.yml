@@ -41,13 +41,14 @@ jobs:
           test -s app/wdccCorrectLogoData.ts
           test -s app/wdcc-owner-logo/route.ts
           test -s app/wdcc-round-header-contract.css
-          test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           grep -Fq 'WDCC_CORRECT_LOGO_DATA_URI' app/LockedIntro.tsx
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
           grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
           grep -Fq '51546 mobile is split' app/wdcc-round-header-contract.css
           grep -Fq '51543 mobile inventory rows' app/wdcc-round-header-contract.css
+          grep -Fq 'Vehicles ready now.' app/ReferenceCloneHome.tsx
           grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
           last_wdcc_css="$(grep -o 'import"\./wdcc-[^"]*\.css"' app/layout.tsx | tail -1 | sed 's/^import"\.\///;s/"$//')"
           test "$last_wdcc_css" = 'wdcc-round-header-contract.css'
@@ -120,7 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           test -s owner-board-proof/result.json
           node -e "const r=require('./owner-board-proof/result.json');const required=['homeMobile','inventoryMobile','approvalMobile','dealerMobile','dealerInventoryMobile','editorMobile','androidDesktopSite'];if(!r.pass||r.writes.length||required.some(k=>!r.boards?.[k]))process.exit(1)"
 
@@ -145,6 +146,7 @@ jobs:
             node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const r=require('./owner-board-proof/result.json');
           console.log(`PASS: ${r.pass}`);
+          console.log(`Mobile benefit columns: ${r.boards?.homeMobile?.benefits ?? 'n/a'} · featured card width: ${r.boards?.homeMobile?.cards?.[0]?.w ?? 'n/a'} px`);
           console.log(`Android Desktop-site tracks: ${r.boards?.androidDesktopSite?.featured ?? 'n/a'}`);
           console.log(`Browser writes: ${r.writes.length}`);
           console.log(`Proof surfaces: ${Object.keys(r.boards||{}).length}`);
