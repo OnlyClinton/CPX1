@@ -1,0 +1,27 @@
+name: WDCC Live DNS Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-live-dns-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Inspect WDCC apex www dealer DNS only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          z="$(curl -fsS 'https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com' "${auth[@]}" | jq -r '.result[0].id // empty')"; test -n "$z"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$z/dns_records?per_page=100" "${auth[@]}" | jq -c '.result[] | select(.name=="wedontcarecars.com" or .name=="www.wedontcarecars.com" or .name=="dealer.wedontcarecars.com") | {id,type,name,content,proxied,ttl}'
+          echo 'READ_ONLY=YES'
