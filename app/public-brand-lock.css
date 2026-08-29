@@ -8,43 +8,22 @@ html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="
   content:none!important;
   display:none!important;
 }
-html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark[data-wdcc-logo-art="owner-wordmark"]{
-  display:flex!important;
+html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-owner-logo[data-wdcc-logo-art="owner-approved-round"]{
+  display:block!important;
   visibility:visible!important;
   opacity:1!important;
-  width:132px!important;
-  height:58px!important;
-  flex-direction:column!important;
-  align-items:flex-start!important;
-  justify-content:center!important;
-  color:#fff!important;
-  line-height:.82!important;
+  width:62px!important;
+  height:62px!important;
+  min-width:62px!important;
+  min-height:62px!important;
+  max-width:62px!important;
+  max-height:62px!important;
+  object-fit:contain!important;
+  border-radius:0!important;
+  clip-path:none!important;
   transform:none!important;
   scale:1!important;
-}
-html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>strong{
-  display:block!important;
-  margin:0!important;
-  color:#fff!important;
-  font-size:31px!important;
-  line-height:.78!important;
-  font-style:italic!important;
-  font-weight:1000!important;
-  letter-spacing:-.075em!important;
-  white-space:nowrap!important;
-}
-html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>strong>span{
-  color:#f21f32!important;
-}
-html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>small{
-  display:block!important;
-  margin-top:5px!important;
-  color:#fff!important;
-  font-size:6.5px!important;
-  line-height:1!important;
-  font-weight:950!important;
-  letter-spacing:.055em!important;
-  white-space:nowrap!important;
+  filter:none!important;
 }
 @media(max-width:767px){
   html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo{
@@ -55,22 +34,16 @@ html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="
     transform:none!important;
     scale:1!important;
   }
-  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark[data-wdcc-logo-art="owner-wordmark"]{
-    width:112px!important;
-    height:48px!important;
-    min-width:112px!important;
-    max-width:112px!important;
-    align-items:center!important;
+  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-owner-logo[data-wdcc-logo-art="owner-approved-round"]{
+    width:56px!important;
+    height:56px!important;
+    min-width:56px!important;
+    min-height:56px!important;
+    max-width:56px!important;
+    max-height:56px!important;
+    object-fit:contain!important;
     transform:none!important;
     scale:1!important;
-  }
-  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>strong{
-    font-size:28px!important;
-  }
-  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] .wdcc-header-wordmark>small{
-    margin-top:4px!important;
-    font-size:5.6px!important;
-    letter-spacing:.04em!important;
   }
 
   /* Owner-board mobile correction: one real merchandising card is the visual focus,
