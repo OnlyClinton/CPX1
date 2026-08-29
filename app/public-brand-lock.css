@@ -1,0 +1,32 @@
+/* WDCC frozen public brand lock — exact review branch only. */
+html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo::before,
+html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo::after{
+  content:none!important;
+  display:none!important;
+}
+html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  content:url('/wdcc-logo-transparent.webp')!important;
+  width:132px!important;
+  height:58px!important;
+  min-width:132px!important;
+  min-height:58px!important;
+  max-width:132px!important;
+  max-height:58px!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  transform:none!important;
+  filter:none!important;
+}
+@media(max-width:767px){
+  html body header.wdcc-public-header.wdcc-public-header[data-wdcc-public-chrome="header"] a.rh-logo.rh-logo>img.rh-logo-art[data-wdcc-logo-art="owner-wordmark"]{
+    width:112px!important;
+    height:48px!important;
+    min-width:112px!important;
+    min-height:48px!important;
+    max-width:112px!important;
+    max-height:48px!important;
+  }
+}
