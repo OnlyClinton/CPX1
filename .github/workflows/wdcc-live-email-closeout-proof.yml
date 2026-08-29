@@ -18,7 +18,7 @@ concurrency:
 env:
   FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
   VERCEL_SCOPE: cpxagency
-  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  TARGET_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   CANONICAL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
   STAGE_PROJECT_ID: prj_eZGqe21T4dHDBXGyRAOHHMhgy9cf
   PROOF_RECIPIENT: sean@wedontcarecars.com
@@ -58,8 +58,8 @@ jobs:
           pull_env(){
             project_id="$1"; output="$2"; work="$3"
             mkdir -p "$work/.vercel"
-            printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$project_id" > "$work/.vercel/project.json"
-            (cd "$work" && vercel env pull "$output" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
+            printf '{"orgId":"%s","projectId":"%s"}\n' "$TARGET_ORG_ID" "$project_id" > "$work/.vercel/project.json"
+            (cd "$work" && VERCEL_ORG_ID="$TARGET_ORG_ID" VERCEL_PROJECT_ID="$project_id" vercel env pull "$output" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null)
             test -s "$output"
           }
           pull_env "$CANONICAL_PROJECT_ID" /tmp/wdcc-canonical.env /tmp/wdcc-canonical-project
@@ -87,6 +87,8 @@ jobs:
           stage="$(flags /tmp/wdcc-stage.env)"
           IFS=, read -r ck cr cf <<< "$canonical"
           IFS=, read -r sk sr sf <<< "$stage"
+          printf 'CANONICAL email config: key=%s recipients=%s from=%s\n' "$ck" "$cr" "$cf"
+          printf 'STAGE email config: key=%s recipients=%s from=%s\n' "$sk" "$sr" "$sf"
           {
             echo "CANONICAL_RESEND_API_KEY=$ck"
             echo "CANONICAL_RECIPIENTS=$cr"
