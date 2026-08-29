@@ -16,54 +16,67 @@ async function openIntro(page,prefix){
   throw new Error(`${prefix.toUpperCase()}_INTRO_HTTP_${response?.status()||0}`);
 }
 
+async function sample(page){
+  return page.evaluate(()=>{
+    const root=document.querySelector('.li'),scene=document.querySelector('.li-scene img'),badge=document.querySelector('.li-badge'),one=document.querySelector('.li-smoke-one'),two=document.querySelector('.li-smoke-two');
+    if(!root||!scene||!badge)return null;
+    const t=getComputedStyle(scene).transform;
+    let scale=0;
+    try{scale=new DOMMatrixReadOnly(t).a}catch{}
+    return{
+      motion:root.getAttribute('data-wdcc-intro-motion'),
+      phase:root.getAttribute('data-wdcc-intro-phase'),
+      sceneTransform:t,
+      sceneScale:scale,
+      sceneAnimation:getComputedStyle(scene).animationName,
+      badgeOpacity:Number(getComputedStyle(badge).opacity),
+      badgeAnimation:getComputedStyle(badge).animationName,
+      smokeOne:Number(one?getComputedStyle(one).opacity:0),
+      smokeTwo:Number(two?getComputedStyle(two).opacity:0),
+      badgeWidth:badge.getBoundingClientRect().width
+    };
+  });
+}
+
 async function prove(viewport,prefix){
   const context=await browser.newContext({viewport,deviceScaleFactor:1,reducedMotion:'no-preference'});
   const page=await context.newPage();
   try{
     await openIntro(page,prefix);
     await page.locator('.li[data-wdcc-intro-ready="true"]').waitFor({state:'visible',timeout:12000});
-    await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-phase')==='move',null,{timeout:5000});
-    await page.waitForTimeout(420);
-    const center=await page.evaluate(()=>{
-      const root=document.querySelector('.li'),scene=document.querySelector('.li-scene img'),badge=document.querySelector('.li-badge');
-      const r=badge?.getBoundingClientRect();
-      return{motion:root?.getAttribute('data-wdcc-intro-motion'),phase:root?.getAttribute('data-wdcc-intro-phase'),sceneTransform:scene?getComputedStyle(scene).transform:'',badge:r?{left:r.left,top:r.top,width:r.width,height:r.height,cx:r.left+r.width/2,cy:r.top+r.height/2}:null,viewport:{w:innerWidth,h:innerHeight}};
-    });
-    await page.screenshot({path:`${out}/${prefix}-intro-center.png`,fullPage:true});
 
-    await page.waitForFunction((mode)=>{
-      const root=document.querySelector('.li'),badge=document.querySelector('.li-badge');
-      if(!root||!badge)return false;
-      const phase=root.getAttribute('data-wdcc-intro-phase');
-      if(phase!=='handoff'&&phase!=='exit')return false;
-      const r=badge.getBoundingClientRect(),cx=r.left+r.width/2;
-      if(r.width>70)return false;
-      return mode==='mobile'?Math.abs(cx-innerWidth/2)<=8:cx<=120;
-    },prefix,{timeout:5000});
-    const handoff=await page.evaluate(()=>{
-      const root=document.querySelector('.li'),scene=document.querySelector('.li-scene img'),badge=document.querySelector('.li-badge');
-      const r=badge?.getBoundingClientRect();
-      return{motion:root?.getAttribute('data-wdcc-intro-motion'),phase:root?.getAttribute('data-wdcc-intro-phase'),sceneTransform:scene?getComputedStyle(scene).transform:'',badge:r?{left:r.left,top:r.top,width:r.width,height:r.height,cx:r.left+r.width/2,cy:r.top+r.height/2}:null,viewport:{w:innerWidth,h:innerHeight}};
-    });
-    await page.screenshot({path:`${out}/${prefix}-intro-handoff.png`,fullPage:true});
+    await page.waitForTimeout(180);
+    const start=await sample(page);
+    await page.screenshot({path:`${out}/${prefix}-intro-v32-start.png`,fullPage:true});
 
-    if(center.motion!=='full'||handoff.motion!=='full'||center.phase!=='move'||!['handoff','exit'].includes(String(handoff.phase))||!center.badge||!handoff.badge)throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({center,handoff})}`);
-    if(center.sceneTransform===handoff.sceneTransform)throw new Error(`${prefix.toUpperCase()}_SCENE_DID_NOT_MOVE ${JSON.stringify({center,handoff})}`);
-    if(center.badge.width<150||handoff.badge.width>70||center.badge.width-handoff.badge.width<90)throw new Error(`${prefix.toUpperCase()}_BADGE_DID_NOT_SHRINK ${JSON.stringify({center:center.badge,handoff:handoff.badge})}`);
-    if(center.badge.cy-handoff.badge.cy<120)throw new Error(`${prefix.toUpperCase()}_BADGE_DID_NOT_TRAVEL ${JSON.stringify({center:center.badge,handoff:handoff.badge})}`);
-    if(prefix==='mobile'&&Math.abs(handoff.badge.cx-handoff.viewport.w/2)>8)throw new Error(`MOBILE_BADGE_NOT_HEADER_CENTER ${JSON.stringify(handoff)}`);
-    if(prefix==='desktop'&&handoff.badge.cx>120)throw new Error(`DESKTOP_BADGE_NOT_HEADER_LEFT ${JSON.stringify(handoff)}`);
+    await page.waitForTimeout(700);
+    const active=await sample(page);
+    await page.screenshot({path:`${out}/${prefix}-intro-v32-active.png`,fullPage:true});
 
-    await page.locator('.li').waitFor({state:'detached',timeout:5000});
-    await page.screenshot({path:`${out}/${prefix}-intro-complete.png`,fullPage:true});
-    return{center,handoff,completed:true};
+    await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-phase')==='reveal',null,{timeout:2500});
+    await page.waitForTimeout(600);
+    const reveal=await sample(page);
+    await page.screenshot({path:`${out}/${prefix}-intro-v32-reveal.png`,fullPage:true});
+
+    if(!start||!active||!reveal)throw new Error(`${prefix.toUpperCase()}_INTRO_SAMPLE_MISSING`);
+    if(start.motion!=='full'||active.motion!=='full'||reveal.motion!=='full'||start.phase!=='impact'||reveal.phase!=='reveal')throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({start,active,reveal})}`);
+    if(start.sceneAnimation!=='liV32Scene'||active.sceneAnimation!=='liV32Scene'||start.badgeAnimation!=='liV32Badge')throw new Error(`${prefix.toUpperCase()}_V32_ANIMATION_NAMES_FAIL ${JSON.stringify({start,active})}`);
+    if(!start.sceneScale||!active.sceneScale||!reveal.sceneScale||start.sceneScale-reveal.sceneScale<.025||start.sceneTransform===active.sceneTransform||active.sceneTransform===reveal.sceneTransform)throw new Error(`${prefix.toUpperCase()}_SCENE_PUSH_FAIL ${JSON.stringify({start,active,reveal})}`);
+    if(active.badgeOpacity<.75||reveal.badgeOpacity<.95)throw new Error(`${prefix.toUpperCase()}_BADGE_RESOLVE_FAIL ${JSON.stringify({start,active,reveal})}`);
+    if(Math.max(active.smokeOne,active.smokeTwo)<.12)throw new Error(`${prefix.toUpperCase()}_SMOKE_MOTION_FAIL ${JSON.stringify({start,active,reveal})}`);
+    if(prefix==='mobile'&&(active.badgeWidth<120||active.badgeWidth>235))throw new Error(`MOBILE_BADGE_SIZE_FAIL ${JSON.stringify(active)}`);
+    if(prefix==='desktop'&&(active.badgeWidth<180||active.badgeWidth>305))throw new Error(`DESKTOP_BADGE_SIZE_FAIL ${JSON.stringify(active)}`);
+
+    await page.locator('.li').waitFor({state:'detached',timeout:4000});
+    await page.screenshot({path:`${out}/${prefix}-intro-v32-complete.png`,fullPage:true});
+    return{start,active,reveal,completed:true};
   }finally{await context.close()}
 }
 
 try{
   const mobile=await prove({width:390,height:844},'mobile');
   const desktop=await prove({width:1440,height:1000},'desktop');
-  const result={sha,url:base,mobile,desktop,pass:true};
+  const result={sha,url:base,benchmark:'wdcc-v32-storefront',mobile,desktop,pass:true};
   fs.writeFileSync(`${out}/intro-motion-result.json`,JSON.stringify(result,null,2));
   console.log(JSON.stringify(result,null,2));
 }finally{await browser.close()}
