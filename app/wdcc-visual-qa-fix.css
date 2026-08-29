@@ -88,4 +88,14 @@ html body .wdccRecoveryInventoryBanner~.rh-grid>article>a:first-child>span:last-
   html body main.reference-home.locked-storefront .rh-benefit small{font-size:7.2px!important;line-height:1.25!important}
   html body main.reference-home.locked-storefront .rh-trust-grid span{font-size:7px!important;line-height:1.25!important}
   html body .wdcc-public-footer .rh-footer-inner{font-size:7.8px!important}
+
+  /* Owner mock requires one large swipe card, not four tiny cards. This exact
+     selector intentionally outranks the earlier compact owner-board rule. */
+  html body main.reference-home.locked-storefront .rh-grid>article{
+    flex:0 0 86%!important;
+    width:86%!important;
+    min-width:86%!important;
+    max-width:86%!important;
+    scroll-snap-align:center!important;
+  }
 }
