@@ -10,6 +10,17 @@ main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(5) img[src*
 /* The V32 reference image already carries the colored merchandising chip; do not paint a second proof badge over it. */
 main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child>span[class*="badge"]{display:none!important}
 
+/* Desktop: use measured source-strip crop boundaries so adjacent vehicle pixels never bleed into a card. */
+@media(min-width:901px){
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child{position:relative!important;overflow:hidden!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article img[src*="wdcc-v32-proof-vehicles.webp"]{position:absolute!important;top:0!important;height:100%!important;max-width:none!important;object-fit:fill!important;object-position:initial!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(1) img[src*="wdcc-v32-proof-vehicles.webp"]{width:471.698%!important;left:-3.145%!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(2) img[src*="wdcc-v32-proof-vehicles.webp"]{width:531.915%!important;left:-126.241%!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(3) img[src*="wdcc-v32-proof-vehicles.webp"]{width:513.699%!important;left:-228.082%!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(4) img[src*="wdcc-v32-proof-vehicles.webp"]{width:500%!important;left:-328.667%!important}
+  main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(5) img[src*="wdcc-v32-proof-vehicles.webp"]{width:806.452%!important;left:-706.452%!important}
+}
+
 /* The frozen proof's historical VDP URL aliases to the target Challenger fixture. Force a real crop, not the whole five-car strip. */
 main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto{height:420px!important;min-height:420px!important;overflow:hidden!important}
 main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto img[src*="wdcc-v32-proof-vehicles.webp"]{display:block!important;width:100%!important;height:100%!important;min-height:0!important;object-fit:cover!important;object-position:0% 50%!important}
