@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: wdcc-live-email-closeout-proof
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   FROZEN_CANDIDATE_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
@@ -95,7 +95,7 @@ jobs:
           }
           const summary = line => fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, line + '\n');
           const vals = parseEnv('/tmp/wdcc-email.env');
-          const key = (vals.RESEND_API_KEY || vals.WDCC_RESEND_API_KEY || process.env.GH_RESEND_API_KEY || process.env.GH_WDCC_RESEND_API_KEY || '').trim();
+          const key = (process.env.GH_RESEND_API_KEY || process.env.GH_WDCC_RESEND_API_KEY || vals.RESEND_API_KEY || vals.WDCC_RESEND_API_KEY || '').trim();
           if (!key) {
             summary('RESEND_API_KEY_PRESENT=NO');
             summary('EMAIL_GATE=HOLD_PROVIDER_CREDENTIAL_MISSING');
@@ -111,7 +111,7 @@ jobs:
               headers: {
                 Authorization: `Bearer ${key}`,
                 'Content-Type': 'application/json',
-                'Idempotency-Key': `wdcc-live-email-${process.env.FROZEN_CANDIDATE_SHA}-${process.env.GITHUB_RUN_ID}`
+                'Idempotency-Key': `wdcc-live-email-${process.env.FROZEN_CANDIDATE_SHA}`
               },
               body: JSON.stringify({
                 from: process.env.PROOF_FROM,
