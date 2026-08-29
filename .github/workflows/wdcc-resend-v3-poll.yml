@@ -1,0 +1,41 @@
+name: WDCC Resend V3 Poll
+
+on:
+  push:
+    branches: [proof/wdcc-live-email-closeout-20260829-final]
+    paths:
+      - '.github/workflows/wdcc-resend-v3-poll.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      EMAIL_ID: 6badf74e-9cd4-4b03-93ec-0efb5c3831ed
+    steps:
+      - name: Poll exact accepted v3 message only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RESEND_API_KEY:-}"
+          last=""
+          for i in $(seq 1 30); do
+            code="$(curl -sS -o /tmp/email.json -w '%{http_code}' "https://api.resend.com/emails/$EMAIL_ID" -H "Authorization: Bearer $RESEND_API_KEY")"
+            if [ "$code" = 404 ]; then sleep 2; continue; fi
+            [ "$code" = 200 ] || { echo "LOOKUP_HTTP=$code"; cat /tmp/email.json; exit 20; }
+            last="$(jq -r '.last_event // empty' /tmp/email.json)"
+            echo "RESEND_EMAIL_ID=$EMAIL_ID"
+            echo "LAST_EVENT=${last:-unknown}"
+            case "$last" in
+              delivered|opened|clicked) echo 'EMAIL_GATE=GREEN'; exit 0 ;;
+              bounced|failed|complained|suppressed) echo 'EMAIL_GATE=HOLD_DELIVERY_FAILURE'; exit 25 ;;
+            esac
+            sleep 2
+          done
+          echo "LAST_EVENT=${last:-not_found_or_not_terminal}"
+          exit 26

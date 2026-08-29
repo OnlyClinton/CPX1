@@ -1,0 +1,17 @@
+name: WDCC Resend Unsuppress And Retest — DISABLED
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse unsuppress while recipient does not exist
+        run: |
+          echo 'BLOCKED: sean@wedontcarecars.com currently returns Proton 550 5.1.1 recipient address does not exist.'
+          echo 'Create/activate the Proton mailbox or alias first; then re-enable a single controlled retest.'
+          exit 1

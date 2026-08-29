@@ -1,0 +1,53 @@
+name: WDCC Mailbox Route Diagnostic
+
+on:
+  pull_request:
+    branches: [preview/wdcc-mockup-convergence-20260827-v2-proof]
+    types: [synchronize, reopened]
+    paths:
+      - '.github/workflows/wdcc-mailbox-route-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-mailbox-route-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      SOURCE_EMAIL_ID: e1f32bef-e592-4bb3-a244-29636b5b2623
+      DOMAIN: wedontcarecars.com
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Inspect public receiving DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== ROOT MX ==='
+          dig +short MX "$DOMAIN" @1.1.1.1 || true
+          echo '=== ROOT A ==='
+          dig +short A "$DOMAIN" @1.1.1.1 || true
+          echo '=== ROOT AAAA ==='
+          dig +short AAAA "$DOMAIN" @1.1.1.1 || true
+
+      - name: Inspect source bounced email safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RESEND_API_KEY:-}"
+          code="$(curl -sS -o email.json -w '%{http_code}' "https://api.resend.com/emails/$SOURCE_EMAIL_ID" -H "Authorization: Bearer $RESEND_API_KEY")"
+          echo "SOURCE_EMAIL_LOOKUP_HTTP=$code"
+          if [ "$code" != 200 ]; then
+            jq -c '{name,message,statusCode}' email.json 2>/dev/null || true
+            exit 0
+          fi
+          jq -c '{id,from,to,subject,created_at,last_event}' email.json
