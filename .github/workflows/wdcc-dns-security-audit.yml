@@ -73,3 +73,4 @@ jobs:
             echo '#### Wildcards'
             jq -r '.result[] | select(.name|startswith("*.")) | "\(.type) \(.name) -> \(.content) ttl=\(.ttl) proxied=\(.proxied // false)"' dns.json
           } | tee audit.txt >> "$GITHUB_STEP_SUMMARY"
+          cat audit.txt
