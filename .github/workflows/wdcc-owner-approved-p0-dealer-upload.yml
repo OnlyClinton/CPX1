@@ -417,13 +417,54 @@ jobs:
 
           npx wrangler versions deploy "$NEW_VERSION@100%" --name "$FRONTDOOR_WORKER" -y --message "Owner-approved P0 dealer upload $P0_SHA"
           promoted=1
-          ok=0
-          for i in $(seq 1 20); do
-            code="$(curl --http1.1 -sS -D /tmp/live-dh -o /tmp/live-health -w '%{http_code}' "$DEALER_ROOT/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
-            if [ "$code" = 200 ] && grep -qi '^x-wdcc-dealer-frontdoor: p0-do' /tmp/live-dh && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null; then ok=1;break;fi
+
+          active=0
+          for i in $(seq 1 30); do
+            npx wrangler deployments status --name "$FRONTDOOR_WORKER" --json > /tmp/front-active.json
+            if NEW_VERSION="$NEW_VERSION" python - <<'PY'
+          import json,os,sys
+          d=json.load(open('/tmp/front-active.json')); target=os.environ['NEW_VERSION']; rows=[]
+          def walk(x):
+            if isinstance(x,dict):
+              v=x.get('version_id') or x.get('versionId'); p=x.get('percentage')
+              if v: rows.append((str(v),p))
+              for y in x.values(): walk(y)
+            elif isinstance(x,list):
+              for y in x: walk(y)
+          walk(d)
+          ok=any(v==target and p in (100,100.0,'100','100.0',1,1.0,'1','1.0') for v,p in rows)
+          sys.exit(0 if ok else 1)
+          PY
+            then
+              active=1
+              echo "P0_FRONTDOOR_DEPLOYMENT_ACTIVE attempt=$i version=$NEW_VERSION"
+              break
+            fi
             sleep 2
           done
-          test "$ok" = 1
+          test "$active" = 1
+
+          ready=0
+          for i in $(seq 1 30); do
+            code="$(curl --http1.1 -sS -D /tmp/live-dh -o /tmp/live-health -w '%{http_code}' "$DEALER_ROOT/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
+            edge="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-dealer-frontdoor:/{sub(/\r$/,"");sub(/^x-wdcc-dealer-frontdoor:[[:space:]]*/,"");print;exit}' /tmp/live-dh)"
+            app_sha="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-dealer-app-sha:/{sub(/\r$/,"");sub(/^x-wdcc-dealer-app-sha:[[:space:]]*/,"");print;exit}' /tmp/live-dh)"
+            body_ok=0
+            jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null 2>&1 && body_ok=1
+            echo "P0_FRONTDOOR_READINESS attempt=$i http=$code edge=${edge:-missing} sha=${app_sha:-missing} body_ok=$body_ok"
+            if [ "$code" = 200 ] && [ "$edge" = 'p0-do' ] && [ "$app_sha" = "$P0_SHA" ] && [ "$body_ok" = 1 ]; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            echo 'public dealer front door did not converge to the exact promoted P0 version' >&2
+            cat /tmp/live-dh >&2 || true
+            cat /tmp/live-health >&2 || true
+            exit 1
+          fi
+
           live_login_code="$(curl --http1.1 -sS -D /tmp/live-login-headers -o /tmp/live-login-page -w '%{http_code}' "$DEALER_ROOT/dealer/login?p0=$GITHUB_RUN_ID")"
           test "$live_login_code" = 307
           live_login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' /tmp/live-login-headers)"
