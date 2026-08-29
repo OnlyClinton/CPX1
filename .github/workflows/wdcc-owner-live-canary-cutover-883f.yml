@@ -1,0 +1,287 @@
+name: WDCC Owner Live Canary Cutover 883f
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-owner-live-canary-cutover-883f.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-owner-live-canary-cutover
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      ROOT_WORKER: wdcc-reference-root
+      DEALER_WORKER: wdcc-dealer-frontdoor
+      ROOT_OLD: 86df4625-17fd-4d68-840b-b37b017cac9b
+      DEALER_OLD: 49f77a46-5fb0-405f-9a79-298c9729b85d
+      APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+      PROD_ROOT: https://wedontcarecars.com
+      PROD_WWW: https://www.wedontcarecars.com
+      DEALER_ROOT: https://dealer.wedontcarecars.com
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail closed on authority, rollback IDs, and live ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = OnlyClinton
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID WDCC_DEALER_E2E_PASSWORD; do test -n "${!v:-}"; done
+          test "$(git rev-parse "$FROZEN_SHA")" = "$FROZEN_SHA"
+          npm install --global wrangler@4.90.0 >/dev/null
+          wrangler deployments status --name "$ROOT_WORKER" --json > /tmp/root-before-deploy.json
+          wrangler deployments status --name "$DEALER_WORKER" --json > /tmp/dealer-before-deploy.json
+          grep -Fq "$ROOT_OLD" /tmp/root-before-deploy.json
+          grep -Fq "$DEALER_OLD" /tmp/dealer-before-deploy.json
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
+          echo "$zone" > /tmp/zone-id
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" | jq -S '.result|sort_by(.pattern)' > /tmp/routes-before.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" | jq -S '.result|sort_by(.hostname)' > /tmp/domains-before.json
+          jq -e --arg r "$ROOT_WORKER" --arg d "$DEALER_WORKER" '
+            any(.[]?; .script==$r and (.pattern=="wedontcarecars.com/*" or .pattern=="www.wedontcarecars.com/*")) and
+            any(.[]?; .script==$d and .pattern=="dealer.wedontcarecars.com/*")
+          ' /tmp/routes-before.json >/dev/null
+          echo 'LIVE_OWNERSHIP_AND_ROLLBACK_IDS=PASS'
+      - name: Reprove P0 app authority and five published vehicles
+        shell: bash
+        run: |
+          set -euo pipefail
+          hcode="$(curl --http1.1 -sS -D /tmp/p0h -o /tmp/p0j -w '%{http_code}' "$APP_URL/api/health?owner-cutover=$GITHUB_RUN_ID")"
+          [ "$hcode" = 200 ]
+          tr -d '\r' </tmp/p0h >/tmp/p0hn
+          grep -Eiq '^x-wdcc-data-authority:[[:space:]]*neon[[:space:]]*$' /tmp/p0hn
+          jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/p0j >/dev/null
+          icode="$(curl --http1.1 -sS -o /tmp/p0inv -w '%{http_code}' "$APP_URL/api/inventory?owner-cutover=$GITHUB_RUN_ID")"
+          [ "$icode" = 200 ]
+          jq -e '.count==5 and (.items|length)==5 and ([.items[].status]|all(.=="published"))' /tmp/p0inv >/dev/null
+          echo 'P0_APP_AUTHORITY=PASS'
+      - name: Build exact frozen storefront once
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/wdcc-live-frozen && mkdir -p /tmp/wdcc-live-frozen
+          git archive "$FROZEN_SHA" | tar -x -C /tmp/wdcc-live-frozen
+          cd /tmp/wdcc-live-frozen
+          npm ci
+          npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
+          npx opennextjs-cloudflare build
+          test -s .open-next/worker.js
+          test -d .open-next/assets
+          test -s .next/BUILD_ID
+          node - <<'NODE'
+          const fs=require('fs');
+          const c={
+            name:process.env.ROOT_WORKER,
+            main:'.open-next/worker.js',
+            compatibility_date:'2026-08-25',
+            compatibility_flags:['nodejs_compat','global_fetch_strictly_public'],
+            workers_dev:false,
+            preview_urls:false,
+            assets:{directory:'.open-next/assets',binding:'ASSETS',run_worker_first:false},
+            observability:{enabled:true},
+            vars:{WDCC_RUNTIME_ROLE:'frontend',WDCC_DEALER_BACKEND_URL:process.env.APP_URL}
+          };
+          fs.writeFileSync('wrangler.live-root.jsonc',JSON.stringify(c,null,2)+'\n');
+          NODE
+          ! grep -Eq 'WDCC_MOCKUP_PREVIEW|"routes?"|"custom_domains?"' wrangler.live-root.jsonc
+          sha256sum public/wdcc-hero-v2.webp | awk '{print $1}' > /tmp/frozen-hero.sha
+          tr -d '\r\n' < .next/BUILD_ID > /tmp/frozen-build-id
+          echo 'FROZEN_BUILD=PASS'
+      - name: Upload exact frozen root version without changing traffic
+        id: root_upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-live-frozen
+          export WRANGLER_OUTPUT_FILE_PATH=/tmp/root-upload.ndjson
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
+          npx wrangler versions upload --config wrangler.live-root.jsonc --message "Owner live frozen $FROZEN_SHA" 2>&1 | tee /tmp/root-upload.log
+          new="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/root-upload.log | tail -1 | awk '{print $4}')"
+          if [ -z "$new" ]; then new="$(jq -r -s '[.[]|select(.type=="version-upload")][0].version_id // empty' /tmp/root-upload.ndjson)"; fi
+          test -n "$new"
+          test "$new" != "$ROOT_OLD"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "ROOT_NEW_VERSION=$new"
+          echo 'TRAFFIC_CHANGED=NO'
+      - name: Root 0.01 percent canary, force real-domain checks, then promote
+        shell: bash
+        env:
+          ROOT_NEW: ${{ steps.root_upload.outputs.new }}
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$ROOT_OLD@99.99%" "$ROOT_NEW@0.01%" --name "$ROOT_WORKER" -y --message "Owner live 883f root canary $GITHUB_RUN_ID"
+          override="Cloudflare-Workers-Version-Overrides: $ROOT_WORKER=\"$ROOT_NEW\""
+          build="$(cat /tmp/frozen-build-id)"; hero_sha="$(cat /tmp/frozen-hero.sha)"
+          root_code="$(curl --http1.1 -sS -L -H "$override" -o /tmp/canary-root -w '%{http_code}' "$PROD_ROOT/?owner-canary=$GITHUB_RUN_ID")"
+          [ "$root_code" = 200 ]
+          grep -Fq "$build" /tmp/canary-root
+          inv_code="$(curl --http1.1 -sS -D /tmp/canary-invh -H "$override" -o /tmp/canary-inv -w '%{http_code}' "$PROD_ROOT/api/inventory?owner-canary=$GITHUB_RUN_ID")"
+          [ "$inv_code" = 200 ]
+          tr -d '\r' </tmp/canary-invh >/tmp/canary-invhn
+          ! grep -Eiq '^x-wdcc-mockup-preview:' /tmp/canary-invhn
+          jq -e '.count==5 and (.items|length)==5 and (.mockupPreview!=true)' /tmp/canary-inv >/dev/null
+          health_code="$(curl --http1.1 -sS -D /tmp/canary-hh -H "$override" -o /tmp/canary-health -w '%{http_code}' "$PROD_ROOT/api/health?owner-canary=$GITHUB_RUN_ID")"
+          [ "$health_code" = 200 ]
+          jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/canary-health >/dev/null
+          hero_code="$(curl --http1.1 -sS -L -H "$override" -o /tmp/canary-hero -w '%{http_code}' "$PROD_ROOT/wdcc-hero-v2.webp?owner-canary=$GITHUB_RUN_ID")"
+          [ "$hero_code" = 200 ]
+          [ "$(sha256sum /tmp/canary-hero|awk '{print $1}')" = "$hero_sha" ]
+          www_code="$(curl --http1.1 -sS -L --max-redirs 5 -H "$override" -o /tmp/canary-www -w '%{http_code}' "$PROD_WWW/?owner-canary=$GITHUB_RUN_ID")"
+          [ "$www_code" = 200 ]
+          grep -Fq "$build" /tmp/canary-www
+          echo 'ROOT_FORCED_CANARY=PASS'
+          npx wrangler versions deploy "$ROOT_NEW@100%" --name "$ROOT_WORKER" -y --message "OWNER APPROVED LIVE frozen $FROZEN_SHA root"
+          sleep 2
+          root_code="$(curl --http1.1 -sS -L -o /tmp/live-root -w '%{http_code}' "$PROD_ROOT/?owner-live=$GITHUB_RUN_ID")"; [ "$root_code" = 200 ]; grep -Fq "$build" /tmp/live-root
+          inv_code="$(curl --http1.1 -sS -o /tmp/live-inv -w '%{http_code}' "$PROD_ROOT/api/inventory?owner-live=$GITHUB_RUN_ID")"; [ "$inv_code" = 200 ]; jq -e '.count==5 and (.items|length)==5 and (.mockupPreview!=true)' /tmp/live-inv >/dev/null
+          health_code="$(curl --http1.1 -sS -o /tmp/live-health -w '%{http_code}' "$PROD_ROOT/api/health?owner-live=$GITHUB_RUN_ID")"; [ "$health_code" = 200 ]; jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/live-health >/dev/null
+          echo 'ROOT_LIVE=PASS'
+      - name: Upload dealer frontdoor with only UI and API origins changed
+        id: dealer_upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wdcc-dealer-frontdoor-live.mjs <<'JS'
+          const UI="https://wedontcarecars.com";
+          const API="https://wdcc-proof-04c5d526.clico-global.workers.dev";
+          const TRUSTED="https://dealer.wedontcarecars.com";
+          const HOST="dealer.wedontcarecars.com";
+          const mutation=new Set(["POST","PUT","PATCH","DELETE"]);
+          function rewriteLocation(value,upstream,incoming){
+            if(!value)return value;
+            try{const u=new URL(value,upstream);if(u.origin===upstream.origin){u.protocol=incoming.protocol;u.host=incoming.host;return u.toString();}}catch{}
+            return value;
+          }
+          export default {async fetch(request){
+            const incoming=new URL(request.url);
+            if(incoming.pathname==="/")return Response.redirect(new URL("/dealer",incoming),307);
+            const isApi=incoming.pathname.startsWith("/api/");
+            const base=new URL(isApi?API:UI);
+            const target=new URL(incoming.pathname+incoming.search,base);
+            const headers=new Headers(request.headers);
+            headers.delete("host");
+            headers.set("x-forwarded-host",HOST);
+            headers.set("x-forwarded-proto","https");
+            headers.set("x-wdcc-edge-frontdoor","dealer-p0-live");
+            if(isApi&&mutation.has(request.method.toUpperCase()))headers.set("origin",TRUSTED);
+            const init={method:request.method,headers,redirect:"manual"};
+            if(!["GET","HEAD"].includes(request.method.toUpperCase()))init.body=request.body;
+            const upstream=await fetch(target,init);
+            const out=new Headers(upstream.headers);
+            const loc=out.get("location");if(loc)out.set("location",rewriteLocation(loc,base,incoming));
+            out.set("x-wdcc-edge","cloudflare-dealer-p0-live");
+            if(isApi||incoming.pathname.startsWith("/dealer"))out.set("cache-control","private, no-store");
+            return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers:out});
+          }};
+          JS
+          cat > /tmp/wrangler.live-dealer.jsonc <<'JSON'
+          {"name":"wdcc-dealer-frontdoor","main":"/tmp/wdcc-dealer-frontdoor-live.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat","global_fetch_strictly_public"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
+          JSON
+          node --check /tmp/wdcc-dealer-frontdoor-live.mjs
+          ! grep -Eq '"routes?"|"custom_domains?"' /tmp/wrangler.live-dealer.jsonc
+          export WRANGLER_OUTPUT_FILE_PATH=/tmp/dealer-upload.ndjson
+          : > "$WRANGLER_OUTPUT_FILE_PATH"
+          npx wrangler versions upload --config /tmp/wrangler.live-dealer.jsonc --message "Owner live dealer to frozen UI + P0 API $GITHUB_RUN_ID" 2>&1 | tee /tmp/dealer-upload.log
+          new="$(grep -Eo 'Worker Version ID: [0-9a-f-]+' /tmp/dealer-upload.log | tail -1 | awk '{print $4}')"
+          if [ -z "$new" ]; then new="$(jq -r -s '[.[]|select(.type=="version-upload")][0].version_id // empty' /tmp/dealer-upload.ndjson)"; fi
+          test -n "$new"; test "$new" != "$DEALER_OLD"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "DEALER_NEW_VERSION=$new"
+          echo 'TRAFFIC_CHANGED=NO'
+      - name: Dealer 0.01 percent canary, force real login/session, then promote
+        shell: bash
+        env:
+          DEALER_NEW: ${{ steps.dealer_upload.outputs.new }}
+        run: |
+          set -euo pipefail
+          npx wrangler versions deploy "$DEALER_OLD@99.99%" "$DEALER_NEW@0.01%" --name "$DEALER_WORKER" -y --message "Owner live dealer canary $GITHUB_RUN_ID"
+          override="Cloudflare-Workers-Version-Overrides: $DEALER_WORKER=\"$DEALER_NEW\""
+          code="$(curl --http1.1 -sS -L --max-redirs 5 -H "$override" -D /tmp/droot.h -o /tmp/droot -w '%{http_code}' "$DEALER_ROOT/?owner-canary=$GITHUB_RUN_ID")"; [ "$code" = 200 ]
+          grep -Eiq '^x-wdcc-edge:[[:space:]]*cloudflare-dealer-p0-live' /tmp/droot.h
+          code="$(curl --http1.1 -sS -L -H "$override" -o /tmp/dnew -w '%{http_code}' "$DEALER_ROOT/dealer/inventory/new?owner-canary=$GITHUB_RUN_ID")"; [ "$code" = 200 ]
+          code="$(curl --http1.1 -sS -H "$override" -o /tmp/dinv -w '%{http_code}' "$DEALER_ROOT/api/inventory?owner-canary=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; jq -e '.count==5 and (.items|length)==5' /tmp/dinv >/dev/null
+          code="$(curl --http1.1 -sS -H "$override" -o /tmp/dhealth -w '%{http_code}' "$DEALER_ROOT/api/health?owner-canary=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/dhealth >/dev/null
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > /tmp/dlogin-body.json
+          code="$(curl --http1.1 -sS -c /tmp/dcanary.jar -H "$override" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/dlogin-body.json -o /tmp/dlogin -w '%{http_code}' "$DEALER_ROOT/api/auth/login")"; [ "$code" = 200 ]
+          jq -e '.ok==true and (.role=="dealer_agent" or .role=="dealer")' /tmp/dlogin >/dev/null
+          code="$(curl --http1.1 -sS -b /tmp/dcanary.jar -H "$override" -o /tmp/dsession -w '%{http_code}' "$DEALER_ROOT/api/auth/session")"; [ "$code" = 200 ]
+          jq -e '.authenticated==true and (.user.role=="dealer_agent" or .user.role=="dealer")' /tmp/dsession >/dev/null
+          code="$(curl --http1.1 -sS -b /tmp/dcanary.jar -H "$override" -o /tmp/ddash -w '%{http_code}' "$DEALER_ROOT/api/crm/dashboard")"; [ "$code" = 200 ]
+          jq -e '(.inventory|type)=="array" and (.leads|type)=="array"' /tmp/ddash >/dev/null
+          echo 'DEALER_FORCED_CANARY=PASS'
+          npx wrangler versions deploy "$DEALER_NEW@100%" --name "$DEALER_WORKER" -y --message "OWNER APPROVED LIVE dealer frozen UI + P0 API $GITHUB_RUN_ID"
+          sleep 2
+          code="$(curl --http1.1 -sS -L --max-redirs 5 -D /tmp/dlive.h -o /tmp/dlive -w '%{http_code}' "$DEALER_ROOT/?owner-live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; grep -Eiq '^x-wdcc-edge:[[:space:]]*cloudflare-dealer-p0-live' /tmp/dlive.h
+          code="$(curl --http1.1 -sS -o /tmp/dliveinv -w '%{http_code}' "$DEALER_ROOT/api/inventory?owner-live=$GITHUB_RUN_ID")"; [ "$code" = 200 ]; jq -e '.count==5 and (.items|length)==5' /tmp/dliveinv >/dev/null
+          code="$(curl --http1.1 -sS -c /tmp/dlive.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/dlogin-body.json -o /tmp/dlivelogin -w '%{http_code}' "$DEALER_ROOT/api/auth/login")"; [ "$code" = 200 ]
+          code="$(curl --http1.1 -sS -b /tmp/dlive.jar -o /tmp/dlivesession -w '%{http_code}' "$DEALER_ROOT/api/auth/session")"; [ "$code" = 200 ]; jq -e '.authenticated==true' /tmp/dlivesession >/dev/null
+          echo 'DEALER_LIVE=PASS'
+      - name: Prove DNS/routes/custom-domain ownership unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone="$(cat /tmp/zone-id)"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" | jq -S '.result|sort_by(.pattern)' > /tmp/routes-after.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" | jq -S '.result|sort_by(.hostname)' > /tmp/domains-after.json
+          cmp /tmp/routes-before.json /tmp/routes-after.json
+          cmp /tmp/domains-before.json /tmp/domains-after.json
+          echo 'ROUTES_UNCHANGED=YES'
+          echo 'CUSTOM_DOMAINS_UNCHANGED=YES'
+          echo 'DNS_CHANGED=NO'
+      - name: Record live version IDs
+        if: success()
+        shell: bash
+        env:
+          ROOT_NEW: ${{ steps.root_upload.outputs.new }}
+          DEALER_NEW: ${{ steps.dealer_upload.outputs.new }}
+        run: |
+          {
+            echo '### WDCC OWNER-APPROVED P0 LIVE — PASS'
+            echo "Frozen visual/source SHA: $FROZEN_SHA"
+            echo "Root Worker version: $ROOT_NEW"
+            echo "Dealer Worker version: $DEALER_NEW"
+            echo "P0 API authority: $APP_URL"
+            echo 'Root + WWW: PASS'
+            echo 'Live inventory five published recovery vehicles: PASS'
+            echo 'Dealer UI + API: PASS'
+            echo 'Dealer real login/session/dashboard: PASS'
+            echo 'Cloudflare routes/custom-domain ownership: UNCHANGED'
+            echo 'DNS: UNCHANGED'
+            echo "Rollback root: $ROOT_OLD"
+            echo "Rollback dealer: $DEALER_OLD"
+            echo 'Email/Sean mailbox delivery: NOT CERTIFIED'
+            echo 'Full release beyond P0 exception: NOT CLAIMED'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Automatic rollback on any cutover failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          npm install --global wrangler@4.90.0 >/dev/null 2>&1 || true
+          wrangler versions deploy "$DEALER_OLD@100%" --name "$DEALER_WORKER" -y --message "OWNER LIVE AUTO-ROLLBACK $GITHUB_RUN_ID" || true
+          wrangler versions deploy "$ROOT_OLD@100%" --name "$ROOT_WORKER" -y --message "OWNER LIVE AUTO-ROLLBACK $GITHUB_RUN_ID" || true
+          sleep 2
+          echo "ROLLBACK_ROOT_HTTP=$(curl --http1.1 -sS -L -o /dev/null -w '%{http_code}' "$PROD_ROOT/?rollback=$GITHUB_RUN_ID" || true)"
+          echo "ROLLBACK_DEALER_HTTP=$(curl --http1.1 -sS -L -o /dev/null -w '%{http_code}' "$DEALER_ROOT/?rollback=$GITHUB_RUN_ID" || true)"
+          echo 'AUTO_ROLLBACK_ATTEMPTED=YES'
