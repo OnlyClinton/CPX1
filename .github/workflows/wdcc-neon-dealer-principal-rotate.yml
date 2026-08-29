@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 8
     env:
       AUTH_BASE: https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+      DEALER_ORIGIN: https://dealer.wedontcarecars.com
       NEW_EMAIL: dealer-v2@internal.wedontcarecars.com
       WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
     steps:
@@ -26,13 +27,13 @@ jobs:
           printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
           sign_in(){
             jar="$1"; out="$2"
-            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,rememberMe:false}' > /tmp/signin.json
-            curl --http1.1 -sS -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @/tmp/signin.json -o "$out" -w '%{http_code}' "$AUTH_BASE/sign-in/email"
+            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,rememberMe:false,callbackURL:"https://dealer.wedontcarecars.com/dealer"}' > /tmp/signin.json
+            curl --http1.1 -sS -c "$jar" -X POST -H 'Content-Type: application/json' -H "Origin: $DEALER_ORIGIN" --data-binary @/tmp/signin.json -o "$out" -w '%{http_code}' "$AUTH_BASE/sign-in/email"
           }
           code="$(sign_in /tmp/dealer-v2.jar /tmp/dealer-v2-login.json)"
           if [ "$code" != 200 ]; then
-            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,name:"WDCC Dealer"}' > /tmp/signup.json
-            signup_code="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data-binary @/tmp/signup.json -o /tmp/signup-result.json -w '%{http_code}' "$AUTH_BASE/sign-up/email")"
+            jq -nc --arg e "$NEW_EMAIL" --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,name:"WDCC Dealer",callbackURL:"https://dealer.wedontcarecars.com/dealer"}' > /tmp/signup.json
+            signup_code="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' -H "Origin: $DEALER_ORIGIN" --data-binary @/tmp/signup.json -o /tmp/signup-result.json -w '%{http_code}' "$AUTH_BASE/sign-up/email")"
             echo "NEON_DEALER_PRINCIPAL_SIGNUP_HTTP=$signup_code"
             if [ "$signup_code" != 200 ] && [ "$signup_code" != 201 ]; then
               jq -c '{code:(.code // null),message:(.message // .error // null)}' /tmp/signup-result.json 2>/dev/null || true
@@ -44,7 +45,7 @@ jobs:
             echo 'NEON_DEALER_PRINCIPAL_ALREADY_PRESENT=YES'
           fi
           test "$code" = 200
-          session_code="$(curl --http1.1 -sS -b /tmp/dealer-v2.jar -o /tmp/dealer-v2-session.json -w '%{http_code}' "$AUTH_BASE/get-session")"
+          session_code="$(curl --http1.1 -sS -b /tmp/dealer-v2.jar -H "Origin: $DEALER_ORIGIN" -o /tmp/dealer-v2-session.json -w '%{http_code}' "$AUTH_BASE/get-session")"
           test "$session_code" = 200
           email="$(jq -r '.user.email // empty' /tmp/dealer-v2-session.json)"
           test "$email" = "$NEW_EMAIL"
