@@ -44,13 +44,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Build exact frozen candidate payload
+      - name: Extract exact frozen candidate payload
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf /tmp/wdcc-frozen
+          mkdir -p /tmp/wdcc-frozen
           git archive "$FROZEN_CANDIDATE_SHA" | tar -x -C /tmp/wdcc-frozen
-        env:
-          TMPDIR: /tmp
       - name: Build candidate in isolated directory
         shell: bash
         run: |
@@ -115,7 +115,6 @@ jobs:
             echo "version_prefix=$alias"
             echo "worker_name=$worker_name"
           } >> "$GITHUB_OUTPUT"
-          cp /tmp/wdcc-frozen/.next/BUILD_ID /tmp/frozen-BUILD_ID
           printf '%s\n' "$url" > /tmp/mockup-v2-preview-url.txt
           printf 'upload_mode=wrangler-versions-upload-not-deployed\nurl_resolution=cloudflare-preview-alias\nurl=%s\nworker_name=%s\npreview_alias=%s\ncloudflare_version_id=%s\nfrozen_sha=%s\n' "$url" "$worker_name" "$alias" "$version_id" "$FROZEN_CANDIDATE_SHA" > /tmp/mockup-v2-preview-version.txt
           echo 'PRODUCTION_DEPLOYED=NO'
