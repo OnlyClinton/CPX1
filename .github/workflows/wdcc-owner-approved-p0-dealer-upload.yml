@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-APP-VARS'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-SECRET-READY'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -154,14 +154,34 @@ jobs:
           npx wrangler deploy --config wrangler.p0-state.jsonc 2>&1 | tee /tmp/state-deploy.log
           grep -Fq "$STATE_URL" /tmp/state-deploy.log
           cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$STATE_WORKER" >/dev/null
+          state_token="$(cat /tmp/state.token)"
+          state_secret_ready=0
+          for i in $(seq 1 20); do
+            state_code="$(curl --http1.1 -sS -H "Authorization: Bearer $state_token" -o /tmp/state-secret-ready.json -w '%{http_code}' "$STATE_URL/state?secret_ready=$GITHUB_RUN_ID-$i" || true)"
+            if [ "$state_code" = 200 ] || [ "$state_code" = 503 ]; then state_secret_ready=1; break; fi
+            if [ "$state_code" != 401 ]; then echo "unexpected state secret readiness status $state_code" >&2; cat /tmp/state-secret-ready.json >&2 || true; exit 1; fi
+            sleep 2
+          done
+          test "$state_secret_ready" = 1
 
           npx wrangler deploy --config wrangler.p0-media.jsonc 2>&1 | tee /tmp/media-deploy.log
           grep -Fq "$MEDIA_URL" /tmp/media-deploy.log
           cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$MEDIA_WORKER" >/dev/null
+          media_token="$(cat /tmp/media.token)"
+          media_secret_ready=0
+          media_probe="media/wdcc/p0-secret-ready/$GITHUB_RUN_ID.webp"
+          for i in $(seq 1 20); do
+            media_code="$(curl --http1.1 -sS -H "Authorization: Bearer $media_token" -o /tmp/media-secret-ready -w '%{http_code}' "$MEDIA_URL/media?p=$media_probe&secret_ready=$i" || true)"
+            if [ "$media_code" = 404 ]; then media_secret_ready=1; break; fi
+            if [ "$media_code" != 401 ]; then echo "unexpected media secret readiness status $media_code" >&2; exit 1; fi
+            sleep 2
+          done
+          test "$media_secret_ready" = 1
 
           test "$(curl --http1.1 -sS -o /tmp/state-health -w '%{http_code}' "$STATE_URL/health")" = 503 || true
           test "$(curl --http1.1 -sS -o /tmp/media-health -w '%{http_code}' "$MEDIA_URL/health")" = 200
           jq -e '.ok==true and .storage=="durable-object-sqlite-chunked"' /tmp/media-health >/dev/null
+          echo 'P0_INTERNAL_SECRET_READINESS=PASS'
 
       - name: Bootstrap or merge verified P0 state without copying historical PII
         shell: bash
@@ -236,15 +256,15 @@ jobs:
           set -euo pipefail
           npx wrangler deploy --config wrangler.p0-app.jsonc 2>&1 | tee /tmp/app-deploy.log
           grep -Fq "$APP_URL" /tmp/app-deploy.log
-          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" --config wrangler.p0-app.jsonc --keep-vars >/dev/null
-          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" --config wrangler.p0-app.jsonc --keep-vars >/dev/null
+          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
+          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$APP_WORKER" >/dev/null
           ok=0
           for i in $(seq 1 20); do
             code="$(curl --http1.1 -sS -o /tmp/app-health -w '%{http_code}' "$APP_URL/api/health?p0=$GITHUB_RUN_ID-$i" || true)"
             if [ "$code" = 200 ] && jq -e '.ok==true and .state=="readable" and .storage=="cloudflare-do"' /tmp/app-health >/dev/null; then ok=1;break;fi
             sleep 2
           done
-          test "$ok" = 1
+          if [ "$ok" != 1 ]; then echo 'isolated dealer app health contract did not become ready' >&2; cat /tmp/app-health >&2 || true; exit 1; fi
           test "$(curl --http1.1 -sS -o /tmp/dealer-login-page -w '%{http_code}' "$APP_URL/dealer/login?p0=$GITHUB_RUN_ID")" = 200
           test "$(curl --http1.1 -sS -o /tmp/dealer-new-page -w '%{http_code}' "$APP_URL/dealer/inventory/new?p0=$GITHUB_RUN_ID")" = 200
           invalid="$(curl --http1.1 -sS -X POST -H 'Content-Type: application/json' --data '{"username":"dealer","password":"__wdcc_invalid_probe__"}' -o /tmp/invalid-login -w '%{http_code}' "$APP_URL/api/auth/login")"
