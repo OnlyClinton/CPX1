@@ -1,0 +1,46 @@
+name: WDCC P0 App Smoke Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/wdcc-p0-app-smoke-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe isolated app smoke statuses
+        shell: bash
+        run: |
+          set -u
+          base='https://wdcc-proof-04c5d526.clico-global.workers.dev'
+
+          probe_get() {
+            label="$1"
+            url="$2"
+            body="/tmp/${label}.body"
+            code="$(curl --http1.1 -sS -o "$body" -w '%{http_code}' "$url" || true)"
+            echo "${label} HTTP=${code}"
+            head -c 2000 "$body" 2>/dev/null || true
+            echo
+          }
+
+          probe_get health "$base/api/health?diag=$GITHUB_RUN_ID"
+          probe_get dealer_login "$base/dealer/login?diag=$GITHUB_RUN_ID"
+          probe_get dealer_new "$base/dealer/inventory/new?diag=$GITHUB_RUN_ID"
+
+          invalid_body=/tmp/invalid_login.body
+          invalid_code="$(curl --http1.1 -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data '{"username":"dealer","password":"__wdcc_invalid_probe__"}' \
+            -o "$invalid_body" -w '%{http_code}' \
+            "$base/api/auth/login" || true)"
+          echo "invalid_login HTTP=${invalid_code}"
+          head -c 2000 "$invalid_body" 2>/dev/null || true
+          echo
+
+          echo 'WDCC_P0_APP_SMOKE_DIAGNOSTIC=COMPLETE'
