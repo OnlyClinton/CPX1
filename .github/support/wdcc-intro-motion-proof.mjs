@@ -25,7 +25,9 @@ async function sample(page){
     try{scale=new DOMMatrixReadOnly(t).a}catch{}
     return{
       motion:root.getAttribute('data-wdcc-intro-motion'),
-      phase:root.getAttribute('data-wdcc-intro-phase'),
+      phase:root.getAttribute('data-wdcc-intro-v32-phase'),
+      legacyPhase:root.getAttribute('data-wdcc-intro-phase'),
+      benchmark:root.getAttribute('data-wdcc-intro-benchmark'),
       sceneTransform:t,
       sceneScale:scale,
       sceneAnimation:getComputedStyle(scene).animationName,
@@ -53,13 +55,13 @@ async function prove(viewport,prefix){
     const active=await sample(page);
     await page.screenshot({path:`${out}/${prefix}-intro-v32-active.png`,fullPage:true});
 
-    await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-phase')==='reveal',null,{timeout:2500});
+    await page.waitForFunction(()=>document.querySelector('.li')?.getAttribute('data-wdcc-intro-v32-phase')==='reveal',null,{timeout:2500});
     await page.waitForTimeout(600);
     const reveal=await sample(page);
     await page.screenshot({path:`${out}/${prefix}-intro-v32-reveal.png`,fullPage:true});
 
     if(!start||!active||!reveal)throw new Error(`${prefix.toUpperCase()}_INTRO_SAMPLE_MISSING`);
-    if(start.motion!=='full'||active.motion!=='full'||reveal.motion!=='full'||start.phase!=='impact'||reveal.phase!=='reveal')throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({start,active,reveal})}`);
+    if(start.motion!=='full'||active.motion!=='full'||reveal.motion!=='full'||start.phase!=='impact'||reveal.phase!=='reveal'||start.benchmark!=='wdcc-v32-storefront')throw new Error(`${prefix.toUpperCase()}_INTRO_PHASE_FAIL ${JSON.stringify({start,active,reveal})}`);
     if(start.sceneAnimation!=='liV32Scene'||active.sceneAnimation!=='liV32Scene'||start.badgeAnimation!=='liV32Badge')throw new Error(`${prefix.toUpperCase()}_V32_ANIMATION_NAMES_FAIL ${JSON.stringify({start,active})}`);
     if(!start.sceneScale||!active.sceneScale||!reveal.sceneScale||start.sceneScale-reveal.sceneScale<.025||start.sceneTransform===active.sceneTransform||active.sceneTransform===reveal.sceneTransform)throw new Error(`${prefix.toUpperCase()}_SCENE_PUSH_FAIL ${JSON.stringify({start,active,reveal})}`);
     if(active.badgeOpacity<.75||reveal.badgeOpacity<.95)throw new Error(`${prefix.toUpperCase()}_BADGE_RESOLVE_FAIL ${JSON.stringify({start,active,reveal})}`);
