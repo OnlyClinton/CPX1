@@ -7,6 +7,7 @@ on:
       - 'app/**'
       - 'public/**'
       - '.github/support/wdcc-owner-board-rebuild-proof.mjs'
+      - '.github/support/wdcc-owner-board-rebuild-proof-latest.mjs'
       - '.github/workflows/wdcc-owner-approval-current.yml'
       - 'WDCC_LOCKED_CONTRACT.md'
   workflow_dispatch:
@@ -47,11 +48,12 @@ jobs:
           test -s app/WdccPublicChrome.tsx
           test -s app/ReferenceCloneHome.tsx
           test -s app/wdcc-round-header-contract.css
-          test -s .github/support/wdcc-owner-board-rebuild-proof.mjs
+          test -s .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
           grep -Fq '/wdcc-logo-transparent.webp' app/WdccPublicChrome.tsx
           grep -Fq 'data-wdcc-intro-badge-art="owner-approved"' app/LockedIntro.tsx
           grep -Fq 'OWNER-SUPPLIED BOARD CLOSEOUT' app/wdcc-round-header-contract.css
+          grep -Fq 'Vehicles ready now.' app/ReferenceCloneHome.tsx
           grep -Fq 'Add Vehicle is a clean new record' WDCC_LOCKED_CONTRACT.md
           grep -Fq 'new-vehicle' app/dealer/inventory/new/page.tsx
 
@@ -123,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node .github/support/wdcc-owner-board-rebuild-proof.mjs
+          node .github/support/wdcc-owner-board-rebuild-proof-latest.mjs
           test -s owner-board-proof/result.json
           node -e "const r=require('./owner-board-proof/result.json');if(!r.pass||r.writes.length)process.exit(1)"
 
@@ -150,6 +152,7 @@ jobs:
           const r=require('./owner-board-proof/result.json');
           console.log(`PASS: ${r.pass}`);
           console.log(`Board families: ${Object.keys(r.boards||{}).length}`);
+          console.log(`Mobile Featured cards: ${r.boards?.homeMobile?.cards?.length||0} · benefit columns: ${r.boards?.homeMobile?.benefits||0}`);
           console.log(`Browser writes: ${r.writes.length}`);
           NODE
           else
