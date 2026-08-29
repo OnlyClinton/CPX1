@@ -1,0 +1,110 @@
+name: WDCC Owner-Authorized V54 Backend Live
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-live-backend-authorized.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FROZEN_SHA: 883f211f345f69967ffad84c3dec3ff36e4f0aee
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      VERCEL_PROJECT_ID: prj_a3oclCcy4sbA2tge4BX7VAKXE4KR
+      VERCEL_SCOPE: cpxagency
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Extract exact frozen source and production-safe deploy config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse "$FROZEN_SHA")" = "$FROZEN_SHA"
+          rm -rf /tmp/wdcc-live-backend && mkdir -p /tmp/wdcc-live-backend
+          git archive "$FROZEN_SHA" | tar -x -C /tmp/wdcc-live-backend
+          mkdir -p /tmp/wdcc-live-backend/.vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > /tmp/wdcc-live-backend/.vercel/project.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='/tmp/wdcc-live-backend/vercel.json';
+          const c=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(!Array.isArray(c.crons)||!c.crons.length) throw new Error('expected frozen cron declaration missing');
+          delete c.crons;
+          fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+          console.log('DEPLOY_CONFIG_DELTA=REMOVE_UNSUPPORTED_HOBBY_CRON_ONLY');
+          console.log('APP_SOURCE_SHA='+process.env.FROZEN_SHA);
+          NODE
+      - name: Stage production-environment deployment without domains
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          npm install -g vercel@59.5.0 >/dev/null
+          cd /tmp/wdcc-live-backend
+          VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" \
+            vercel deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1 | tee /tmp/vercel-backend-stage.log
+          url="$(grep -Eo 'https://[^ ]+\.vercel\.app' /tmp/vercel-backend-stage.log | tail -n1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "STAGED_BACKEND_URL=$url"
+          echo 'DOMAINS_ASSIGNED=NO'
+      - name: Prove staged production backend readiness
+        shell: bash
+        env:
+          STAGED_URL: ${{ steps.stage.outputs.url }}
+        run: |
+          set -euo pipefail
+          code=000
+          for i in $(seq 1 20); do
+            : >/tmp/staged.headers
+            code="$(curl --http1.1 -sS -D /tmp/staged.headers -o /tmp/staged.json -w '%{http_code}' "$STAGED_URL/api/health?owner-live-stage=$i" || true)"
+            [ "$code" = 200 ] && break
+            sleep 2
+          done
+          tr -d '\r' </tmp/staged.headers >/tmp/staged.norm
+          echo "STAGED_HEALTH_HTTP=$code"
+          cat /tmp/staged.json | jq -c '{ok,degraded,state,authority,provider,release,database,session,auth:.integrations.auth,email:.integrations.email,media:.integrations.media,outboxRetry:.integrations.outboxRetry,reasons}'
+          [ "$code" = 200 ]
+          grep -Eiq '^x-wdcc-data-authority:[[:space:]]*neon[[:space:]]*$' /tmp/staged.norm
+          jq -e '.ok==true and .state=="readable" and .authority=="neon" and .provider=="vercel" and .release=="WDCC-V54-NEON-AUTHORITY" and .database.configured==true and .session=="configured" and .integrations.auth.ready==true and .integrations.email.configured==true and .integrations.media.configured==true and .integrations.outboxRetry.configured==true and (.reasons|length)==0' /tmp/staged.json >/dev/null
+          echo 'STAGED_BACKEND_READINESS=PASS'
+      - name: Promote verified backend to production domains
+        id: promote
+        shell: bash
+        env:
+          STAGED_URL: ${{ steps.stage.outputs.url }}
+        run: |
+          set -euo pipefail
+          cd /tmp/wdcc-live-backend
+          VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" \
+            vercel promote "$STAGED_URL" --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          VERCEL_ORG_ID="$VERCEL_ORG_ID" VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID" \
+            vercel alias set "$STAGED_URL" wdcc-cpx-launch-cpxagency.vercel.app --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          echo "live_url=$STAGED_URL" >> "$GITHUB_OUTPUT"
+          echo "LIVE_BACKEND_IMMUTABLE_URL=$STAGED_URL"
+      - name: Verify production aliases now serve exact V54 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for origin in https://wdcc-cpx-launch.vercel.app https://wdcc-cpx-launch-cpxagency.vercel.app; do
+            code="$(curl --http1.1 -sS -D /tmp/live.headers -o /tmp/live.json -w '%{http_code}' "$origin/api/health?owner-live-verify=$(date +%s)")"
+            tr -d '\r' </tmp/live.headers >/tmp/live.norm
+            echo "$origin HTTP=$code"
+            [ "$code" = 200 ]
+            grep -Eiq '^x-wdcc-data-authority:[[:space:]]*neon[[:space:]]*$' /tmp/live.norm
+            jq -e '.ok==true and .state=="readable" and .authority=="neon" and .release=="WDCC-V54-NEON-AUTHORITY" and .database.configured==true' /tmp/live.json >/dev/null
+          done
+          echo 'BACKEND_PRODUCTION=GREEN'
