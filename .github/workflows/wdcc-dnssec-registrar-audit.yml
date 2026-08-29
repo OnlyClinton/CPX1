@@ -1,0 +1,35 @@
+name: WDCC DNSSEC Registrar Audit
+
+on:
+  push:
+    branches:
+      - ops/resend-dns-verify-20260829
+    paths:
+      - '.github/workflows/wdcc-dnssec-registrar-audit.yml'
+
+permissions:
+  contents: read
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+    steps:
+      - name: Read registrar and Cloudflare DNSSEC details
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+          auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "$CF_API/zones/$ZONE_ID/dnssec" "${auth[@]}" > dnssec.json
+          jq -e '.success==true' dnssec.json >/dev/null
+          curl -fsS 'https://rdap.verisign.com/com/v1/domain/wedontcarecars.com' > rdap.json
+          echo '### WDCC registrar + DNSSEC detail'
+          jq -r '[.entities[]? | select((.roles // []) | index("registrar")) | .vcardArray[1][]? | select(.[0]=="fn") | .[3]][0] // "UNKNOWN" | "registrar=" + .' rdap.json
+          jq -r '.result | "dnssec_status=\(.status) key_tag=\(.key_tag // "-") algorithm=\(.algorithm // "-") digest_type=\(.digest_type // "-") digest=\(.digest // "-") ds=\(.ds // "-")"' dnssec.json
