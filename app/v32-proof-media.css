@@ -1,0 +1,22 @@
+/* Proof-only V32 fixture crops. Live inventory/media URLs are never matched by these selectors. */
+
+/* Storefront owner-review cards use the five slots in the V32 target strip. */
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article img[src*="wdcc-v32-proof-vehicles.webp"]{object-fit:cover!important;height:100%!important;width:100%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(1) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:0% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(2) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:25% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(3) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:50% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(4) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:75% 50%!important}
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(5) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:100% 50%!important}
+
+/* The frozen proof still navigates through its historical VDP URL; review fixture alias resolves it to slot 1. */
+main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto img[src*="wdcc-v32-proof-vehicles.webp"]{object-fit:cover!important;object-position:0% 50%!important}
+
+/* Dealer proof API stubs use legacy proof-media URLs. Visually replace only those proof thumbnails with target slots. */
+.topVehicleTable .vehicleLabel:has(img[src*="/wdcc-review-media/"]){position:relative!important}
+.topVehicleTable .vehicleLabel img[src*="/wdcc-review-media/"]{opacity:0!important}
+.topVehicleTable .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:48px;height:34px;border-radius:5px;background-image:url('/wdcc-v32-proof-vehicles.webp');background-size:500% 100%;background-repeat:no-repeat;background-position-y:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);z-index:2}
+.topVehicleTable>div:nth-child(2) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:0%}
+.topVehicleTable>div:nth-child(3) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:25%}
+.topVehicleTable>div:nth-child(4) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:50%}
+.topVehicleTable>div:nth-child(5) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:75%}
+.topVehicleTable>div:nth-child(6) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:100%}
