@@ -51,11 +51,10 @@ jobs:
           cf_get TXT "$SEND_NAME" send-txt.json
           cf_get MX "$SEND_NAME" send-mx.json
 
-          jq_norm='def normtxt: gsub("^\\\"";"") | gsub("\\\"$";"") | gsub("\\\"[[:space:]]*\\\"";"");'
-          dkim_exact="$(jq --arg v "$DKIM_VALUE" "$jq_norm [.result[] | select((.content|normtxt) == ($v|normtxt))] | length" dkim.json)"
-          dkim_other="$(jq --arg v "$DKIM_VALUE" "$jq_norm [.result[] | select((.content|normtxt) != ($v|normtxt))] | length" dkim.json)"
-          spf_exact="$(jq --arg v "$SPF_VALUE" "$jq_norm [.result[] | select((.content|normtxt) == ($v|normtxt))] | length" send-txt.json)"
-          spf_other="$(jq --arg v "$SPF_VALUE" "$jq_norm [.result[] | select(((.content|normtxt) | startswith(\"v=spf1\")) and ((.content|normtxt) != ($v|normtxt)))] | length" send-txt.json)"
+          dkim_exact="$(jq --arg v "$DKIM_VALUE" 'def normtxt: gsub("^\"";"") | gsub("\"$";"") | gsub("\"[[:space:]]*\"";""); [.result[] | select((.content|normtxt) == ($v|normtxt))] | length' dkim.json)"
+          dkim_other="$(jq --arg v "$DKIM_VALUE" 'def normtxt: gsub("^\"";"") | gsub("\"$";"") | gsub("\"[[:space:]]*\"";""); [.result[] | select((.content|normtxt) != ($v|normtxt))] | length' dkim.json)"
+          spf_exact="$(jq --arg v "$SPF_VALUE" 'def normtxt: gsub("^\"";"") | gsub("\"$";"") | gsub("\"[[:space:]]*\"";""); [.result[] | select((.content|normtxt) == ($v|normtxt))] | length' send-txt.json)"
+          spf_other="$(jq --arg v "$SPF_VALUE" 'def normtxt: gsub("^\"";"") | gsub("\"$";"") | gsub("\"[[:space:]]*\"";""); [.result[] | select(((.content|normtxt) | startswith("v=spf1")) and ((.content|normtxt) != ($v|normtxt)))] | length' send-txt.json)"
           mx_exact="$(jq --arg v "$MX_VALUE" '[.result[] | select((.content | ascii_downcase) == ($v | ascii_downcase) and (.priority // 0) == 10)] | length' send-mx.json)"
           mx_other="$(jq --arg v "$MX_VALUE" '[.result[] | select(((.content | ascii_downcase) != ($v | ascii_downcase)) or ((.priority // 0) != 10))] | length' send-mx.json)"
 
