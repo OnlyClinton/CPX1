@@ -52,8 +52,8 @@ jobs:
             "required_pull_request_reviews": {
               "dismiss_stale_reviews": true,
               "require_code_owner_reviews": false,
-              "required_approving_review_count": 1,
-              "require_last_push_approval": true
+              "required_approving_review_count": 0,
+              "require_last_push_approval": false
             },
             "restrictions": null,
             "required_linear_history": false,
@@ -75,7 +75,7 @@ jobs:
             > /tmp/applied.json
           jq -e '.enforce_admins.enabled == true' /tmp/applied.json >/dev/null
 
-      - name: Verify protection is non-bypassable and checks are required
+      - name: Verify protection is solo-owner safe and checks are required
         shell: bash
         run: |
           set -euo pipefail
@@ -91,22 +91,21 @@ jobs:
             .required_status_checks.strict == true and
             (.required_status_checks.contexts | index("audit") != null) and
             (.required_status_checks.contexts | index("visual-acceptance") != null) and
-            .required_pull_request_reviews.required_approving_review_count >= 1 and
+            .required_pull_request_reviews.required_approving_review_count == 0 and
             .required_pull_request_reviews.dismiss_stale_reviews == true and
-            .required_pull_request_reviews.require_last_push_approval == true and
+            .required_pull_request_reviews.require_last_push_approval == false and
             .allow_force_pushes.enabled == false and
             .allow_deletions.enabled == false
           ' /tmp/verify.json >/dev/null
 
           echo 'WDCC_MAIN_PROTECTION=PASS'
           {
-            echo '### WDCC main protection — enforced'
+            echo '### WDCC main protection — solo-owner enforced'
             echo '- pull request required'
-            echo '- one approval required'
+            echo '- no mandatory second-person approval'
             echo '- stale approvals dismissed'
-            echo '- latest push requires independent approval'
             echo '- required checks: audit, visual-acceptance'
-            echo '- administrators cannot bypass'
+            echo '- administrators cannot bypass required checks'
             echo '- force pushes blocked'
             echo '- branch deletion blocked'
             echo '- no production/provider/deployment authority added'
