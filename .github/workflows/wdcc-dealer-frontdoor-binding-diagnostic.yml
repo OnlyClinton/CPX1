@@ -19,7 +19,7 @@ jobs:
       WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
       DEALER_ROOT: https://dealer.wedontcarecars.com
       APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
-      FAILED_P0_VERSION_PREVIEW: https://ca5b9c4a-wdcc-dealer-frontdoor.clico-global.workers.dev
+      FAILED_P0_VERSION_PREVIEW: https://206b3333-wdcc-dealer-frontdoor.clico-global.workers.dev
     steps:
       - name: Read Cloudflare binding and public-edge evidence only
         shell: bash
