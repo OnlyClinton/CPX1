@@ -66,7 +66,7 @@ try{
  const home=await desktop.newPage();watch(home);await go(home,'/?owner-review=1');
  const skip=home.getByRole('button',{name:/skip intro/i});if(await skip.count())await skip.click().catch(()=>{});
  await home.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});
- const homeMedia=await decodeImages(home,'.rh-grid .rh-photo img',5);
+ const homeMedia=await decodeImages(home,'.rh-grid>article img',5);
  const homeCheck=await home.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,cards:document.querySelectorAll('.rh-grid>article').length,headline:[...document.querySelectorAll('.rh-copy h1 span')].map(x=>(x.textContent||'').trim())}));
  if(homeCheck.overflow>2||homeCheck.cards!==5)fail('DESKTOP_HOME',homeCheck);result.home.desktop={...homeCheck,media:homeMedia};await shot(home,'desktop-home');
 
@@ -79,7 +79,7 @@ try{
  dealerCheck.contrast=contrast(dealerCheck.title,dealerCheck.canvas);if(dealerCheck.contrast<4.5||dealerCheck.overflow>2)fail('DEALER_DESKTOP',dealerCheck);result.dealer.desktop={...dealerCheck,media:dealerMedia};await shot(dealer,'dealer-desktop');await desktop.close();
 
  const mobile=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});
- const mh=await mobile.newPage();watch(mh);await go(mh,'/?owner-review=1');const mskip=mh.getByRole('button',{name:/skip intro/i});if(await mskip.count())await mskip.click().catch(()=>{});await mh.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});const mMedia=await decodeImages(mh,'.rh-grid .rh-photo img',5);
+ const mh=await mobile.newPage();watch(mh);await go(mh,'/?owner-review=1');const mskip=mh.getByRole('button',{name:/skip intro/i});if(await mskip.count())await mskip.click().catch(()=>{});await mh.locator('.rh-grid>article').first().waitFor({state:'visible',timeout:20000});const mMedia=await decodeImages(mh,'.rh-grid>article img',5);
  const mobileHome=await mh.evaluate(()=>{const h=document.querySelector('.rh-section-head h2'),r=h.getBoundingClientRect();return{heading:h.textContent?.trim(),headingHeight:r.height,fontSize:parseFloat(getComputedStyle(h).fontSize),firstCard:document.querySelector('.rh-grid>article')?.getBoundingClientRect().width||0,overflow:document.documentElement.scrollWidth-innerWidth}});
  if(mobileHome.overflow>2||mobileHome.firstCard<300||mobileHome.headingHeight>mobileHome.fontSize*1.45)fail('MOBILE_HOME',mobileHome);result.home.mobile={...mobileHome,media:mMedia};await shot(mh,'mobile-home');
 
