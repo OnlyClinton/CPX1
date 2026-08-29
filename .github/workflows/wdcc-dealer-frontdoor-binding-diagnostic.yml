@@ -34,8 +34,15 @@ jobs:
 
           curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
           curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
-          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=dealer.wedontcarecars.com" "${auth[@]}" > /tmp/dns.json
-          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/deployments" "${auth[@]}" > /tmp/deployments.json || printf '{"success":false,"result":[]}' > /tmp/deployments.json
+
+          optional_json(){
+            out="$1"; shift
+            code="$(curl -sS -o "$out" -w '%{http_code}' "$@" || true)"
+            echo "optional_read_http=$code file=$out"
+            if [ "$code" != 200 ]; then printf '{"success":false,"result":[]}' > "$out"; fi
+          }
+          optional_json /tmp/dns.json "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=dealer.wedontcarecars.com" "${auth[@]}"
+          optional_json /tmp/deployments.json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/deployments" "${auth[@]}"
 
           echo '=== DEALER WORKER ROUTES ==='
           jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
@@ -44,7 +51,7 @@ jobs:
           echo '=== DEALER DNS ==='
           jq -c '.result[]? | {type,name,content,proxied}' /tmp/dns.json || true
           echo '=== FRONTDOOR DEPLOYMENTS ==='
-          jq -c '.result.deployments[]? // .result[]? | {id,created_on,annotations,versions}' /tmp/deployments.json || true
+          jq -c '(.result.deployments[]? // .result[]?) | {id,created_on,annotations,versions}' /tmp/deployments.json || true
 
           probe(){
             label="$1"; url="$2"; out="/tmp/${label}.body"; hdr="/tmp/${label}.hdr"
