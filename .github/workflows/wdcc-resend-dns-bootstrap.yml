@@ -1,0 +1,143 @@
+name: WDCC Resend DNS Bootstrap
+
+on:
+  push:
+    branches:
+      - ops/resend-dns-verify-20260829
+    paths:
+      - '.github/workflows/wdcc-resend-dns-bootstrap.yml'
+
+permissions:
+  contents: read
+
+env:
+  CF_API: https://api.cloudflare.com/client/v4
+  ZONE_ID: 53f5a816cfbba0c31d6d12fe46af05a1
+  DKIM_NAME: resend._domainkey.wedontcarecars.com
+  DKIM_VALUE: p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDd6urYtTrC71ift2X5FHJBNieraLM56mN5ySx7tYKR93cgAzRojx1vVUyXvUFxAWkvZU6idDBa6u+/msATSBYqlte4d2dwcqtphh7COy8QgYLfkVNSJqV0SWsXrnw4LC0pQuWV6ObC7EJxdzBZwNvPmLjPziZRkTMuRkXSFDLTwQIDAQAB
+  SEND_NAME: send.wedontcarecars.com
+  SEND_MX_VALUE: feedback-smtp.us-east-1.amazonses.com
+  SEND_SPF_VALUE: v=spf1 include:amazonses.com ~all
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_ZONE_TOKEN: ${{ secrets.CLOUDFLARE_ZONE_API_TOKEN }}
+    steps:
+      - name: Require Cloudflare DNS authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ZONE_TOKEN:-}"
+          curl -fsS "$CF_API/zones/$ZONE_ID" \
+            -H "Authorization: Bearer $CF_ZONE_TOKEN" \
+            -H 'Content-Type: application/json' > zone.json
+          jq -e '.success==true and .result.name=="wedontcarecars.com"' zone.json >/dev/null
+
+      - name: Inspect target labels and fail closed on conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
+
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
+            --data-urlencode "name=$DKIM_NAME" > dkim-before.json
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
+            --data-urlencode "name=$SEND_NAME" > send-before.json
+
+          jq -e '.success==true' dkim-before.json >/dev/null
+          jq -e '.success==true' send-before.json >/dev/null
+
+          if jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type != "TXT" or .content != $v)' dkim-before.json >/dev/null; then
+            echo "CONFLICT: unexpected record exists at $DKIM_NAME"
+            jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' dkim-before.json
+            exit 20
+          fi
+
+          if jq -e '.result[] | select(.type == "CNAME")' send-before.json >/dev/null; then
+            echo "CONFLICT: CNAME exists at $SEND_NAME and cannot coexist with MX/TXT"
+            jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' send-before.json
+            exit 21
+          fi
+
+          if jq -e --arg v "$SEND_MX_VALUE" '.result[] | select(.type == "MX" and (.content != $v or .priority != 10))' send-before.json >/dev/null; then
+            echo "CONFLICT: differing MX exists at $SEND_NAME"
+            jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' send-before.json
+            exit 22
+          fi
+
+          if jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type == "TXT" and (.content | startswith("v=spf1")) and .content != $v)' send-before.json >/dev/null; then
+            echo "CONFLICT: differing SPF exists at $SEND_NAME"
+            jq -r '.result[] | [.type,.name,.content,(.priority // "-")] | @tsv' send-before.json
+            exit 23
+          fi
+
+          if jq -e '.result[] | select(.type == "A" or .type == "AAAA")' send-before.json >/dev/null; then
+            echo "WARNING: A/AAAA also exists at $SEND_NAME; preserving it because it can coexist with MX/TXT."
+            jq -r '.result[] | select(.type == "A" or .type == "AAAA") | [.type,.name,.content] | @tsv' send-before.json
+          fi
+
+      - name: Create only missing exact Resend records
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
+
+          create_record() {
+            local payload="$1"
+            curl -fsS -X POST "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
+              --data "$payload" > create.json
+            jq -e '.success==true' create.json >/dev/null
+          }
+
+          if ! jq -e --arg v "$DKIM_VALUE" '.result[] | select(.type=="TXT" and .content==$v)' dkim-before.json >/dev/null; then
+            payload="$(jq -nc --arg name "$DKIM_NAME" --arg content "$DKIM_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+            create_record "$payload"
+            echo "CREATED_DKIM=1" >> "$GITHUB_ENV"
+          else
+            echo "CREATED_DKIM=0" >> "$GITHUB_ENV"
+          fi
+
+          if ! jq -e --arg v "$SEND_MX_VALUE" '.result[] | select(.type=="MX" and .content==$v and .priority==10)' send-before.json >/dev/null; then
+            payload="$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_MX_VALUE" '{type:"MX",name:$name,content:$content,ttl:1,priority:10}')"
+            create_record "$payload"
+            echo "CREATED_MX=1" >> "$GITHUB_ENV"
+          else
+            echo "CREATED_MX=0" >> "$GITHUB_ENV"
+          fi
+
+          if ! jq -e --arg v "$SEND_SPF_VALUE" '.result[] | select(.type=="TXT" and .content==$v)' send-before.json >/dev/null; then
+            payload="$(jq -nc --arg name "$SEND_NAME" --arg content "$SEND_SPF_VALUE" '{type:"TXT",name:$name,content:$content,ttl:1}')"
+            create_record "$payload"
+            echo "CREATED_SPF=1" >> "$GITHUB_ENV"
+          else
+            echo "CREATED_SPF=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify exact Cloudflare state
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CF_ZONE_TOKEN" -H 'Content-Type: application/json')
+
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
+            --data-urlencode "name=$DKIM_NAME" > dkim-after.json
+          curl -fsS --get "$CF_API/zones/$ZONE_ID/dns_records" "${auth[@]}" \
+            --data-urlencode "name=$SEND_NAME" > send-after.json
+
+          jq -e --arg v "$DKIM_VALUE" '.success==true and any(.result[]; .type=="TXT" and .content==$v and .ttl==1)' dkim-after.json >/dev/null
+          jq -e --arg v "$SEND_MX_VALUE" '.success==true and any(.result[]; .type=="MX" and .content==$v and .priority==10 and .ttl==1)' send-after.json >/dev/null
+          jq -e --arg v "$SEND_SPF_VALUE" '.success==true and any(.result[]; .type=="TXT" and .content==$v and .ttl==1)' send-after.json >/dev/null
+
+          {
+            echo '### WDCC Resend DNS bootstrap'
+            echo ''
+            echo "- DKIM exact: PASS (created=${CREATED_DKIM:-0})"
+            echo "- send MX exact, priority 10: PASS (created=${CREATED_MX:-0})"
+            echo "- send SPF exact: PASS (created=${CREATED_SPF:-0})"
+            echo '- TTL: Auto (Cloudflare API ttl=1)'
+            echo '- Existing unrelated DNS: preserved'
+            echo '- Site routes/deployments: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
