@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: e3332fea49587f41cfd15cb041ebba6eb6db68d4
+  P0_SHA: ac917d3d2e3d11f9ac4fcfa230b9f781a930893c
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-E3332FEA'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-MEDIAFIX-AC917D3D'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -82,6 +82,7 @@ jobs:
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
           grep -Fq 'WDCC_STATE_SERVICE_URL' lib/wdccAuthority.ts
           grep -Fq 'WDCC_MEDIA_SERVICE_URL' lib/wdccAuthority.ts
+          node --check cloudflare/wdcc-media-worker.mjs
           npm ci
           npm install --no-save --package-lock=false @opennextjs/cloudflare@1.19.9 wrangler@4.90.0
           npx opennextjs-cloudflare build
@@ -335,7 +336,7 @@ jobs:
           set -euo pipefail
           cat > wdcc-p0-dealer-frontdoor.mjs <<'JS'
           const TARGET="https://wdcc-p0-dealer-app.clico-global.workers.dev";
-          export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","e3332fea49587f41cfd15cb041ebba6eb6db68d4");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
+          export default{async fetch(request){const incoming=new URL(request.url),target=new URL(incoming.pathname+incoming.search,TARGET);const h=new Headers(request.headers);h.set("x-forwarded-host",incoming.host);h.set("x-forwarded-proto","https");h.set("x-wdcc-p0-frontdoor","dealer-upload");h.delete("host");const init={method:request.method,headers:h,redirect:"manual"};if(request.method!=="GET"&&request.method!=="HEAD")init.body=request.body;const r=await fetch(new Request(target,init));const rh=new Headers(r.headers);rh.set("x-wdcc-dealer-frontdoor","p0-do");rh.set("x-wdcc-dealer-app-sha","ac917d3d2e3d11f9ac4fcfa230b9f781a930893c");return new Response(r.body,{status:r.status,statusText:r.statusText,headers:rh});}};
           JS
           cat > wrangler.p0-frontdoor.jsonc <<'JSON'
           {"name":"wdcc-dealer-frontdoor","main":"wdcc-p0-dealer-frontdoor.mjs","compatibility_date":"2026-08-25","compatibility_flags":["nodejs_compat"],"workers_dev":false,"preview_urls":false,"observability":{"enabled":true}}
