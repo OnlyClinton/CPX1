@@ -3,6 +3,8 @@ const MAX_BYTES=15*1024*1024;
 const CHUNK_BYTES=512*1024;
 const ALLOWED=new Set(["image/jpeg","image/png","image/webp","image/avif"]);
 
+export {WDCCState} from "./wdcc-state-worker.mjs";
+
 function authorized(request,env){const expected=String(env.WDCC_MEDIA_SERVICE_TOKEN||"");return Boolean(expected)&&String(request.headers.get("authorization")||"")===`Bearer ${expected}`;}
 function safePath(value){const p=String(value||"").trim();return p.startsWith("media/wdcc/")&&p.length<=700&&!p.includes("..")?p:"";}
 function hex(bytes){return [...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,"0")).join("");}
