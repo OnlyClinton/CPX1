@@ -85,7 +85,7 @@ export async function currentUser(){
   }
   return neonCurrentUser();
 }
-export function setSession(user:User){
+export async function setSession(user:User){
   const jar=await cookies();
   jar.set(SESSION_COOKIE,sessionCookieValue(user),{httpOnly:true,secure:true,sameSite:"strict",path:"/",maxAge:SESSION_MAX_AGE});
 }
