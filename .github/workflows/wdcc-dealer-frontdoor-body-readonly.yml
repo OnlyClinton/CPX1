@@ -1,0 +1,29 @@
+name: WDCC Dealer Frontdoor Body Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-body-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Print exact non-secret module body
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" > /tmp/frontdoor.raw
+          cat /tmp/frontdoor.raw
+          echo
+          echo "SHA256=$(sha256sum /tmp/frontdoor.raw|awk '{print $1}')"
+          echo 'READ_ONLY=YES'
