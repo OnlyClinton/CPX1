@@ -1,0 +1,41 @@
+name: WDCC V32 Microfrontends Readonly
+
+on:
+  push:
+    branches: [proof/wdcc-522-immutable-parser-20260829]
+    paths:
+      - '.github/workflows/wdcc-v32-microfrontends-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+      PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+      OLD_DEPLOYMENT_ID: dpl_2vfDGZg6erycSF6Pmwo6yPbFSaxp
+      NEW_READY_ID: dpl_D1k4NzmKoSVxRYU8BMrfgEAPhadA
+    steps:
+      - name: Compare project microfrontends config presence read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $VERCEL_TOKEN")
+          for item in old:$OLD_DEPLOYMENT_ID new:$NEW_READY_ID; do
+            label="${item%%:*}"; id="${item#*:}"
+            code="$(curl -sS -o "/tmp/$label.json" -w '%{http_code}' "https://api.vercel.com/v1/microfrontends/$id/config?teamId=$TEAM_ID" "${auth[@]}")"
+            echo "$label HTTP=$code"
+            if [ "$code" = 200 ]; then
+              jq -c '{hasConfig:(.config!=null),version:.config.version,applications:(.config.applications|keys? // []),options:.config.options}' "/tmp/$label.json"
+              echo "$label CONFIG_SHA256=$(jq -S '.config' "/tmp/$label.json" | sha256sum | awk '{print $1}')"
+            else
+              head -c 1000 "/tmp/$label.json"; echo
+            fi
+          done
+          echo 'READ_ONLY=YES'
+          echo 'PRODUCTION_CHANGED=NO'
