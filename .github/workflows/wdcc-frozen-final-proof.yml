@@ -38,8 +38,11 @@ jobs:
           grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/DashboardManager.tsx
           grep -Fq 'src="/wdcc-official-logo.webp"' app/dealer/inventory/InventoryManager.tsx
           grep -Fq 'public-brand-lock.css' app/layout.tsx
-          grep -Fq 'data-wdcc-logo-art="owner-wordmark"' app/WdccPublicChrome.tsx
-          grep -Fq 'WE DON&apos;T CARE CARS' app/WdccPublicChrome.tsx
+          grep -Fq 'WDCC_CORRECT_LOGO_DATA_URI' app/WdccPublicChrome.tsx
+          grep -Fq 'data-wdcc-logo-art="owner-approved-round"' app/WdccPublicChrome.tsx
+          ! grep -Fq 'wdcc-header-wordmark' app/WdccPublicChrome.tsx
+          test -s app/wdccCorrectLogoData.ts
+          grep -Fq 'Exact owner-approved WDCC round emblem' app/wdccCorrectLogoData.ts
           test -s .github/support/wdcc-final-brand-proof.mjs
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
