@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-APP-VARS'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-C811687B-DO-COMPAT-W2W-SECRET-CONFIG'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -153,11 +153,11 @@ jobs:
           set -euo pipefail
           npx wrangler deploy --config wrangler.p0-state.jsonc 2>&1 | tee /tmp/state-deploy.log
           grep -Fq "$STATE_URL" /tmp/state-deploy.log
-          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$STATE_WORKER" >/dev/null
+          cat /tmp/state.token | npx wrangler secret put WDCC_STATE_SERVICE_TOKEN --name "$STATE_WORKER" --config wrangler.p0-state.jsonc --keep-vars >/dev/null
 
           npx wrangler deploy --config wrangler.p0-media.jsonc 2>&1 | tee /tmp/media-deploy.log
           grep -Fq "$MEDIA_URL" /tmp/media-deploy.log
-          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$MEDIA_WORKER" >/dev/null
+          cat /tmp/media.token | npx wrangler secret put WDCC_MEDIA_SERVICE_TOKEN --name "$MEDIA_WORKER" --config wrangler.p0-media.jsonc --keep-vars >/dev/null
 
           test "$(curl --http1.1 -sS -o /tmp/state-health -w '%{http_code}' "$STATE_URL/health")" = 503 || true
           test "$(curl --http1.1 -sS -o /tmp/media-health -w '%{http_code}' "$MEDIA_URL/health")" = 200
