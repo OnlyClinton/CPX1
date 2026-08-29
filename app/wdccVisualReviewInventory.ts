@@ -19,24 +19,26 @@ export type WdccVisualReviewVehicle={
   primary_image_url:string;
 };
 
-const description="Verified historical WDCC recovery record and recovered first-party vehicle photo used only for owner visual review. NOT LIVE inventory.";
+/* Owner-review fixture only. These target records are never returned by the live inventory API. */
+const description="";
+const strip="/wdcc-v32-proof-vehicles.webp";
 
 export const WDCC_VISUAL_REVIEW_INVENTORY:WdccVisualReviewVehicle[]=[
-  {id:"real-2004-nissan-350z",year:2004,make:"Nissan",model:"350Z",price:4900,downPayment:2000,mileage:154000,stock:"WDCC-350Z-2004",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"RWD",bodyStyle:"Convertible",fuelType:"Gasoline",description,primary_image_url:"/wdcc-review-media/nissan350z"},
-  {id:"real-2016-ford-f150-limited",year:2016,make:"Ford",model:"F-150",trim:"Limited",price:15000,downPayment:6000,mileage:164000,stock:"WDCC-F150-2016",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"4x4",bodyStyle:"Truck",fuelType:"Gasoline",description,primary_image_url:"/wdcc-review-media/fordF150"},
-  {id:"real-2019-honda-pilot",year:2019,make:"Honda",model:"Pilot",price:7900,downPayment:3000,mileage:380000,stock:"WDCC-PILOT-2019",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"AWD",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:"/wdcc-review-media/hondaPilot"},
-  {id:"real-2019-kia-sportage",year:2019,make:"Kia",model:"Sportage",price:6500,downPayment:2500,mileage:127000,stock:"WDCC-SPORTAGE-2019",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"FWD",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:"/wdcc-review-media/kiaSportage"},
-  {id:"real-2019-toyota-rav4",year:2019,make:"Toyota",model:"RAV4",price:10500,downPayment:4500,mileage:240000,stock:"WDCC-RAV4-2019",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"AWD",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:"/wdcc-review-media/toyotaRav4"}
+  {id:"proof-vdp",year:2020,make:"Dodge",model:"Challenger",trim:"SXT",price:24995,downPayment:2000,mileage:41000,stock:"DGC2020SXT",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"RWD",bodyStyle:"Coupe",fuelType:"Gasoline",description,primary_image_url:`${strip}?slot=1`},
+  {id:"proof-charger",year:2019,make:"Dodge",model:"Charger",trim:"R/T",price:21995,downPayment:1500,mileage:53000,stock:"DCR2019RT",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"RWD",bodyStyle:"Sedan",fuelType:"Gasoline",description,primary_image_url:`${strip}?slot=2`},
+  {id:"proof-camaro",year:2018,make:"Chevrolet",model:"Camaro",trim:"LT",price:20995,downPayment:1500,mileage:38000,stock:"CCLT2018",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"RWD",bodyStyle:"Coupe",fuelType:"Gasoline",description,primary_image_url:`${strip}?slot=3`},
+  {id:"proof-jeep",year:2020,make:"Jeep",model:"Grand Cherokee",trim:"Laredo",price:23995,downPayment:2000,mileage:60000,stock:"JGCL2020",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"4x4",bodyStyle:"SUV",fuelType:"Gasoline",description,primary_image_url:`${strip}?slot=4`},
+  {id:"proof-f150",year:2018,make:"Ford",model:"F-150",trim:"XLT",price:22995,downPayment:2000,mileage:71000,stock:"FF150XLT2018",status:"published",visibility:"public",internalOnly:false,transmission:"Automatic",drivetrain:"4x4",bodyStyle:"Truck",fuelType:"Gasoline",description,primary_image_url:`${strip}?slot=5`}
 ];
 
-const REVIEW_KEY="wdcc-owner-review-fixture-v3-recovered-media";
+const REVIEW_KEY="wdcc-owner-review-fixture-v5-v32-hybrid";
 
 export function isWdccVisualReviewFixture(){
   if(typeof window==="undefined")return false;
   try{
     const p=new URL(window.location.href).searchParams;
     if(p.get("owner-review")==="0"){sessionStorage.removeItem(REVIEW_KEY);return false}
-    if(p.get("owner-review")==="1"||p.get("visual-fixture")==="verified-real"){
+    if(p.get("owner-review")==="1"||p.get("visual-fixture")==="v32-target"){
       sessionStorage.setItem(REVIEW_KEY,"1");
       return true;
     }
@@ -48,4 +50,4 @@ export function wdccVisualReviewVehicle(id:string){
   return WDCC_VISUAL_REVIEW_INVENTORY.find(v=>v.id===id)||null;
 }
 
-export const WDCC_VISUAL_REVIEW_LABEL="OWNER VISUAL REVIEW · VERIFIED HISTORICAL RECORDS + RECOVERED FIRST-PARTY MEDIA · NOT LIVE";
+export const WDCC_VISUAL_REVIEW_LABEL="OWNER VISUAL REVIEW · V32 TARGET FIXTURE · NOT LIVE";
