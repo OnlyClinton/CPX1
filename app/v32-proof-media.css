@@ -7,16 +7,17 @@ main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(2) img[src*
 main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(3) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:50% 50%!important}
 main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(4) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:75% 50%!important}
 main[data-wdcc-proof-mode="owner-review"] .rh-grid>article:nth-child(5) img[src*="wdcc-v32-proof-vehicles.webp"]{object-position:100% 50%!important}
+/* The V32 reference image already carries the colored merchandising chip; do not paint a second proof badge over it. */
+main[data-wdcc-proof-mode="owner-review"] .rh-grid>article>a:first-child>span[class*="badge"]{display:none!important}
 
-/* The frozen proof still navigates through its historical VDP URL; review fixture alias resolves it to slot 1. */
-main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto img[src*="wdcc-v32-proof-vehicles.webp"]{object-fit:cover!important;object-position:0% 50%!important}
+/* The frozen proof's historical VDP URL aliases to the target Challenger fixture. Force a real crop, not the whole five-car strip. */
+main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto{height:420px!important;min-height:420px!important;overflow:hidden!important}
+main.vehiclePage[data-wdcc-proof-mode="owner-review"] .vehiclePhoto img[src*="wdcc-v32-proof-vehicles.webp"]{display:block!important;width:100%!important;height:100%!important;min-height:0!important;object-fit:cover!important;object-position:0% 50%!important}
 
-/* Dealer proof API stubs use legacy proof-media URLs. Visually replace only those proof thumbnails with target slots. */
-.topVehicleTable .vehicleLabel:has(img[src*="/wdcc-review-media/"]){position:relative!important}
-.topVehicleTable .vehicleLabel img[src*="/wdcc-review-media/"]{opacity:0!important}
-.topVehicleTable .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:48px;height:34px;border-radius:5px;background-image:url('/wdcc-v32-proof-vehicles.webp');background-size:500% 100%;background-repeat:no-repeat;background-position-y:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);z-index:2}
-.topVehicleTable>div:nth-child(2) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:0%}
-.topVehicleTable>div:nth-child(3) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:25%}
-.topVehicleTable>div:nth-child(4) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:50%}
-.topVehicleTable>div:nth-child(5) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:75%}
-.topVehicleTable>div:nth-child(6) .vehicleLabel:has(img[src*="/wdcc-review-media/"])::before{background-position-x:100%}
+/* Dealer frozen-proof API stubs still expose legacy review-media URLs. Replace only those proof thumbnails at paint time with the same V32 target strip and crop each row. */
+.topVehicleTable .vehicleLabel img[src*="/wdcc-review-media/"]{content:url('/wdcc-v32-proof-vehicles.webp')!important;display:block!important;opacity:1!important;width:48px!important;height:34px!important;min-width:48px!important;max-width:48px!important;object-fit:cover!important;object-position:0% 50%!important;border-radius:5px!important;background:#10202c!important}
+.topVehicleTable>div:nth-child(2) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:0% 50%!important}
+.topVehicleTable>div:nth-child(3) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:25% 50%!important}
+.topVehicleTable>div:nth-child(4) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:50% 50%!important}
+.topVehicleTable>div:nth-child(5) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:75% 50%!important}
+.topVehicleTable>div:nth-child(6) .vehicleLabel img[src*="/wdcc-review-media/"]{object-position:100% 50%!important}
