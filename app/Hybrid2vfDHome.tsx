@@ -1,13 +1,12 @@
 "use client";
 
 import LockedIntro from "./LockedIntro";
-import Exact2vfDHome from "./Exact2vfDHome";
+import Exact2vfDHomeLive from "./Exact2vfDHomeLive";
 
-// Preview-only composition: cinematic opening + exact 2vfD storefront.
+// Preview composition: cinematic opening + corrected live storefront surface.
 export default function Hybrid2vfDHome(){
   return <>
     <LockedIntro/>
-    <style>{`.intro-sequence{display:none!important}`}</style>
-    <Exact2vfDHome/>
+    <Exact2vfDHomeLive/>
   </>;
 }
