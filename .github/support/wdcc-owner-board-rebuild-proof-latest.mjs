@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import {pathToFileURL} from 'node:url';
 
 const sourcePath=new URL('./wdcc-owner-board-rebuild-proof.mjs',import.meta.url);
 let src=fs.readFileSync(sourcePath,'utf8');
@@ -18,6 +17,6 @@ const latestAssertionWithHeading=latestAssertion.replace("if(hm.display", "if(hm
 if(!src.includes(latestAssertion))throw new Error('OWNER_BOARD_LATEST_HEADING_ASSERTION_TARGET_MISSING');
 src=src.replace(latestAssertion,latestAssertionWithHeading);
 
-const tmp=`/tmp/wdcc-owner-board-latest-${process.env.GITHUB_SHA||Date.now()}.mjs`;
+const tmp=new URL(`./.wdcc-owner-board-latest-${process.env.GITHUB_SHA||Date.now()}.mjs`,import.meta.url);
 fs.writeFileSync(tmp,src);
-await import(`${pathToFileURL(tmp).href}?v=${Date.now()}`);
+try{await import(`${tmp.href}?v=${Date.now()}`)}finally{fs.rmSync(tmp,{force:true})}
