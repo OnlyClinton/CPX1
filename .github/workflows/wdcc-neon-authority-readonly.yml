@@ -12,7 +12,7 @@ permissions:
 jobs:
   locate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
@@ -26,47 +26,59 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}"
+          printf '::add-mask::%s\n' "$VERCEL_TOKEN"
           npm install -g vercel@59.5.0 >/dev/null
           work="$(mktemp -d)"
-          projects=(
-            'wdcc-lead-auth-rotate|prj_sysj9siNz02JMcImjAM0xfYG8fzP'
-            'wdcc-crm-service-bootstrap-2|prj_T9gvwSkKAFxO1ea9FV2V1Yfhc2Sb'
-            'wdcc-growth-os-live-test|prj_JqnkOEzvWzcacc2SbmpDXjGzZDxM'
-            'wdcc-live-lead-retest|prj_crRWpey1tIEsuP9wu5ZwdDACtJNP'
-            'wdcc-dealer-crm-stage|prj_AtAZFnVg7RQIVM4934ejNq9MYnOb'
-            'wdcc-lead-auth-bootstrap|prj_KQ46SBFgt4HVrajf5Cx5jmpklNT7'
-            'wdcc-lead-shim-stage|prj_V85PRKctITB4pHYOIb7Gk40bBrQ5'
-            'wdcc-growth-os-stage|prj_M5pVkDG2Ey9ljqbfpFO4CFmpgIDF'
-          )
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects?teamId=$TEAM_ID&limit=100" > "$work/projects.json"
+          jq -r '.projects[] | select((.name|ascii_downcase|test("wdcc|wedontcarecars|carecars"))) | [.name,.id] | @tsv' "$work/projects.json" > "$work/projects.tsv"
+          echo "WDCC_PROJECTS_DISCOVERED=$(wc -l < "$work/projects.tsv" | tr -d ' ')"
+
           exact=''
           exact_name=''
-          for entry in "${projects[@]}"; do
-            name="${entry%%|*}"; pid="${entry#*|}"; dir="$work/$pid"; mkdir -p "$dir/.vercel"
-            printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
-            file="$dir/prod.env"
-            if ! (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment=production --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
-              echo "PROJECT=$name ENV_PULL=FAILED"
-              continue
-            fi
-            PROJECT_NAME="$name" ENV_FILE="$file" node - <<'NODE'
-          const fs=require('fs');const text=fs.readFileSync(process.env.ENV_FILE,'utf8');const env={};for(const line of text.split(/\r?\n/)){const i=line.indexOf('=');if(i<1)continue;let v=line.slice(i+1).trim();if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1);env[line.slice(0,i).trim()]=v;}
-          const keys=Object.keys(env).filter(k=>/NEON|POSTGRES|DATABASE|AUTH_URL/i.test(k)).sort();const urls=[];for(const [k,v] of Object.entries(env)){try{const u=new URL(v);if(['postgres:','postgresql:','https:'].includes(u.protocol)&&(u.hostname.includes('neon.tech')||u.hostname.includes('neonauth.')))urls.push({key:k,host:u.hostname,path:u.pathname})}catch{}}
-          console.log(JSON.stringify({project:process.env.PROJECT_NAME,matchingKeys:keys,authorities:urls}));
+          exact_env=''
+          while IFS=$'\t' read -r name pid; do
+            [ -n "$pid" ] || continue
+            for environment in production preview development; do
+              dir="$work/$pid-$environment"; mkdir -p "$dir/.vercel"
+              printf '{"orgId":"%s","projectId":"%s"}\n' "$TEAM_ID" "$pid" > "$dir/.vercel/project.json"
+              file="$dir/current.env"
+              if ! (cd "$dir" && VERCEL_ORG_ID="$TEAM_ID" VERCEL_PROJECT_ID="$pid" vercel env pull "$file" --environment="$environment" --yes --token="$VERCEL_TOKEN" --scope="$TEAM" >/dev/null 2>&1); then
+                continue
+              fi
+              PROJECT_NAME="$name" ENVIRONMENT="$environment" ENV_FILE="$file" node - <<'NODE'
+          const fs=require('fs');const text=fs.readFileSync(process.env.ENV_FILE,'utf8');const env={};for(const line of text.split(/\r?\n/)){const i=line.indexOf('=');if(i<1)continue;let v=line.slice(i+1).trim();if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1);env[line.slice(0,i).trim()]=v.replace(/\\n/g,'\n');}
+          const found=[];for(const [k,v] of Object.entries(env)){try{const u=new URL(v);if((u.protocol==='postgres:'||u.protocol==='postgresql:'||u.protocol==='https:')&&(u.hostname.includes('neon.tech')||u.hostname.includes('neonauth.')))found.push({key:k,host:u.hostname,database:u.pathname.replace(/^\//,'')})}catch{}}
+          if(found.length)console.log(JSON.stringify({project:process.env.PROJECT_NAME,environment:process.env.ENVIRONMENT,authorities:found}));
           NODE
-            for key in WDCC_DATABASE_URL DATABASE_URL POSTGRES_URL NEON_DATABASE_URL POSTGRES_PRISMA_URL POSTGRES_URL_NON_POOLING; do
-              val="$(grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- || true)"; val="${val%\"}"; val="${val#\"}"
-              case "$val" in postgres://*|postgresql://*) host="$(node -e 'console.log(new URL(process.argv[1]).hostname)' "$val")"; if [[ "$host" == *.c-5.us-east-2.aws.neon.tech ]]; then exact="$val"; exact_name="$name"; break 2; fi;; esac
+              for key in WDCC_DATABASE_URL DATABASE_URL POSTGRES_URL NEON_DATABASE_URL POSTGRES_PRISMA_URL POSTGRES_URL_NON_POOLING; do
+                val="$(grep -E "^${key}=" "$file" | head -1 | cut -d= -f2- || true)"
+                val="${val%\"}"; val="${val#\"}"
+                case "$val" in
+                  postgres://*|postgresql://*)
+                    host="$(node -e 'try{console.log(new URL(process.argv[1]).hostname)}catch{}' "$val")"
+                    if [[ "$host" == *.c-5.us-east-2.aws.neon.tech ]]; then
+                      exact="$val"; exact_name="$name"; exact_env="$environment"; break 3
+                    fi
+                    ;;
+                esac
+              done
             done
-          done
-          if [ -z "$exact" ]; then echo 'EXACT_C5_DATABASE_URL_FOUND=NO'; echo 'READ_ONLY=YES'; exit 0; fi
+          done < "$work/projects.tsv"
+
+          if [ -z "$exact" ]; then
+            echo 'EXACT_C5_DATABASE_URL_FOUND=NO'
+            echo 'SECRET_VALUES_PRINTED=NO'
+            echo 'READ_ONLY=YES'
+            exit 0
+          fi
           printf '::add-mask::%s\n' "$exact"
-          echo "EXACT_C5_DATABASE_URL_FOUND=YES PROJECT=$exact_name"
+          echo "EXACT_C5_DATABASE_URL_FOUND=YES PROJECT=$exact_name ENVIRONMENT=$exact_env"
           if ! command -v psql >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; fi
-          echo '=== AUTH SCHEMA COLUMNS ==='
-          psql "$exact" -X -A -t -F '|' -c "select table_name,column_name from information_schema.columns where table_schema='neon_auth' and table_name in ('user','account') order by table_name,ordinal_position"
+          echo '=== AUTH TABLES ==='
+          psql "$exact" -X -A -t -c "select table_name from information_schema.tables where table_schema='neon_auth' order by table_name"
           echo '=== DEALER USER SAFE METADATA ==='
-          psql "$exact" -X -A -t -F '|' -c "select id,email,coalesce(role::text,'') from neon_auth.\"user\" where email='dealer@internal.wedontcarecars.com'"
+          psql "$exact" -X -A -t -F '|' -c "select id,email,coalesce(role::text,'') from neon_auth.\"user\" where lower(email)='dealer@internal.wedontcarecars.com'"
           echo '=== DEALER ACCOUNT SAFE METADATA ==='
-          psql "$exact" -X -A -t -F '|' -c "select \"providerId\", case when password is null then 'NO_PASSWORD' else 'PASSWORD_PRESENT' end from neon_auth.account where \"userId\" in (select id from neon_auth.\"user\" where email='dealer@internal.wedontcarecars.com')"
+          psql "$exact" -X -A -t -F '|' -c "select \"providerId\", case when password is null then 'NO_PASSWORD' else 'PASSWORD_PRESENT' end from neon_auth.account where \"userId\" in (select id from neon_auth.\"user\" where lower(email)='dealer@internal.wedontcarecars.com')"
           echo 'SECRET_VALUES_PRINTED=NO'
           echo 'READ_ONLY=YES'
