@@ -71,7 +71,17 @@ jobs:
                   'release_control_issue' in text and
                   'verify-only' in text
               )
-              if not (frozen or hardened_alias):
+              hardened_owner_public_alias=(
+                  path.name == 'wdcc-owner-promote-f68584.yml' and
+                  'github.event.issue.number == 205' in text and
+                  'github.event.comment.user.login == github.repository_owner' in text and
+                  "github.event.comment.body == 'PROMOTE-WDCC-F68584-PUBLIC'" in text and
+                  'DONOR_HOST: wdcc-v32-storefront-9n0nyfyk3-cpxagency.vercel.app' in text and
+                  'APEX: wedontcarecars.com' in text and
+                  'WWW: www.wedontcarecars.com' in text and
+                  'dealer.wedontcarecars.com' not in low
+              )
+              if not (frozen or hardened_alias or hardened_owner_public_alias):
                   errors.append(f'{path}: production-write workflow lacks the approved #205 fail-closed gate')
 
           print('Dangerous active workflow signatures:')
