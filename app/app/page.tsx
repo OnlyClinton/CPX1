@@ -4,6 +4,9 @@ import Link from "next/link";
 
 import styles from "./page.module.css";
 
+const DEALER_PORTAL_URL = "https://dealer.wedontcarecars.com/dealer";
+const ADD_VEHICLE_URL = "https://dealer.wedontcarecars.com/dealer/inventory/new";
+
 export const metadata: Metadata = {
   title: "WDCC Dealer App | Web Portal & Android Download",
   description:
@@ -50,9 +53,9 @@ export default function DealerAppPage() {
             <small>Inventory operations</small>
           </span>
         </Link>
-        <Link className={styles.headerLink} href="/dealer">
+        <a className={styles.headerLink} href={DEALER_PORTAL_URL}>
           Dealer sign in <ArrowIcon />
-        </Link>
+        </a>
       </header>
 
       <section className={styles.hero}>
@@ -67,9 +70,9 @@ export default function DealerAppPage() {
           </p>
 
           <div className={styles.actions}>
-            <Link className={styles.primaryAction} href="/dealer">
+            <a className={styles.primaryAction} href={DEALER_PORTAL_URL}>
               Open Web Portal <ArrowIcon />
-            </Link>
+            </a>
             <a className={styles.downloadAction} href="/app/download/android">
               <DownloadIcon /> Download Android
             </a>
@@ -108,7 +111,7 @@ export default function DealerAppPage() {
                   <span>GOOD MORNING, SEAN</span>
                   <h2>Dealer Dashboard</h2>
                 </div>
-                <Link href="/dealer/inventory/new">+ Add Vehicle</Link>
+                <a href={ADD_VEHICLE_URL}>+ Add Vehicle</a>
               </div>
 
               <div className={styles.metricGrid}>
@@ -186,4 +189,3 @@ export default function DealerAppPage() {
     </main>
   );
 }
-

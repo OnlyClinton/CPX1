@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import {useEffect,useMemo,useState} from "react";
+import {primaryVehiclePhoto} from "../../../lib/vehiclePhotos";
 
 const money=(v:any)=>Number(v||0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0});
-const pathname=(v:any)=>String(v?.primaryPhotoPathname||v?.photoPathnames?.[0]||"").trim();
-const img=(v:any)=>{const direct=v.image||v.photo||v.primaryPhotoUrl||v.primaryPhoto||v.imageUrl||"";if(direct)return direct;const p=pathname(v);return p?`/api/media?p=${encodeURIComponent(p)}`:""};
+const img=(v:any)=>primaryVehiclePhoto(v);
 const isQa=(v:any)=>{const stock=String(v?.stock||"").trim().toUpperCase(),id=String(v?.id||"").trim().toUpperCase(),badges=Array.isArray(v?.badges)?v.badges.map((x:any)=>String(x||"").toUpperCase()):[];return v?.qa===true||/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock)||/^(WDCC[-_]QA|QA)[-_]/.test(id)||badges.some((x:string)=>x==="R36-TEST"||x==="QA"||x==="TEST"||x.includes("CERTIFICATION"));};
 const isInternal=(v:any)=>v?.internalOnly===true||["internal","dealer_only"].includes(String(v?.visibility||v?.listingVisibility||"").toLowerCase());
 const customerVisible=(v:any)=>String(v?.status||"").toLowerCase()==="published"&&!isQa(v)&&!isInternal(v)&&Number(v?.year)>1900&&Boolean(String(v?.make||"").trim())&&Boolean(String(v?.model||"").trim())&&Number(v?.price)>0;
@@ -50,7 +50,7 @@ export default function DealerInventory(){
         <section className="targetInventoryPanel">
           <div className="targetInventoryHead"><span>VEHICLE</span><span>PRICE</span><span>MILES</span><span>STATUS</span><span>READINESS</span><span>ACTIONS</span></div>
           <div className="targetInventoryRows">{paged.map(v=>{const r=readiness(v),s=String(v.status||"draft").toLowerCase(),visible=customerVisible(v),qaRecord=isQa(v),internalRecord=isInternal(v);return <article key={v.id} className="targetInventoryRow">
-            <div className="targetVehicle"><div className="targetVehicleThumb">{img(v)?<img src={img(v)} alt="" loading="lazy"/>:<span>WDCC</span>}</div><div><strong>{v.year||"—"} {v.make||"Unknown"} {v.model||"Vehicle"} {v.trim||""}</strong><small>Stock #{v.stock||String(v.id).slice(-8)}</small><div>{visible&&<i>AVAILABLE</i>}{internalRecord&&<i>INTERNAL</i>}{qaRecord&&<i>QA HIDDEN</i>}</div></div></div>
+            <Link href={`/vehicle/${encodeURIComponent(String(v.id))}`} className="targetVehicle"><div className="targetVehicleThumb">{img(v)?<img src={img(v)} alt="" loading="lazy"/>:<span>PHOTO NEEDED</span>}</div><div><strong>{v.year||"—"} {v.make||"Unknown"} {v.model||"Vehicle"} {v.trim||""}</strong><small>Stock #{v.stock||String(v.id).slice(-8)}</small><div>{visible&&<i>AVAILABLE</i>}{internalRecord&&<i>INTERNAL</i>}{qaRecord&&<i>QA HIDDEN</i>}</div></div></Link>
             <div className="targetPrice"><strong>{money(v.price)}</strong><small>{Number(v.downPayment||0)>0?`${money(v.downPayment)} Down`:"Cash price"}</small></div>
             <span>{Number(v.mileage||0).toLocaleString()}</span>
             <div className="targetStatus"><b className={s}>{s.toUpperCase()}</b><small>{visible?"Customer live":internalRecord?"Dealer only":qaRecord?"Hidden from shoppers":"Not public"}</small></div>

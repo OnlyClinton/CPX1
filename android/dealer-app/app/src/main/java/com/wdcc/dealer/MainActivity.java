@@ -51,9 +51,7 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4013;
     private static final String HOME_URL = "https://dealer.wedontcarecars.com/dealer";
     private static final String[] DEALER_ENDPOINTS = new String[]{
-            HOME_URL,
-            "https://wdcc-cpx-launch-cpxagency.vercel.app/dealer",
-            "https://wdcc-v32-storefront-7bw9v7387-cpxagency.vercel.app/dealer"
+            HOME_URL
     };
 
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
@@ -215,7 +213,7 @@ public class MainActivity extends Activity {
         settings.setGeolocationEnabled(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " WDCCDealerAndroid/2.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " WDCCDealerAndroid/3.0");
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -368,7 +366,7 @@ public class MainActivity extends Activity {
             connection.setInstanceFollowRedirects(true);
             connection.setConnectTimeout(6500);
             connection.setReadTimeout(7500);
-            connection.setRequestProperty("User-Agent", "WDCCDealerAndroid-Probe/2.0");
+            connection.setRequestProperty("User-Agent", "WDCCDealerAndroid-Probe/3.0");
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml");
             int code = connection.getResponseCode();
             if (code < 200 || code >= 400 || !isTrustedHost(connection.getURL().getHost())) return false;
@@ -408,11 +406,8 @@ public class MainActivity extends Activity {
                 firstDealerPageVerified = true;
                 getPreferences(MODE_PRIVATE).edit().putString("last_dealer_endpoint", rootDealerUrl(url)).apply();
                 hideStatusPanels();
-            } else if (value != null && value.contains("customer")) {
-                tryNextEndpoint();
             } else {
-                firstDealerPageVerified = true;
-                hideStatusPanels();
+                tryNextEndpoint();
             }
         });
     }
@@ -461,10 +456,6 @@ public class MainActivity extends Activity {
     private boolean isTrustedHost(String hostValue) {
         String host = lower(hostValue);
         return host.equals("dealer.wedontcarecars.com")
-                || host.equals("wedontcarecars.com")
-                || host.equals("www.wedontcarecars.com")
-                || host.equals("wdcc-cpx-launch-cpxagency.vercel.app")
-                || host.equals("wdcc-v32-storefront-7bw9v7387-cpxagency.vercel.app")
                 || host.endsWith(".vercel-storage.com")
                 || host.endsWith(".blob.vercel-storage.com")
                 || host.endsWith(".public.blob.vercel-storage.com");

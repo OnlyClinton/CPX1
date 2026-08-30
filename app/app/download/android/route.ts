@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_ANDROID_APK =
-  "https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v2/WDCC-Dealer-v2.apk";
+  "https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v3/WDCC-Dealer-v3.apk";
 
 function installerUrl() {
   const configured = process.env.WDCC_ANDROID_APK_URL?.trim();
@@ -24,4 +24,3 @@ export async function GET() {
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
   return response;
 }
-
