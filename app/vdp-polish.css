@@ -1,0 +1,23 @@
+.vehicle-detail-grid {
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr);
+}
+
+.vehicle-detail .vdp-call {
+  color: #111;
+  background: #fff;
+  border-color: #aeb5bc;
+}
+
+@media (max-width: 820px) {
+  .vehicle-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-detail .actions {
+    display: grid;
+  }
+
+  .vehicle-detail .actions .cta {
+    width: 100%;
+  }
+}
