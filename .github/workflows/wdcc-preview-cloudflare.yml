@@ -114,3 +114,5 @@ jobs:
           name: wdcc-cloudflare-preview-url
           path: preview-url.txt
           retention-days: 7
+
+# Preview trigger: vehicle-detail image verification.
