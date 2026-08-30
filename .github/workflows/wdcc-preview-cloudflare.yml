@@ -7,6 +7,7 @@ on:
       - preview/wdcc-locked-contract-20260826
       - dev/wdcc-cinematic-mockup-v1
       - fix/wdcc-locked-contract-20260826
+      - release/wdcc-photoreal-challenger-cloudflare-20260830
   workflow_dispatch:
 
 permissions:

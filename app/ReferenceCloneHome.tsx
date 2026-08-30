@@ -13,7 +13,7 @@ const fallback:Vehicle[]=[
 ];
 const visible=(v:any)=>String(v?.status||"").toLowerCase()==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()&&String(v?.model||"").trim()&&Number(v?.price||v?.cashPrice)>0;
 const photo=(v:Vehicle)=>v.primaryPhotoPathname?`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`:(v.primary_image_url||v.image||"/wdcc-hero-v2.webp");
-const href=(v:Vehicle)=>v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`;
+const href=(v:Vehicle)=>`/vehicle/${encodeURIComponent(String(v.slug||v.id||""))}`;
 
 export default function ReferenceCloneHome(){
   const[open,setOpen]=useState(false),[items,setItems]=useState<Vehicle[]>(fallback);

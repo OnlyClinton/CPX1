@@ -1,0 +1,37 @@
+/* Final visual invariant: the WDCC storefront and intro always use the
+   photoreal American-flag Challenger. Earlier experimental vector layers
+   are retained only as history and cannot win the cascade. */
+.wdcc-live-polish .hero::before {
+  background: var(--hero-image) 58% 50% / cover no-repeat !important;
+  filter: saturate(1.04) contrast(1.03) brightness(.9) !important;
+  transform: none !important;
+}
+
+.wdcc-live-polish .hero-car-glow,
+.wdcc-live-polish .hero-shade {
+  display: none !important;
+}
+
+.li .li-scene::before,
+.li .li-scene + .li-smoke::before,
+.li .li-scene + .li-smoke::after {
+  display: none !important;
+}
+
+.li .li-scene img {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: 64% 45% !important;
+}
+
+@media (max-width: 760px) {
+  .wdcc-live-polish .hero::before {
+    background: var(--hero-image) 64% 0 / auto 360px no-repeat !important;
+    background-color: #06111b !important;
+    filter: saturate(1.06) contrast(1.03) brightness(1.03) !important;
+  }
+}

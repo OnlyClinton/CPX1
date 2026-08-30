@@ -25,7 +25,7 @@ const fallback:Vehicle[]=[
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x).toUpperCase());const stock=String(v?.stock||v?.stock_id||"").toUpperCase();return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST")}
 function recoveryKey(v:Vehicle){return String(v.slug||v.id||"").toLowerCase().replace(/^recovered-/,"").replace(/^recovery-/,"")}
 function photo(v:Vehicle){if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;const direct=v.primary_image_url||v.image;if(direct)return direct;return recoveredMedia[recoveryKey(v)]||"/wdcc-hero-v2.webp"}
-function href(v:Vehicle){return v.slug?`/inventory/${v.slug}`:`/vehicle/${encodeURIComponent(String(v.id||""))}`}
+function href(v:Vehicle){return `/vehicle/${encodeURIComponent(String(v.slug||v.id||""))}`}
 
 export default function Exact2vfDHomeLive(){
  const[open,setOpen]=useState(false),[active,setActive]=useState(0),[items,setItems]=useState<Vehicle[]>(fallback);
