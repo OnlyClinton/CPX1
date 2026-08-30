@@ -1,0 +1,72 @@
+name: WDCC owner promote f68584
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: wdcc-owner-promote-f68584
+  cancel-in-progress: false
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  DONOR_HOST: wdcc-v32-storefront-9n0nyfyk3-cpxagency.vercel.app
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-F68584-PUBLIC'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Gate exact owner action
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          test -n "${VERCEL_TOKEN:-}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+      - name: Verify exact donor before production write
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor.html
+          grep -qi 'BAD CREDIT' /tmp/donor.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
+          grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
+          grep -q 'width:148px' /tmp/donor.html
+      - name: Pin public aliases to exact donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel alias set "$DONOR_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$DONOR_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+      - name: Verify public apex and www
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 30); do
+              code="$(curl -sS -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "https://$host/?promote=$stamp-$i" || true)"
+              if [ "$code" = 200 ] && grep -qi 'BAD CREDIT' /tmp/live.html && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html && grep -q 'wdcc-hero-v2.webp' /tmp/live.html && grep -q 'width:148px' /tmp/live.html; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" = 1
+          done
+          echo 'WDCC_F68584_PUBLIC=PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo 'APEX_AND_WWW=PASS' >> "$GITHUB_STEP_SUMMARY"
