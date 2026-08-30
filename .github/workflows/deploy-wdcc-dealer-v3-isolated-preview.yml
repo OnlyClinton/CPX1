@@ -1,0 +1,117 @@
+name: WDCC DEALER V3 ISOLATED PREVIEW
+
+on:
+  push:
+    branches: [codex/wdcc-dealer-app-v3-20260830]
+    paths:
+      - ".github/workflows/deploy-wdcc-dealer-v3-isolated-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-dealer-v3-isolated-preview
+  cancel-in-progress: true
+
+env:
+  APK_URL: https://github.com/OnlyClinton/CPX1/releases/download/wdcc-dealer-app-v3/WDCC-Dealer-v3.apk
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  VERCEL_SCOPE: cpxagency
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact preview source
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Build and visually render exact source
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm start >/tmp/wdcc-v3-next.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/app -o /tmp/app.html && break
+            sleep 1
+          done
+          grep -q 'Run your inventory from anywhere' /tmp/app.html
+          grep -q 'https://dealer.wedontcarecars.com/dealer' /tmp/app.html
+          browser="$(command -v google-chrome || command -v chromium || true)"
+          test -n "$browser"
+          "$browser" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1050 --screenshot=/tmp/wdcc-app-desktop.png http://127.0.0.1:3000/app
+          "$browser" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=430,932 --screenshot=/tmp/wdcc-app-mobile.png http://127.0.0.1:3000/app
+          test "$(stat -c%s /tmp/wdcc-app-desktop.png)" -gt 20000
+          test "$(stat -c%s /tmp/wdcc-app-mobile.png)" -gt 15000
+
+      - name: Upload visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: WDCC-Dealer-v3-Visual-Proof
+          path: |
+            /tmp/wdcc-app-desktop.png
+            /tmp/wdcc-app-mobile.png
+          retention-days: 30
+
+      - name: Build isolated Vercel preview
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          npm install --global vercel@59.5.0 >/dev/null
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" >/dev/null
+          vercel build --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN"
+
+      - name: Deploy preview without production promotion
+        id: deploy
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(vercel deploy --prebuilt --yes --env "WDCC_ANDROID_APK_URL=$APK_URL" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -eq 0
+          url="$(printf '%s\n' "$output" | grep -Eo 'https://wdcc-v32-storefront-[a-z0-9-]+-cpxagency\.vercel\.app' | tail -n1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify protected preview through Vercel access
+        env:
+          CANDIDATE: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          test "$CANDIDATE" != "https://wedontcarecars.com"
+          test "$CANDIDATE" != "https://www.wedontcarecars.com"
+          vercel curl /app --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-app.html
+          grep -q 'Run your inventory from anywhere' /tmp/candidate-app.html
+          grep -q 'https://dealer.wedontcarecars.com/dealer' /tmp/candidate-app.html
+          grep -q 'Download Android' /tmp/candidate-app.html
+          vercel curl /wdcc-logo-transparent.webp --deployment "$CANDIDATE" --scope="$VERCEL_SCOPE" --token="$VERCEL_TOKEN" > /tmp/candidate-logo.webp
+          test "$(stat -c%s /tmp/candidate-logo.webp)" -gt 20000
+
+      - name: Publish preview proof summary
+        env:
+          CANDIDATE: ${{ steps.deploy.outputs.url }}
+        run: |
+          {
+            echo '## WDCC Dealer v3 isolated preview — PASS'
+            echo
+            echo "- Exact source: $GITHUB_SHA"
+            echo "- Protected preview: $CANDIDATE/app"
+            echo "- Android installer: $APK_URL"
+            echo '- Desktop and mobile visual renders: uploaded as workflow artifacts'
+            echo '- Production aliases, DNS, Cloudflare routes, and dealer domain: unchanged'
+          } >> "$GITHUB_STEP_SUMMARY"
