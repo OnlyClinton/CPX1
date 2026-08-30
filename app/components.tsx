@@ -2,6 +2,7 @@
 import Link from"next/link";
 import type{CSSProperties}from"react";
 import{useEffect,useState}from"react";
+import {PUBLIC_INVENTORY_FALLBACK} from "../lib/publicInventoryFallback";
 import TrackedCallLink from"./TrackedCallLink";
 
 export function Intro(){
@@ -94,8 +95,8 @@ function customerVisible(v:any){
 }
 
 export function VehicleGrid({limit}:{limit?:number}){
-  const[items,setItems]=useState<any[]>([]),[loading,setLoading]=useState(true);
-  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>setItems((j.items||j.inventory||[]).filter(customerVisible))).catch(()=>{}).finally(()=>setLoading(false))},[]);
+  const[items,setItems]=useState<any[]>(PUBLIC_INVENTORY_FALLBACK),[loading,setLoading]=useState(true);
+  useEffect(()=>{fetch("/api/inventory",{cache:"no-store"}).then(r=>r.json()).then(j=>{const live=(j.items||j.inventory||[]).filter(customerVisible);setItems(live.length?live:PUBLIC_INVENTORY_FALLBACK)}).catch(()=>setItems(PUBLIC_INVENTORY_FALLBACK)).finally(()=>setLoading(false))},[]);
   const shown=limit?items.slice(0,limit):items;
   if(loading)return <div className="grid">{[1,2,3,4,5].map(i=><div className="card" key={i}><div className="photo">LOADING VEHICLE…</div><div className="cardBody"><div className="carTitle">Inventory loading</div></div></div>)}</div>;
   return <div className="grid">{shown.length?shown.map(v=><article className="card" key={v.id}><Link className="photo" href={`/vehicle/${v.id}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{v.primaryPhotoPathname?<img src={`/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`} alt={`${v.year} ${v.make} ${v.model}`}/>:v.primary_image_url?<img src={v.primary_image_url} alt={`${v.year} ${v.make} ${v.model}`}/>:"PHOTOS COMING"}</Link><div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div><div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null&&<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>}<div className="cardButtons"><Link href={`/vehicle/${v.id}`}><span>VIEW VEHICLE</span></Link><Link href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(v.id)}`}><span>GET APPROVED</span></Link></div></div></article>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>

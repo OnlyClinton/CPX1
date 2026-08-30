@@ -3,6 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
+import {fallbackVehicle} from "../../../../lib/publicInventoryFallback";
 import {isInternalVehicleRecord,isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
 import {recordVehicleAudit} from "../../../../lib/vehicleAudit";
 
@@ -52,7 +53,12 @@ async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible")
 
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
   const{id}=await params;
-  if(!isDealerRuntime(request))return proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
+  if(!isDealerRuntime(request)){
+    const upstream=await proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
+    if(upstream.ok||String(request.headers.get("cookie")||"").includes("__Host-wdcc_session="))return upstream;
+    const item=fallbackVehicle(id);
+    return item?NextResponse.json({ok:true,item,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}}):NextResponse.json({ok:false,error:"Not found"},{status:404,headers:{"Cache-Control":"public, max-age=60"}});
+  }
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);

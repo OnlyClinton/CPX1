@@ -3,6 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
+import {PUBLIC_INVENTORY_FALLBACK} from "../../../lib/publicInventoryFallback";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
 
@@ -25,11 +26,12 @@ function publicEligible(item:any){
 
 async function proxyPublicInventory(request:Request){
   const upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok)return upstream;
+  if(!upstream.ok)return NextResponse.json({ok:true,count:PUBLIC_INVENTORY_FALLBACK.length,items:PUBLIC_INVENTORY_FALLBACK,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}});
   const json=await upstream.json().catch(()=>({}));
   const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
   const items=source.filter(publicEligible);
-  return NextResponse.json({...json,ok:true,count:items.length,items},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
+  const publicItems=items.length?items:PUBLIC_INVENTORY_FALLBACK;
+  return NextResponse.json({...json,ok:true,count:publicItems.length,items:publicItems,degraded:items.length?Boolean(json?.degraded):true},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":items.length?"canonical":"launch-fallback"}});
 }
 
 export async function GET(request:Request){

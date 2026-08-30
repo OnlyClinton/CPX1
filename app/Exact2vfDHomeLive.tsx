@@ -3,28 +3,15 @@
 import Link from "next/link";
 import type {CSSProperties} from "react";
 import {useEffect,useMemo,useState} from "react";
+import {PUBLIC_INVENTORY_FALLBACK} from "../lib/publicInventoryFallback";
 
 type Vehicle={id?:string;slug?:string;year:number;make:string;model:string;trim?:string;price:number;downPayment?:number;down_payment?:number;mileage?:number;primaryPhotoPathname?:string;primary_image_url?:string;image?:string;status?:string;stock?:string;stock_id?:string;badges?:string[];bodyStyle?:string;body_style?:string;transmission?:string;drivetrain?:string};
 
-const recoveredMedia:Record<string,string>={
-  "2004-nissan-350z":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2004-nissan-350z.jpg",
-  "2016-ford-f150-limited":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2016-ford-f150-limited.jpg",
-  "2019-honda-pilot":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-honda-pilot.jpg",
-  "2019-kia-sportage":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-kia-sportage.jpg",
-  "2019-toyota-rav4":"https://xgbsyv0ovelnac0u.public.blob.vercel-storage.com/wdcc/vehicles/2019-toyota-rav4.jpg"
-};
-
-const fallback:Vehicle[]=[
-  {id:"2004-nissan-350z",slug:"2004-nissan-350z",year:2004,make:"Nissan",model:"350Z",price:4900,downPayment:2000,mileage:154000,image:recoveredMedia["2004-nissan-350z"],bodyStyle:"Car",drivetrain:"RWD"},
-  {id:"2016-ford-f150-limited",slug:"2016-ford-f150-limited",year:2016,make:"Ford",model:"F-150",trim:"Limited",price:15000,downPayment:6000,mileage:164000,image:recoveredMedia["2016-ford-f150-limited"],bodyStyle:"Truck",transmission:"Automatic",drivetrain:"4x4"},
-  {id:"2019-honda-pilot",slug:"2019-honda-pilot",year:2019,make:"Honda",model:"Pilot",price:7900,downPayment:3000,mileage:380000,image:recoveredMedia["2019-honda-pilot"],bodyStyle:"SUV",transmission:"Automatic"},
-  {id:"2019-kia-sportage",slug:"2019-kia-sportage",year:2019,make:"Kia",model:"Sportage",price:6500,downPayment:2500,mileage:127000,image:recoveredMedia["2019-kia-sportage"],bodyStyle:"SUV"},
-  {id:"2019-toyota-rav4",slug:"2019-toyota-rav4",year:2019,make:"Toyota",model:"RAV4",price:10500,downPayment:4500,mileage:240000,image:recoveredMedia["2019-toyota-rav4"],bodyStyle:"SUV"}
-];
+const fallback:Vehicle[]=PUBLIC_INVENTORY_FALLBACK;
 
 function customerVisible(v:any){const status=String(v?.status||"").toLowerCase();const badges=(Array.isArray(v?.badges)?v.badges:[]).map((x:any)=>String(x).toUpperCase());const stock=String(v?.stock||v?.stock_id||"").toUpperCase();return status==="published"&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!stock.startsWith("R36TEST-")&&!badges.includes("R36-TEST")}
 function recoveryKey(v:Vehicle){return String(v.slug||v.id||"").toLowerCase().replace(/^recovered-/,"").replace(/^recovery-/,"")}
-function photo(v:Vehicle){if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;const direct=v.primary_image_url||v.image;if(direct)return direct;return recoveredMedia[recoveryKey(v)]||"/wdcc-hero-v2.webp"}
+function photo(v:Vehicle){if(v.primaryPhotoPathname)return `/api/media?p=${encodeURIComponent(v.primaryPhotoPathname)}`;const direct=v.primary_image_url||v.image;if(direct)return direct;return `/assets/cars/${recoveryKey(v)}-1.webp`}
 function href(v:Vehicle){return `/vehicle/${encodeURIComponent(String(v.slug||v.id||""))}`}
 
 export default function Exact2vfDHomeLive(){
