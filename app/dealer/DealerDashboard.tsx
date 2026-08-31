@@ -12,7 +12,7 @@ const vehicleName=(v:Vehicle)=>`${v.year||""} ${v.make||""} ${v.model||""} ${v.t
 export default function DealerDashboard(){
   const[session,setSession]=useState<any>(null);
   const[data,setData]=useState<any>(null);
-  const[username,setUsername]=useState("Dealer");
+  const[username,setUsername]=useState("bigpussy");
   const[password,setPassword]=useState("");
   const[message,setMessage]=useState("");
   const[busy,setBusy]=useState(false);

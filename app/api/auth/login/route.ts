@@ -1,14 +1,18 @@
 import {readState,type User} from "../../../../lib/store";
 
 const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
-const LOGIN_MAP:Record<string,string>={admin:"admin@internal.wedontcarecars.com",dealer:"dealer-v2@internal.wedontcarecars.com"};
+const LOGIN_MAP:Record<string,string>={
+  admin:"admin@internal.wedontcarecars.com",
+  bigpussy:"dealer-v2@internal.wedontcarecars.com",
+  dealer:"dealer-v2@internal.wedontcarecars.com"
+};
 export const dynamic="force-dynamic";
 
 function resolveLogin(value:unknown){
   const raw=String(value||"").trim().toLowerCase();
   if(LOGIN_MAP[raw])return {email:LOGIN_MAP[raw],username:raw};
   if(raw==="admin@internal.wedontcarecars.com")return {email:raw,username:"admin"};
-  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"dealer"};
+  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"bigpussy"};
   return null;
 }
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
