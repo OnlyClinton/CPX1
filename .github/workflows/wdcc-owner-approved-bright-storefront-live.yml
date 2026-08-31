@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APPROVED_SHA: bce69816314fd31b80a97281b4c8838238e0f73e
+  APPROVED_SHA: c09247e98a56342d293d70ecb1db9708c26d3893
   VERCEL_SCOPE: cpxagency
   VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-BRIGHT-BCE69816-CLOUDFLARE-FRONTDOOR'
+      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-C09247E9-CLOUDFLARE-FRONTDOOR'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -67,6 +67,8 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           grep -Fq 'brightness(1.30)' app/reference-clone.css
+          grep -Fq 'import"./mobile-density-polish.css"' app/layout.tsx
+          grep -Fq '.reference-home .rh-logo img{width:92px!important;height:92px!important' app/mobile-density-polish.css
           grep -Fq 'https://dealer.wedontcarecars.com' lib/wdccAuthority.ts
           grep -Fq 'https://dealer.wedontcarecars.com' wrangler.jsonc
           ! grep -Fq 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
