@@ -30,9 +30,9 @@ button,a{-webkit-tap-highlight-color:transparent}
 .wdcc-app.wdcc-live-polish .hero-actions>a:hover{transform:translateY(-3px);filter:brightness(1.07)}
 .wdcc-app.wdcc-live-polish .hero-actions>a:active{transform:translateY(0) scale(.985)}
 
-.wdcc-app.wdcc-live-polish .benefit-strip{min-height:108px}
+.wdcc-app.wdcc-live-polish .benefit-strip{min-height:108px;color:#f4f8fb}
 .wdcc-app.wdcc-live-polish .benefit-strip article{min-width:0;padding:22px clamp(15px,2vw,30px)}
-.wdcc-app.wdcc-live-polish .benefit-strip strong{font-size:13px;line-height:1.25}
+.wdcc-app.wdcc-live-polish .benefit-strip strong{color:#f4f8fb;font-size:13px;line-height:1.25}
 .wdcc-app.wdcc-live-polish .benefit-strip article div span{font-size:12px;line-height:1.45}
 
 .wdcc-app.wdcc-live-polish .inventory-showcase{padding-top:64px;padding-bottom:72px}
