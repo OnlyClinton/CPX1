@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  P0_SHA: fd342ce9258c0479936e10854efc068378be8864
+  P0_SHA: 4c7899bafe6174863837888d9229d006ae2e5280
   APPROVED_VISUAL_SHA: 3d255fa8f1d65e4307e7c3ee474a996dd68ba3e1
   STATE_WORKER: wdcc-v53-1-staging
   MEDIA_WORKER: wdcc-v53-staging
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-FD342CE9-DO-COMPAT-W2W-LOGIN-REDIRECT'
+      github.event.comment.body == 'PROMOTE-WDCC-P0-DEALER-UPLOAD-REUSE-4C7899BA-BRIDGE-UPSERT-W2W-LOGIN-REDIRECT'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -83,6 +83,8 @@ jobs:
           ! grep -Fq 'dealer@internal.wedontcarecars.com' app/api/auth/session/route.ts
           ! grep -Fq 'dealer@internal.wedontcarecars.com' lib/auth.ts
           grep -Fq 'return neonCurrentUser();' lib/auth.ts
+          grep -Fq 'export async function setSession(user:User)' lib/auth.ts
+          ! grep -Fq 'export function setSession(user:User)' lib/auth.ts
           grep -Fq 'sessionAuthority()' app/api/health/route.ts
           ! grep -Fq 'sessionCookieHeader(user)' app/api/auth/login/route.ts
           grep -Fq 'uploadVehiclePhoto' app/dealer/inventory/VehicleEditor.tsx
@@ -219,7 +221,13 @@ jobs:
             {id:'wdcc-admin-neon-bridge',tenantId:'wdcc',email:'admin@internal.wedontcarecars.com',username:'admin',loginAlias:'admin',aliases:['admin'],displayName:'WDCC Admin',role:'platform_admin',status:'active'},
             {id:'wdcc-dealer-neon-bridge',tenantId:'wdcc',email:'dealer-v2@internal.wedontcarecars.com',username:'dealer',loginAlias:'dealer',aliases:['dealer'],displayName:'WDCC Dealer',role:'dealer_agent',status:'active'}
           ];
-          for(const u of bridge)if(!state.users.some(x=>String(x?.id)===u.id)){state.users.push(u);changed=true;}
+          for(const u of bridge){
+            const idx=state.users.findIndex(x=>String(x?.id)===u.id);
+            if(idx<0){state.users.push(u);changed=true;continue;}
+            const before=JSON.stringify(state.users[idx]);
+            state.users[idx]={...state.users[idx],...u};
+            if(JSON.stringify(state.users[idx])!==before)changed=true;
+          }
           const now=new Date().toISOString();
           for(const r of recovered){
             const id=String(r.id||r.slug||''); if(!id)throw new Error('RECOVERY_ID_MISSING');
@@ -236,7 +244,7 @@ jobs:
             jq -e '.ok==true' /tmp/state-put.json >/dev/null
           fi
           test "$(curl --http1.1 -sS -H "Authorization: Bearer $state_token" -o /tmp/state-readback.json -w '%{http_code}' "$STATE_URL/state")" = 200
-          jq -e '(.vehicles|length)>=5 and ([.users[].id]|index("wdcc-dealer-neon-bridge")!=null) and ([.users[].id]|index("wdcc-admin-neon-bridge")!=null)' /tmp/state-readback.json >/dev/null
+          jq -e '(.vehicles|length)>=5 and any(.users[]?; .id=="wdcc-dealer-neon-bridge" and .email=="dealer-v2@internal.wedontcarecars.com" and .username=="dealer" and .role=="dealer_agent" and .status=="active") and any(.users[]?; .id=="wdcc-admin-neon-bridge" and .email=="admin@internal.wedontcarecars.com" and .username=="admin" and .role=="platform_admin" and .status=="active")' /tmp/state-readback.json >/dev/null
           test "$(curl --http1.1 -sS -o /tmp/state-health2 -w '%{http_code}' "$STATE_URL/health")" = 200
           jq -e '.ok==true and .state=="readable"' /tmp/state-health2 >/dev/null
           echo 'P0_STATE_AUTHORITY=PASS'
