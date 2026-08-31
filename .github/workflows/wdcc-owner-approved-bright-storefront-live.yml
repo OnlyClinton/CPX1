@@ -1,5 +1,8 @@
 name: WDCC Owner Approved Bright Storefront Live
 
+# Production writes remain subordinate to wdcc-production-freeze-check.yml and
+# the exact owner-only issue #205 gate below.
+
 on:
   issue_comment:
     types: [created]
