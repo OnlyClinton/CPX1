@@ -137,7 +137,7 @@ jobs:
           ok=0
           for i in $(seq 1 20); do
             code="$(curl --http1.1 -sS -D /tmp/sh -o /tmp/sb -w '%{http_code}' "$direct/?stage=$GITHUB_RUN_ID-$i"||true)"
-            if [ "$code" = 200 ] && grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/sh && grep -Fq 'SCHEDULE TEST DRIVE' /tmp/sb; then ok=1; break; fi
+            if [ "$code" = 200 ] && grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/sh && grep -Fqi 'schedule test drive' /tmp/sb; then ok=1; break; fi
             sleep 2
           done
           test "$ok" = 1
@@ -175,7 +175,7 @@ jobs:
           ok=0
           for i in $(seq 1 30); do
             code="$(curl --http1.1 -sS -D /tmp/lh -o /tmp/lb -w '%{http_code}' "$PROD_ROOT/?release=$APPROVED_SHA-$i"||true)"
-            if [ "$code" = 200 ] && grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/lh && grep -Fq 'SCHEDULE TEST DRIVE' /tmp/lb; then ok=1; break; fi
+            if [ "$code" = 200 ] && grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/lh && grep -Fqi 'schedule test drive' /tmp/lb; then ok=1; break; fi
             sleep 2
           done
           test "$ok" = 1
@@ -192,7 +192,7 @@ jobs:
           code="$(curl --http1.1 -sS -D /tmp/wh -o /tmp/www -w '%{http_code}' "$PROD_WWW/?release=$APPROVED_SHA"||true)"
           test "$code" = 200
           grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/wh
-          grep -Fq 'SCHEDULE TEST DRIVE' /tmp/www
+          grep -Fqi 'schedule test drive' /tmp/www
           curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-r31.webp?release=$APPROVED_SHA" -o /tmp/hero
           test "$(sha256sum /tmp/hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-r31.webp|awk '{print $1}')"
           trap - ERR
