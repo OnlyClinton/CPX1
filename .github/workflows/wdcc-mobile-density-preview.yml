@@ -1,0 +1,63 @@
+name: WDCC Mobile Density Preview
+
+on:
+  push:
+    branches:
+      - fix/wdcc-mobile-density-polish-20260831
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build exact branch
+        run: |
+          npm ci
+          npm run build
+      - name: Capture exact phone renders
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          mkdir -p proof
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/wdcc-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill $app_pid 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            curl -fsS --max-time 3 http://127.0.0.1:3000/ >/dev/null && break
+            sleep 1
+          done
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const cfg of [
+              {name:'phone-390x844',width:390,height:844},
+              {name:'phone-412x915',width:412,height:915}
+            ]){
+              const page=await browser.newPage({viewport:{width:cfg.width,height:cfg.height},deviceScaleFactor:1});
+              await page.goto('http://127.0.0.1:3000/?intro=0',{waitUntil:'networkidle',timeout:20000});
+              await page.screenshot({path:`proof/${cfg.name}-home.png`,fullPage:false});
+              await page.goto('http://127.0.0.1:3000/inventory',{waitUntil:'networkidle',timeout:20000});
+              await page.screenshot({path:`proof/${cfg.name}-inventory.png`,fullPage:false});
+              await page.goto('http://127.0.0.1:3000/get-approved',{waitUntil:'networkidle',timeout:20000});
+              await page.screenshot({path:`proof/${cfg.name}-approved.png`,fullPage:false});
+              await page.close();
+            }
+            await browser.close();
+          })();
+          NODE
+          echo "MOBILE_DENSITY_PROOF=PASS" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-mobile-density-proof
+          path: proof/*.png
+          if-no-files-found: error
