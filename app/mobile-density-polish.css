@@ -3,14 +3,14 @@
 @media (max-width:820px), (max-width:1100px) and (orientation:portrait) {
   html{scroll-padding-top:86px}
 
-  /* Reference storefront: compact brand chrome without shrinking tap targets. */
+  /* Reference storefront: compact chrome with a deliberately prominent centered badge. */
   .reference-home .rh-utility{height:22px!important;min-height:22px!important}
   .reference-home .rh-utility-inner{height:22px!important;padding:0 7px!important;gap:7px!important;font-size:6.4px!important;letter-spacing:.025em!important}
   .reference-home .rh-utility-inner span+span::before{left:-6px!important}
-  .reference-home .rh-header{height:64px!important;min-height:64px!important}
-  .reference-home .rh-header-inner{height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important}
-  .reference-home .rh-logo{width:78px!important;height:78px!important;align-self:center!important}
-  .reference-home .rh-logo img{width:76px!important;height:76px!important}
+  .reference-home .rh-header{height:64px!important;min-height:64px!important;overflow:visible!important}
+  .reference-home .rh-header-inner{height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important;overflow:visible!important}
+  .reference-home .rh-logo{position:relative!important;z-index:4!important;width:96px!important;height:96px!important;align-self:center!important;overflow:visible!important}
+  .reference-home .rh-logo img{width:92px!important;height:92px!important;max-width:none!important}
   .reference-home .rh-menu{width:40px!important;height:40px!important}
   .reference-home .rh-call{width:40px!important;height:40px!important}
   .reference-home .rh-nav{top:64px!important}
@@ -36,10 +36,10 @@
   /* Shared premium header used by inventory, financing and conversion routes. */
   .commandStrip{height:22px!important;min-height:22px!important}
   .commandStrip .wrap{height:22px!important;min-height:22px!important;padding:0 8px!important;gap:6px!important;font-size:6.5px!important;letter-spacing:.025em!important}
-  .premiumHeader{height:64px!important;min-height:64px!important;top:22px!important}
-  .premiumHeader .nav{height:64px!important;min-height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important}
-  .premiumHeader .logoBrand{width:78px!important;height:78px!important;align-self:center!important}
-  .premiumHeader .logoBrand img{width:76px!important;height:76px!important}
+  .premiumHeader{height:64px!important;min-height:64px!important;top:22px!important;overflow:visible!important}
+  .premiumHeader .nav{height:64px!important;min-height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important;overflow:visible!important}
+  .premiumHeader .logoBrand{position:relative!important;z-index:4!important;width:96px!important;height:96px!important;align-self:center!important;overflow:visible!important}
+  .premiumHeader .logoBrand img{width:92px!important;height:92px!important;max-width:none!important}
   .premiumHeader .mobileMenuButton,.premiumHeader .mobileCallButton{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important}
   .mobileHeaderMenu{top:86px!important;left:7px!important;right:7px!important}
   .stickyCtaBar{grid-template-columns:1.05fr 1fr .72fr!important}
@@ -82,7 +82,8 @@
 
 @media (max-width:560px){
   .reference-home .rh-utility-inner span:nth-child(2),.commandStrip .wrap span:nth-child(2){display:none!important}
-  .reference-home .rh-logo,.reference-home .rh-logo img,.premiumHeader .logoBrand,.premiumHeader .logoBrand img{width:72px!important;height:72px!important}
+  .reference-home .rh-logo,.premiumHeader .logoBrand{width:94px!important;height:94px!important}
+  .reference-home .rh-logo img,.premiumHeader .logoBrand img{width:90px!important;height:90px!important}
   .reference-home h1{font-size:clamp(34px,9.7vw,40px)!important}
   .reference-home .rh-copy{padding-top:242px!important}
   .wdcc-mobile-actions a{min-height:39px!important;font-size:9px!important}
