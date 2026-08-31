@@ -1,0 +1,89 @@
+/* Final phone-density correction after owner review of live R31 screenshots.
+   Mobile only: preserve desktop/tablet visual contract and CTA hierarchy. */
+@media (max-width:820px), (max-width:1100px) and (orientation:portrait) {
+  html{scroll-padding-top:86px}
+
+  /* Reference storefront: compact brand chrome without shrinking tap targets. */
+  .reference-home .rh-utility{height:22px!important;min-height:22px!important}
+  .reference-home .rh-utility-inner{height:22px!important;padding:0 7px!important;gap:7px!important;font-size:6.4px!important;letter-spacing:.025em!important}
+  .reference-home .rh-utility-inner span+span::before{left:-6px!important}
+  .reference-home .rh-header{height:64px!important;min-height:64px!important}
+  .reference-home .rh-header-inner{height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important}
+  .reference-home .rh-logo{width:78px!important;height:78px!important;align-self:center!important}
+  .reference-home .rh-logo img{width:76px!important;height:76px!important}
+  .reference-home .rh-menu{width:40px!important;height:40px!important}
+  .reference-home .rh-call{width:40px!important;height:40px!important}
+  .reference-home .rh-nav{top:64px!important}
+
+  /* One strong hero CTA; secondary conversion remains visible but no second giant block. */
+  .reference-home .rh-hero{height:auto!important;min-height:590px!important}
+  .reference-home .rh-hero::before{background-size:max(510px,100vw) auto!important;background-position:66% top!important}
+  .reference-home .rh-hero-inner{height:auto!important;min-height:590px!important}
+  .reference-home .rh-copy{max-width:520px!important;padding:248px 13px 18px!important}
+  .reference-home .rh-kicker{margin-bottom:8px!important;font-size:8.8px!important;letter-spacing:.10em!important}
+  .reference-home h1{margin-bottom:11px!important;font-size:clamp(35px,9.8vw,42px)!important;line-height:.91!important;letter-spacing:-.05em!important}
+  .reference-home .rh-lead{max-width:410px!important;font-size:12.5px!important;line-height:1.4!important}
+  .reference-home .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:5px!important;margin-top:12px!important}
+  .reference-home .rh-hero-actions .rh-btn:first-child{width:100%!important;min-height:44px!important;padding:0 14px!important;font-size:9.2px!important;border-radius:7px!important}
+  .reference-home .rh-hero-actions .rh-btn:nth-child(2){width:max-content!important;min-width:0!important;min-height:30px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;justify-content:flex-start!important;color:#dce7ef!important;font-size:9px!important;letter-spacing:.025em!important}
+  .reference-home .rh-phone{display:none!important}
+
+  /* Persistent dock stays three-choice, but becomes support UI instead of dominating the screen. */
+  .reference-home{padding-bottom:58px!important}
+  .wdcc-mobile-actions{left:7px!important;right:7px!important;bottom:max(5px,env(safe-area-inset-bottom))!important;gap:5px!important;padding:5px!important;border-radius:14px!important}
+  .wdcc-mobile-actions a{min-height:40px!important;padding:5px 6px!important;border-radius:9px!important;font-size:9.4px!important;line-height:1!important}
+
+  /* Shared premium header used by inventory, financing and conversion routes. */
+  .commandStrip{height:22px!important;min-height:22px!important}
+  .commandStrip .wrap{height:22px!important;min-height:22px!important;padding:0 8px!important;gap:6px!important;font-size:6.5px!important;letter-spacing:.025em!important}
+  .premiumHeader{height:64px!important;min-height:64px!important;top:22px!important}
+  .premiumHeader .nav{height:64px!important;min-height:64px!important;padding:0 10px!important;grid-template-columns:42px 1fr 42px!important;gap:4px!important}
+  .premiumHeader .logoBrand{width:78px!important;height:78px!important;align-self:center!important}
+  .premiumHeader .logoBrand img{width:76px!important;height:76px!important}
+  .premiumHeader .mobileMenuButton,.premiumHeader .mobileCallButton{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important}
+  .mobileHeaderMenu{top:86px!important;left:7px!important;right:7px!important}
+  .stickyCtaBar{grid-template-columns:1.05fr 1fr .72fr!important}
+  .stickyCtaBar a{min-height:42px!important;padding:0 5px!important;font-size:8.8px!important;letter-spacing:0!important}
+
+  /* Inventory cards: keep photos prominent while reducing oversized text/action chrome. */
+  .inventoryTop{padding:28px 0 24px!important}
+  .inventoryTop h1{font-size:clamp(34px,9.5vw,43px)!important}
+  .inventoryTop .lede{font-size:12px!important;line-height:1.4!important}
+  .inventoryTop+.section{padding:22px 0 38px!important}
+  .inventoryTop+.section .grid{gap:11px!important}
+  .inventoryTop+.section .cardBody{padding:13px!important}
+  .inventoryTop+.section .carTitle{min-height:36px!important;font-size:15.5px!important;line-height:1.18!important}
+  .inventoryTop+.section .facts{margin:7px 0!important;font-size:9px!important}
+  .inventoryTop+.section .price{margin-top:9px!important;font-size:24px!important}
+  .inventoryTop+.section .down{font-size:9px!important}
+  .inventoryTop+.section .cardButtons{gap:6px!important;margin-top:11px!important}
+  .inventoryTop+.section .cardButtons a{min-height:39px!important;font-size:8.4px!important}
+
+  /* Financing/test-drive forms: denser hierarchy, still 16px controls to avoid mobile zoom. */
+  .conversionPage{padding-bottom:18px!important}
+  .conversionBackdrop{height:255px!important;background-size:auto 255px!important}
+  .conversionGrid{gap:14px!important;padding:190px 11px 0!important}
+  .conversionCopy h1{font-size:clamp(32px,9.5vw,40px)!important;line-height:.93!important}
+  .conversionLead{margin-top:10px!important;font-size:12.5px!important;line-height:1.4!important}
+  .conversionCopy ul{gap:6px!important;margin-top:12px!important}
+  .conversionCopy li{padding-left:24px!important;font-size:11px!important}
+  .conversionSean{margin-top:14px!important;padding:11px 13px!important}
+  .conversionCard{padding:14px!important;border-radius:10px!important}
+  .conversionCardHead h2{font-size:24px!important}
+  .conversionCardHead p{font-size:10.5px!important}
+  .conversionCard .leadGrid{gap:10px!important}
+  .conversionCard .leadGrid label{gap:5px!important;font-size:9px!important}
+  .conversionCard input,.conversionCard select{height:44px!important;font-size:16px!important;padding:0 11px!important}
+  .conversionCard textarea{height:76px!important;font-size:16px!important;padding:10px 11px!important}
+  .conversionCard .cta.red{min-height:44px!important;margin-top:11px!important;font-size:10px!important}
+  .conversionCard .consent{font-size:8.4px!important;line-height:1.35!important}
+  .conversionTrust{margin-top:14px!important}
+}
+
+@media (max-width:560px){
+  .reference-home .rh-utility-inner span:nth-child(2),.commandStrip .wrap span:nth-child(2){display:none!important}
+  .reference-home .rh-logo,.reference-home .rh-logo img,.premiumHeader .logoBrand,.premiumHeader .logoBrand img{width:72px!important;height:72px!important}
+  .reference-home h1{font-size:clamp(34px,9.7vw,40px)!important}
+  .reference-home .rh-copy{padding-top:242px!important}
+  .wdcc-mobile-actions a{min-height:39px!important;font-size:9px!important}
+}
