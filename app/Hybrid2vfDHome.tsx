@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback,useState} from "react";
+import FinalCTAContract from "./FinalCTAContract";
 import LockedIntro from "./LockedIntro";
 import ReferenceCloneHome from "./ReferenceCloneHome";
 
@@ -11,5 +12,6 @@ export default function Hybrid2vfDHome(){
   return <>
     <LockedIntro onComplete={handleIntroComplete}/>
     <ReferenceCloneHome motionReady={motionReady}/>
+    <FinalCTAContract/>
   </>;
 }
