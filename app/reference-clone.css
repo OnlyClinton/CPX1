@@ -93,3 +93,16 @@ body:has(.reference-home){background:var(--wdcc-black);padding-bottom:0!importan
   .reference-home .rh-hero-inner{min-height:760px}
   .reference-home .rh-copy{padding-top:365px}
 }
+
+/* Owner brightness pass: preserve the approved R31 composition while lifting
+   the car, skyline, and wet-road color toward the supplied bright references. */
+.reference-home .rh-hero::before{
+  filter:saturate(1.28) contrast(.99) brightness(1.30)
+}
+.reference-home .rh-hero::after{
+  background:linear-gradient(90deg,rgba(2,6,10,.30) 0%,rgba(2,6,10,.18) 29%,rgba(2,6,10,.04) 47%,rgba(2,6,10,0) 72%,rgba(2,6,10,.01) 100%),linear-gradient(0deg,rgba(2,6,10,.12) 0%,transparent 31%)
+}
+@media(max-width:820px), (max-width:1100px) and (orientation:portrait){
+  .reference-home .rh-hero::before{filter:saturate(1.28) contrast(.99) brightness(1.30)}
+  .reference-home .rh-hero::after{background:linear-gradient(180deg,transparent 0%,rgba(2,6,10,0) 43%,rgba(2,6,10,.04) 49%,rgba(2,6,10,.50) 60%,#02060a 74%,#02060a 100%)}
+}
