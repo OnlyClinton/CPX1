@@ -1,4 +1,6 @@
 import {get} from "@vercel/blob";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
+import {proxyDealer} from "../../../lib/dealerProxy";
 import {blobAuthority} from "../../../lib/wdccAuthority";
 
 export const dynamic="force-dynamic";
@@ -6,6 +8,7 @@ export const dynamic="force-dynamic";
 export async function GET(req:Request){
   const p=new URL(req.url).searchParams.get("p")||"";
   if(!p.startsWith("media/wdcc/"))return new Response("Not found",{status:404});
+  if(!isDealerRuntime(req))return proxyDealer(req,"/api/media");
   const authority=blobAuthority();
   if(authority.mode==="missing"){
     console.error("WDCC_MEDIA_AUTHORITY_MISSING");

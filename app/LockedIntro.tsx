@@ -5,20 +5,20 @@ import {useLayoutEffect,useRef,useState} from "react";
 type Phase="show"|"dock"|"done";
 const KEY="wdcc-opening-seen-v2";
 
-export default function LockedIntro(){
+export default function LockedIntro({onComplete}:{onComplete?:()=>void}){
   const[phase,setPhase]=useState<Phase>("show");
   const badgeRef=useRef<HTMLDivElement|null>(null);
   useLayoutEffect(()=>{
     const q=new URLSearchParams(window.location.search);
     const force=q.get("intro")==="1"||q.has("intro-preview");
     const seen=(()=>{try{return sessionStorage.getItem(KEY)==="1"}catch{return false}})();
-    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches||(seen&&!force)){setPhase("done");return}
+    if(window.matchMedia("(prefers-reduced-motion: reduce)").matches||(seen&&!force)){setPhase("done");onComplete?.();return}
     document.documentElement.classList.add("wdcc-intro-active");
     const dock=window.setTimeout(()=>setPhase("dock"),1550);
-    const done=window.setTimeout(()=>{try{sessionStorage.setItem(KEY,"1")}catch{}document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")},2350);
+    const done=window.setTimeout(()=>{try{sessionStorage.setItem(KEY,"1")}catch{}document.documentElement.classList.remove("wdcc-intro-active");setPhase("done");onComplete?.()},2350);
     return()=>{clearTimeout(dock);clearTimeout(done);document.documentElement.classList.remove("wdcc-intro-active")};
-  },[]);
-  const finish=()=>{try{sessionStorage.setItem(KEY,"1")}catch{}document.documentElement.classList.remove("wdcc-intro-active");setPhase("done")};
+  },[onComplete]);
+  const finish=()=>{try{sessionStorage.setItem(KEY,"1")}catch{}document.documentElement.classList.remove("wdcc-intro-active");setPhase("done");onComplete?.()};
   if(phase==="done")return null;
   return <div className={`li li-${phase}`} aria-label="WDCC opening intro">
     <style>{`
