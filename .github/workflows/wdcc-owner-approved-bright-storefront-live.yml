@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APPROVED_SHA: c09247e98a56342d293d70ecb1db9708c26d3893
+  APPROVED_SHA: ea52078e2f8b6cf0c1001046e38341b1b4cf4d0a
   VERCEL_SCOPE: cpxagency
   VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
@@ -29,7 +29,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-C09247E9-CLOUDFLARE-FRONTDOOR'
+      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-EA52078E-CLOUDFLARE-FRONTDOOR'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -67,6 +67,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
           grep -Fq 'brightness(1.30)' app/reference-clone.css
+          grep -Fq 'brightness(1.28)' app/exact2vfd-final.css
           grep -Fq 'import"./mobile-density-polish.css"' app/layout.tsx
           grep -Fq '.reference-home .rh-logo img{width:92px!important;height:92px!important' app/mobile-density-polish.css
           grep -Fq 'https://dealer.wedontcarecars.com' lib/wdccAuthority.ts
@@ -107,7 +108,14 @@ jobs:
               const context=await browser.newContext({viewport:{width:cfg.width,height:cfg.height},isMobile:cfg.isMobile,hasTouch:cfg.hasTouch,deviceScaleFactor:1});
               const page=await context.newPage();
               await page.goto('http://127.0.0.1:3000/?hard-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
-              await page.waitForTimeout(2800);
+              await page.waitForTimeout(1500);
+              const intro=await page.evaluate(()=>{
+                const image=document.querySelector('.li .li-scene img');
+                return image?{filter:getComputedStyle(image).filter,opacity:getComputedStyle(image).opacity}:null;
+              });
+              if(!intro||!intro.filter.includes('brightness(1.28)')||Number(intro.opacity)<.95)throw Error(`${cfg.name} intro ${JSON.stringify(intro)}`);
+              await page.screenshot({path:`proof/${cfg.name}-intro.png`,fullPage:false});
+              await page.waitForTimeout(1400);
               await page.evaluate(async()=>{
                 const step=Math.max(320,Math.floor(innerHeight*.7));
                 for(let y=0;y<document.documentElement.scrollHeight;y+=step){scrollTo(0,y);await new Promise(r=>setTimeout(r,100));}
