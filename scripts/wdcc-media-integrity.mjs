@@ -2,6 +2,7 @@ import {createHash} from "node:crypto";
 import {readFileSync} from "node:fs";
 
 const assets = [
+  {path: "public/wdcc-hero-r31.webp", minBytes: 100_000},
   {path: "public/wdcc-hero-v2.webp", minBytes: 100_000},
   {path: "public/wdcc-logo-transparent.webp", minBytes: 40_000},
   {path: "public/assets/hero-car.webp", minBytes: 100_000},

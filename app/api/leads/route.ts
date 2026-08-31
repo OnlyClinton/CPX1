@@ -12,6 +12,11 @@ const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
 const DEALER_BACKEND=canonicalDealerBackend();
+const hash=(value:string)=>crypto.createHash("sha256").update(value).digest("hex");
+
+function dedupeReceipt(existing:any){
+  return NextResponse.json({ok:true,persisted:true,deduplicated:true,item:{id:String(existing.id),kind:String(existing.kind||""),status:String(existing.status||"new")},sync:{upstream:existing?.sync?.upstream==="synced"?"synced":"pending"},source:"local-ledger"},{status:200,headers:{"Cache-Control":"no-store"}});
+}
 
 function leadKind(body:any){const raw=text(body?.kind??body?.type??body?.requestType,40).toLowerCase();if(["schedule","test-drive","test_drive","schedule-test-drive"].includes(raw))return "schedule";if(["contact","call","call-or-contact","general"].includes(raw))return "contact";if(["approval","get-approved","get_approved","finance","financing"].includes(raw))return "approval";return raw;}
 function upstreamRequestType(kind:string){if(kind==="schedule")return "test-drive";if(kind==="approval")return "pre-approval";return "contact";}
@@ -53,26 +58,30 @@ export async function GET(request:Request){
 export async function POST(req:Request){
   try{
     const actor=await currentUser().catch(()=>null);const body=await req.json();const kind=leadKind(body);
-    const normalized={name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),vehicleId:text(body?.vehicleId,160),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),source:text(body?.source,80)||`cta-${kind||"unknown"}`,pagePath:text(body?.pagePath,240),referrer:text(body?.referrer,500),utmSource:text(body?.utmSource,120),utmMedium:text(body?.utmMedium,120),utmCampaign:text(body?.utmCampaign,160),utmContent:text(body?.utmContent,160),clickId:text(body?.clickId,220)};
+    const normalized={name:text(body?.name??`${text(body?.firstName,60)} ${text(body?.lastName,60)}`,120),phone:text(body?.phone,40),email:text(body?.email,160).toLowerCase(),vehicleInterest:text(body?.vehicleInterest??body?.vehicle??body?.vehicleId,240),vehicleId:text(body?.vehicleId,160),message:text(body?.message??body?.notes,2000),preferredTime:text(body?.preferredTime??body?.appointmentTime,120),monthlyIncome:text(body?.monthlyIncome,40),downPaymentInterest:text(body?.downPaymentInterest,40),referralSource:text(body?.referralSource,80),source:text(body?.source,80)||`cta-${kind||"unknown"}`,pagePath:text(body?.pagePath,240),referrer:text(body?.referrer,500),utmSource:text(body?.utmSource,120),utmMedium:text(body?.utmMedium,120),utmCampaign:text(body?.utmCampaign,160),utmContent:text(body?.utmContent,160),clickId:text(body?.clickId,220)};
     const consent=body?.consent===true||String(body?.consent||"").toLowerCase()==="true"||body?.consent==="on";
     if(!supportedKinds.has(kind))return NextResponse.json({ok:false,error:"valid_lead_type_required"},{status:400});if(!normalized.name)return NextResponse.json({ok:false,error:"name_required"},{status:400});if(!normalized.phone&&!normalized.email)return NextResponse.json({ok:false,error:"phone_or_email_required"},{status:400});if(!consent)return NextResponse.json({ok:false,error:"consent_required"},{status:400});
+    const tenantId=String(actor?.tenantId||"wdcc");
     const idempotencyKey=text(req.headers.get("idempotency-key")??body?.idempotencyKey,160)||crypto.randomUUID();
+    const idempotencyHash=hash(`${tenantId}\0${idempotencyKey}`);
+    const requestFingerprint=hash(JSON.stringify({kind,...normalized,consent:true}));
     const qa=isQaLead(body,normalized,idempotencyKey);
 
     if(!canonicalHost(req)){
       try{const dealer=await persistViaDealer(normalized,kind,idempotencyKey,qa);return NextResponse.json({...dealer,source:"dealer-ledger"},{status:dealer?.deduplicated?200:201,headers:{"Cache-Control":"no-store"}});}catch(dealerError){
         if(qa)return NextResponse.json({ok:false,persisted:false,qa:true,error:"qa_dealer_persistence_failed",dealerError:dealerError instanceof Error?dealerError.message:"dealer_persistence_failed"},{status:503,headers:{"Cache-Control":"no-store"}});
+        if(kind==="approval"&&(normalized.monthlyIncome||normalized.downPaymentInterest||normalized.referralSource))return NextResponse.json({ok:false,persisted:false,error:"secure_approval_storage_unavailable"},{status:503,headers:{"Cache-Control":"no-store"}});
         const upstream=await persistViaUpstream(normalized,kind,idempotencyKey);
         return NextResponse.json({ok:true,persisted:true,item:{id:upstream.leadId,kind,...normalized,consent:true,status:"new",idempotencyKey,transport:"lead-upstream"},sync:{dealer:"failed",upstream:"synced",upstreamLeadId:upstream.leadId},notifications:{email:upstream.emailStatus,sms:upstream.smsStatus,webhook:"upstream"},source:"lead-upstream",dealerError:dealerError instanceof Error?dealerError.message:"dealer_persistence_failed"},{status:201,headers:{"Cache-Control":"no-store"}});
       }
     }
 
     const state=await readState();
-    if(idempotencyKey){const existing:any=state.leads.find((lead:any)=>lead.idempotencyKey===idempotencyKey);if(existing){const existingQa=existing.qa===true||existing.status==="test"||isQaLead(existing,existing,idempotencyKey);if(!existingQa&&existing?.sync?.upstream!=="synced"){try{const up=await persistViaUpstream(existing,existing.kind||kind,idempotencyKey);existing.upstreamLeadId=up.leadId;existing.sync={...(existing.sync||{}),upstream:"synced",upstreamLeadId:up.leadId,syncedAt:new Date().toISOString()};existing.updatedAt=new Date().toISOString();await writeState(state);}catch{}}return NextResponse.json({ok:true,persisted:true,deduplicated:true,qa:existingQa,item:existing,sync:existing.sync||{},notifications:existing.notifications||{},source:"local-ledger"},{status:200});}}
+    if(idempotencyKey){const existing:any=state.leads.find((lead:any)=>String(lead.tenantId||"wdcc")===tenantId&&(lead.idempotencyHash===idempotencyHash||(!lead.idempotencyHash&&lead.idempotencyKey===idempotencyKey)));if(existing){if(existing.requestFingerprint&&existing.requestFingerprint!==requestFingerprint)return NextResponse.json({ok:false,error:"idempotency_key_conflict"},{status:409,headers:{"Cache-Control":"no-store"}});return dedupeReceipt(existing);}}
 
-    const now=new Date().toISOString();const createdBy=actor?.id||"public";const createdByRole=actor?.role||"public";const tenantId=actor?.tenantId||"wdcc";
-    const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId:String(tenantId),kind,...normalized,consent:true,consentVersion:"wdcc-request-v1",qa,status:qa?"test":"new",idempotencyKey,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now,sync:{dealer:"saved",upstream:qa?"suppressed_qa":"pending"}};
-    state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${qa?"qa.":""}${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source,idempotencyKey,qa});
+    const now=new Date().toISOString();const createdBy=actor?.id||"public";const createdByRole=actor?.role||"public";
+    const lead:any={id:`lead_${crypto.randomUUID()}`,tenantId,kind,...normalized,consent:true,consentVersion:"wdcc-request-v1",qa,status:qa?"test":"new",idempotencyHash,requestFingerprint,requestId:crypto.randomUUID(),createdBy,createdByRole,createdAt:now,updatedAt:now,sync:{dealer:"saved",upstream:qa?"suppressed_qa":"pending"}};
+    state.leads.push(lead);state.audit.push({id:crypto.randomUUID(),at:now,action:`lead.create.${qa?"qa.":""}${kind}`,actor:createdBy,actorRole:createdByRole,leadId:lead.id,requestId:lead.requestId,source:lead.source,idempotencyHash,qa});
     let saved=await writeState(state);
 
     if(qa){lead.notifications={email:"suppressed_qa",sms:"suppressed_qa",webhook:"suppressed_qa"};lead.updatedAt=new Date().toISOString();saved=await writeState(state);return NextResponse.json({ok:true,persisted:true,qa:true,revision:saved.revision,item:lead,sync:lead.sync,notifications:lead.notifications,source:"local-ledger"},{status:201,headers:{"Cache-Control":"no-store"}});}

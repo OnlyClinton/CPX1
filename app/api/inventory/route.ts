@@ -21,32 +21,55 @@ function publicEligible(item:any){
   const mileage=Number(item?.mileage||0);
   const downPayment=Number(item?.downPayment||0);
   const maxYear=new Date().getUTCFullYear()+1;
-  return String(item?.status||"").toLowerCase()==="published"&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
+  const photo=String(item?.primaryPhotoPathname||item?.photoPathnames?.[0]||item?.primary_image_url||item?.image||item?.photo||item?.primaryPhotoUrl||item?.primaryPhoto||item?.imageUrl||"").trim();
+  return String(item?.status||"").toLowerCase()==="published"&&Boolean(photo)&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
+}
+
+function toPublicVehicle(item:any){
+  return {
+    id:String(item?.id||item?.slug||""),slug:String(item?.slug||item?.id||""),
+    year:Number(item?.year),make:String(item?.make||""),model:String(item?.model||""),trim:text(item?.trim,80),
+    price:Number(item?.price),downPayment:Number(item?.downPayment??item?.down_payment??0),mileage:Number(item?.mileage||0),
+    stock:text(item?.stock??item?.stock_id,80),bodyStyle:text(item?.bodyStyle??item?.body_style,40),condition:text(item?.condition,40),
+    transmission:text(item?.transmission,40),exteriorColor:text(item?.exteriorColor??item?.exterior_color,40),interiorColor:text(item?.interiorColor??item?.interior_color,40),
+    drivetrain:text(item?.drivetrain,40),fuelType:text(item?.fuelType??item?.fuel_type,40),description:text(item?.description,3000),status:"published",
+    primaryPhotoPathname:text(item?.primaryPhotoPathname,500),photoPathnames:Array.isArray(item?.photoPathnames)?item.photoPathnames.map((value:unknown)=>text(value,500)).filter(Boolean).slice(0,50):[],
+    primary_image_url:text(item?.primary_image_url,1000),image:text(item?.image,1000),photoPending:item?.photoPending===true
+  };
 }
 
 async function proxyPublicInventory(request:Request){
   const upstream=await proxyDealer(request,"/api/inventory");
-  if(!upstream.ok)return NextResponse.json({ok:true,count:PUBLIC_INVENTORY_FALLBACK.length,items:PUBLIC_INVENTORY_FALLBACK,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}});
+  if(!upstream.ok){
+    if(upstream.status<500)return NextResponse.json({ok:true,count:0,items:[],degraded:false},{status:200,headers:{"Cache-Control":"public, max-age=30","X-WDCC-Inventory-Source":"canonical-empty"}});
+    const fallbackItems=PUBLIC_INVENTORY_FALLBACK.map(toPublicVehicle);
+    return NextResponse.json({ok:true,count:fallbackItems.length,items:fallbackItems,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}});
+  }
   const json=await upstream.json().catch(()=>({}));
-  const source=Array.isArray(json?.items)?json.items:Array.isArray(json?.inventory)?json.inventory:[];
-  const items=source.filter(publicEligible);
-  const publicItems=items.length?items:PUBLIC_INVENTORY_FALLBACK;
-  return NextResponse.json({...json,ok:true,count:publicItems.length,items:publicItems,degraded:items.length?Boolean(json?.degraded):true},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":items.length?"canonical":"launch-fallback"}});
+  const hasContract=Array.isArray(json?.items)||Array.isArray(json?.inventory);
+  if(!hasContract){
+    const fallbackItems=PUBLIC_INVENTORY_FALLBACK.map(toPublicVehicle);
+    return NextResponse.json({ok:true,count:fallbackItems.length,items:fallbackItems,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback-invalid-contract"}});
+  }
+  const source=Array.isArray(json?.items)?json.items:json.inventory;
+  const publicItems=source.filter(publicEligible).map(toPublicVehicle);
+  return NextResponse.json({ok:true,count:publicItems.length,items:publicItems,degraded:Boolean(json?.degraded)},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict","X-WDCC-Inventory-Source":"canonical"}});
 }
 
 export async function GET(request:Request){
+  const publicScope=new URL(request.url).searchParams.get("scope")==="public";
   if(!isDealerRuntime(request)){
     const hasSession=String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=");
-    return hasSession?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
+    return hasSession&&!publicScope?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
   }
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     let items;
-    if(user&&editorRoles.has(String(user.role||"").toLowerCase())){
+    if(!publicScope&&user&&editorRoles.has(String(user.role||"").toLowerCase())){
       items=String(user.role).toLowerCase()==="platform_admin"?state.vehicles:state.vehicles.filter(vehicle=>String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc"));
-    }else items=publicVehicles(state).filter(publicEligible);
-    return response({ok:true,count:items.length,items,revision:state.revision},200,rid);
+    }else items=publicVehicles(state).filter(publicEligible).map(toPublicVehicle);
+    return response(!publicScope&&user&&editorRoles.has(String(user.role||"").toLowerCase())?{ok:true,count:items.length,items,revision:state.revision}:{ok:true,count:items.length,items},200,rid);
   }catch(error){
     return response({ok:false,items:[],error:error instanceof Error?error.message:"read_failed"},500,rid);
   }

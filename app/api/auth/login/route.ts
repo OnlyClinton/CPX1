@@ -7,6 +7,7 @@ import {readState} from "../../../../lib/store";
 export const dynamic="force-dynamic";
 
 function norm(v:unknown){return String(v||"").trim().toLowerCase()}
+const dealerRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/auth/login");
@@ -21,7 +22,7 @@ export async function POST(request:Request){
       const aliases=[u.email,u.secondaryEmail,u.username,u.loginAlias,...(Array.isArray(u.aliases)?u.aliases:[])].map(norm).filter(Boolean);
       return aliases.includes(login);
     });
-    if(!user||!verifyPassword(password,user.passwordHash))return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
+    if(!user||!verifyPassword(password,user.passwordHash)||!dealerRoles.has(norm(user.role)))return NextResponse.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"Cache-Control":"no-store"}});
     await setSession(user);
     return NextResponse.json({ok:true,role:user.role,tenantId:user.tenantId||"wdcc",name:user.displayName||user.username||user.email||"WDCC Dealer",mustChangePassword:false,user:{id:user.id,displayName:user.displayName,username:user.username,email:user.email,role:user.role,tenantId:user.tenantId}},{headers:{"Cache-Control":"no-store"}});
   }catch(error){

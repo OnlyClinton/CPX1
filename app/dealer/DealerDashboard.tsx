@@ -8,6 +8,7 @@ type Vehicle=Record<string,any>;
 const money=(v:any)=>Number(v||0).toLocaleString(undefined,{style:"currency",currency:"USD",maximumFractionDigits:0});
 const imageFor=(v:Vehicle)=>{const direct=v.image||v.photo||v.primaryPhotoUrl||v.primaryPhoto||v.imageUrl||"";if(direct)return direct;const p=String(v.primaryPhotoPathname||v.photoPathnames?.[0]||"").trim();return p?`/api/media?p=${encodeURIComponent(p)}`:""};
 const vehicleName=(v:Vehicle)=>`${v.year||""} ${v.make||""} ${v.model||""} ${v.trim||""}`.replace(/\s+/g," ").trim()||"Vehicle";
+const dealerRole=(value:any)=>["dealer_agent","tenant_admin","platform_admin"].includes(String(value||"").toLowerCase());
 
 export default function DealerDashboard(){
   const[session,setSession]=useState<any>(null);
@@ -18,7 +19,7 @@ export default function DealerDashboard(){
   const[busy,setBusy]=useState(false);
 
   async function loadDashboard(){const r=await fetch("/api/crm/dashboard",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));setData(r.ok?j:{summary:{},leads:[],inventory:[],error:j?.error||`Dashboard ${r.status}`})}
-  async function loadSession(){const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));if(j?.authenticated){setSession(j);await loadDashboard()}else setSession(null)}
+  async function loadSession(){const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));const role=j?.user?.role||j?.role||j?.session?.role;if(j?.authenticated&&dealerRole(role)){setSession(j);await loadDashboard()}else setSession(null)}
   useEffect(()=>{loadSession().catch(()=>setSession(null))},[]);
   async function login(e:FormEvent){e.preventDefault();if(busy)return;setBusy(true);setMessage("Signing in…");try{const r=await fetch("/api/auth/login",{method:"POST",credentials:"include",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({username:username.trim(),email:username.trim(),password})});const j=await r.json().catch(()=>({}));if(!r.ok||!j?.ok)throw Error(r.status===401?"Login or password is incorrect.":j?.error||"Sign-in failed.");await loadSession();setMessage("")}catch(error){setMessage(error instanceof Error?error.message:"Sign-in failed.")}finally{setBusy(false)}}
   async function logout(){await fetch("/api/auth/logout",{method:"POST",credentials:"include",cache:"no-store"}).catch(()=>{});setSession(null);setData(null);setPassword("")}
