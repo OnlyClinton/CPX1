@@ -12,6 +12,7 @@ on:
           - verify-only
           - pin-2vfd
           - pin-fb1a21f
+          - pin-mobile-359631f1
       owner_approval:
         description: 'For writes, type the matching owner approval token'
         required: false
@@ -27,6 +28,7 @@ on:
 permissions:
   contents: read
   issues: read
+  pull-requests: read
 
 concurrency:
   group: wdcc-emergency-vercel-alias-pin-2vfd
@@ -36,9 +38,13 @@ env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_SCOPE: cpxagency
   VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
   DONOR_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
   APPROVED_FB_SHA: fb1a21f2611a6b9ff3bde5dbc2de37fdbab51d32
   APPROVED_FB_DONOR: wdcc-v32-storefront-2gsd6hxbd-cpxagency.vercel.app
+  MOBILE_VISUAL_SHA: 359631f1ec434f66f5ea400dfa6dff5d277ab7dc
+  MOBILE_RELEASE_SHA: 8daf842583bcfec6e56c9c2845974d9df1d4a100
   ROLLBACK_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
@@ -50,9 +56,10 @@ jobs:
       (github.event_name == 'issue_comment' &&
        github.event.issue.number == 205 &&
        github.event.comment.user.login == github.repository_owner &&
-       github.event.comment.body == 'PROMOTE-WDCC-VERCEL-FB1A21F')
+       (github.event.comment.body == 'PROMOTE-WDCC-VERCEL-FB1A21F' ||
+        github.event.comment.body == 'PROMOTE-WDCC-MOBILE-359631F1'))
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - name: Require explicit release-control context
         id: control
@@ -71,8 +78,11 @@ jobs:
           if [ "$EVENT_NAME" = issue_comment ]; then
             test "$ISSUE_NUMBER" = 205
             test "$COMMENT_USER" = "$GITHUB_REPOSITORY_OWNER"
-            test "$COMMENT_BODY" = 'PROMOTE-WDCC-VERCEL-FB1A21F'
-            operation='pin-fb1a21f'
+            case "$COMMENT_BODY" in
+              PROMOTE-WDCC-VERCEL-FB1A21F) operation='pin-fb1a21f' ;;
+              PROMOTE-WDCC-MOBILE-359631F1) operation='pin-mobile-359631f1' ;;
+              *) echo 'Unsupported owner issue comment.' >&2; exit 2 ;;
+            esac
             release_issue=205
           else
             test "$EVENT_NAME" = workflow_dispatch
@@ -83,6 +93,7 @@ jobs:
               verify-only) ;;
               pin-2vfd) test "$OWNER_APPROVAL" = 'OWNER-APPROVED-2VFD' ;;
               pin-fb1a21f) test "$OWNER_APPROVAL" = 'OWNER-APPROVED-FB1A21F' ;;
+              pin-mobile-359631f1) test "$OWNER_APPROVAL" = 'OWNER-APPROVED-MOBILE-359631F1' ;;
               *) echo "Unsupported operation: $operation" >&2; exit 2 ;;
             esac
           fi
@@ -90,21 +101,42 @@ jobs:
           curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
             -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/issue205.json
           jq -e '.number==205 and .state=="open"' /tmp/issue205.json >/dev/null
-          body="$(jq -r '.body // ""' /tmp/issue205.json)"
-          grep -Fq 'OWNER-APPROVED STOREFRONT VISUAL GO — 2026-08-31' <<<"$body"
-          grep -Fq "$APPROVED_FB_SHA" <<<"$body"
-          grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
-          grep -Fq 'no dealer-frontdoor mutation' <<<"$body"
+
+          if [ "$operation" = 'pin-mobile-359631f1' ]; then
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100" \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/comments.json
+            token="WDCC_OWNER_VISUAL_APPROVAL $MOBILE_VISUAL_SHA"
+            jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" --arg token "$token" \
+              'any(.[]; .user.login==$owner and .author_association=="OWNER" and (((.body // "") | split("\n")[0])==$token))' \
+              /tmp/comments.json >/dev/null
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/591" \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/pr591.json
+            jq -e --arg head "$MOBILE_VISUAL_SHA" --arg merge "$MOBILE_RELEASE_SHA" \
+              '.merged==true and .head.sha==$head and .merge_commit_sha==$merge' /tmp/pr591.json >/dev/null
+          else
+            body="$(jq -r '.body // ""' /tmp/issue205.json)"
+            grep -Fq 'OWNER-APPROVED STOREFRONT VISUAL GO — 2026-08-31' <<<"$body"
+            grep -Fq "$APPROVED_FB_SHA" <<<"$body"
+            grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
+            grep -Fq 'no dealer-frontdoor mutation' <<<"$body"
+          fi
+
           echo "operation=$operation" >> "$GITHUB_OUTPUT"
           echo "OPERATION=$operation" >> "$GITHUB_STEP_SUMMARY"
           echo "RELEASE_CONTROL_ISSUE=#$release_issue" >> "$GITHUB_STEP_SUMMARY"
           echo 'OWNER-APPROVED-2VFD compatibility guard retained.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'verify-only compatibility guard retained.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require Vercel authority
         shell: bash
         run: |
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MOBILE_RELEASE_SHA }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -113,14 +145,43 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@59.5.0
 
+      - name: Build exact mobile donor when requested
+        id: mobile
+        if: ${{ steps.control.outputs.operation == 'pin-mobile-359631f1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$MOBILE_RELEASE_SHA"
+          test "$(git rev-parse HEAD^2)" = "$MOBILE_VISUAL_SHA"
+          test -f app/mobile-density-polish.css
+          grep -Fq 'width:92px!important' app/mobile-density-polish.css
+          grep -Fq 'window.scrollY>140' app/FinalCTAContract.tsx
+
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          target="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" | tail -1 | sed 's#https://##')"
+          test -n "$target"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "MOBILE_RELEASE_SHA=$MOBILE_RELEASE_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "MOBILE_VISUAL_SHA=$MOBILE_VISUAL_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "IMMUTABLE_MOBILE_DONOR=$target" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resolve exact target and prove immutable deployment
         id: target
         shell: bash
         env:
           OPERATION: ${{ steps.control.outputs.operation }}
+          MOBILE_TARGET: ${{ steps.mobile.outputs.target || '' }}
         run: |
           set -euo pipefail
           case "$OPERATION" in
+            pin-mobile-359631f1)
+              target="$MOBILE_TARGET"
+              expected_sha=''
+              hero='wdcc-hero-r31.webp'
+              ;;
             pin-fb1a21f)
               target="$APPROVED_FB_DONOR"
               expected_sha="$APPROVED_FB_SHA"
@@ -134,6 +195,7 @@ jobs:
             *) exit 2 ;;
           esac
 
+          test -n "$target"
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "hero=$hero" >> "$GITHUB_OUTPUT"
 
@@ -151,11 +213,13 @@ jobs:
           vercel --scope "$VERCEL_SCOPE" curl "/$hero" --deployment "$target" > /tmp/donor-hero.webp
           test -s /tmp/donor-logo.webp
           test -s /tmp/donor-hero.webp
-          if [ "$OPERATION" = pin-fb1a21f ]; then
+          if [ "$OPERATION" = pin-fb1a21f ] || [ "$OPERATION" = pin-mobile-359631f1 ]; then
+            for path in /inventory /get-approved /schedule-test-drive /app; do
+              vercel --scope "$VERCEL_SCOPE" curl "$path" --deployment "$target" > /tmp/donor-route.html
+              test -s /tmp/donor-route.html
+            done
             vercel --scope "$VERCEL_SCOPE" curl /schedule-test-drive --deployment "$target" > /tmp/donor-test-drive.html
             grep -qi 'test drive' /tmp/donor-test-drive.html
-            vercel --scope "$VERCEL_SCOPE" curl /app --deployment "$target" > /tmp/donor-app.html
-            test -s /tmp/donor-app.html
           fi
           echo "IMMUTABLE_TARGET=$target" >> "$GITHUB_STEP_SUMMARY"
 
@@ -183,10 +247,14 @@ jobs:
               continue
             fi
             all_target=0
-            test "$current" = "$ROLLBACK_HOST" || {
-              echo "Refusing write: $host currently resolves to unexpected deployment $current" >&2
-              exit 3
-            }
+            if [ "$OPERATION" = pin-mobile-359631f1 ]; then
+              printf '%s' "$current" > "/tmp/rollback-$key"
+            else
+              test "$current" = "$ROLLBACK_HOST" || {
+                echo "Refusing write: $host currently resolves to unexpected deployment $current" >&2
+                exit 3
+              }
+            fi
           done
           if [ "$all_target" = 1 ]; then
             echo 'write_needed=0' >> "$GITHUB_OUTPUT"
@@ -205,6 +273,7 @@ jobs:
         if: ${{ steps.control.outputs.operation != 'verify-only' && steps.rollback.outputs.write_needed == '1' }}
         shell: bash
         env:
+          OPERATION: ${{ steps.control.outputs.operation }}
           TARGET: ${{ steps.target.outputs.target }}
         run: |
           set -Eeuo pipefail
@@ -214,8 +283,16 @@ jobs:
             trap - ERR INT TERM
             if [ "$changed" = 1 ]; then
               echo 'Alias cutover verification failed; restoring exact prior deployment.' >&2
-              vercel alias set "$ROLLBACK_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
-              vercel alias set "$ROLLBACK_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              for host in "$APEX" "$WWW"; do
+                if [ "$OPERATION" = pin-mobile-359631f1 ]; then
+                  key="${host//./_}"
+                  old="$(cat "/tmp/rollback-$key")"
+                else
+                  old="$ROLLBACK_HOST"
+                fi
+                vercel alias set "$old" "$host" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              done
+              echo 'ROLLBACK_EXECUTED=YES' >> "$GITHUB_STEP_SUMMARY"
             fi
             exit "$rc"
           }
@@ -227,7 +304,7 @@ jobs:
 
           for host in "$APEX" "$WWW"; do
             ok=0
-            for i in $(seq 1 30); do
+            for i in $(seq 1 40); do
               curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
                 "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > /tmp/live-alias.json || true
               live="$(jq -r '.url // empty' /tmp/live-alias.json 2>/dev/null || true)"
@@ -236,7 +313,6 @@ jobs:
             done
             test "$ok" = 1
           done
-
           trap - ERR INT TERM
 
       - name: Verify live domains match exact donor
@@ -265,18 +341,22 @@ jobs:
             curl -fsS "https://$host/$HERO?proof=$stamp" -o /tmp/live-hero.webp
             test "$(sha256sum /tmp/live-logo.webp | awk '{print $1}')" = "$donor_logo"
             test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$donor_hero"
-            if [ "$OPERATION" = pin-fb1a21f ]; then
+
+            if [ "$OPERATION" = pin-fb1a21f ] || [ "$OPERATION" = pin-mobile-359631f1 ]; then
+              for path in /inventory /get-approved /schedule-test-drive /app; do
+                route_code="$(curl -sS -L --max-time 25 -o /tmp/live-route.html -w '%{http_code}' "https://$host$path?proof=$stamp" || true)"
+                echo "$route_code" | grep -Eq '^(200|302|307|308)$'
+              done
               test "$(curl -sS -L --max-time 25 -o /tmp/live-test-drive.html -w '%{http_code}' "https://$host/schedule-test-drive?proof=$stamp")" = 200
               grep -qi 'test drive' /tmp/live-test-drive.html
-              app_code="$(curl -sS -L --max-time 25 -o /tmp/live-app.html -w '%{http_code}' "https://$host/app?proof=$stamp" || true)"
-              echo "$app_code" | grep -Eq '^(200|302|307|308)$'
             fi
           done
-          if [ "$OPERATION" = pin-fb1a21f ]; then
-            echo 'CUSTOMER_ALIASES_EXACT_FB1A21F=PASS' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
-          fi
+
+          case "$OPERATION" in
+            pin-mobile-359631f1) echo 'WDCC_MOBILE_359631F1_LIVE=PASS' >> "$GITHUB_STEP_SUMMARY" ;;
+            pin-fb1a21f) echo 'CUSTOMER_ALIASES_EXACT_FB1A21F=PASS' >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
           echo 'CUSTOMER_MEDIA_HASH_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Confirm dealer stays isolated
