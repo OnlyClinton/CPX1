@@ -16,10 +16,10 @@
   .reference-home .rh-nav{top:64px!important}
 
   /* One strong hero CTA; secondary conversion remains visible but no second giant block. */
-  .reference-home .rh-hero{height:auto!important;min-height:590px!important}
+  .reference-home .rh-hero{height:auto!important;min-height:535px!important}
   .reference-home .rh-hero::before{background-size:max(510px,100vw) auto!important;background-position:66% top!important}
-  .reference-home .rh-hero-inner{height:auto!important;min-height:590px!important}
-  .reference-home .rh-copy{max-width:520px!important;padding:248px 13px 18px!important}
+  .reference-home .rh-hero-inner{height:auto!important;min-height:535px!important}
+  .reference-home .rh-copy{max-width:520px!important;padding:248px 13px 10px!important}
   .reference-home .rh-kicker{margin-bottom:8px!important;font-size:8.8px!important;letter-spacing:.10em!important}
   .reference-home h1{margin-bottom:11px!important;font-size:clamp(35px,9.8vw,42px)!important;line-height:.91!important;letter-spacing:-.05em!important}
   .reference-home .rh-lead{max-width:410px!important;font-size:12.5px!important;line-height:1.4!important}
