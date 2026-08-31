@@ -12,7 +12,7 @@ permissions:
 # Guard companion: wdcc-production-freeze-check.yml remains the global default
 # outside this exact owner-authorized #205 exception.
 concurrency:
-  group: wdcc-owner-promote-mobile-591
+  group: wdcc-production-release
   cancel-in-progress: false
 
 env:
