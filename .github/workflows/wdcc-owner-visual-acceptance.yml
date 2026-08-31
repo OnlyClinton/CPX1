@@ -1,7 +1,7 @@
 name: WDCC Owner Visual Acceptance Gate
 
 on:
-  # Intentionally unfiltered so this check always reports and can be required
+  # Intentionally unfiltered so the check always reports and can be required
   # by main branch protection. Non-visual changes pass without approval.
   pull_request:
   workflow_dispatch:
@@ -50,28 +50,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ -n "${APPROVED_SHA:-}" ] && [ "$APPROVED_SHA" = "$HEAD_SHA" ]; then
+          if [ "${APPROVED_SHA:-}" = "$HEAD_SHA" ]; then
             echo "WDCC_OWNER_VISUAL_ACCEPTANCE=PASS exact_sha=$HEAD_SHA source=repository-variable"
             exit 0
           fi
-
-          # Fail-closed fallback: accept only an exact-SHA approval recorded by
-          # the repository owner in the canonical release-control issue #205.
-          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'Accept: application/vnd.github+json' > /tmp/issue205-comments.json
-          token="WDCC_OWNER_VISUAL_APPROVAL $HEAD_SHA"
-          if jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" --arg token "$token" \
-            'any(.[]; .user.login == $owner and .author_association == "OWNER" and (((.body // "") | split("\n")[0]) == $token))' \
-            /tmp/issue205-comments.json >/dev/null; then
-            echo "WDCC_OWNER_VISUAL_ACCEPTANCE=PASS exact_sha=$HEAD_SHA source=issue-205-owner-comment"
-            exit 0
-          fi
-
-          echo "OWNER VISUAL ACCEPTANCE REQUIRED: no exact-head owner approval was found." >&2
-          echo "repository_variable=${APPROVED_SHA:-unset}" >&2
-          echo "required_issue205_token=$token" >&2
-          exit 1
+          printf '[]\n' > /tmp/visual-comments.json
+          page=1
+          while :; do
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100&page=$page" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' > /tmp/visual-comments-page.json
+            count="$(jq 'length' /tmp/visual-comments-page.json)"
+            jq -s 'add' /tmp/visual-comments.json /tmp/visual-comments-page.json > /tmp/visual-comments-next.json
+            mv /tmp/visual-comments-next.json /tmp/visual-comments.json
+            test "$count" -lt 100 && break
+            page=$((page + 1))
+          done
+          jq -e \
+            --arg owner "$GITHUB_REPOSITORY_OWNER" \
+            --arg marker "WDCC_OWNER_VISUAL_APPROVAL $HEAD_SHA" \
+            'any(.[]; .user.login==$owner and .author_association=="OWNER" and (.body // "")==$marker)' \
+            /tmp/visual-comments.json >/dev/null || {
+              echo "OWNER VISUAL ACCEPTANCE REQUIRED for exact head: $HEAD_SHA" >&2
+              exit 1
+            }
+          echo "WDCC_OWNER_VISUAL_ACCEPTANCE=PASS exact_sha=$HEAD_SHA source=owner-issue-marker"
 
       - name: Record no-op for non-visual changes
         if: steps.scope.outputs.visual != 'true'
@@ -87,7 +90,7 @@ jobs:
             echo "Head SHA: $HEAD_SHA"
             echo "Visual-sensitive change: ${{ steps.scope.outputs.visual }}"
             if [ "${{ steps.scope.outputs.visual }}" = true ]; then
-              echo 'Machine/E2E success is not visual approval. This gate stays fail-closed until the owner approves the exact head through the repository variable or an exact owner-authored token in release-control issue #205.'
+              echo 'Machine/E2E success is not visual approval. This gate stays fail-closed until the owner approves the exact head after reviewing its captured photography and animation.'
             else
               echo 'No owner-visible WDCC application/asset change detected; visual approval is not required for this PR.'
             fi

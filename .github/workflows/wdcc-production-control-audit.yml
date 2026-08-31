@@ -73,6 +73,8 @@ jobs:
               )
               if not (frozen or hardened_alias):
                   errors.append(f'{path}: production-write workflow lacks the approved #205 fail-closed gate')
+              if not re.search(r'(?m)^\s+group:\s*wdcc-production-release\s*$', text):
+                  errors.append(f'{path}: production-write workflow lacks the shared wdcc-production-release lock')
 
           print('Dangerous active workflow signatures:')
           for path,reasons in dangerous:
