@@ -7,6 +7,7 @@ on:
       - preview/wdcc-locked-contract-20260826
       - dev/wdcc-cinematic-mockup-v1
       - fix/wdcc-locked-contract-20260826
+      - release/wdcc-photoreal-challenger-cloudflare-20260830
   workflow_dispatch:
 
 permissions:
@@ -97,7 +98,7 @@ jobs:
           test "$code" = 200
           grep -qi "we don.t care" /tmp/home.html
           grep -q "wdcc-logo-transparent.webp" /tmp/home.html
-          grep -q "wdcc-hero-v2.webp" /tmp/home.html
+          grep -q "wdcc-hero-r31.webp" /tmp/home.html
           test "$(curl -sS -L -o /tmp/dealer.html -w '%{http_code}' "$URL/dealer?wdcc-preview=$GITHUB_RUN_ID")" = 200
           grep -qi "dealer" /tmp/dealer.html
           {
@@ -113,3 +114,5 @@ jobs:
           name: wdcc-cloudflare-preview-url
           path: preview-url.txt
           retention-days: 7
+
+# Preview trigger: vehicle-detail image verification.

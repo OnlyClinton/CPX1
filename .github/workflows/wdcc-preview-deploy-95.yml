@@ -1,0 +1,128 @@
+name: WDCC 95 Preview Deploy
+
+on:
+  push:
+    branches:
+      - release/wdcc-2vfd-cinematic-95-preview-20260829
+      - release/wdcc-photoreal-challenger-cloudflare-20260830
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Require preview authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          case "$GITHUB_REF_NAME" in
+            release/wdcc-2vfd-cinematic-95-preview-20260829|release/wdcc-photoreal-challenger-cloudflare-20260830) ;;
+            *) echo "unauthorized preview branch: $GITHUB_REF_NAME" >&2; exit 1 ;;
+          esac
+      - name: Install Vercel CLI
+        run: npm install --global vercel@59.5.0
+      - name: Link exact storefront project
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+      - name: Pull preview environment
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+      - name: Build preview
+        run: vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+      - name: Deploy immutable preview only
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_ENV"
+          echo "PREVIEW_URL=$url" >> "$GITHUB_STEP_SUMMARY"
+          echo "EXACT_SHA=$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "PRODUCTION_ALIAS_WRITE=NONE" >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke exact preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$PREVIEW_URL" > /tmp/home.html
+          grep -qi "we don.t care" /tmp/home.html
+          grep -q "wdcc-hero-r31.webp" /tmp/home.html
+          echo "PREVIEW_SMOKE=PASS" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build browser proof target
+        run: |
+          npm ci
+          cp .vercel/.env.preview.local .env.local
+          npm run build
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+      - name: Capture exact desktop and mobile renders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/wdcc-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill $app_pid 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 3 http://127.0.0.1:3000/ >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1 || { cat /tmp/wdcc-next.log; exit 1; }
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for (const cfg of [
+              {name:'desktop',width:1440,height:1200},
+              {name:'mobile',width:390,height:844}
+            ]) {
+              const page=await browser.newPage({viewport:{width:cfg.width,height:cfg.height},deviceScaleFactor:1});
+              await page.goto('http://127.0.0.1:3000/?intro=1',{waitUntil:'domcontentloaded',timeout:15000});
+              await page.waitForTimeout(700);
+              await page.screenshot({path:`proof/${cfg.name}-intro.png`,fullPage:false});
+              await page.waitForTimeout(2500);
+              await page.evaluate(async()=>{
+                const step=Math.max(320,Math.floor(window.innerHeight*.65));
+                const height=document.documentElement.scrollHeight;
+                for(let y=0;y<height;y+=step){
+                  window.scrollTo({top:y,behavior:'instant'});
+                  await new Promise(resolve=>setTimeout(resolve,120));
+                }
+                window.scrollTo({top:0,behavior:'instant'});
+              });
+              await page.waitForTimeout(400);
+              const storefront=await page.evaluate(()=>({
+                hiddenReveals:[...document.querySelectorAll('[data-rh-reveal]')].filter(node=>getComputedStyle(node).opacity==='0').length,
+                vehicleImages:[...document.querySelectorAll('.rh-card img')].filter(image=>image.complete&&image.naturalWidth>0).length,
+                horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1
+              }));
+              if(storefront.hiddenReveals||storefront.vehicleImages<5||storefront.horizontalOverflow){
+                throw new Error(`${cfg.name} storefront proof failed: ${JSON.stringify(storefront)}`);
+              }
+              await page.screenshot({path:`proof/${cfg.name}-home.png`,fullPage:true});
+              await page.close();
+            }
+            await browser.close();
+          })();
+          NODE
+          echo "VISUAL_CAPTURE=PASS" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-95-visual-proof
+          path: proof/*.png
+          if-no-files-found: error

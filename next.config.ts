@@ -76,6 +76,14 @@ const privilegedApiHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    return [
+      { source: "/inventory/:id", destination: "/vehicle/:id", permanent: true },
+      { source: "/financing", destination: "/get-approved?source=legacy-financing", permanent: true },
+      { source: "/about", destination: "/#how-it-works", permanent: true },
+      { source: "/reviews", destination: "/#how-it-works", permanent: true }
+    ];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: storefrontHeaders },

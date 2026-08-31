@@ -3,6 +3,7 @@ import {NextResponse} from "next/server";
 import {currentUser} from "../../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
+import {fallbackVehicle} from "../../../../lib/publicInventoryFallback";
 import {isInternalVehicleRecord,isQaVehicleRecord,readState,writeState} from "../../../../lib/store";
 import {recordVehicleAudit} from "../../../../lib/vehicleAudit";
 
@@ -14,6 +15,13 @@ function canEdit(user:any,vehicle:any){
   if(!user||!editorRoles.has(String(user.role||"").toLowerCase()))return false;
   return String(user.role).toLowerCase()==="platform_admin"||String(vehicle.tenantId||"wdcc")===String(user.tenantId||"wdcc");
 }
+function publicReadable(vehicle:any){return String(vehicle?.status||"").toLowerCase()==="published"&&!isQaVehicleRecord(vehicle)&&!isInternalVehicleRecord(vehicle)}
+function publicReady(item:any){
+  const year=Number(item?.year),price=Number(item?.price),mileage=Number(item?.mileage||0),downPayment=Number(item?.downPayment??item?.down_payment??0),maxYear=new Date().getUTCFullYear()+1;
+  const photo=String(item?.primaryPhotoPathname||item?.photoPathnames?.[0]||item?.primary_image_url||item?.image||item?.photo||item?.primaryPhotoUrl||item?.primaryPhoto||item?.imageUrl||"").trim();
+  return publicReadable(item)&&Boolean(photo)&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price;
+}
+function toPublicVehicle(item:any){return {id:String(item?.id||item?.slug||""),slug:String(item?.slug||item?.id||""),year:Number(item?.year),make:text(item?.make,80),model:text(item?.model,80),trim:text(item?.trim,80),price:Number(item?.price),downPayment:Number(item?.downPayment??item?.down_payment??0),mileage:Number(item?.mileage||0),stock:text(item?.stock??item?.stock_id,80),bodyStyle:text(item?.bodyStyle??item?.body_style,40),condition:text(item?.condition,40),transmission:text(item?.transmission,40),exteriorColor:text(item?.exteriorColor??item?.exterior_color,40),interiorColor:text(item?.interiorColor??item?.interior_color,40),drivetrain:text(item?.drivetrain,40),fuelType:text(item?.fuelType??item?.fuel_type,40),description:text(item?.description,3000),status:"published",primaryPhotoPathname:text(item?.primaryPhotoPathname,500),photoPathnames:Array.isArray(item?.photoPathnames)?item.photoPathnames.map((value:unknown)=>text(value,500)).filter(Boolean).slice(0,50):[],primary_image_url:text(item?.primary_image_url,1000),image:text(item?.image,1000),photoPending:item?.photoPending===true};}
 function json(body:any,status:number,rid:string,headers:Record<string,string>={}){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store","X-WDCC-Request-ID":rid,...headers}});
 }
@@ -52,14 +60,23 @@ async function verifyStorefront(id:string,expected:"visible"|"hidden"="visible")
 
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
   const{id}=await params;
-  if(!isDealerRuntime(request))return proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
+  const publicScope=new URL(request.url).searchParams.get("scope")==="public";
+  if(!isDealerRuntime(request)){
+    const upstream=await proxyDealer(request,`/api/inventory/${encodeURIComponent(id)}`);
+    if(upstream.ok&&publicScope){const body=await upstream.json().catch(()=>({}));if(body?.item&&publicReady(body.item))return NextResponse.json({ok:true,item:toPublicVehicle(body.item)},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});return NextResponse.json({ok:false,error:"Not found"},{status:404,headers:{"Cache-Control":"public, max-age=60"}})}
+    if(upstream.ok||(!publicScope&&String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=")))return upstream;
+    if(upstream.status<500)return NextResponse.json({ok:false,error:"Not found"},{status:404,headers:{"Cache-Control":"public, max-age=60"}});
+    const item=fallbackVehicle(id);
+    return item?NextResponse.json({ok:true,item:toPublicVehicle(item),degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}}):NextResponse.json({ok:false,error:"Not found"},{status:404,headers:{"Cache-Control":"public, max-age=60"}});
+  }
   const rid=requestId(request);
   try{
     const [state,user]=await Promise.all([readState(),currentUser()]);
     const item=state.vehicles.find(vehicle=>vehicle.id===id);
     if(!item)return json({ok:false,error:"Not found"},404,rid);
-    const publicReadable=String(item.status||"").toLowerCase()==="published"&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
-    if(!publicReadable&&!canEdit(user,item))return json({ok:false,error:"Not found"},404,rid);
+    const editor=canEdit(user,item);
+    if((publicScope||!editor)&&!publicReady(item))return json({ok:false,error:"Not found"},404,rid);
+    if(publicScope||!editor)return NextResponse.json({ok:true,item:toPublicVehicle(item)},{status:200,headers:{"Cache-Control":"public, max-age=0, must-revalidate","X-WDCC-Public-Inventory-Filter":"strict"}});
     return json({ok:true,item,revision:state.revision},200,rid);
   }catch(error){return json({ok:false,error:error instanceof Error?error.message:"read_failed"},500,rid);}
 }
@@ -94,6 +111,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
       return json({ok:false,error:"Forbidden"},403,rid);
     }
 
+    const wasPublic=publicReady(current);
     const next:any={...current};
     if(body.year!==undefined)next.year=Math.trunc(Number(body.year));
     if(body.make!==undefined)next.make=text(body.make,80);
@@ -112,8 +130,9 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(body.drivetrain!==undefined)next.drivetrain=text(body.drivetrain,40);
     if(body.fuelType!==undefined)next.fuelType=text(body.fuelType,40);
     if(body.description!==undefined)next.description=text(body.description,3000);
-    if(body.internalOnly!==undefined||body.visibility!==undefined){
-      next.internalOnly=body.internalOnly===true||String(body.visibility||"").toLowerCase()==="internal";
+    if(body.internalOnly!==undefined||body.visibility!==undefined||body.listingVisibility!==undefined){
+      const visibility=String(body.visibility??body.listingVisibility??"").toLowerCase();
+      next.internalOnly=body.internalOnly===true||visibility==="internal"||visibility==="dealer_only";
       next.visibility=next.internalOnly?"internal":"public";
     }
 
@@ -139,19 +158,21 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(!Number.isFinite(Number(next.downPayment||0))||Number(next.downPayment||0)<0||Number(next.downPayment||0)>Number(next.price))return json({ok:false,error:"invalid_down_payment"},400,rid);
     if(!Number.isInteger(Number(next.mileage||0))||Number(next.mileage||0)<0||Number(next.mileage||0)>2_000_000)return json({ok:false,error:"invalid_mileage"},400,rid);
     if(next.stock&&state.vehicles.some((vehicle:any,vehicleIndex:number)=>vehicleIndex!==index&&String(vehicle.tenantId||"wdcc")===String(next.tenantId||"wdcc")&&String(vehicle.stock||"").toLowerCase()===String(next.stock).toLowerCase()&&String(vehicle.status||"").toLowerCase()!=="archived"))return json({ok:false,error:"stock_number_already_exists"},409,rid);
-    if(next.status==="published"&&(!Array.isArray(next.photoPathnames)||next.photoPathnames.length===0))return json({ok:false,error:"photo_required_before_publish"},409,rid);
+    const hasPhoto=Boolean(String(next.primaryPhotoPathname||next.photoPathnames?.[0]||next.primary_image_url||next.image||next.primaryPhotoUrl||next.imageUrl||"").trim());
+    if(next.status==="published"&&!hasPhoto)return json({ok:false,error:"photo_required_before_publish"},409,rid);
 
     next.updatedAt=new Date().toISOString();
     state.vehicles[index]=next;
     const photoChanged=(next.photoPathnames?.length||0)!==(current.photoPathnames?.length||0)||next.primaryPhotoPathname!==current.primaryPhotoPathname;
     const statusChanged=next.status!==current.status;
+    const isPublic=publicReady(next);
     const action=statusChanged?`vehicle.status.${next.status}`:photoChanged?"vehicle.photo_checkpoint":"vehicle.update";
     state.audit.push({id:crypto.randomUUID(),at:next.updatedAt,action,actor:user.id,actorRole:user.role,vehicleId:id,requestId:rid,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0});
     const saved=await writeState(state);
     await recordVehicleAudit({action,outcome:"ok",requestId:rid,vehicleId:id,actorId:user.id,actorRole:user.role,year:next.year,make:next.make,model:next.model,mileage:next.mileage,stock:next.stock,status:next.status,photoCount:Array.isArray(next.photoPathnames)?next.photoPathnames.length:0,detail:`revision:${saved.revision}`});
 
     let storefront:any=undefined;
-    if(statusChanged&&next.status==="published"){
+    if(next.status==="published"&&(statusChanged||photoChanged||wasPublic!==isPublic)){
       const expected=isQaVehicleRecord(next)||isInternalVehicleRecord(next)?"hidden":"visible";
       storefront=await verifyStorefront(id,expected);
       const lastAttempt=Array.isArray(storefront.attempts)&&storefront.attempts.length?storefront.attempts[storefront.attempts.length-1]:null;

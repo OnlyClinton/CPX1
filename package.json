@@ -3,6 +3,8 @@
   "version": "47.0.0",
   "private": true,
   "scripts": {
+    "prebuild": "node scripts/wdcc-media-integrity.mjs",
+    "check:media": "node scripts/wdcc-media-integrity.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
