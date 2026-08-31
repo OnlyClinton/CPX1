@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APPROVED_SHA: ea52078e2f8b6cf0c1001046e38341b1b4cf4d0a
+  APPROVED_SHA: 97d6d2f99c77f0578479df6d09dce7b9ddf96f1e
   DEALER_APPROVED_SHA: 879c5431a2b319eeb30f30a93090857a7fb54c08
   VERCEL_SCOPE: cpxagency
   VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
@@ -31,7 +31,7 @@ jobs:
     if: >-
       github.event.issue.number == 205 &&
       github.event.comment.user.login == github.repository_owner &&
-      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-EA52078E-CLOUDFLARE-FRONTDOOR'
+      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-97D6D2F9-CLOUDFLARE-FRONTDOOR'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -53,6 +53,7 @@ jobs:
           body="$(jq -r '.body // ""' /tmp/issue.json)"
           grep -Fxq 'CANONICAL_PUBLIC_ALIAS_WRAPPER: PR #593' <<<"$body"
           grep -Fxq "CANONICAL_STOREFRONT_SOURCE: $APPROVED_SHA" <<<"$body"
+          grep -Fxq 'CANONICAL_STOREFRONT_TRIGGER: PROMOTE-WDCC-CONVERGED-97D6D2F9-CLOUDFLARE-FRONTDOOR' <<<"$body"
           grep -Fxq "CANONICAL_DEALER_SOURCE: $DEALER_APPROVED_SHA" <<<"$body"
           printf '[]\n' > /tmp/comments.json
           page=1
