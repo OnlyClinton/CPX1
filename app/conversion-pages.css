@@ -73,3 +73,50 @@
   .conversionBackdrop{height:390px;background-size:cover;background-position:63% top}
   .conversionGrid{padding-top:300px}
 }
+
+/* Brighter R31 treatment shared by inventory and conversion routes. */
+.conversionBackdrop{filter:saturate(1.24) contrast(.99) brightness(1.24)}
+.conversionPage::before{background:linear-gradient(90deg,rgba(2,7,11,.84) 0%,rgba(2,7,11,.58) 36%,rgba(2,7,11,.22) 55%,rgba(2,7,11,.05) 72%,rgba(2,7,11,.34) 100%),linear-gradient(0deg,rgba(2,7,11,.58) 0%,transparent 40%)}
+.inventoryTop{position:relative!important;isolation:isolate!important;overflow:hidden!important;background:#02070b!important;text-shadow:0 3px 16px #000c!important}
+.inventoryTop::before{content:"";position:absolute;inset:-2%;z-index:-2;background:url('/wdcc-hero-r31.webp') 72% 54%/cover no-repeat;filter:saturate(1.28) contrast(.99) brightness(1.30);transform:scale(1.01)}
+.inventoryTop::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(2,7,11,.62) 0%,rgba(2,7,11,.40) 42%,rgba(2,7,11,.08) 70%,rgba(2,7,11,.02) 100%),linear-gradient(0deg,rgba(2,7,11,.14),transparent 44%)}
+.inventoryTop .wrap{position:relative;z-index:1}
+
+/* Normal phones: dense, readable two-column inventory instead of five
+   full-screen cards. Very narrow legacy screens safely fall back to one. */
+@media(max-width:820px){
+  .inventoryTop{padding:30px 0 26px!important}
+  .inventoryTop::before{background-position:67% center}
+  .inventoryTop h1{font-size:clamp(34px,9.6vw,44px)!important;line-height:.92!important}
+  .inventoryTop .lede{max-width:540px!important;font-size:12.5px!important;line-height:1.42!important}
+  .inventoryTop+.section>.wrap{width:calc(100% - 20px)!important}
+  .inventoryTop+.section .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+  .inventoryTop+.section .cardBody{padding:11px!important}
+  .inventoryTop+.section .carTitle{min-height:37px!important;font-size:14px!important;line-height:1.25!important}
+  .inventoryTop+.section .facts{margin-top:6px!important;font-size:9px!important}
+  .inventoryTop+.section .price{margin-top:8px!important;font-size:23px!important}
+  .inventoryTop+.section .down{font-size:9px!important}
+  .inventoryTop+.section .cardButtons{grid-template-columns:1fr!important;gap:6px!important;margin-top:10px!important}
+  .inventoryTop+.section .cardButtons a{min-height:36px!important;font-size:8.5px!important}
+}
+@media(max-width:560px){
+  .inventoryTop+.section{padding:20px 0 36px!important}
+  .inventoryTop+.section .photo{aspect-ratio:1.48!important}
+  .inventoryTop+.section .cardBody{padding:10px!important}
+  .inventoryTop+.section .carTitle{font-size:13px!important}
+  .inventoryTop+.section .price{font-size:22px!important}
+}
+@media(max-width:339px){
+  .inventoryTop+.section>.wrap{width:calc(100% - 18px)!important}
+  .inventoryTop+.section .grid{grid-template-columns:1fr!important}
+  .inventoryTop+.section .photo{aspect-ratio:16/9!important}
+  .inventoryTop+.section .cardButtons{grid-template-columns:1fr 1fr!important}
+}
+
+/* Android Chrome's “desktop site” keeps a wide CSS viewport and then scales it
+   down. Give that coarse-pointer portrait mode its own optical scale. */
+@media(hover:none) and (pointer:coarse) and (min-width:821px) and (max-width:1100px) and (orientation:portrait){
+  .commandStrip{height:52px!important}.commandStrip .wrap{height:52px!important;padding:0 24px!important;gap:18px!important;font-size:13px!important}
+  .premiumHeader{height:154px!important;min-height:154px!important;top:52px!important}.premiumHeader .nav{height:154px!important;min-height:154px!important;padding:0 28px!important;grid-template-columns:86px 1fr 86px!important}.premiumHeader .logoBrand{width:184px!important;height:184px!important}.premiumHeader .logoBrand img{width:178px!important;height:178px!important}.premiumHeader .mobileMenuButton{width:78px!important;height:78px!important;font-size:40px!important}.premiumHeader .mobileCallButton{width:82px!important;height:82px!important;font-size:36px!important}.mobileHeaderMenu{top:214px!important}.mobileHeaderMenu a{min-height:76px!important;font-size:17px!important}
+  .inventoryTop{padding:66px 0 58px!important}.inventoryTop .wrap,.inventoryTop+.section>.wrap{width:calc(100% - 44px)!important}.inventoryTop .eyebrow{font-size:16px!important}.inventoryTop h1{max-width:850px!important;font-size:82px!important;line-height:.9!important}.inventoryTop .lede{max-width:850px!important;font-size:25px!important;line-height:1.45!important}.inventoryTop+.section{padding:42px 0 68px!important}.inventoryTop+.section .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:20px!important}.inventoryTop+.section .card{border-radius:14px!important}.inventoryTop+.section .photo{aspect-ratio:1.48!important}.inventoryTop+.section .cardBody{padding:22px!important}.inventoryTop+.section .carTitle{min-height:70px!important;font-size:28px!important}.inventoryTop+.section .facts{margin-top:10px!important;font-size:17px!important}.inventoryTop+.section .price{margin-top:14px!important;font-size:42px!important}.inventoryTop+.section .down{font-size:17px!important}.inventoryTop+.section .cardButtons{grid-template-columns:1fr!important;gap:10px!important;margin-top:18px!important}.inventoryTop+.section .cardButtons a{min-height:76px!important;font-size:15px!important}
+}

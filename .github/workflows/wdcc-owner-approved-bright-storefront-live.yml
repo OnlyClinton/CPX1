@@ -1,0 +1,303 @@
+name: WDCC Owner Approved Bright Storefront Live
+
+# Production writes remain subordinate to wdcc-production-freeze-check.yml and
+# the exact owner-only issue #205 gate below.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: wdcc-production-release
+  cancel-in-progress: false
+
+env:
+  APPROVED_SHA: ea52078e2f8b6cf0c1001046e38341b1b4cf4d0a
+  DEALER_APPROVED_SHA: 879c5431a2b319eeb30f30a93090857a7fb54c08
+  VERCEL_SCOPE: cpxagency
+  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+  DEALER_ROOT: https://dealer.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-CONVERGED-EA52078E-CLOUDFLARE-FRONTDOOR'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Fail closed on exact owner and release control
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/issue.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue.json >/dev/null
+          body="$(jq -r '.body // ""' /tmp/issue.json)"
+          grep -Fxq 'CANONICAL_PUBLIC_ALIAS_WRAPPER: PR #593' <<<"$body"
+          grep -Fxq "CANONICAL_STOREFRONT_SOURCE: $APPROVED_SHA" <<<"$body"
+          grep -Fxq "CANONICAL_DEALER_SOURCE: $DEALER_APPROVED_SHA" <<<"$body"
+          printf '[]\n' > /tmp/comments.json
+          page=1
+          while :; do
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100&page=$page" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' > /tmp/comments-page.json
+            count="$(jq 'length' /tmp/comments-page.json)"
+            jq -s 'add' /tmp/comments.json /tmp/comments-page.json > /tmp/comments-next.json
+            mv /tmp/comments-next.json /tmp/comments.json
+            test "$count" -lt 100 && break
+            page=$((page + 1))
+          done
+          jq -e \
+            --arg owner "$GITHUB_REPOSITORY_OWNER" \
+            --arg marker "WDCC_PUBLIC_ALIAS_APPROVAL $APPROVED_SHA" \
+            'any(.[]; .user.login==$owner and .author_association=="OWNER" and (.body // "")==$marker)' \
+            /tmp/comments.json >/dev/null
+          for status in queued in_progress; do
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?status=$status&per_page=100" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' > "/tmp/runs-$status.json"
+            jq -e --argjson current "$GITHUB_RUN_ID" '
+              [.workflow_runs[] | select(.id != $current) |
+                select((.name | startswith("WDCC Owner Approved")) or (.name=="WDCC Emergency Vercel Alias Pin 2vFD"))] | length==0
+            ' "/tmp/runs-$status.json" >/dev/null
+          done
+          echo "OWNER_APPROVED_SHA=$APPROVED_SHA"
+          echo 'OWNER_AND_RELEASE_CONTROL=PASS'
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Prove exact source and production authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          grep -Fq 'brightness(1.30)' app/reference-clone.css
+          grep -Fq 'brightness(1.28)' app/exact2vfd-final.css
+          grep -Fq 'import"./mobile-density-polish.css"' app/layout.tsx
+          grep -Fq '.reference-home .rh-logo img{width:92px!important;height:92px!important' app/mobile-density-polish.css
+          grep -Fq 'https://dealer.wedontcarecars.com' lib/wdccAuthority.ts
+          grep -Fq 'https://dealer.wedontcarecars.com' wrangler.jsonc
+          ! grep -Fq 'wdcc-cpx-launch-qhcvflfih-cpxagency.vercel.app' lib/wdccAuthority.ts
+          node scripts/wdcc-media-integrity.mjs
+          echo 'EXACT_SOURCE_AND_AUTHORITY=PASS'
+
+      - name: Build and torture-test responsive storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          export WDCC_RUNTIME_ROLE=frontend
+          export WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com
+          npm ci
+          npm run build
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+          mkdir -p proof
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/wdcc-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill $app_pid 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 3 http://127.0.0.1:3000/ >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1 || { cat /tmp/wdcc-next.log; exit 1; }
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const cfg of [
+              {name:'desktop',width:1440,height:1100,isMobile:false,hasTouch:false},
+              {name:'mobile',width:390,height:844,isMobile:true,hasTouch:true},
+              {name:'touch-portrait-980',width:980,height:1740,isMobile:false,hasTouch:true}
+            ]){
+              const context=await browser.newContext({viewport:{width:cfg.width,height:cfg.height},isMobile:cfg.isMobile,hasTouch:cfg.hasTouch,deviceScaleFactor:1});
+              const page=await context.newPage();
+              await page.goto('http://127.0.0.1:3000/?hard-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForTimeout(1500);
+              const intro=await page.evaluate(()=>{
+                const image=document.querySelector('.li .li-scene img');
+                return image?{filter:getComputedStyle(image).filter,opacity:getComputedStyle(image).opacity}:null;
+              });
+              if(!intro||!intro.filter.includes('brightness(1.28)')||Number(intro.opacity)<.95)throw Error(`${cfg.name} intro ${JSON.stringify(intro)}`);
+              await page.screenshot({path:`proof/${cfg.name}-intro.png`,fullPage:false});
+              await page.waitForTimeout(1400);
+              await page.evaluate(async()=>{
+                const step=Math.max(320,Math.floor(innerHeight*.7));
+                for(let y=0;y<document.documentElement.scrollHeight;y+=step){scrollTo(0,y);await new Promise(r=>setTimeout(r,100));}
+                scrollTo(0,0);
+              });
+              await page.waitForTimeout(400);
+              const home=await page.evaluate(()=>({
+                overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,
+                hero:getComputedStyle(document.querySelector('.rh-hero'),'::before').backgroundImage,
+                hidden:[...document.querySelectorAll('[data-rh-reveal]')].filter(n=>getComputedStyle(n).opacity==='0').length,
+                cards:document.querySelectorAll('.rh-card').length,
+                loaded:[...document.querySelectorAll('.rh-card img')].filter(i=>i.complete&&i.naturalWidth>0).length
+              }));
+              if(home.overflow||!home.hero.includes('wdcc-hero-r31.webp')||home.hidden||home.cards<5||home.loaded<5)throw Error(`${cfg.name} home ${JSON.stringify(home)}`);
+              await page.screenshot({path:`proof/${cfg.name}-home.png`,fullPage:true});
+              await page.goto('http://127.0.0.1:3000/inventory?hard-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForSelector('.inventoryTop + .section .card',{timeout:20000});
+              await page.waitForFunction(()=>[...document.querySelectorAll('.inventoryTop + .section .card .photo img')].every(i=>i.complete&&i.naturalWidth>0),null,{timeout:20000});
+              const inv=await page.evaluate(()=>{
+                const cards=[...document.querySelectorAll('.inventoryTop + .section .card')],images=[...document.querySelectorAll('.inventoryTop + .section .card .photo img')],w=document.documentElement.clientWidth;
+                const rects=cards.map(c=>c.getBoundingClientRect());
+                return {count:cards.length,unique:new Set(images.map(i=>i.currentSrc)).size,pending:document.querySelectorAll('.photo-pending').length,overflow:document.documentElement.scrollWidth>w+1,clipped:rects.filter(r=>r.left< -1||r.right>w+1).length,columns:new Set(rects.slice(0,2).map(r=>Math.round(r.left))).size};
+              });
+              if(inv.count<5||inv.unique<5||inv.pending||inv.overflow||inv.clipped||(cfg.width<=1100&&inv.columns<2))throw Error(`${cfg.name} inventory ${JSON.stringify(inv)}`);
+              await page.screenshot({path:`proof/${cfg.name}-inventory.png`,fullPage:true});
+              await context.close();
+            }
+            await browser.close();
+          })().catch(error=>{console.error(error);process.exit(1)});
+          NODE
+          kill "$app_pid" 2>/dev/null || true
+          trap - EXIT
+          echo 'RESPONSIVE_VISUAL_CONTRACT=PASS'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-bright-live-proof
+          path: proof/*.png
+          if-no-files-found: error
+
+      - name: Deploy immutable Vercel origin without aliases
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          export WDCC_RUNTIME_ROLE=frontend
+          export WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com
+          vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          target="$(vercel deploy --prebuilt --env WDCC_RUNTIME_ROLE=frontend --env WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          test -n "$target"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$target?teamId=$VERCEL_TEAM_ID" > /tmp/target.json
+          jq -e --arg sha "$APPROVED_SHA" '.readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/target.json >/dev/null
+          echo "IMMUTABLE_TARGET=$target" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove immutable origin before traffic
+        shell: bash
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+        run: |
+          set -euo pipefail
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$TARGET" > /tmp/home
+          grep -q 'wdcc-hero-r31.webp' /tmp/home
+          grep -qi 'we don.t care' /tmp/home
+          vercel --scope "$VERCEL_SCOPE" curl /inventory --deployment "$TARGET" > /tmp/inventory
+          grep -qi 'find the right car' /tmp/inventory
+          vercel --scope "$VERCEL_SCOPE" curl /api/health --deployment "$TARGET" > /tmp/health
+          jq -e '.ok==true and .degraded==false and .backend=="healthy"' /tmp/health >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /api/inventory --deployment "$TARGET" > /tmp/inventory.json
+          jq -e '.ok==true and (.items|length)>=5' /tmp/inventory.json >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-hero-r31.webp --deployment "$TARGET" > /tmp/target-hero
+          test "$(sha256sum /tmp/target-hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-r31.webp|awk '{print $1}')"
+          test "$(curl -sS --max-time 25 -D /tmp/dealer-preflight-headers -o /tmp/dealer-preflight-health -w '%{http_code}' "$DEALER_ROOT/api/health?release=$APPROVED_SHA")" = 200
+          jq -e '.ok==true and .degraded==false and .storage=="cloudflare-do"' /tmp/dealer-preflight-health >/dev/null
+          tr -d '\r' < /tmp/dealer-preflight-headers | grep -Fxi "x-wdcc-dealer-app-sha: $DEALER_APPROVED_SHA"
+          echo 'IMMUTABLE_ORIGIN_PROOF=PASS'
+
+      - name: Capture exact rollback aliases
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$APEX" "$WWW"; do
+            key="${host//./_}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > "/tmp/before-$key.json"
+            current="$(jq -r '.url // empty' "/tmp/before-$key.json")"
+            test -n "$current"
+            echo "$key=$current" >> "$GITHUB_OUTPUT"
+            echo "ROLLBACK $host -> $current"
+          done
+
+      - name: Promote origin aliases and verify or rollback
+        shell: bash
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+          ROLLBACK_APEX: ${{ steps.rollback.outputs.wedontcarecars_com }}
+          ROLLBACK_WWW: ${{ steps.rollback.outputs.www_wedontcarecars_com }}
+        run: |
+          set -Eeuo pipefail
+          changed=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$changed" = 1 ]; then
+              vercel alias set "$ROLLBACK_APEX" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              vercel alias set "$ROLLBACK_WWW" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+          changed=1
+          vercel alias set "$TARGET" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$TARGET" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+          live=0
+          for i in $(seq 1 45); do
+            root="$(curl -sS -L --max-time 25 -o /tmp/live-home -w '%{http_code}' "https://$APEX/?release=$APPROVED_SHA-$i" || true)"
+            health="$(curl -sS -L --max-time 25 -o /tmp/live-health -w '%{http_code}' "https://$APEX/api/health?release=$APPROVED_SHA-$i" || true)"
+            inv="$(curl -sS -L --max-time 25 -o /tmp/live-inventory -w '%{http_code}' "https://$APEX/api/inventory?release=$APPROVED_SHA-$i" || true)"
+            if [ "$root" = 200 ] && [ "$health" = 200 ] && [ "$inv" = 200 ] && grep -q 'wdcc-hero-r31.webp' /tmp/live-home && jq -e '.ok==true and .degraded==false and .backend=="healthy"' /tmp/live-health >/dev/null 2>&1 && jq -e '.ok==true and (.items|length)>=5' /tmp/live-inventory >/dev/null 2>&1; then live=1; break; fi
+            sleep 2
+          done
+          test "$live" = 1
+          for path in /inventory /get-approved /schedule-test-drive /login /contact /app; do
+            code="$(curl -sS -L --max-time 25 -o /tmp/page -w '%{http_code}' "https://$APEX$path?release=$APPROVED_SHA")"
+            test "$code" = 200
+          done
+          invalid="$(curl -sS --max-time 25 -X POST -H 'Content-Type: application/json' --data '{"username":"admin","password":"__wdcc_invalid_probe__"}' -o /tmp/invalid-login -w '%{http_code}' "https://$APEX/api/auth/login")"
+          test "$invalid" = 401 || test "$invalid" = 429
+          jq -e '.error=="invalid_credentials" or .error=="too_many_attempts"' /tmp/invalid-login >/dev/null
+          curl -fsS "https://$APEX/wdcc-hero-r31.webp?release=$APPROVED_SHA" -o /tmp/live-hero
+          test "$(sha256sum /tmp/live-hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-r31.webp|awk '{print $1}')"
+          test "$(curl -sS -L --max-time 25 -o /tmp/www -w '%{http_code}' "https://$WWW/?release=$APPROVED_SHA")" = 200
+          grep -q 'wdcc-hero-r31.webp' /tmp/www
+          test "$(curl -sS --max-time 25 -D /tmp/dealer-health-headers -o /tmp/dealer-health -w '%{http_code}' "$DEALER_ROOT/api/health?release=$APPROVED_SHA")" = 200
+          jq -e '.ok==true and .degraded==false and .storage=="cloudflare-do"' /tmp/dealer-health >/dev/null
+          tr -d '\r' < /tmp/dealer-health-headers | grep -Fxi "x-wdcc-dealer-app-sha: $DEALER_APPROVED_SHA"
+          trap - ERR INT TERM
+          {
+            echo '### WDCC BRIGHT STOREFRONT — LIVE PASS'
+            echo "Exact source SHA: $APPROVED_SHA"
+            echo "Origin deployment: $TARGET"
+            echo 'Cloudflare front door: unchanged'
+            echo 'Responsive desktop/mobile/touch portrait: PASS'
+            echo 'Inventory images and routes: PASS'
+            echo 'Canonical dealer authority and auth error contract: PASS'
+          } >> "$GITHUB_STEP_SUMMARY"

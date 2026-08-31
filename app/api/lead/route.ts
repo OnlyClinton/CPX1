@@ -2,7 +2,7 @@ import {GET as canonicalGET,POST as canonicalPOST} from "../leads/route";
 
 export const dynamic="force-dynamic";
 
-const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://wdcc-cpx-launch-cpxagency.vercel.app").replace(/\/$/,"");
+const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://dealer.wedontcarecars.com").replace(/\/$/,"");
 const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
 const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
 
