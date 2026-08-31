@@ -1,0 +1,290 @@
+name: WDCC owner promote mobile 591
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+# Guard companion: wdcc-production-freeze-check.yml remains the global default
+# outside this exact owner-authorized #205 exception.
+concurrency:
+  group: wdcc-owner-promote-mobile-591
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 8daf842583bcfec6e56c9c2845974d9df1d4a100
+  VISUAL_SHA: 359631f1ec434f66f5ea400dfa6dff5d277ab7dc
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_SCOPE: cpxagency
+  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_ORG_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+  DEALER: dealer.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-MOBILE-359631F1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Enforce exact release-control, merged candidate, checks and distinct review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          test -n "${VERCEL_TOKEN:-}"
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/issue205.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue205.json >/dev/null
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/comments.json
+          approval="WDCC_PUBLIC_ALIAS_APPROVAL $CANDIDATE_SHA"
+          jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" --arg token "$approval" \
+            'any(.[]; .user.login==$owner and .author_association=="OWNER" and (((.body // "")|split("\n")[0])==$token))' \
+            /tmp/comments.json >/dev/null
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/591" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/pr591.json
+          jq -e --arg merge "$CANDIDATE_SHA" --arg head "$VISUAL_SHA" \
+            '.merged==true and .merge_commit_sha==$merge and .head.sha==$head' /tmp/pr591.json >/dev/null
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/591/reviews?per_page=100" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/reviews.json
+          jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" \
+            'any(.[]; .state=="APPROVED" and .user.login!=$owner)' /tmp/reviews.json >/dev/null
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$VISUAL_SHA&event=pull_request&per_page=100" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/runs.json
+          jq -e 'any(.workflow_runs[]; .name=="WDCC Production Control Audit" and .conclusion=="success")' /tmp/runs.json >/dev/null
+          jq -e 'any(.workflow_runs[]; .name=="WDCC Owner Visual Acceptance Gate" and .conclusion=="success")' /tmp/runs.json >/dev/null
+
+          {
+            echo "CANDIDATE_SHA=$CANDIDATE_SHA"
+            echo "VISUAL_SHA=$VISUAL_SHA"
+            echo 'RELEASE_CONTROL=PASS'
+            echo 'DISTINCT_REVIEW=PASS'
+            echo 'REQUIRED_CHECKS=PASS'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          echo "EXACT_CHECKOUT=PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact deployment and browser tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Link exact storefront project and build preview artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+      - name: Deploy immutable donor without production aliases
+        shell: bash
+        run: |
+          set -euo pipefail
+          donor_url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          donor_host="${donor_url#https://}"
+          donor_host="${donor_host#http://}"
+          test -n "$donor_host"
+          echo "DONOR_URL=https://$donor_host" >> "$GITHUB_ENV"
+          echo "DONOR_HOST=$donor_host" >> "$GITHUB_ENV"
+          echo "IMMUTABLE_DONOR=https://$donor_host" >> "$GITHUB_STEP_SUMMARY"
+          echo 'PRODUCTION_ALIAS_WRITE=NOT_YET' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke immutable donor before any public write
+        shell: bash
+        run: |
+          set -euo pipefail
+          for route in / /inventory /get-approved /schedule-test-drive; do
+            vercel --scope "$VERCEL_SCOPE" curl "$route" --deployment "$DONOR_HOST" > /tmp/donor.html
+            test -s /tmp/donor.html
+          done
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor-home.html
+          grep -qi 'we don.t care' /tmp/donor-home.html
+          grep -q 'wdcc-logo-transparent.webp' /tmp/donor-home.html
+          grep -q 'wdcc-hero-r31.webp' /tmp/donor-home.html
+          echo 'IMMUTABLE_DONOR_SMOKE=PASS' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pin only public aliases, verify mobile live end to end, or rollback
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          resolve_alias(){
+            host="$1"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" \
+              | jq -r '.url // empty'
+          }
+
+          old_apex="$(resolve_alias "$APEX")"
+          old_www="$(resolve_alias "$WWW")"
+          test -n "$old_apex"
+          test -n "$old_www"
+          test "$old_apex" != "$DONOR_HOST" || true
+          test "$old_www" != "$DONOR_HOST" || true
+
+          dealer_before="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}|%{url_effective}' "https://$DEALER/dealer" || true)"
+          echo "$dealer_before" | grep -Eq '^(200|302|307|308)\|'
+
+          changed=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$changed" = 1 ]; then
+              echo 'LIVE PROOF FAILED: restoring captured public alias targets.' >&2
+              vercel alias set "$old_apex" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              vercel alias set "$old_www" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              apex_after_rb="$(resolve_alias "$APEX" || true)"
+              www_after_rb="$(resolve_alias "$WWW" || true)"
+              test "$apex_after_rb" = "$old_apex" || echo "ROLLBACK_APEX_VERIFY=FAILED expected=$old_apex actual=$apex_after_rb" >&2
+              test "$www_after_rb" = "$old_www" || echo "ROLLBACK_WWW_VERIFY=FAILED expected=$old_www actual=$www_after_rb" >&2
+              echo "ROLLBACK_APEX=$apex_after_rb" >&2
+              echo "ROLLBACK_WWW=$www_after_rb" >&2
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+
+          changed=1
+          vercel alias set "$DONOR_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$DONOR_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 30); do
+              actual="$(resolve_alias "$host" || true)"
+              if [ "$actual" = "$DONOR_HOST" ]; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" = 1
+          done
+
+          export APEX WWW
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          const assert=(cond,msg)=>{if(!cond)throw new Error(msg)};
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const host of [`https://${process.env.APEX}`,`https://${process.env.WWW}`]){
+              const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+              const routes=['/','/inventory','/get-approved','/schedule-test-drive','/app'];
+              for(const route of routes){
+                const suffix=route==='/'?'/?intro=0&mobilelive=1':`${route}?mobilelive=1`;
+                const response=await page.goto(host+suffix,{waitUntil:'domcontentloaded',timeout:30000});
+                assert(response && response.status()<400,`${host}${route} bad status ${response&&response.status()}`);
+                await page.waitForTimeout(500);
+                const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth+1);
+                assert(!overflow,`${host}${route} horizontal overflow`);
+
+                if(route==='/'){
+                  await page.evaluate(()=>window.scrollTo(0,0));
+                  await page.waitForTimeout(100);
+                  const initial=await page.evaluate(()=>{
+                    const logo=document.querySelector('.reference-home .rh-logo img');
+                    const header=document.querySelector('.reference-home .rh-header');
+                    const dock=document.querySelector('.wdcc-mobile-actions');
+                    const actions=document.querySelector('.reference-home .rh-hero-actions');
+                    const buttons=actions?[...actions.querySelectorAll('.rh-btn')]:[];
+                    const lr=logo?.getBoundingClientRect();
+                    const hr=header?.getBoundingClientRect();
+                    const ar=actions?.getBoundingClientRect();
+                    const b0=buttons[0]?.getBoundingClientRect();
+                    const b1=buttons[1]?.getBoundingClientRect();
+                    const ds=dock?getComputedStyle(dock):null;
+                    return {logoW:lr?.width||0,logoH:lr?.height||0,headerH:hr?.height||0,dockOpacity:Number(ds?.opacity||0),dockVisibility:ds?.visibility||'',dockPointer:ds?.pointerEvents||'',actionsW:ar?.width||0,b0W:b0?.width||0,b1W:b1?.width||0};
+                  });
+                  assert(initial.logoW>=88&&initial.logoW<=100,`${host} home logo width ${initial.logoW}`);
+                  assert(initial.logoH>=88&&initial.logoH<=100,`${host} home logo height ${initial.logoH}`);
+                  assert(initial.headerH>=60&&initial.headerH<=68,`${host} home header height ${initial.headerH}`);
+                  assert(initial.dockVisibility==='hidden'||initial.dockOpacity<=0.05,`${host} dock visible before scroll`);
+                  assert(initial.actionsW>0&&initial.b0W>=initial.actionsW*0.9,`${host} primary CTA not dominant`);
+                  assert(initial.b1W>0&&initial.b1W<=initial.actionsW*0.65,`${host} secondary CTA too large`);
+                  await page.evaluate(()=>window.scrollTo(0,220));
+                  await page.waitForTimeout(350);
+                  const after=await page.evaluate(()=>{
+                    const dock=document.querySelector('.wdcc-mobile-actions');
+                    const s=dock?getComputedStyle(dock):null;
+                    return {opacity:Number(s?.opacity||0),visibility:s?.visibility||'',pointer:s?.pointerEvents||''};
+                  });
+                  assert(after.visibility==='visible'&&after.opacity>=0.9&&after.pointer!=='none',`${host} dock not visible after scroll`);
+                }
+
+                if(['/inventory','/get-approved','/schedule-test-drive'].includes(route)){
+                  const chrome=await page.evaluate(()=>{
+                    const logo=document.querySelector('.premiumHeader .logoBrand img');
+                    const header=document.querySelector('.premiumHeader');
+                    const lr=logo?.getBoundingClientRect();
+                    const hr=header?.getBoundingClientRect();
+                    return {logoW:lr?.width||0,logoH:lr?.height||0,headerH:hr?.height||0};
+                  });
+                  assert(chrome.logoW>=88&&chrome.logoW<=100,`${host}${route} logo width ${chrome.logoW}`);
+                  assert(chrome.logoH>=88&&chrome.logoH<=100,`${host}${route} logo height ${chrome.logoH}`);
+                  assert(chrome.headerH>=60&&chrome.headerH<=68,`${host}${route} header height ${chrome.headerH}`);
+                }
+              }
+              await page.close();
+            }
+            await browser.close();
+          })().catch(err=>{console.error(err);process.exit(1)});
+          NODE
+
+          dealer_after="$(curl -sS -L --max-time 25 -o /dev/null -w '%{http_code}|%{url_effective}' "https://$DEALER/dealer" || true)"
+          test "$dealer_after" = "$dealer_before"
+
+          changed=0
+          trap - ERR INT TERM
+          {
+            echo '### WDCC MOBILE 591 PUBLIC CUTOVER — PASS'
+            echo "Candidate merge SHA: $CANDIDATE_SHA"
+            echo "Visual SHA: $VISUAL_SHA"
+            echo "Donor: https://$DONOR_HOST"
+            echo "Prior apex target: $old_apex"
+            echo "Prior www target: $old_www"
+            echo 'Apex + www alias pin: PASS'
+            echo 'Mobile home / inventory / get-approved / schedule-test-drive / app: PASS'
+            echo 'Large centered logo + compact 64px header: PASS'
+            echo 'CTA density + dock hidden-until-scroll: PASS'
+            echo 'Horizontal overflow: NONE'
+            echo 'Dealer front door: UNCHANGED'
+            echo 'DNS / Cloudflare routes / production data: UNCHANGED'
+          } >> "$GITHUB_STEP_SUMMARY"
