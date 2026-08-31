@@ -90,7 +90,7 @@ export default function ReferenceCloneHome({motionReady=false}:{motionReady?:boo
     }),{threshold:.12,rootMargin:"0px 0px -5% 0px"});
     nodes.forEach(node=>observer.observe(node));
     return()=>observer.disconnect();
-  },[motionReady,vehicles.length]);
+  },[motionReady,vehicles]);
 
   return <main className={`reference-home${motionReady?" rh-motion-ready":""}`}>
     <div className="rh-utility"><div className="rh-utility-inner"><span>Tampa Bay</span><span>In-house financing</span><span>Sean · <b>813-516-4752</b></span></div></div>
