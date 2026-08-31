@@ -1,0 +1,188 @@
+name: WDCC Owner Approved Reference Root FB1A21F V4
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: wdcc-reference-fb1a21f-v4
+  cancel-in-progress: false
+
+env:
+  APPROVED_SHA: fb1a21f2611a6b9ff3bde5dbc2de37fdbab51d32
+  TARGET_VERSION: 82d47a25-aad2-46f6-87a1-5ad75d0ff1f4
+  TARGET_PREVIEW: https://82d47a25-wdcc-reference-root.clico-global.workers.dev
+  LIVE_WORKER: wdcc-reference-root
+  PROD_ROOT: https://wedontcarecars.com
+  PROD_WWW: https://www.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-REFERENCE-FB1A21F-V4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Fail-closed release-control gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/issue205.json
+          body="$(jq -r '.body // ""' /tmp/issue205.json)"
+          grep -Fq 'OWNER-APPROVED STOREFRONT VISUAL GO — 2026-08-31' <<<"$body"
+          grep -Fq "$APPROVED_SHA" <<<"$body"
+          grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
+          grep -Fq 'wdcc-reference-root' <<<"$body"
+          grep -Fq '96/100' <<<"$body"
+          grep -Fq 'NO-GO FOR FULL PRODUCTION RELEASE' <<<"$body"
+          echo 'RELEASE_CONTROL_FB1A21F_V4=PASS'
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SHA }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact Cloudflare CLI
+        run: npm install --global wrangler@4.90.0
+
+      - name: Re-prove immutable target version before live traffic
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /schedule-test-drive /get-approved /inventory; do
+            code="$(curl --http1.1 -sS -o /tmp/preview-page -w '%{http_code}' "$TARGET_PREVIEW$path?proof=$GITHUB_RUN_ID" || true)"
+            echo "PREVIEW_PAGE=$path HTTP=$code"
+            test "$code" = 200
+          done
+          code="$(curl --http1.1 -sS -D /tmp/pih -o /tmp/pij -w '%{http_code}' "$TARGET_PREVIEW/api/inventory?proof=$GITHUB_RUN_ID" || true)"
+          test "$code" = 200
+          grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/pih
+          grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/pih
+          jq -e '.readOnly==true and .live==false and (.items|length)==5' /tmp/pij >/dev/null
+          curl --http1.1 -fsSL "$TARGET_PREVIEW/wdcc-hero-r31.webp?proof=$GITHUB_RUN_ID" -o /tmp/preview-hero
+          test "$(sha256sum /tmp/preview-hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-r31.webp|awk '{print $1}')"
+          echo 'IMMUTABLE_TARGET_V4=PASS'
+
+      - name: Capture exact rollback version
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/before.json
+          old="$(python - <<'PY'
+          import json
+          d=json.load(open('/tmp/before.json')); rows=[]
+          def walk(x):
+            if isinstance(x,dict):
+              v=x.get('version_id') or x.get('versionId'); p=x.get('percentage')
+              if v: rows.append((p,str(v)))
+              for y in x.values(): walk(y)
+            elif isinstance(x,list):
+              for y in x: walk(y)
+          walk(d)
+          print(next((v for p,v in rows if p in (100,100.0,'100','100.0',1,1.0,'1','1.0')), rows[0][1] if rows else ''))
+          PY
+          )"
+          test -n "$old"
+          echo "old=$old" >> "$GITHUB_OUTPUT"
+          echo "ROLLBACK_VERSION=$old"
+
+      - name: Promote exact version, wait for edge convergence, verify or rollback
+        shell: bash
+        env:
+          OLD_VERSION: ${{ steps.rollback.outputs.old }}
+        run: |
+          set -Eeuo pipefail
+          promoted=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$promoted" = 1 ]; then
+              echo 'VERIFY FAILED — RESTORING CAPTURED VERSION' >&2
+              wrangler versions deploy "$OLD_VERSION@100%" --name "$LIVE_WORKER" -y --message "V4 AUTO-ROLLBACK $GITHUB_RUN_ID" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+
+          wrangler versions deploy "$TARGET_VERSION@100%" --name "$LIVE_WORKER" -y --message "Owner-approved storefront V4 $APPROVED_SHA"
+          promoted=1
+
+          converged=0
+          for i in $(seq 1 60); do
+            code="$(curl --http1.1 -sS -D /tmp/lih -o /tmp/lij -w '%{http_code}' "$PROD_ROOT/api/inventory?converge=$GITHUB_RUN_ID-$i" || true)"
+            sha_ok=0; src_ok=0; body_ok=0
+            grep -qi "^x-wdcc-visual-sha: $APPROVED_SHA" /tmp/lih && sha_ok=1 || true
+            grep -qi '^x-wdcc-inventory-source: verified-real-edge-recovery' /tmp/lih && src_ok=1 || true
+            jq -e '.readOnly==true and .live==false and (.items|length)==5' /tmp/lij >/dev/null 2>&1 && body_ok=1 || true
+            echo "EDGE_CONVERGENCE_ATTEMPT=$i HTTP=$code SHA=$sha_ok SOURCE=$src_ok BODY=$body_ok"
+            if [ "$code" = 200 ] && [ "$sha_ok" = 1 ] && [ "$src_ok" = 1 ] && [ "$body_ok" = 1 ]; then converged=1; break; fi
+            sleep 2
+          done
+          test "$converged" = 1
+          echo 'LIVE_EDGE_EXACT_SHA_CONVERGED=PASS'
+
+          for path in / /schedule-test-drive /get-approved /inventory; do
+            ok=0
+            for i in $(seq 1 15); do
+              code="$(curl --http1.1 -sS -o /tmp/live-page -w '%{http_code}' "$PROD_ROOT$path?release=$APPROVED_SHA-$GITHUB_RUN_ID-$i" || true)"
+              echo "LIVE_PAGE=$path ATTEMPT=$i HTTP=$code"
+              if [ "$code" = 200 ]; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" = 1
+          done
+
+          id="$(jq -r '.items[0].id' /tmp/lij)"
+          test -n "$id"
+          code="$(curl --http1.1 -sS -o /tmp/ld -w '%{http_code}' "$PROD_ROOT/api/inventory/$id?release=$GITHUB_RUN_ID" || true)"
+          test "$code" = 200
+          jq -e '.ok==true and .item' /tmp/ld >/dev/null
+
+          www_ok=0
+          for i in $(seq 1 15); do
+            code="$(curl --http1.1 -sS -o /tmp/www -w '%{http_code}' "$PROD_WWW/?release=$APPROVED_SHA-$GITHUB_RUN_ID-$i" || true)"
+            echo "LIVE_WWW_ATTEMPT=$i HTTP=$code"
+            if [ "$code" = 200 ]; then www_ok=1; break; fi
+            sleep 2
+          done
+          test "$www_ok" = 1
+
+          curl --http1.1 -fsSL "$PROD_ROOT/wdcc-hero-r31.webp?release=$GITHUB_RUN_ID" -o /tmp/hero
+          test "$(sha256sum /tmp/hero|awk '{print $1}')" = "$(sha256sum public/wdcc-hero-r31.webp|awk '{print $1}')"
+
+          wrangler deployments status --name "$LIVE_WORKER" --json > /tmp/after.json
+          grep -Fq "$TARGET_VERSION" /tmp/after.json
+
+          trap - ERR INT TERM
+          {
+            echo '### WDCC REFERENCE FB1A21F V4 — LIVE PASS'
+            echo "Approved visual SHA: $APPROVED_SHA"
+            echo "Worker version: $TARGET_VERSION"
+            echo 'Exact-SHA edge convergence: PASS'
+            echo 'Routes /, /schedule-test-drive, /get-approved, /inventory: PASS'
+            echo 'Inventory API + detail + WWW + hero checksum: PASS'
+            echo 'DNS/routes/dealer/provider/database: UNCHANGED'
+          } >> "$GITHUB_STEP_SUMMARY"
