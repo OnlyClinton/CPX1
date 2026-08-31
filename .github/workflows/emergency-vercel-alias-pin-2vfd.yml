@@ -11,8 +11,9 @@ on:
         options:
           - verify-only
           - pin-2vfd
+          - pin-fb1a21f
       owner_approval:
-        description: 'For pin-2vfd only, type OWNER-APPROVED-2VFD'
+        description: 'For writes, type the matching owner approval token'
         required: false
         type: string
       release_control_issue:
@@ -20,9 +21,12 @@ on:
         required: true
         default: '205'
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: wdcc-emergency-vercel-alias-pin-2vfd
@@ -31,39 +35,70 @@ concurrency:
 env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   VERCEL_SCOPE: cpxagency
+  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
   DONOR_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
+  APPROVED_FB_SHA: fb1a21f2611a6b9ff3bde5dbc2de37fdbab51d32
+  APPROVED_FB_DONOR: wdcc-v32-storefront-2gsd6hxbd-cpxagency.vercel.app
+  ROLLBACK_HOST: wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app
   APEX: wedontcarecars.com
   WWW: www.wedontcarecars.com
 
 jobs:
   pin:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.number == 205 &&
+       github.event.comment.user.login == github.repository_owner &&
+       github.event.comment.body == 'PROMOTE-WDCC-VERCEL-FB1A21F')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Require explicit release-control context
+        id: control
         shell: bash
         env:
-          OPERATION: ${{ inputs.operation }}
-          OWNER_APPROVAL: ${{ inputs.owner_approval }}
-          RELEASE_CONTROL_ISSUE: ${{ inputs.release_control_issue }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          COMMENT_USER: ${{ github.event.comment.user.login || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || 0 }}
+          DISPATCH_OPERATION: ${{ inputs.operation || '' }}
+          OWNER_APPROVAL: ${{ inputs.owner_approval || '' }}
+          RELEASE_CONTROL_ISSUE: ${{ inputs.release_control_issue || '205' }}
         run: |
           set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
-          test "$RELEASE_CONTROL_ISSUE" = "205"
-          case "$OPERATION" in
-            verify-only)
-              ;;
-            pin-2vfd)
-              test "$OWNER_APPROVAL" = "OWNER-APPROVED-2VFD"
-              ;;
-            *)
-              echo "Unsupported operation: $OPERATION" >&2
-              exit 2
-              ;;
-          esac
-          echo "OPERATION=$OPERATION" >> "$GITHUB_STEP_SUMMARY"
-          echo "RELEASE_CONTROL_ISSUE=#$RELEASE_CONTROL_ISSUE" >> "$GITHUB_STEP_SUMMARY"
-          echo "Successful execution is not release approval." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EVENT_NAME" = issue_comment ]; then
+            test "$ISSUE_NUMBER" = 205
+            test "$COMMENT_USER" = "$GITHUB_REPOSITORY_OWNER"
+            test "$COMMENT_BODY" = 'PROMOTE-WDCC-VERCEL-FB1A21F'
+            operation='pin-fb1a21f'
+            release_issue=205
+          else
+            test "$EVENT_NAME" = workflow_dispatch
+            release_issue="$RELEASE_CONTROL_ISSUE"
+            test "$release_issue" = 205
+            operation="$DISPATCH_OPERATION"
+            case "$operation" in
+              verify-only) ;;
+              pin-2vfd) test "$OWNER_APPROVAL" = 'OWNER-APPROVED-2VFD' ;;
+              pin-fb1a21f) test "$OWNER_APPROVAL" = 'OWNER-APPROVED-FB1A21F' ;;
+              *) echo "Unsupported operation: $operation" >&2; exit 2 ;;
+            esac
+          fi
+
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/issue205.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue205.json >/dev/null
+          body="$(jq -r '.body // ""' /tmp/issue205.json)"
+          grep -Fq 'OWNER-APPROVED STOREFRONT VISUAL GO — 2026-08-31' <<<"$body"
+          grep -Fq "$APPROVED_FB_SHA" <<<"$body"
+          grep -Fq 'SCOPE: STOREFRONT_VISUAL_ONLY' <<<"$body"
+          grep -Fq 'no dealer-frontdoor mutation' <<<"$body"
+          echo "operation=$operation" >> "$GITHUB_OUTPUT"
+          echo "OPERATION=$operation" >> "$GITHUB_STEP_SUMMARY"
+          echo "RELEASE_CONTROL_ISSUE=#$release_issue" >> "$GITHUB_STEP_SUMMARY"
+          echo 'OWNER-APPROVED-2VFD compatibility guard retained.' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require Vercel authority
         shell: bash
@@ -78,38 +113,138 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@59.5.0
 
-      - name: Verify exact 2vfD through authenticated Vercel access
+      - name: Resolve exact target and prove immutable deployment
+        id: target
         shell: bash
+        env:
+          OPERATION: ${{ steps.control.outputs.operation }}
         run: |
           set -euo pipefail
-          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$DONOR_HOST" > /tmp/donor.html
+          case "$OPERATION" in
+            pin-fb1a21f)
+              target="$APPROVED_FB_DONOR"
+              expected_sha="$APPROVED_FB_SHA"
+              hero='wdcc-hero-r31.webp'
+              ;;
+            verify-only|pin-2vfd)
+              target="$DONOR_HOST"
+              expected_sha=''
+              hero='wdcc-hero-v2.webp'
+              ;;
+            *) exit 2 ;;
+          esac
+
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "hero=$hero" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$expected_sha" ]; then
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$target?teamId=$VERCEL_TEAM_ID" > /tmp/target-meta.json
+            jq -e --arg sha "$expected_sha" '.readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/target-meta.json >/dev/null
+          fi
+
+          vercel --scope "$VERCEL_SCOPE" curl / --deployment "$target" > /tmp/donor.html
           grep -qi 'we don.t care' /tmp/donor.html
           grep -q 'wdcc-logo-transparent.webp' /tmp/donor.html
-          grep -q 'wdcc-hero-v2.webp' /tmp/donor.html
-          vercel --scope "$VERCEL_SCOPE" curl /wdcc-logo-transparent.webp --deployment "$DONOR_HOST" > /tmp/donor-logo.webp
-          vercel --scope "$VERCEL_SCOPE" curl /wdcc-hero-v2.webp --deployment "$DONOR_HOST" > /tmp/donor-hero.webp
+          grep -q "$hero" /tmp/donor.html
+          vercel --scope "$VERCEL_SCOPE" curl /wdcc-logo-transparent.webp --deployment "$target" > /tmp/donor-logo.webp
+          vercel --scope "$VERCEL_SCOPE" curl "/$hero" --deployment "$target" > /tmp/donor-hero.webp
           test -s /tmp/donor-logo.webp
           test -s /tmp/donor-hero.webp
-          file /tmp/donor-logo.webp /tmp/donor-hero.webp
+          if [ "$OPERATION" = pin-fb1a21f ]; then
+            vercel --scope "$VERCEL_SCOPE" curl /schedule-test-drive --deployment "$target" > /tmp/donor-test-drive.html
+            grep -qi 'test drive' /tmp/donor-test-drive.html
+            vercel --scope "$VERCEL_SCOPE" curl /app --deployment "$target" > /tmp/donor-app.html
+            test -s /tmp/donor-app.html
+          fi
+          echo "IMMUTABLE_TARGET=$target" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Capture and require current public rollback target
+        id: rollback
+        shell: bash
+        env:
+          OPERATION: ${{ steps.control.outputs.operation }}
+          TARGET: ${{ steps.target.outputs.target }}
+        run: |
+          set -euo pipefail
+          if [ "$OPERATION" = verify-only ]; then
+            echo 'write_needed=0' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          all_target=1
+          for host in "$APEX" "$WWW"; do
+            key="${host//./_}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > "/tmp/current-$key.json"
+            current="$(jq -r '.url // empty' "/tmp/current-$key.json")"
+            test -n "$current"
+            echo "CURRENT_ALIAS $host -> $current"
+            if [ "$current" = "$TARGET" ]; then
+              continue
+            fi
+            all_target=0
+            test "$current" = "$ROLLBACK_HOST" || {
+              echo "Refusing write: $host currently resolves to unexpected deployment $current" >&2
+              exit 3
+            }
+          done
+          if [ "$all_target" = 1 ]; then
+            echo 'write_needed=0' >> "$GITHUB_OUTPUT"
+          else
+            echo 'write_needed=1' >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify-only mode leaves production unchanged
-        if: ${{ inputs.operation == 'verify-only' }}
+        if: ${{ steps.control.outputs.operation == 'verify-only' }}
         shell: bash
         run: |
           set -euo pipefail
           echo 'PRODUCTION_WRITE=SKIPPED' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Pin apex and www aliases to exact 2vfD
-        if: ${{ inputs.operation == 'pin-2vfd' }}
+      - name: Pin apex and www aliases with exact rollback
+        if: ${{ steps.control.outputs.operation != 'verify-only' && steps.rollback.outputs.write_needed == '1' }}
         shell: bash
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
         run: |
-          set -euo pipefail
-          vercel alias set "$DONOR_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
-          vercel alias set "$DONOR_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          set -Eeuo pipefail
+          changed=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$changed" = 1 ]; then
+              echo 'Alias cutover verification failed; restoring exact prior deployment.' >&2
+              vercel alias set "$ROLLBACK_HOST" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              vercel alias set "$ROLLBACK_HOST" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+          changed=1
+          vercel alias set "$TARGET" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$TARGET" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
           echo 'PRODUCTION_WRITE=EXECUTED' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify live domains match exact donor media
+          for host in "$APEX" "$WWW"; do
+            ok=0
+            for i in $(seq 1 30); do
+              curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > /tmp/live-alias.json || true
+              live="$(jq -r '.url // empty' /tmp/live-alias.json 2>/dev/null || true)"
+              if [ "$live" = "$TARGET" ]; then ok=1; break; fi
+              sleep 2
+            done
+            test "$ok" = 1
+          done
+
+          trap - ERR INT TERM
+
+      - name: Verify live domains match exact donor
         shell: bash
+        env:
+          OPERATION: ${{ steps.control.outputs.operation }}
+          TARGET: ${{ steps.target.outputs.target }}
+          HERO: ${{ steps.target.outputs.hero }}
         run: |
           set -euo pipefail
           stamp="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
@@ -119,7 +254,7 @@ jobs:
             ok=0
             for i in $(seq 1 30); do
               code="$(curl -sS -L --max-time 25 -o /tmp/live.html -w '%{http_code}' "https://$host/?proof=$stamp-$i" || true)"
-              if [ "$code" = 200 ] && grep -qi 'we don.t care' /tmp/live.html && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html && grep -q 'wdcc-hero-v2.webp' /tmp/live.html; then
+              if [ "$code" = 200 ] && grep -qi 'we don.t care' /tmp/live.html && grep -q 'wdcc-logo-transparent.webp' /tmp/live.html && grep -q "$HERO" /tmp/live.html; then
                 ok=1
                 break
               fi
@@ -127,13 +262,21 @@ jobs:
             done
             test "$ok" = 1
             curl -fsS "https://$host/wdcc-logo-transparent.webp?proof=$stamp" -o /tmp/live-logo.webp
-            curl -fsS "https://$host/wdcc-hero-v2.webp?proof=$stamp" -o /tmp/live-hero.webp
-            live_logo="$(sha256sum /tmp/live-logo.webp | awk '{print $1}')"
-            live_hero="$(sha256sum /tmp/live-hero.webp | awk '{print $1}')"
-            test "$live_logo" = "$donor_logo"
-            test "$live_hero" = "$donor_hero"
+            curl -fsS "https://$host/$HERO?proof=$stamp" -o /tmp/live-hero.webp
+            test "$(sha256sum /tmp/live-logo.webp | awk '{print $1}')" = "$donor_logo"
+            test "$(sha256sum /tmp/live-hero.webp | awk '{print $1}')" = "$donor_hero"
+            if [ "$OPERATION" = pin-fb1a21f ]; then
+              test "$(curl -sS -L --max-time 25 -o /tmp/live-test-drive.html -w '%{http_code}' "https://$host/schedule-test-drive?proof=$stamp")" = 200
+              grep -qi 'test drive' /tmp/live-test-drive.html
+              app_code="$(curl -sS -L --max-time 25 -o /tmp/live-app.html -w '%{http_code}' "https://$host/app?proof=$stamp" || true)"
+              echo "$app_code" | grep -Eq '^(200|302|307|308)$'
+            fi
           done
-          echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$OPERATION" = pin-fb1a21f ]; then
+            echo 'CUSTOMER_ALIASES_EXACT_FB1A21F=PASS' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'CUSTOMER_ALIASES_EXACT_2VFD=PASS' >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo 'CUSTOMER_MEDIA_HASH_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Confirm dealer stays isolated
