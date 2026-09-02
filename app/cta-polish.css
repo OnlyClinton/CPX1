@@ -86,6 +86,23 @@ body:has(.premiumHeader){padding-bottom:0!important}
   text-transform:none!important;
 }
 .reference-home .rh-phone b{font-weight:850!important}
+.reference-home .rh-benefit::after{content:none!important}
+
+/* Draw directional affordances in CSS so they render consistently on every OS. */
+.reference-home .rh-btn>span,
+.reference-home .rh-finance-head>a>span:last-child,
+.inventoryTop+.section .cardButtons a.vehicleCardAction span:last-child{font-size:0!important}
+.reference-home .rh-btn>span::before,
+.reference-home .rh-finance-head>a>span:last-child::before,
+.inventoryTop+.section .cardButtons a.vehicleCardAction span:last-child::before{
+  content:"";
+  width:8px;
+  height:8px;
+  border-top:2px solid currentColor;
+  border-right:2px solid currentColor;
+  transform:rotate(45deg);
+  margin-left:-3px;
+}
 
 .reference-home .rh-finance-head>a{
   min-height:48px!important;
@@ -100,6 +117,19 @@ body:has(.premiumHeader){padding-bottom:0!important}
   line-height:1!important;
   letter-spacing:.005em!important;
   text-transform:none!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:18px!important;
+}
+.reference-home .rh-finance-head>a>span:last-child{
+  width:28px;
+  height:28px;
+  flex:0 0 28px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:rgba(255,255,255,.16);
 }
 
 /* Shared inventory cards: one deliberate detail action, never an approval button per card. */
