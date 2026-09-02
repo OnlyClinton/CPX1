@@ -1,5 +1,6 @@
 "use client";
 import Link from"next/link";
+import{usePathname}from"next/navigation";
 import type{CSSProperties}from"react";
 import{useEffect,useState}from"react";
 import {PUBLIC_INVENTORY_FALLBACK} from "../lib/publicInventoryFallback";
@@ -67,19 +68,19 @@ export function Intro(){
 
 export function Header(){
   const[open,setOpen]=useState(false);
+  const pathname=usePathname();
+  const showHeaderApply=pathname==="/inventory";
   return <>
     <div className="commandStrip"><div className="wrap"><span>● TAMPA BAY</span><span>IN-HOUSE FINANCING</span><span>SEAN · <b>813-516-4752</b></span></div></div>
     <header className="premiumHeader"><div className="wrap nav">
       <Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
       <button className="mobileMenuButton" type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="mobileHeaderMenu" onClick={()=>setOpen(v=>!v)}>{open?"×":"☰"}</button>
-      <TrackedCallLink className="mobileCallButton" source="header-mobile-phone" label="Call Sean">☎</TrackedCallLink>
       <div className="navlinks">
-        <Link href="/inventory">INVENTORY</Link><Link href="/get-approved?source=header-financing">FINANCING</Link><Link href="/#how-it-works">HOW IT WORKS</Link><Link href="/#reviews">REVIEWS</Link><Link href="/#about-us">ABOUT US</Link><TrackedCallLink className="premiumPhone" source="header-phone">☎ <b>813-516-4752</b></TrackedCallLink><Link className="premiumApply" href="/get-approved?source=header-get-approved">GET PRE-APPROVED</Link>
+        <Link href="/inventory">INVENTORY</Link><Link href="/get-approved?source=header-financing">FINANCING</Link><Link href="/#how-it-works">HOW IT WORKS</Link><Link href="/#reviews">REVIEWS</Link><Link href="/#about-us">ABOUT US</Link>{showHeaderApply?<Link className="premiumApply" href="/get-approved?source=header-get-approved">Get pre-approved</Link>:null}
       </div>
     </div>
     {open?<nav id="mobileHeaderMenu" className="mobileHeaderMenu"><Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link><Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>REVIEWS</Link><Link href="/#about-us" onClick={()=>setOpen(false)}>ABOUT US</Link><Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link><Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link><Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link></nav>:null}
     </header>
-    <nav className="stickyCtaBar" aria-label="Quick actions"><Link className="stickyPrimary" href="/schedule-test-drive?source=sticky-test-drive"><span>TEST DRIVE</span></Link><Link className="stickySecondary" href="/get-approved?source=sticky-get-approved"><span>GET APPROVED</span></Link><TrackedCallLink className="stickyContact" source="sticky-call-sean" label="Call Sean"><span>CALL SEAN</span></TrackedCallLink></nav>
   </>
 }
 
@@ -105,5 +106,5 @@ export function VehicleGrid({limit}:{limit?:number}){
   const[items,setItems]=useState<any[]>(PUBLIC_INVENTORY_FALLBACK);
   useEffect(()=>{fetch("/api/inventory?scope=public",{cache:"no-store"}).then(r=>r.json()).then(j=>{const live=(j.items||j.inventory||[]).filter(customerVisible);setItems(live.length?live:PUBLIC_INVENTORY_FALLBACK)}).catch(()=>setItems(PUBLIC_INVENTORY_FALLBACK))},[]);
   const shown=limit?items.slice(0,limit):items;
-  return <div className="grid">{shown.length?shown.map((v,index)=>{const key=String(v.id||v.slug||index);return <article className="card" key={key}><Link className={`photo${v.photoPending?" photo-pending":""}`} href={`/vehicle/${encodeURIComponent(key)}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{vehiclePhoto(v)?<img src={vehiclePhoto(v)} alt={v.photoPending?"Vehicle photos updating":`${v.year} ${v.make} ${v.model}`} width="1400" height="782" loading={index<6?"eager":"lazy"} decoding="async" fetchPriority={index<3?"high":"auto"} onError={event=>{event.currentTarget.style.display="none"}}/>:"PHOTOS COMING"}</Link><div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div><div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null?<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>:null}<div className="cardButtons"><Link href={`/vehicle/${encodeURIComponent(key)}`}><span>VIEW VEHICLE</span></Link><Link href={`/get-approved?source=inventory-get-approved&vehicle=${encodeURIComponent(key)}`}><span>GET APPROVED</span></Link></div></div></article>}):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
+  return <div className="grid">{shown.length?shown.map((v,index)=>{const key=String(v.id||v.slug||index);return <article className="card" key={key}><Link className={`photo${v.photoPending?" photo-pending":""}`} href={`/vehicle/${encodeURIComponent(key)}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{vehiclePhoto(v)?<img src={vehiclePhoto(v)} alt={v.photoPending?"Vehicle photos updating":`${v.year} ${v.make} ${v.model}`} width="1400" height="782" loading={index<6?"eager":"lazy"} decoding="async" fetchPriority={index<3?"high":"auto"} onError={event=>{event.currentTarget.style.display="none"}}/>:"PHOTOS COMING"}</Link><div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div><div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null?<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>:null}<div className="cardButtons"><Link className="vehicleCardAction" href={`/vehicle/${encodeURIComponent(key)}`}><span>View vehicle</span><span aria-hidden="true">→</span></Link></div></div></article>}):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
 }
