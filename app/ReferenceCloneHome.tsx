@@ -125,7 +125,7 @@ export default function ReferenceCloneHome({motionReady=false}:{motionReady?:boo
       <div className="rh-dots" aria-label="Featured inventory pages">{[0,1,2].map(index=><button type="button" className={slide===index?"active":""} aria-label={`Show inventory page ${index+1}`} aria-current={slide===index?"true":undefined} onClick={()=>moveInventory(index)} key={index}/>)}</div>
     </section>
 
-    <section className="rh-finance" id="how-it-works" data-rh-reveal><div className="rh-finance-inner"><div className="rh-finance-head"><div><h2>In-house financing <span>made easy</span></h2><small>One simple process. No hoops. No hassle.</small></div><Link href="/get-approved?source=how-it-works">Start pre-approval →</Link></div><div className="rh-steps">
+    <section className="rh-finance" id="how-it-works" data-rh-reveal><div className="rh-finance-inner"><div className="rh-finance-head"><div><h2>In-house financing <span>made easy</span></h2><small>One simple process. No hoops. No hassle.</small></div><Link href="/get-approved?source=how-it-works"><span>Start pre-approval</span><span aria-hidden="true">→</span></Link></div><div className="rh-steps">
       <article className="rh-step"><b>1</b><span className="rh-step-icon"><ApprovalIcon/></span><strong>Apply online</strong><small>Send basic details securely.</small></article>
       <article className="rh-step"><b>2</b><span className="rh-step-icon"><TrustIcon kind="answers"/></span><strong>Talk to Sean</strong><small>Confirm down payment and vehicle fit.</small></article>
       <article className="rh-step"><b>3</b><span className="rh-step-icon"><BenefitIcon kind="car"/></span><strong>Choose your car</strong><small>Shop our inventory online or in person.</small></article>
