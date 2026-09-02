@@ -22,8 +22,8 @@ export default function Vehicle({params}:{params:Promise<{id:string}>}){
     if(fallback)setV(fallback);
     fetch(`/api/inventory/${encodeURIComponent(id)}?scope=public`,{cache:"no-store"})
       .then(async response=>({ok:response.ok,json:await response.json().catch(()=>({}))}))
-      .then(({ok,json})=>{if(ok&&json.item)setV(json.item);else setV(undefined)})
-      .catch(()=>{})
+      .then(({ok,json})=>{if(ok&&json.item)setV(json.item);else if(!fallback)setV(undefined)})
+      .catch(()=>{if(!fallback)setV(undefined)})
       .finally(()=>setLoading(false));
   },[id]);
 
