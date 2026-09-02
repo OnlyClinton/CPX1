@@ -99,7 +99,6 @@ export default function ReferenceCloneHome({motionReady=false}:{motionReady?:boo
       <Link className="rh-logo" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></Link>
       <nav className={`rh-nav${open?" open":""}`}><Link href="/inventory" onClick={()=>setOpen(false)}>Inventory</Link><Link href="/get-approved" onClick={()=>setOpen(false)}>Financing</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>How it works</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>Reviews</Link><Link href="/#about-us" onClick={()=>setOpen(false)}>About us</Link></nav>
       <Link className="rh-header-cta" href="/get-approved?source=header-get-approved">Get pre-approved</Link>
-      <a className="rh-call" href="tel:+18135164752" aria-label="Call Sean"><PhoneIcon/></a>
     </div></header>
 
     <section className="rh-hero"><div className="rh-hero-inner"><div className="rh-copy">
@@ -131,10 +130,9 @@ export default function ReferenceCloneHome({motionReady=false}:{motionReady?:boo
       <article className="rh-step"><b>2</b><span className="rh-step-icon"><TrustIcon kind="answers"/></span><strong>Talk to Sean</strong><small>Confirm down payment and vehicle fit.</small></article>
       <article className="rh-step"><b>3</b><span className="rh-step-icon"><BenefitIcon kind="car"/></span><strong>Choose your car</strong><small>Shop our inventory online or in person.</small></article>
       <article className="rh-step"><b>4</b><span className="rh-step-icon"><CalendarIcon/></span><strong>Drive today</strong><small>Schedule pickup or a test drive.</small></article>
-    </div><a className="rh-finance-call" href="tel:+18135164752"><PhoneIcon/><span>Call Sean<strong>813-516-4752</strong></span></a></div></section>
+    </div></div></section>
 
     <section className="rh-trust" id="reviews" data-rh-reveal><div className="rh-trust-grid"><article><span className="rh-trust-icon"><TrustIcon kind="local"/></span><div><b>Tampa Bay proud</b><span>Local dealer. Local community.</span></div></article><article><span className="rh-trust-icon"><TrustIcon kind="answers"/></span><div><b>Straight answers</b><span>Clear numbers. Direct help.</span></div></article><article><span className="rh-trust-icon"><TrustIcon kind="people"/></span><div><b>Real people</b><span>Talk to Sean. Not a call center.</span></div></article><article><span className="rh-trust-icon"><TrustIcon kind="finance"/></span><div><b>In-house financing</b><span>We make it happen when others can't.</span></div></article></div></section>
     <footer className="rh-footer" id="about-us"><div className="rh-footer-inner"><span>WDCC · We Don't Care Cars</span><span>Serving Tampa Bay · Confirm availability before visiting</span><span><Link href="/dealer">Dealer portal</Link> · <a href="tel:+18135164752">813-516-4752</a></span></div></footer>
-    <nav className="rh-mobile-dock" aria-label="Quick actions"><Link href="/schedule-test-drive?source=mobile-sticky-test-drive"><CalendarIcon/><span>Test drive</span></Link><Link href="/get-approved?source=mobile-sticky-get-approved"><ApprovalIcon/><span>Get approved</span></Link><a href="tel:+18135164752" aria-label="Call Sean"><PhoneIcon/><span>Call Sean</span></a></nav>
   </main>;
 }
