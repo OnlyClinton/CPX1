@@ -12,7 +12,7 @@ const publicVehicle=(vehicle:any)=>{
 };
 const vehicleLabel=(vehicle:any)=>`${vehicle?.year||""} ${vehicle?.make||""} ${vehicle?.model||""}${vehicle?.trim?` ${vehicle.trim}`:""}`.replace(/\s+/g," ").trim();
 
-const submitLabel:Record<Kind,string>={schedule:"SCHEDULE TEST DRIVE",contact:"CONTACT SEAN",approval:"GET APPROVED"};
+const submitLabel:Record<Kind,string>={schedule:"Schedule test drive",contact:"Contact Sean",approval:"Get approved"};
 const successLabel:Record<Kind,string>={schedule:"Test-drive request received.",contact:"Request received.",approval:"Approval request received."};
 
 export default function LeadForm({kind,source}:{kind:Kind;source?:string}){

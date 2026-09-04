@@ -26,6 +26,6 @@ export const PUBLIC_INVENTORY_FALLBACK:PublicInventoryVehicle[]=[
 ];
 
 export function fallbackVehicle(id:string){
-  const key=String(id||"").trim().toLowerCase();
+  const key=String(id||"").trim().toLowerCase().replace(/^recovered-/,"").replace(/^recovery-/,"");
   return PUBLIC_INVENTORY_FALLBACK.find(vehicle=>vehicle.id===key||vehicle.slug===key);
 }

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
+const secureTransport = process.env.NODE_ENV === "production";
+
 const baselineHeaders = [
-  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  ...(secureTransport ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }] : []),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()" }
@@ -9,7 +11,7 @@ const baselineHeaders = [
 
 const storefrontHeaders = [
   ...baselineHeaders,
-  {
+  ...(secureTransport ? [{
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
@@ -27,7 +29,7 @@ const storefrontHeaders = [
       "manifest-src 'self'",
       "upgrade-insecure-requests"
     ].join("; ")
-  },
+  }] : []),
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Resource-Policy", value: "same-site" },
@@ -38,7 +40,7 @@ const storefrontHeaders = [
 const dealerHeaders = [
   ...baselineHeaders,
   { key: "Cache-Control", value: "private, no-store, max-age=0, must-revalidate" },
-  {
+  ...(secureTransport ? [{
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
@@ -56,7 +58,7 @@ const dealerHeaders = [
       "manifest-src 'self'",
       "upgrade-insecure-requests"
     ].join("; ")
-  },
+  }] : []),
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Resource-Policy", value: "same-site" },

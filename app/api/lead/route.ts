@@ -1,17 +1,10 @@
 import {GET as canonicalGET,POST as canonicalPOST} from "../leads/route";
+import {canonicalDealerBackend} from "../../../lib/wdccAuthority";
+import {isDealerRuntime} from "../../../lib/dealerRuntime";
 
 export const dynamic="force-dynamic";
 
-const BACKEND=(process.env.WDCC_DEALER_BACKEND_URL||"https://dealer.wedontcarecars.com").replace(/\/$/,"");
-const DEALER_PROJECT_ID="prj_fz5mN7Q5gImZ9UGpv1GDpHxPtLNB";
-const CPX_BACKEND_PROJECT_ID="prj_a3oclCcy4sbA2tge4BX7VAKXE4KR";
-
-function isCanonicalRuntime(request:Request){
-  const host=new URL(request.url).host.toLowerCase();
-  const project=process.env.VERCEL_PROJECT_ID||"";
-  return project===DEALER_PROJECT_ID||project===CPX_BACKEND_PROJECT_ID||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch")||host==="dealer.wedontcarecars.com";
-}
-
+const BACKEND=canonicalDealerBackend();
 function proxyHeaders(request:Request){
   const headers=new Headers();
   for(const name of ["content-type","accept","cookie","user-agent","idempotency-key"]){const value=request.headers.get(name);if(value)headers.set(name,value);}
@@ -39,9 +32,9 @@ async function proxy(request:Request){
 }
 
 export async function GET(request:Request){
-  return isCanonicalRuntime(request)?canonicalGET(request):proxy(request);
+  return isDealerRuntime(request)?canonicalGET(request):proxy(request);
 }
 
 export async function POST(request:Request){
-  return isCanonicalRuntime(request)?canonicalPOST(request):proxy(request);
+  return isDealerRuntime(request)?canonicalPOST(request):proxy(request);
 }

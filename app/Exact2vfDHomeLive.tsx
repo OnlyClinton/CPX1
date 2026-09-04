@@ -70,7 +70,7 @@ export default function Exact2vfDHomeLive({motionReady=false}:{motionReady?:bool
   const[items,setItems]=useState<Vehicle[]>(fallback);
 
   useEffect(()=>{
-    fetch("/api/inventory",{cache:"no-store"})
+    fetch("/api/inventory?scope=public",{cache:"no-store"})
       .then(response=>response.json())
       .then(json=>{
         const live=(json.items||json.inventory||json.vehicles||[]).filter(customerVisible).slice(0,5);
@@ -108,7 +108,7 @@ export default function Exact2vfDHomeLive({motionReady=false}:{motionReady?:bool
       <header className="site-header">
         <button className="mobile-menu" aria-expanded={open} aria-label={open?"Close navigation":"Open navigation"} onClick={()=>setOpen(value=>!value)}><span aria-hidden="true"><i/><i/><i/></span></button>
         <Link className="logo-button" aria-label="WDCC home" href="/"><span className="brand-logo"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars" width="512" height="512"/></span></Link>
-        <nav className={`main-nav${open?" open":""}`}><Link href="/inventory">Inventory</Link><Link href="/get-approved?source=header-get-approved">Financing</Link><Link href="/#how-it-works">How it works</Link><Link href="/schedule-test-drive?source=header-test-drive">Test drive</Link><Link href="/dealer">Dealer Portal</Link></nav>
+        <nav className={`main-nav${open?" open":""}`}><Link href="/inventory">Inventory</Link><Link href="/get-approved?source=header-get-approved">Financing</Link><Link href="/#how-it-works">How it works</Link><Link href="/schedule-test-drive?source=header-test-drive">Test drive</Link><a href="https://dealer.wedontcarecars.com/login">Dealer Portal</a></nav>
         <a className="mobile-call" href="tel:+18135164752" aria-label="Call Sean"><PhoneIcon/></a>
       </header>
     </div>

@@ -51,6 +51,14 @@ export async function recordVehicleAudit(input:VehicleAuditEvent){
   const pathname=`private/logs/vehicle/${at.slice(0,10)}/${at.replace(/[:.]/g,"-")}-${id}.json`;
   try{
     const authority=requireAuthority();
+    // The canonical Cloudflare runtime keeps the authoritative vehicle ledger
+    // inside the state document and emits this structured event to Worker logs.
+    // Passing state-service credentials into @vercel/blob only produces a false
+    // provider failure and cannot create a durable record.
+    if(authority.mode==="cloudflare-do"){
+      console.log("WDCC_VEHICLE_EVENT",JSON.stringify(record));
+      return record;
+    }
     await put(pathname,JSON.stringify(record,null,2)+"\n",{
       access:"private",addRandomSuffix:false,allowOverwrite:false,contentType:"application/json",...authority.options
     });
@@ -62,7 +70,8 @@ export async function recordVehicleAudit(input:VehicleAuditEvent){
 }
 
 export async function readRecentVehicleAudit(max=100){
-  requireAuthority();
+  const authority=requireAuthority();
+  if(authority.mode==="cloudflare-do")return [];
   const wanted=Math.max(1,Math.min(Number(max)||100,200));
   const result=await list({prefix:"private/logs/vehicle/",limit:1000,...opt()});
   const blobs=[...result.blobs].sort((a:any,b:any)=>String(b.uploadedAt||"").localeCompare(String(a.uploadedAt||""))).slice(0,wanted);

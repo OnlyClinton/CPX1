@@ -5,7 +5,7 @@
   "scripts": {
     "prebuild": "node scripts/wdcc-media-integrity.mjs",
     "check:media": "node scripts/wdcc-media-integrity.mjs",
-    "dev": "next dev",
+    "dev": "node scripts/next-dev-preview.mjs",
     "build": "next build",
     "start": "next start"
   },
