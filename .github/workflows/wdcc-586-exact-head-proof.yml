@@ -74,8 +74,8 @@ jobs:
             const page=await context.newPage();
             await page.route('**/api/auth/session',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session||{authenticated:false,user:null,session:null})}));
             if(dashboardMock)await page.route('**/api/crm/dashboard',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
-            await page.goto(base+path,{waitUntil:'networkidle'});
-            await page.waitForTimeout(500);
+            await page.goto(base+path,{waitUntil:'domcontentloaded',timeout:15000});
+            await page.waitForTimeout(dashboardMock?1800:700);
             await page.screenshot({path:`proof/${dir}/${name}.png`,fullPage:true});
             await context.close();
           }
