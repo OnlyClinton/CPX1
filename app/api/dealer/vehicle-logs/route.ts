@@ -5,7 +5,7 @@ import {readState} from "../../../../lib/store";
 import {readRecentVehicleAudit} from "../../../../lib/vehicleAudit";
 
 export const dynamic="force-dynamic";
-const roles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
+const roles=new Set(["dealer","dealer_agent","tenant_admin","platform_admin"]);
 
 export async function GET(request:Request){
   const rid=requestId(request);

@@ -1,0 +1,9 @@
+.page{background:#eef2f5;color:#0b1721}
+.hero{position:relative;isolation:isolate;overflow:hidden;padding:64px max(24px,calc((100vw - 1420px)/2));background:#06121d;color:#fff;border-bottom:1px solid #203447}
+.hero::before{content:"";position:absolute;z-index:-2;inset:0;background:radial-gradient(circle at 88% 20%,rgba(226,30,47,.3),transparent 30%),radial-gradient(circle at 72% 120%,rgba(20,130,235,.24),transparent 40%),linear-gradient(125deg,#081927,#03090f 72%)}
+.hero::after{content:"";position:absolute;z-index:-1;inset:0;opacity:.24;background-image:linear-gradient(90deg,transparent 49.8%,rgba(255,255,255,.08) 50%,transparent 50.2%);background-size:90px 100%}
+.eyebrow{margin:0 0 12px;color:#7ebcf6;font-size:.75rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+.hero h1{max-width:820px;margin:0;font-size:clamp(3rem,5.8vw,5.8rem);line-height:.88;letter-spacing:-.06em;text-transform:uppercase}
+.lead{max-width:670px;margin:19px 0 0;color:#c8d4dd;font-size:1rem;line-height:1.58}
+.section{padding:42px max(20px,calc((100vw - 1420px)/2)) 74px}
+@media(max-width:820px){.hero{padding:34px 16px 30px}.eyebrow{margin-bottom:9px;font-size:.67rem}.hero h1{font-size:clamp(2.45rem,11vw,3.5rem)}.lead{margin-top:13px;font-size:.9rem;line-height:1.5}.section{padding:22px 12px 48px}}

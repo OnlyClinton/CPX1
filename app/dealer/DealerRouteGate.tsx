@@ -17,7 +17,7 @@ export default function DealerRouteGate({children}:{children:React.ReactNode}){
     fetch("/api/auth/session",{cache:"no-store",credentials:"include",signal:controller.signal}).then(response=>response.json().catch(()=>({})).then(json=>({ok:response.ok,status:response.status,json}))).then(({ok,status,json})=>{
       if(!active)return;
       const role=String(json?.user?.role||json?.role||json?.session?.role||"").toLowerCase();
-      if(ok&&json.authenticated===true&&["dealer_agent","tenant_admin","platform_admin"].includes(role)){setVerifiedPath(pathname);return}
+      if(ok&&json.authenticated===true&&["dealer","dealer_agent","tenant_admin","platform_admin"].includes(role)){setVerifiedPath(pathname);return}
       if(status===401||status===403||(ok&&json.authenticated!==true)){window.location.replace("/dealer");return}
       setError("Dealer access could not be verified. Check the connection and try again.");
     }).catch(reason=>{if(active&&reason?.name!=="AbortError")setError("Dealer access could not be verified. Check the connection and try again.")});

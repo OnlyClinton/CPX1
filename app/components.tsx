@@ -5,6 +5,7 @@ import type{CSSProperties}from"react";
 import{useEffect,useState}from"react";
 import {PUBLIC_INVENTORY_FALLBACK} from "../lib/publicInventoryFallback";
 import TrackedCallLink from"./TrackedCallLink";
+import {InventoryCard,inventoryCardStyles} from "./InventoryCard";
 
 export function Intro(){
   const[phase,setPhase]=useState<"reveal"|"dock"|"done">("reveal");
@@ -75,17 +76,18 @@ export function Header(){
     <header className="premiumHeader"><div className="wrap nav">
       <Link className="brand logoBrand" href="/" aria-label="We Don't Care Cars home"><img src="/wdcc-logo-transparent.webp" alt="We Don't Care Cars"/></Link>
       <button className="mobileMenuButton" type="button" aria-label={open?"Close navigation":"Open navigation"} aria-expanded={open} aria-controls="mobileHeaderMenu" onClick={()=>setOpen(v=>!v)}>{open?"×":"☰"}</button>
+      <TrackedCallLink className="mobileCallButton" source="mobile-header" label="Call Sean at 813-516-4752"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 3.5 10 7.8 8.4 9.4c1.1 2.2 2.9 4 5.1 5.1l1.6-1.6 4.4 2.8-.7 3.7c-.2.8-.9 1.4-1.8 1.4C9.4 20.2 3.8 14.6 3.2 7c-.1-.9.5-1.6 1.4-1.8l2.6-.7Z"/></svg></TrackedCallLink>
       <div className="navlinks">
         <Link href="/inventory">INVENTORY</Link><Link href="/get-approved?source=header-financing">FINANCING</Link><Link href="/#how-it-works">HOW IT WORKS</Link><Link href="/#reviews">REVIEWS</Link><Link href="/#about-us">ABOUT US</Link>{showHeaderApply?<Link className="premiumApply" href="/get-approved?source=header-get-approved">Get pre-approved</Link>:null}
       </div>
     </div>
-    {open?<nav id="mobileHeaderMenu" className="mobileHeaderMenu"><Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link><Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>REVIEWS</Link><Link href="/#about-us" onClick={()=>setOpen(false)}>ABOUT US</Link><Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link><Link href="/dealer/login" onClick={()=>setOpen(false)}>DEALER PORTAL</Link><Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link></nav>:null}
+    {open?<nav id="mobileHeaderMenu" className="mobileHeaderMenu"><Link href="/inventory" onClick={()=>setOpen(false)}>INVENTORY</Link><Link href="/get-approved?source=mobile-financing" onClick={()=>setOpen(false)}>FINANCING</Link><Link href="/#how-it-works" onClick={()=>setOpen(false)}>HOW IT WORKS</Link><Link href="/#reviews" onClick={()=>setOpen(false)}>REVIEWS</Link><Link href="/#about-us" onClick={()=>setOpen(false)}>ABOUT US</Link><Link href="/schedule-test-drive?source=mobile-test-drive" onClick={()=>setOpen(false)}>TEST DRIVE</Link><a href="https://dealer.wedontcarecars.com/login" onClick={()=>setOpen(false)}>DEALER PORTAL</a><Link href="/contact?source=mobile-contact" onClick={()=>setOpen(false)}>CONTACT</Link></nav>:null}
     </header>
   </>
 }
 
 export function Footer(){
-  return <footer className="premiumFooter"><div className="wrap premiumFooterRow"><div className="footerBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><strong>WE DON'T CARE CARS</strong><br/><small>Tampa Bay · Real inventory · Direct help</small></div></div><div><TrackedCallLink source="footer-phone">813-516-4752</TrackedCallLink> · <Link href="/contact?source=footer-contact">Contact</Link> · <Link href="/dealer">Dealer portal</Link></div></div></footer>
+  return <footer className="premiumFooter"><div className="wrap premiumFooterRow"><div className="footerBrand"><img src="/wdcc-logo-transparent.webp" alt="WDCC"/><div><strong>WE DON'T CARE CARS</strong><br/><small>Tampa Bay · Real inventory · Direct help</small></div></div><div><TrackedCallLink source="footer-phone">813-516-4752</TrackedCallLink> · <Link href="/contact?source=footer-contact">Contact</Link> · <a href="https://dealer.wedontcarecars.com/login">Dealer portal</a></div></div></footer>
 }
 
 function customerVisible(v:any){
@@ -97,14 +99,12 @@ function customerVisible(v:any){
   return status==="published"&&!hidden&&Number(v?.year)>1900&&String(v?.make||"").trim()!==""&&String(v?.model||"").trim()!==""&&Number(v?.price||v?.cashPrice)>0&&!/^(R36TEST|WDCC[-_]QA|QA|TEST)[-_]/.test(stock);
 }
 
-function vehiclePhoto(v:any){
-  const pathname=String(v?.primaryPhotoPathname||v?.photoPathnames?.[0]||"");
-  return pathname?`/api/media?p=${encodeURIComponent(pathname)}`:String(v?.primary_image_url||v?.image||"");
-}
-
 export function VehicleGrid({limit}:{limit?:number}){
   const[items,setItems]=useState<any[]>(PUBLIC_INVENTORY_FALLBACK);
-  useEffect(()=>{fetch("/api/inventory?scope=public",{cache:"no-store"}).then(r=>r.json()).then(j=>{const live=(j.items||j.inventory||[]).filter(customerVisible);setItems(live.length?live:PUBLIC_INVENTORY_FALLBACK)}).catch(()=>setItems(PUBLIC_INVENTORY_FALLBACK))},[]);
+  useEffect(()=>{fetch("/api/inventory?scope=public",{cache:"no-store"}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j?.error||"Inventory unavailable");const source=Array.isArray(j?.items)?j.items:Array.isArray(j?.inventory)?j.inventory:null;if(!source)throw Error("Invalid inventory response");setItems(source.filter(customerVisible))}).catch(()=>setItems(PUBLIC_INVENTORY_FALLBACK))},[]);
   const shown=limit?items.slice(0,limit):items;
-  return <div className="grid">{shown.length?shown.map((v,index)=>{const key=String(v.id||v.slug||index);return <article className="card" key={key}><Link className={`photo${v.photoPending?" photo-pending":""}`} href={`/vehicle/${encodeURIComponent(key)}`} aria-label={`View ${v.year} ${v.make} ${v.model}`}>{vehiclePhoto(v)?<img src={vehiclePhoto(v)} alt={v.photoPending?"Vehicle photos updating":`${v.year} ${v.make} ${v.model}`} width="1400" height="782" loading={index<6?"eager":"lazy"} decoding="async" fetchPriority={index<3?"high":"auto"} onError={event=>{event.currentTarget.style.display="none"}}/>:"PHOTOS COMING"}</Link><div className="cardBody"><div className="carTitle">{v.year} {v.make}<br/><b>{v.model}</b></div><div className="facts"><span>{Number(v.mileage||0).toLocaleString()} MILES</span></div><div className="price">${Number(v.price||0).toLocaleString()}</div>{(v.downPayment??v.down_payment)!=null?<div className="down">${Number(v.downPayment??v.down_payment).toLocaleString()} DOWN</div>:null}<div className="cardButtons"><Link className="vehicleCardAction" href={`/vehicle/${encodeURIComponent(key)}`}><span>View vehicle</span><span aria-hidden="true">→</span></Link></div></div></article>}):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
+  return <div>
+    <div className={inventoryCardStyles.catalogToolbar}><strong>{shown.length} vehicle{shown.length===1?"":"s"} available now</strong></div>
+    <div className={inventoryCardStyles.catalogGrid}>{shown.length?shown.map((vehicle,index)=><InventoryCard vehicle={vehicle} index={index} variant="catalog" key={String(vehicle.id||vehicle.slug||index)}/>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
+  </div>
 }

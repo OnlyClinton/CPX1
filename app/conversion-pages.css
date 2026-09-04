@@ -11,7 +11,7 @@
 .premiumHeader .navlinks{height:100%!important;display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:19px!important;font-size:10px!important;font-weight:900!important;letter-spacing:.02em!important;white-space:nowrap!important}
 .premiumHeader .navlinks>a:not(.premiumApply):not(.premiumPhone){color:#f5f8fa!important}
 .premiumHeader .premiumPhone{color:#ff5360!important;font-size:10px!important}.premiumHeader .premiumApply{min-height:42px!important;padding:0 18px!important;border-radius:5px!important;background:var(--r31-red)!important;color:#fff!important;display:flex!important;align-items:center!important;box-shadow:0 8px 22px #ef202f30!important}
-.premiumHeader .mobileMenuButton,.premiumHeader .mobileCallButton{display:none!important}.mobileHeaderMenu{z-index:920!important}.stickyCtaBar{display:none!important}
+.premiumHeader .mobileMenuButton,.premiumHeader .mobileCallButton{display:none!important}.premiumHeader .mobileCallButton svg{width:21px;height:21px;fill:currentColor}.mobileHeaderMenu{z-index:920!important}.stickyCtaBar{display:none!important}
 .premiumHeader .mobileMenuButton::before{content:none!important}
 
 .conversionPage{position:relative;isolation:isolate;min-height:calc(100svh - 108px);overflow:hidden;background:#02070b;color:#fff;padding:42px 0 28px}

@@ -6,9 +6,10 @@ import {proxyDealer} from "../../../lib/dealerProxy";
 import {PUBLIC_INVENTORY_FALLBACK} from "../../../lib/publicInventoryFallback";
 import {isInternalVehicleRecord,isQaVehicleRecord,publicVehicles,readState,writeState} from "../../../lib/store";
 import {recordVehicleAudit} from "../../../lib/vehicleAudit";
+import {recoveryVehicleImage} from "../../../lib/recoveryVehicleImage";
 
 export const dynamic="force-dynamic";
-const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
+const editorRoles=new Set(["dealer","dealer_agent","tenant_admin","platform_admin"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 
 function response(body:any,status:number,requestIdValue:string){
@@ -21,11 +22,12 @@ function publicEligible(item:any){
   const mileage=Number(item?.mileage||0);
   const downPayment=Number(item?.downPayment||0);
   const maxYear=new Date().getUTCFullYear()+1;
-  const photo=String(item?.primaryPhotoPathname||item?.photoPathnames?.[0]||item?.primary_image_url||item?.image||item?.photo||item?.primaryPhotoUrl||item?.primaryPhoto||item?.imageUrl||"").trim();
+  const photo=String(item?.primaryPhotoPathname||item?.photoPathnames?.[0]||recoveryVehicleImage(item)||"").trim();
   return String(item?.status||"").toLowerCase()==="published"&&Boolean(photo)&&Number.isInteger(year)&&year>=1901&&year<=maxYear&&Boolean(String(item?.make||"").trim())&&Boolean(String(item?.model||"").trim())&&Number.isFinite(price)&&price>0&&price<=10_000_000&&Number.isFinite(mileage)&&mileage>=0&&mileage<=2_000_000&&Number.isFinite(downPayment)&&downPayment>=0&&downPayment<=price&&!isQaVehicleRecord(item)&&!isInternalVehicleRecord(item);
 }
 
 function toPublicVehicle(item:any){
+  const recoveryPhoto=recoveryVehicleImage(item);
   return {
     id:String(item?.id||item?.slug||""),slug:String(item?.slug||item?.id||""),
     year:Number(item?.year),make:String(item?.make||""),model:String(item?.model||""),trim:text(item?.trim,80),
@@ -34,7 +36,7 @@ function toPublicVehicle(item:any){
     transmission:text(item?.transmission,40),exteriorColor:text(item?.exteriorColor??item?.exterior_color,40),interiorColor:text(item?.interiorColor??item?.interior_color,40),
     drivetrain:text(item?.drivetrain,40),fuelType:text(item?.fuelType??item?.fuel_type,40),description:text(item?.description,3000),status:"published",
     primaryPhotoPathname:text(item?.primaryPhotoPathname,500),photoPathnames:Array.isArray(item?.photoPathnames)?item.photoPathnames.map((value:unknown)=>text(value,500)).filter(Boolean).slice(0,50):[],
-    primary_image_url:text(item?.primary_image_url,1000),image:text(item?.image,1000),photoPending:item?.photoPending===true
+    primary_image_url:text(recoveryPhoto,1000),image:"",photoPending:item?.photoPending===true
   };
 }
 
@@ -59,8 +61,12 @@ async function proxyPublicInventory(request:Request){
 export async function GET(request:Request){
   const publicScope=new URL(request.url).searchParams.get("scope")==="public";
   if(!isDealerRuntime(request)){
-    const hasSession=String(request.headers.get("cookie")||"").includes("__Host-wdcc_session=");
-    return hasSession&&!publicScope?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
+    // Customer pages always ask for the explicitly filtered public contract.
+    // Every no-scope request belongs to the dealer UI and must be passed through
+    // with the canonical service's current Neon-backed session cookies.  The old
+    // __Host-wdcc_session name belonged to the retired Blob runtime and caused a
+    // valid dealer login to be silently downgraded to public inventory.
+    return publicScope?proxyPublicInventory(request):proxyDealer(request,"/api/inventory");
   }
   const rid=requestId(request);
   try{
