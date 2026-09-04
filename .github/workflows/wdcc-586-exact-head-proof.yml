@@ -11,9 +11,11 @@ permissions:
 jobs:
   exact-head-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       CANDIDATE_SHA: 00e6eaebb370ac2865fcab23c00bb77c6f0df9ee
+      WDCC_RUNTIME_ROLE: canonical
+      SESSION_SECRET: visual-proof-only-00e6eaebb370ac2865fcab23c00bb77c6f0df9ee-0123456789
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,3 +42,63 @@ jobs:
           ! grep -Rqs 'RESEND_API_KEY' app lib
           ! grep -Rqs 'WDCC_PASSWORD_RESET_FROM' app lib
           echo "WDCC_PR586_EXACT_HEAD_BUILD=PASS sha=$CANDIDATE_SHA"
+      - name: Install isolated browser tooling
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install chromium
+      - name: Start isolated exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- -p 3100 > /tmp/wdcc-pr586-next.log 2>&1 &
+          echo $! > /tmp/wdcc-pr586-next.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3100/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wdcc-pr586-next.log >&2
+          exit 1
+      - name: Capture desktop and mobile exact-head proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof/desktop proof/mobile
+          cat > /tmp/capture.cjs <<'NODE'
+          const {chromium}=require('playwright');
+          const base='http://127.0.0.1:3100';
+          const dashboard={summary:{vehicles:23,totalVehicles:23,published:18,drafts:4,sold:7,leads:12,appointments:5,applications:8,messages:3},leads:[],inventory:[{id:'proof-1',year:2020,make:'Dodge',model:'Challenger SXT',price:24995,mileage:41000,status:'published'},{id:'proof-2',year:2019,make:'Dodge',model:'Charger R/T',price:21995,mileage:53000,status:'published'},{id:'proof-3',year:2018,make:'Chevrolet',model:'Camaro LT',price:20995,mileage:38000,status:'published'}]};
+          const dealer={authenticated:true,user:{id:'visual-proof-dealer',displayName:'Sean · Sales Manager',username:'bigpussy',role:'dealer',tenantId:'wdcc',mustChangePassword:false},session:{role:'dealer',tenantId:'wdcc',mustChangePassword:false}};
+          const admin={authenticated:true,user:{id:'visual-proof-admin',displayName:'WDCC Admin',username:'admin',role:'platform_admin',tenantId:'wdcc',mustChangePassword:false},session:{role:'platform_admin',tenantId:'wdcc',mustChangePassword:false}};
+          async function shot(browser,dir,name,path,{session=null,dashboardMock=false}={}){
+            const context=await browser.newContext({viewport:dir==='desktop'?{width:1440,height:1000}:{width:390,height:844},deviceScaleFactor:1});
+            const page=await context.newPage();
+            await page.route('**/api/auth/session',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session||{authenticated:false,user:null,session:null})}));
+            if(dashboardMock)await page.route('**/api/crm/dashboard',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
+            await page.goto(base+path,{waitUntil:'networkidle'});
+            await page.waitForTimeout(500);
+            await page.screenshot({path:`proof/${dir}/${name}.png`,fullPage:true});
+            await context.close();
+          }
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const dir of ['desktop','mobile']){
+              await shot(browser,dir,'01-login','/login');
+              await shot(browser,dir,'02-forgot-password','/forgot-password');
+              await shot(browser,dir,'03-reset-password','/reset-password?token=visual-proof-token-abcdefghijklmnopqrstuvwxyz0123456789');
+              await shot(browser,dir,'04-change-password','/change-password',{session:dealer});
+              await shot(browser,dir,'05-dealer','/dealer',{session:dealer,dashboardMock:true});
+              await shot(browser,dir,'06-admin','/admin',{session:admin,dashboardMock:true});
+            }
+            await browser.close();
+          })().catch(error=>{console.error(error);process.exit(1)});
+          NODE
+          node /tmp/capture.cjs
+          test "$(find proof -type f -name '*.png' | wc -l)" -eq 12
+          sha256sum proof/desktop/*.png proof/mobile/*.png > proof/SHA256SUMS.txt
+          printf 'candidate=%s\nrender_mode=isolated-local\nauth_state=mocked-for-visual-only\nproduction_writes=none\n' "$CANDIDATE_SHA" > proof/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WDCC-PR586-exact-head-visuals-00e6eaeb
+          path: proof/
+          if-no-files-found: error
+          retention-days: 14
