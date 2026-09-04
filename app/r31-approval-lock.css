@@ -1,0 +1,22 @@
+/* Approval-form parity lock. Layout only; submission logic unchanged. */
+@media(max-width:820px), (max-width:1100px) and (orientation:portrait){
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid{display:grid!important;grid-template-columns:1fr 1fr!important;gap:5px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="name"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="phone"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="email"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(select[name="vehicleSelection"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="vehicleInterest"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(select[name="referralSource"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(textarea),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>.consent{grid-column:1/-1!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="monthlyIncome"]),
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid>label:has(input[name="downPaymentInterest"]){grid-column:auto!important}
+  .conversionCard:has(input[name="monthlyIncome"]) input,
+  .conversionCard:has(input[name="monthlyIncome"]) select{height:34px!important;min-height:34px!important;padding:0 7px!important;font-size:16px!important;border-radius:5px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) textarea{height:48px!important;min-height:48px!important;padding:6px 7px!important;font-size:16px!important;border-radius:5px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .leadGrid label{gap:2px!important;font-size:5.9px!important;line-height:1.05!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .consent{font-size:5.7px!important;line-height:1.15!important;gap:5px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .consent input{width:14px!important;height:14px!important;min-height:14px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .cta.red{height:34px!important;min-height:34px!important;margin-top:5px!important}
+  .conversionCard:has(input[name="monthlyIncome"]) .formPrivacy{margin-top:5px!important;font-size:5.6px!important}
+}
