@@ -84,15 +84,15 @@ export async function backupVehiclePhotoToDrive(input:BackupInput):Promise<Drive
   const token=await accessToken();
   const boundary=`wdcc-${crypto.randomUUID()}`;
   const filename=`${safeName(input.vehicleId)}-${safeName(input.filename)}`;
+  const correlationProperties={
+    wdccVehicleId:String(input.vehicleId).slice(0,124),
+    wdccRequestId:String(input.requestId).slice(0,124),
+    wdccSourcePath:String(input.sourcePathname).slice(0,124)
+  };
   const metadata={
     name:filename,
     parents:[folderId],
-    appProperties:{
-      wdccVehicleId:String(input.vehicleId).slice(0,124),
-      wdccRequestId:String(input.requestId).slice(0,124),
-      wdccSha256:sha256,
-      wdccSourcePath:String(input.sourcePathname).slice(0,124)
-    }
+    appProperties:{...correlationProperties,wdccSha256:sha256}
   };
   const prefix=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${input.contentType||"application/octet-stream"}\r\n\r\n`;
   const suffix=`\r\n--${boundary}--`;
@@ -106,6 +106,12 @@ export async function backupVehiclePhotoToDrive(input:BackupInput):Promise<Drive
   const result:any=await response.json().catch(()=>({}));
   if(!response.ok||!result?.id)throw Error(`drive_backup_upload_failed:${response.status}:${result?.error?.message||result?.error||"unknown"}`);
   if(!Array.isArray(result.parents)||!result.parents.includes(folderId))throw Error("drive_backup_parent_mismatch");
-  if(String(result?.appProperties?.wdccSha256||"").toLowerCase()!==sha256)throw Error("drive_backup_hash_metadata_mismatch");
+  const resultProperties=result?.appProperties||{};
+  if(
+    String(resultProperties.wdccVehicleId||"")!==correlationProperties.wdccVehicleId||
+    String(resultProperties.wdccRequestId||"")!==correlationProperties.wdccRequestId||
+    String(resultProperties.wdccSourcePath||"")!==correlationProperties.wdccSourcePath
+  )throw Error("drive_backup_correlation_metadata_mismatch");
+  if(String(resultProperties.wdccSha256||"").toLowerCase()!==sha256)throw Error("drive_backup_hash_metadata_mismatch");
   return {status:"uploaded",required,folderId,fileId:String(result.id),name:String(result.name||filename),sha256};
 }
