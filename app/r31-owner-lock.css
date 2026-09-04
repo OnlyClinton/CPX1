@@ -1,0 +1,129 @@
+/* R31 owner-reference lock — visual only.
+   Keeps the approved photographic Challenger composition, large round logo,
+   compact mobile conversion hierarchy, three-card featured rail, and tight
+   public inventory/VDP proportions. Loaded last on purpose. */
+
+@media (max-width:820px), (max-width:1100px) and (orientation:portrait){
+  html{scroll-padding-top:112px}
+
+  /* Public storefront chrome: preserve the R31 utility line and a prominent
+     round logo without turning the header into a giant block. */
+  .reference-home .rh-utility{display:block!important;height:24px!important;min-height:24px!important;background:#020609!important}
+  .reference-home .rh-utility-inner{width:100%!important;height:24px!important;padding:0 9px!important;gap:13px!important;justify-content:center!important;font-size:6.6px!important;letter-spacing:.035em!important;white-space:nowrap!important}
+  .reference-home .rh-utility-inner span+span::before{left:-7px!important}
+  .reference-home .rh-header{height:82px!important;min-height:82px!important;top:24px!important;overflow:visible!important;background:#03080df8!important}
+  .reference-home .rh-header-inner{width:100%!important;height:82px!important;padding:0 12px!important;grid-template-columns:46px minmax(0,1fr) 46px!important;gap:6px!important;overflow:visible!important}
+  .reference-home .rh-logo{grid-column:2!important;grid-row:1!important;position:relative!important;z-index:6!important;width:112px!important;height:112px!important;justify-self:center!important;align-self:center!important;overflow:visible!important}
+  .reference-home .rh-logo img{width:106px!important;height:106px!important;max-width:none!important;filter:drop-shadow(0 8px 15px rgba(0,0,0,.62))!important}
+  .reference-home .rh-menu,.reference-home .rh-call{display:grid!important;place-items:center!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border:0!important;border-radius:50%!important}
+  .reference-home .rh-menu{grid-column:1!important;grid-row:1!important;justify-self:start!important;background:transparent!important}
+  .reference-home .rh-call{grid-column:3!important;grid-row:1!important;justify-self:end!important;background:#ef202f!important;box-shadow:0 7px 22px rgba(239,32,47,.28)!important}
+  .reference-home .rh-call svg{width:20px!important;height:20px!important;fill:#fff!important}
+  .reference-home .rh-nav{top:82px!important;left:8px!important;right:8px!important}
+  .reference-home .rh-header-cta{display:none!important}
+
+  /* Hero: one scene, not an image block followed by a second giant content block. */
+  .reference-home .rh-hero{height:auto!important;min-height:590px!important;background:#02060a!important}
+  .reference-home .rh-hero::before{inset:0!important;background-size:max(520px,118vw) auto!important;background-position:67% top!important;filter:saturate(1.08) contrast(1.05) brightness(.96)!important}
+  .reference-home .rh-hero::after{background:linear-gradient(180deg,rgba(2,6,10,.02) 0%,rgba(2,6,10,.08) 35%,rgba(2,6,10,.72) 58%,rgba(2,6,10,.98) 78%,#02060a 100%)!important}
+  .reference-home .rh-hero-inner{width:100%!important;height:auto!important;min-height:590px!important;align-items:flex-start!important}
+  .reference-home .rh-copy{width:100%!important;max-width:520px!important;padding:274px 14px 20px!important}
+  .reference-home .rh-kicker{margin:0 0 7px!important;font-size:8.5px!important;letter-spacing:.11em!important}
+  .reference-home .rh-kicker::before{width:24px!important;margin-right:7px!important}
+  .reference-home h1{margin:0 0 10px!important;font-size:clamp(37px,10.5vw,44px)!important;line-height:.89!important;letter-spacing:-.052em!important;text-shadow:0 6px 22px rgba(0,0,0,.95)!important}
+  .reference-home .rh-lead{max-width:390px!important;font-size:12.25px!important;line-height:1.38!important}
+  .reference-home .rh-hero-actions{display:grid!important;grid-template-columns:1fr!important;gap:7px!important;margin-top:13px!important}
+  .reference-home .rh-btn{width:100%!important;min-width:0!important;min-height:44px!important;padding:0 14px!important;border-radius:6px!important;display:flex!important;justify-content:center!important;font-size:9.6px!important;letter-spacing:.025em!important;box-shadow:none!important}
+  .reference-home .rh-btn.red{background:#ef202f!important;border-color:#ef202f!important}
+  .reference-home .rh-btn.dark{background:rgba(6,17,27,.74)!important;border:1px solid #8395a5!important;color:#fff!important}
+  .reference-home .rh-phone{display:flex!important;margin-top:10px!important;font-size:9.5px!important;line-height:1!important}
+  .reference-home .rh-phone svg{width:16px!important;height:16px!important}
+
+  /* Benefit bridge: compact rows like the reference, not oversized feature cards. */
+  .reference-home .rh-benefit-wrap{padding:0 8px 12px!important}
+  .reference-home .rh-benefits{width:100%!important;grid-template-columns:1fr!important;border-radius:10px!important;box-shadow:0 8px 24px rgba(12,24,36,.08)!important}
+  .reference-home .rh-benefit{min-height:62px!important;padding:9px 13px!important;grid-template-columns:34px 1fr 14px!important;gap:10px!important;border-right:0!important;border-bottom:1px solid #e1e5e8!important}
+  .reference-home .rh-benefit:last-child{border-bottom:0!important}
+  .reference-home .rh-benefit::after{content:"›";display:block;color:#101820;font-size:22px;font-weight:500;line-height:1}
+  .reference-home .rh-icon{width:31px!important;height:31px!important}
+  .reference-home .rh-benefit strong{font-size:9.6px!important}
+  .reference-home .rh-benefit small{margin-top:2px!important;font-size:8.5px!important;line-height:1.25!important}
+
+  /* Featured inventory: roughly three cards visible at once at the owner 390px viewport. */
+  .reference-home .rh-inventory{padding:22px 10px 28px!important}
+  .reference-home .rh-section-head{margin-bottom:10px!important;align-items:end!important;gap:8px!important}
+  .reference-home .rh-section-head small{font-size:7.5px!important}
+  .reference-home .rh-section-head h2{font-size:25px!important;margin:2px 0!important}
+  .reference-home .rh-section-head p{font-size:9px!important}
+  .reference-home .rh-view-all{font-size:7.6px!important;white-space:nowrap!important}
+
+  /* Financing block: same four-step system, much tighter vertically. */
+  .reference-home .rh-finance{padding:28px 10px 30px!important}
+  .reference-home .rh-finance-head{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;gap:10px!important;margin-bottom:12px!important}
+  .reference-home .rh-finance h2{font-size:25px!important;line-height:1.02!important}
+  .reference-home .rh-finance-head small{font-size:7.8px!important}
+  .reference-home .rh-finance-head>a{min-height:38px!important;padding:0 11px!important;font-size:7.8px!important;white-space:nowrap!important}
+  .reference-home .rh-steps{grid-template-columns:1fr!important;gap:7px!important}
+  .reference-home .rh-step{min-height:72px!important;padding:9px 11px!important;display:grid!important;grid-template-columns:34px 34px minmax(0,1fr)!important;grid-template-rows:auto auto!important;align-items:center!important;column-gap:9px!important}
+  .reference-home .rh-step b{grid-column:1!important;grid-row:1/3!important;width:32px!important;height:32px!important;margin:0!important}
+  .reference-home .rh-step-icon{grid-column:2!important;grid-row:1/3!important}
+  .reference-home .rh-step strong{grid-column:3!important;grid-row:1!important;font-size:9.5px!important}
+  .reference-home .rh-step small{grid-column:3!important;grid-row:2!important;margin:1px 0 0!important;font-size:8.3px!important;line-height:1.25!important}
+  .reference-home .rh-trust{padding:0 8px 12px!important}
+  .reference-home .rh-trust-grid{grid-template-columns:1fr 1fr!important;border-radius:10px!important}
+  .reference-home .rh-trust-grid article{min-height:66px!important;padding:8px 10px!important;border-bottom:1px solid #e0e4e7!important}
+  .reference-home .rh-trust-grid b{font-size:8.5px!important}
+  .reference-home .rh-trust-grid article div span{font-size:7.8px!important}
+  .reference-home .rh-footer{padding:16px 12px!important}
+  .reference-home .rh-footer-inner{display:grid!important;gap:5px!important;font-size:8px!important}
+
+  /* Shared route header — inventory, forms, VDP. */
+  .commandStrip{display:block!important;height:24px!important;min-height:24px!important}
+  .commandStrip .wrap{height:24px!important;min-height:24px!important;padding:0 8px!important;gap:12px!important;justify-content:center!important;font-size:6.6px!important;letter-spacing:.035em!important;white-space:nowrap!important}
+  .premiumHeader{height:82px!important;min-height:82px!important;top:24px!important;overflow:visible!important}
+  .premiumHeader .nav{height:82px!important;min-height:82px!important;padding:0 12px!important;display:grid!important;grid-template-columns:46px minmax(0,1fr) 46px!important;gap:6px!important;overflow:visible!important}
+  .premiumHeader .logoBrand{grid-column:2!important;grid-row:1!important;position:relative!important;z-index:6!important;width:112px!important;height:112px!important;justify-self:center!important;align-self:center!important;overflow:visible!important}
+  .premiumHeader .logoBrand img{width:106px!important;height:106px!important;max-width:none!important}
+  .premiumHeader .mobileMenuButton{grid-column:1!important;grid-row:1!important;justify-self:start!important;display:grid!important;place-items:center!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;background:transparent!important;border:0!important;color:#fff!important;font-size:26px!important}
+  .premiumHeader .mobileCallButton{grid-column:3!important;grid-row:1!important;justify-self:end!important;display:grid!important;place-items:center!important;width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;border-radius:50%!important;background:#ef202f!important;color:#fff!important}
+  .premiumHeader .mobileCallButton svg{width:19px!important;height:19px!important;fill:#fff!important}
+  .premiumHeader .premiumApply,.premiumHeader .premiumPhone{display:none!important}
+  .mobileHeaderMenu{top:106px!important;left:8px!important;right:8px!important}
+
+  /* Vehicle detail: keep image prominent but stop the title/price/buttons from
+     becoming an oversized white landing page. */
+  .vehicle-detail{padding:18px 0 32px!important}
+  .vehicle-detail>.wrap{padding:0 12px!important}
+  .vehicle-detail>.wrap>.eyebrow{margin:4px 0 5px!important;font-size:8px!important;letter-spacing:.08em!important}
+  .vehicle-detail>.wrap>h2{margin:0 0 12px!important;font-size:clamp(28px,8.5vw,34px)!important;line-height:.98!important;letter-spacing:-.035em!important}
+  .vehicle-detail-grid{gap:12px!important}
+  .vehicle-detail .photo{border-radius:10px!important;overflow:hidden!important;aspect-ratio:16/9!important;min-height:0!important}
+  .vehicle-detail .photo img{width:100%!important;height:100%!important;object-fit:cover!important}
+  .vehicle-detail .vehicle-summary{padding:14px!important;border-radius:10px!important}
+  .vehicle-detail .price{font-size:32px!important;line-height:1!important}
+  .vehicle-detail .down{font-size:9.5px!important}
+  .vehicle-detail .vehicle-specs{margin:10px 0!important;gap:5px!important}
+  .vehicle-detail .vehicle-specs span{padding:6px 8px!important;font-size:8px!important}
+  .vehicle-detail .vehicle-description{font-size:10.5px!important;line-height:1.4!important}
+  .vehicle-detail .actions{gap:7px!important;margin-top:12px!important}
+  .vehicle-detail .actions .cta{min-height:44px!important;font-size:9.5px!important;border-radius:6px!important}
+  .vehicle-detail .actions .vdp-call{min-height:28px!important;font-size:8.8px!important}
+
+  /* Forms remain readable without giant empty spacing. */
+  .conversionPage{padding-bottom:18px!important}
+  .conversionBackdrop{height:250px!important;background-size:auto 250px!important}
+  .conversionGrid{padding:184px 11px 0!important;gap:12px!important}
+  .conversionCopy h1{font-size:clamp(31px,9vw,38px)!important;line-height:.94!important}
+  .conversionLead{font-size:12px!important;line-height:1.38!important}
+  .conversionCard{padding:14px!important}
+}
+
+@media (max-width:599px){
+  /* Keep the utility message intact on phones. */
+  .reference-home .rh-utility-inner span,.commandStrip .wrap span{display:inline!important}
+}
+
+@media (min-width:821px){
+  /* Desktop remains the R31 composition: five featured cards and four-step rail. */
+  .reference-home .rh-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+}
