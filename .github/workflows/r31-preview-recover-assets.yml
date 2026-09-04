@@ -1,0 +1,57 @@
+name: Recover exact 2vfD assets for R31 preview
+on:
+  push:
+    branches: [preview/r31-exact-live-base]
+    paths:
+      - '.github/workflows/r31-preview-recover-assets.yml'
+permissions:
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview/r31-exact-live-base
+      - name: Download exact a2wntmnnn visual assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app/?_vercel_share=5v8yLAZJV7RkY2sOM5vEguPhTnrdzFfd'
+          HOST='https://wdcc-v32-storefront-a2wntmnnn-cpxagency.vercel.app'
+          curl -fsSL -L -c /tmp/vcookie "$ROOT" -o /tmp/root.html
+          echo "root_bytes=$(stat -c '%s' /tmp/root.html)"
+          curl -fsSL -L -b /tmp/vcookie "$HOST/wdcc-logo-transparent.webp" -o public/wdcc-logo-transparent.webp
+          curl -fsSL -L -b /tmp/vcookie "$HOST/wdcc-hero-v2.webp" -o public/wdcc-hero-v2.webp
+          test "$(stat -c '%s' public/wdcc-logo-transparent.webp)" = '47594'
+          test "$(head -c 4 public/wdcc-logo-transparent.webp)" = 'RIFF'
+          test "$(head -c 4 public/wdcc-hero-v2.webp)" = 'RIFF'
+
+          mkdir -p public/assets/cars
+          files=(
+            2004-nissan-350z-1.webp 2004-nissan-350z-2.webp 2004-nissan-350z-3.webp 2004-nissan-350z-4.webp
+            2016-ford-f150-limited-1.webp 2016-ford-f150-limited-2.webp 2016-ford-f150-limited-3.webp 2016-ford-f150-limited-4.webp 2016-ford-f150-limited-5.webp 2016-ford-f150-limited-6.webp 2016-ford-f150-limited-7.webp
+            2019-honda-pilot-1.webp
+            2019-kia-sportage-1.webp
+            2019-toyota-rav4-1.webp 2019-toyota-rav4-2.webp
+          )
+          for file in "${files[@]}"; do
+            echo "recovering $file"
+            curl -fsSL -L -b /tmp/vcookie "$HOST/assets/cars/$file" -o "public/assets/cars/$file"
+            test "$(head -c 4 "public/assets/cars/$file")" = 'RIFF'
+            test "$(stat -c '%s' "public/assets/cars/$file")" -gt 1000
+          done
+          sha256sum public/wdcc-logo-transparent.webp public/wdcc-hero-v2.webp public/assets/cars/*.webp
+      - name: Commit exact preview assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'WDCC Preview Bot'
+          git config user.email '120651995+OnlyClinton@users.noreply.github.com'
+          git add public/wdcc-logo-transparent.webp public/wdcc-hero-v2.webp public/assets/cars
+          if git diff --cached --quiet; then
+            echo 'Exact donor assets already match.'
+          else
+            git commit -m 'Recover exact a2wntmnnn WDCC visual and vehicle assets'
+            git push origin HEAD:preview/r31-exact-live-base
+          fi
