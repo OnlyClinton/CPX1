@@ -70,13 +70,15 @@ jobs:
           const dealer={authenticated:true,user:{id:'visual-proof-dealer',displayName:'Sean · Sales Manager',username:'bigpussy',role:'dealer',tenantId:'wdcc',mustChangePassword:false},session:{role:'dealer',tenantId:'wdcc',mustChangePassword:false}};
           const admin={authenticated:true,user:{id:'visual-proof-admin',displayName:'WDCC Admin',username:'admin',role:'platform_admin',tenantId:'wdcc',mustChangePassword:false},session:{role:'platform_admin',tenantId:'wdcc',mustChangePassword:false}};
           async function shot(browser,dir,name,path,{session=null,dashboardMock=false}={}){
+            console.log(`CAPTURE ${dir}/${name} ${path}`);
             const context=await browser.newContext({viewport:dir==='desktop'?{width:1440,height:1000}:{width:390,height:844},deviceScaleFactor:1});
             const page=await context.newPage();
             await page.route('**/api/auth/session',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(session||{authenticated:false,user:null,session:null})}));
             if(dashboardMock)await page.route('**/api/crm/dashboard',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(dashboard)}));
             await page.goto(base+path,{waitUntil:'domcontentloaded',timeout:15000});
             await page.waitForTimeout(dashboardMock?1800:700);
-            await page.screenshot({path:`proof/${dir}/${name}.png`,fullPage:true});
+            await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}'}).catch(()=>{});
+            await page.screenshot({path:`proof/${dir}/${name}.png`,fullPage:false,animations:'disabled',timeout:15000});
             await context.close();
           }
           (async()=>{
