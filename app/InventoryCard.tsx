@@ -19,6 +19,7 @@ export function InventoryCard({vehicle,index=0,variant="catalog"}:{vehicle:Inven
   const year=Number(vehicle.year||0),make=String(vehicle.make||"").trim(),model=String(vehicle.model||"").trim(),trim=String(vehicle.trim||"").trim();
   const price=Number(vehicle.price??vehicle.cashPrice??0),down=Number(vehicle.downPayment??vehicle.down_payment??0),mileage=Number(vehicle.mileage||0);
   const primary=vehicleImageSource(vehicle),fallback=recoveryVehicleImage(vehicle),body=String(vehicle.bodyStyle||vehicle.body_style||"").trim();
+  const isInitialCatalogRow=variant==="catalog"&&index<5;
   const[photoUnavailable,setPhotoUnavailable]=useState(!primary);
   useEffect(()=>{setPhotoUnavailable(!primary)},[primary]);
 
@@ -26,7 +27,7 @@ export function InventoryCard({vehicle,index=0,variant="catalog"}:{vehicle:Inven
     <span className={styles.media}>
       <span className={styles.photoSkeleton} aria-hidden="true"/>
       {!primary||photoUnavailable?<span className={styles.photoFallback} aria-hidden="true">Photo unavailable · call Sean</span>:null}
-      {primary?<img src={primary} alt="" width="1400" height="782" loading={variant==="catalog"&&index===0?"eager":"lazy"} decoding="async" fetchPriority={variant==="catalog"&&index===0?"high":"auto"} onError={event=>{
+      {primary?<img src={primary} alt="" width="1400" height="782" loading={isInitialCatalogRow?"eager":"lazy"} decoding="async" fetchPriority={isInitialCatalogRow?"high":"auto"} onError={event=>{
         const image=event.currentTarget;
         if(fallback&&!image.dataset.fallbackAttempted&&!image.src.endsWith(fallback)){image.dataset.fallbackAttempted="true";image.src=fallback;return;}
         image.hidden=true;setPhotoUnavailable(true);
