@@ -1,6 +1,6 @@
 import {NextResponse} from "next/server";
 import {backendHealth} from "../../../lib/dealerProxy";
-import {readState} from "../../../lib/store";
+import {readState,selectedStateProvider} from "../../../lib/store";
 import {blobAuthority,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
 
 export const dynamic="force-dynamic";
@@ -28,17 +28,23 @@ export async function GET(){
   const commit=process.env.VERCEL_GIT_COMMIT_SHA||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.CF_PAGES_COMMIT_SHA||null;
 
   if(canonicalRuntime()){
-    const storage=blobAuthority();
+    let stateProvider:"blob"|"postgres";
+    try{stateProvider=selectedStateProvider();}
+    catch(error){
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:"invalid",stateProvider:"invalid",session:Boolean((process.env.SESSION_SECRET||"").trim())?"configured":"missing",state:"unverified",integrations:integrations(),error:error instanceof Error?error.message:"state_provider_invalid",provider:provider(),commit},{status:503,headers});
+    }
+    const blob=blobAuthority();
+    const storage=stateProvider==="postgres"?"postgres":blob.mode;
     const session=Boolean((process.env.SESSION_SECRET||"").trim());
     const notificationIntegrations=integrations();
-    if(storage.mode==="missing"||!session){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
+    if((stateProvider==="blob"&&blob.mode==="missing")||!session){
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage,stateProvider,session:session?"configured":"missing",state:"unverified",integrations:notificationIntegrations,provider:provider(),commit},{status:503,headers});
     }
     try{
       const state=await readState();
-      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
+      return NextResponse.json({ok:true,degraded:false,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage,stateProvider,session:"configured",state:"readable",revision:state.revision,integrations:notificationIntegrations,provider:provider(),commit},{status:200,headers});
     }catch(error){
-      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage:storage.mode,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
+      return NextResponse.json({ok:false,degraded:true,service:"wdcc-canonical-backend",release:"WDCC-V53-OPS-HARDENED",backend:"local",storage,stateProvider,session:"configured",state:"unreadable",integrations:notificationIntegrations,error:error instanceof Error?error.message:"state_read_failed",provider:provider(),commit},{status:503,headers});
     }
   }
 
@@ -48,7 +54,7 @@ export async function GET(){
     // Older immutable canonical backends do not expose integration readiness.
     // In that case report the facade runtime's actual configuration instead of null.
     const notificationIntegrations=json?.integrations||integrations();
-    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
+    return NextResponse.json({ok,degraded:!ok,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:ok?"healthy":"degraded",backendState:json?.state||null,backendStorage:json?.storage||null,backendStateProvider:json?.stateProvider||null,integrations:notificationIntegrations,integrationReadinessSource:json?.integrations?"canonical-backend":"facade-runtime",provider:provider(),commit},{status:ok?200:503,headers});
   }catch(error){
     return NextResponse.json({ok:false,degraded:true,service:"wdcc-hardened-dealer-facade",release:"WDCC-V53-OPS-HARDENED",backend:"unreachable",integrations:integrations(),integrationReadinessSource:"facade-runtime",error:error instanceof Error?error.message:"backend_health_failed",commit},{status:503,headers});
   }
