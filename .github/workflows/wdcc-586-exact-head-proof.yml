@@ -1,0 +1,42 @@
+name: WDCC PR586 Exact Head Proof
+
+on:
+  push:
+    branches:
+      - proof/wdcc-586-build-00e6eaeb
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CANDIDATE_SHA: 00e6eaebb370ac2865fcab23c00bb77c6f0df9ee
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify immutable candidate
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build exact candidate
+        run: npm run build
+      - name: Verify recovery and canonical-auth routes are emitted
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d .next
+          grep -Rqs 'request-password-reset' app lib
+          grep -Rqs 'reset-password' app lib
+          grep -Rqs 'change-password' app lib
+          grep -Rqs 'sign-in/email' app lib
+          ! grep -Rqs 'RESEND_API_KEY' app lib
+          ! grep -Rqs 'WDCC_PASSWORD_RESET_FROM' app lib
+          echo "WDCC_PR586_EXACT_HEAD_BUILD=PASS sha=$CANDIDATE_SHA"
