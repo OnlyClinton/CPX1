@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p proof/desktop proof/mobile
-          cat > /tmp/capture.cjs <<'NODE'
+          cat > capture.cjs <<'NODE'
           const {chromium}=require('playwright');
           const base='http://127.0.0.1:3100';
           const dashboard={summary:{vehicles:23,totalVehicles:23,published:18,drafts:4,sold:7,leads:12,appointments:5,applications:8,messages:3},leads:[],inventory:[{id:'proof-1',year:2020,make:'Dodge',model:'Challenger SXT',price:24995,mileage:41000,status:'published'},{id:'proof-2',year:2019,make:'Dodge',model:'Charger R/T',price:21995,mileage:53000,status:'published'},{id:'proof-3',year:2018,make:'Chevrolet',model:'Camaro LT',price:20995,mileage:38000,status:'published'}]};
@@ -92,7 +92,8 @@ jobs:
             await browser.close();
           })().catch(error=>{console.error(error);process.exit(1)});
           NODE
-          node /tmp/capture.cjs
+          node capture.cjs
+          rm capture.cjs
           test "$(find proof -type f -name '*.png' | wc -l)" -eq 12
           sha256sum proof/desktop/*.png proof/mobile/*.png > proof/SHA256SUMS.txt
           printf 'candidate=%s\nrender_mode=isolated-local\nauth_state=mocked-for-visual-only\nproduction_writes=none\n' "$CANDIDATE_SHA" > proof/README.txt
