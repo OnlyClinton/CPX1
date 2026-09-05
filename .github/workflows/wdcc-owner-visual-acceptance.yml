@@ -35,12 +35,19 @@ jobs:
             git show --pretty='' --name-only "$HEAD_SHA" > /tmp/changed.txt
           fi
           cat /tmp/changed.txt
-          # Only application/rendering code and shipped assets require owner
-          # visual approval. Control-plane workflow changes are governed by
-          # the separate production-control audit and PR review policy.
-          if grep -Eq '^(app/|public/|styles/|next\.config\.|package(-lock)?\.json$)' /tmp/changed.txt; then
-            visual=true
-          fi
+          # Only owner-visible application/rendering code and shipped assets
+          # require owner visual approval. API routes are server-side and do
+          # not change rendered WDCC output. Control-plane workflow changes are
+          # governed by the separate production-control audit and PR review policy.
+          while IFS= read -r path; do
+            case "$path" in
+              app/api/*)
+                ;;
+              app/*|public/*|styles/*|next.config.*|package.json|package-lock.json)
+                visual=true
+                ;;
+            esac
+          done < /tmp/changed.txt
           echo "visual=$visual" >> "$GITHUB_OUTPUT"
 
       - name: Require exact-head owner visual approval
