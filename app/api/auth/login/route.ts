@@ -1,8 +1,9 @@
 import {readState,type User} from "../../../../lib/store";
 import {isDealerRuntime} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
+import {sessionCookieHeader} from "../../../../lib/auth";
 
-const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
+const AUTH_BASE=(process.env.NEON_AUTH_BASE_URL||"").replace(/\/$/,"");
 const LOGIN_MAP:Record<string,string>={
   admin:"admin@internal.wedontcarecars.com",
   bigpussy:"dealer-v2@internal.wedontcarecars.com",
@@ -14,7 +15,7 @@ function resolveLogin(value:unknown){
   const raw=String(value||"").trim().toLowerCase();
   if(LOGIN_MAP[raw])return {email:LOGIN_MAP[raw],username:raw};
   if(raw==="admin@internal.wedontcarecars.com")return {email:raw,username:"admin"};
-  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"bigpussy"};
+  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"dealer"};
   return null;
 }
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
@@ -30,15 +31,11 @@ async function accessUser(email:string,username:string){
   const keys=new Set([email.toLowerCase(),username.toLowerCase()]);
   return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;
 }
-function copyCookies(upstream:Response,headers:Headers){
-  const getter=(upstream.headers as any).getSetCookie;
-  if(typeof getter==="function")for(const cookie of getter.call(upstream.headers))headers.append("set-cookie",cookie);
-  else{const cookie=upstream.headers.get("set-cookie");if(cookie)headers.append("set-cookie",cookie);}
-}
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/auth/login");
   try{
+    if(!AUTH_BASE)return Response.json({ok:false,error:"auth_service_unavailable"},{status:503,headers:{"cache-control":"no-store"}});
     const body=await request.json().catch(()=>({}));
     const login=resolveLogin(body?.username||body?.email);
     const password=String(body?.password||"");
@@ -65,7 +62,9 @@ export async function POST(request:Request){
     }
 
     const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
-    copyCookies(upstream,headers);
+    // Do not forward Neon Auth's host-scoped cookie. Establish WDCC's own
+    // host-scoped, signed portal session after Neon has authenticated the user.
+    headers.append("set-cookie",sessionCookieHeader(user));
     return new Response(JSON.stringify({ok:true,role:user.role,user:{id:user.id,email:login.email,username:login.username,displayName:user.displayName||data?.user?.name||(login.username==="admin"?"WDCC Admin":"WDCC Dealer"),role:user.role}}),{status:200,headers});
   }catch(error){
     console.error("WDCC_NEON_AUTH_LOGIN_ERROR",error);
