@@ -66,7 +66,7 @@ export default function DealerLeads(){
         <Link href="/dealer">⌂ Dashboard</Link>
         <strong>INVENTORY</strong>
         <Link href="/dealer/inventory">▣ All Vehicles</Link>
-        <Link href="/dealer/inventory/new">＋ Add / Edit Vehicle</Link>
+        <Link href="/dealer/inventory/new">＋ Add Vehicle</Link>
         <strong>OPERATIONS</strong>
         <Link className="active" href="/dealer/leads">♙ Leads</Link>
         <Link href="/dealer/leads?view=appointments">▣ Appointments</Link>

@@ -1,0 +1,29 @@
+/* WDCC P0 dealer CTA convergence layered after dealer-target.css.
+   Preserve the current auth/edit/upload implementation while enforcing one primary Add Vehicle CTA. */
+.targetDealerMain{position:relative}
+.targetDealerTitle{padding-right:154px}
+.targetDealerTitle>div:last-child{display:none!important}
+.targetDealerQuick{position:absolute!important;top:18px;right:18px;z-index:4;display:block!important;margin:0!important;padding:0!important;background:transparent!important;border:0!important;width:auto!important}
+.targetDealerQuick a:nth-child(n+2){display:none!important}
+.targetDealerQuick a:first-child{min-height:40px;display:inline-flex!important;align-items:center;justify-content:center;padding:0 15px!important;border:1px solid var(--wdcc-red)!important;border-radius:5px!important;background:var(--wdcc-red)!important;color:#fff!important;font-size:9px!important;font-weight:950!important;white-space:nowrap}
+.targetDealerQuick a:first-child:hover{background:#ff3041!important;border-color:#ff3041!important;color:#fff!important}
+
+/* Source labels remain edit-capable, but the primary creation CTA reads Add Vehicle. */
+.editSide nav a[href="/dealer/inventory/new"],
+.targetInventorySide nav a[href="/dealer/inventory/new"]{font-size:0!important}
+.editSide nav a[href="/dealer/inventory/new"]::after,
+.targetInventorySide nav a[href="/dealer/inventory/new"]::after{content:"＋ Add Vehicle";font-size:9px;font-weight:inherit}
+
+/* One save / preview / publish action bar only. */
+.readinessCard>button{display:none!important}
+
+/* Internal-only dealer previews must never present shopper actions. */
+.vehiclePreview:has(.internalNotice) .previewActions{display:none!important}
+.vehiclePreview:has(.internalNotice) .internalNotice::after{content:" Customer actions are disabled for this internal-only vehicle.";font-weight:850}
+
+@media(max-width:900px){
+  .targetDealerTitle{padding-right:0}
+  .targetDealerQuick{display:none!important}
+  .editSide nav a[href="/dealer/inventory/new"]::after,
+  .targetInventorySide nav a[href="/dealer/inventory/new"]::after{font-size:9px}
+}

@@ -50,9 +50,6 @@ export default function DealerAppPage() {
             <small>Inventory operations</small>
           </span>
         </Link>
-        <Link className={styles.headerLink} href="/dealer">
-          Dealer sign in <ArrowIcon />
-        </Link>
       </header>
 
       <section className={styles.hero}>
@@ -68,7 +65,7 @@ export default function DealerAppPage() {
 
           <div className={styles.actions}>
             <Link className={styles.primaryAction} href="/dealer">
-              Open Web Portal <ArrowIcon />
+              Open Dealer Dashboard <ArrowIcon />
             </Link>
             <a className={styles.downloadAction} href="/app/download/android">
               <DownloadIcon /> Download Android
@@ -186,4 +183,3 @@ export default function DealerAppPage() {
     </main>
   );
 }
-
