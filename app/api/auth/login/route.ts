@@ -2,8 +2,9 @@ import {readState,type User} from "../../../../lib/store";
 import {isDealerRuntime} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
 import {sessionCookieHeader} from "../../../../lib/auth";
+import {NEON_AUTH_BASE} from "../../../../lib/passwordRecovery";
 
-const AUTH_BASE=(process.env.NEON_AUTH_BASE_URL||"").replace(/\/$/,"");
+const AUTH_BASE=NEON_AUTH_BASE.replace(/\/$/,"");
 const LOGIN_MAP:Record<string,string>={
   admin:"admin@internal.wedontcarecars.com",
   bigpussy:"dealer-v2@internal.wedontcarecars.com",
@@ -35,7 +36,6 @@ async function accessUser(email:string,username:string){
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/auth/login");
   try{
-    if(!AUTH_BASE)return Response.json({ok:false,error:"auth_service_unavailable"},{status:503,headers:{"cache-control":"no-store"}});
     const body=await request.json().catch(()=>({}));
     const login=resolveLogin(body?.username||body?.email);
     const password=String(body?.password||"");
@@ -62,8 +62,8 @@ export async function POST(request:Request){
     }
 
     const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
-    // Do not forward Neon Auth's host-scoped cookie. Establish WDCC's own
-    // host-scoped, signed portal session after Neon has authenticated the user.
+    // Neon authenticates the credential; WDCC owns the browser session cookie.
+    // Do not forward a cookie scoped to the Neon Auth host.
     headers.append("set-cookie",sessionCookieHeader(user));
     return new Response(JSON.stringify({ok:true,role:user.role,user:{id:user.id,email:login.email,username:login.username,displayName:user.displayName||data?.user?.name||(login.username==="admin"?"WDCC Admin":"WDCC Dealer"),role:user.role}}),{status:200,headers});
   }catch(error){
