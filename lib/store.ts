@@ -15,6 +15,18 @@ export type User={
   status?:string;
   disabled?:boolean;
   passwordHash?:string;
+  /** Invalidate every existing session after an access, role, or password change. */
+  sessionVersion?:number;
+  /** A provisioned or administrator-reset account must choose a permanent password. */
+  mustChangePassword?:boolean;
+  passwordChangedAt?:string;
+  updatedAt?:string;
+  /** Opaque, short-lived recovery material. The raw reset link token is never stored. */
+  passwordReset?:{
+    tokenHash:string;
+    requestedAt:string;
+    expiresAt:string;
+  };
 };
 export type Vehicle={id:string;[key:string]:any};
 export type State={

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {FormEvent,useEffect,useState} from "react";
+import {useEffect,useState} from "react";
 import {createdAtOf,sourceLabel,stageLabels,stageOf,when,type LeadRecord} from "./crmFilters";
 
 type Vehicle=Record<string,any>;
@@ -13,18 +13,15 @@ const dealerRole=(value:any)=>["dealer_agent","tenant_admin","platform_admin"].i
 export default function DealerDashboard(){
   const[session,setSession]=useState<any>(null);
   const[data,setData]=useState<any>(null);
-  const[username,setUsername]=useState("Dealer");
-  const[password,setPassword]=useState("");
-  const[message,setMessage]=useState("");
-  const[busy,setBusy]=useState(false);
+  const[sessionResolved,setSessionResolved]=useState(false);
 
   async function loadDashboard(){const r=await fetch("/api/crm/dashboard",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));setData(r.ok?j:{summary:{},leads:[],inventory:[],error:j?.error||`Dashboard ${r.status}`})}
-  async function loadSession(){const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));const role=j?.user?.role||j?.role||j?.session?.role;if(j?.authenticated&&dealerRole(role)){setSession(j);await loadDashboard()}else setSession(null)}
+  async function loadSession(){try{const r=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});const j=await r.json().catch(()=>({}));const role=j?.user?.role||j?.role||j?.session?.role;if(j?.authenticated&&dealerRole(role)){if(j?.user?.mustChangePassword===true||j?.session?.mustChangePassword===true){location.replace("/change-password");return;}setSession(j);await loadDashboard()}else setSession(null)}finally{setSessionResolved(true)}}
   useEffect(()=>{loadSession().catch(()=>setSession(null))},[]);
-  async function login(e:FormEvent){e.preventDefault();if(busy)return;setBusy(true);setMessage("Signing in…");try{const r=await fetch("/api/auth/login",{method:"POST",credentials:"include",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({username:username.trim(),email:username.trim(),password})});const j=await r.json().catch(()=>({}));if(!r.ok||!j?.ok)throw Error(r.status===401?"Login or password is incorrect.":j?.error||"Sign-in failed.");await loadSession();setMessage("")}catch(error){setMessage(error instanceof Error?error.message:"Sign-in failed.")}finally{setBusy(false)}}
-  async function logout(){await fetch("/api/auth/logout",{method:"POST",credentials:"include",cache:"no-store"}).catch(()=>{});setSession(null);setData(null);setPassword("")}
+  useEffect(()=>{if(sessionResolved&&!session?.authenticated)location.replace("/login")},[sessionResolved,session?.authenticated]);
+  async function logout(){await fetch("/api/auth/logout",{method:"POST",credentials:"include",cache:"no-store"}).catch(()=>{});setSession(null);setData(null)}
 
-  if(!session?.authenticated)return <main className="targetDealerLogin"><section className="targetDealerLoginHero"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><span>WDCC DEALER PORTAL</span><h1>RUN YOUR DEALERSHIP.<br/>CLOSE MORE DEALS.</h1><p>Inventory, leads, appointments and sales operations in one place.</p></div></section><form className="targetDealerLoginCard" onSubmit={login}><small>SECURE DEALER ACCESS</small><h2>Dealer Sign In</h2><label>USERNAME<input value={username} onChange={e=>setUsername(e.target.value)} autoCapitalize="none" autoComplete="username" required/></label><label>PASSWORD<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?"SIGNING IN…":"SIGN IN"}</button><div>{message}</div></form></main>;
+  if(!session?.authenticated)return <main className="targetDealerLogin"><section className="targetDealerLoginHero"><img src="/wdcc-official-logo.webp" alt="WDCC"/><div><span>WDCC DEALER PORTAL</span><h1>CHECKING SECURE<br/>DEALER SESSION.</h1><p>Opening the single secure sign-in page.</p><Link href="/login">OPEN SECURE SIGN IN</Link></div></section></main>;
 
   const leads:LeadRecord[]=Array.isArray(data?.leads)?data.leads:[];
   const inventory:Vehicle[]=Array.isArray(data?.inventory)?data.inventory:[];
