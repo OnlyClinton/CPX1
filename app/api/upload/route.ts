@@ -1,4 +1,5 @@
 import {handleUpload,type HandleUploadBody} from "@vercel/blob/client";
+import {del} from "@vercel/blob";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {isDealerRuntime,requestId} from "../../../lib/dealerRuntime";
@@ -12,6 +13,10 @@ const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
 
 function json(body:any,status:number,rid:string){
   return NextResponse.json(body,{status,headers:{"Cache-Control":"no-store","X-WDCC-Request-ID":rid}});
+}
+
+function driveBackupRequired(){
+  return ["1","true","yes","required"].includes(String(process.env.WDCC_DRIVE_BACKUP_REQUIRED||"").trim().toLowerCase());
 }
 
 export async function POST(request:Request){
@@ -33,7 +38,7 @@ export async function POST(request:Request){
           await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"denied",requestId:rid,actorId:user?.id||null,actorRole:user?.role||null,detail:"auth_required"});
           throw Error("Unauthorized");
         }
-        let payload:any={};try{payload=JSON.parse(clientPayload||"{}");}catch{}
+        let payload:any={};try{payload=JSON.parse(clientPayload||"");}catch{}
         const vehicleId=String(payload.vehicleId||"");
         const correlationId=String(payload.requestId||rid).slice(0,160)||rid;
         if(!vehicleId||!pathname.startsWith(`media/wdcc/${vehicleId}/`)){
@@ -83,7 +88,18 @@ export async function POST(request:Request){
         }catch(error){
           const detail=error instanceof Error?error.message:"drive_backup_failed";
           await recordVehicleAudit({action:"vehicle.photo_backup",outcome:"failed",requestId:correlationId,vehicleId:vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,detail});
-          if(["1","true","yes","required"].includes(String(process.env.WDCC_DRIVE_BACKUP_REQUIRED||"").trim().toLowerCase()))throw error;
+          if(driveBackupRequired()){
+            try{
+              await del(blob.url,{token:uploadToken});
+              await recordVehicleAudit({action:"vehicle.photo_rollback",outcome:"ok",requestId:correlationId,vehicleId:vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,detail:blob.pathname});
+            }catch(rollbackError){
+              const rollbackDetail=rollbackError instanceof Error?rollbackError.message:"primary_photo_rollback_failed";
+              await recordVehicleAudit({action:"vehicle.photo_rollback",outcome:"failed",requestId:correlationId,vehicleId:vehicleId||null,actorId:payload.userId||null,actorRole:payload.actorRole||null,detail:rollbackDetail});
+              console.error("WDCC_PRIMARY_PHOTO_ROLLBACK_FAILED",JSON.stringify({requestId:correlationId,vehicleId,pathname:blob.pathname,detail:rollbackDetail,driveBackupError:detail}));
+              throw Error(`drive_backup_failed_primary_rollback_failed:${detail}`);
+            }
+            throw Error(`drive_backup_required:${detail}`);
+          }
           console.error("WDCC_DRIVE_BACKUP_FAILED",JSON.stringify({requestId:correlationId,vehicleId,pathname:blob.pathname,detail}));
         }
       }
