@@ -38,7 +38,7 @@ export async function POST(request:Request){
           await recordVehicleAudit({action:"vehicle.photo_authorize",outcome:"denied",requestId:rid,actorId:user?.id||null,actorRole:user?.role||null,detail:"auth_required"});
           throw Error("Unauthorized");
         }
-        let payload:any={};try{payload=JSON.parse(clientPayload||"");}catch{}
+        let payload:any={};try{payload=JSON.parse(clientPayload||"{}");}catch{}
         const vehicleId=String(payload.vehicleId||"");
         const correlationId=String(payload.requestId||rid).slice(0,160)||rid;
         if(!vehicleId||!pathname.startsWith(`media/wdcc/${vehicleId}/`)){
