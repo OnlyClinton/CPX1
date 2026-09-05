@@ -1,36 +1,18 @@
 import crypto from "node:crypto";
-import {cookies,headers} from "next/headers";
+import {cookies} from "next/headers";
 import {readState,type User} from "./store";
 
 export const SESSION_COOKIE="__Host-wdcc_session";
 const SESSION_MAX_AGE=4*60*60;
-const AUTH_BASE="https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth";
-const PORTAL_EMAILS=new Set(["admin@internal.wedontcarecars.com","dealer-v2@internal.wedontcarecars.com"]);
 
 function secret(){
   const value=process.env.SESSION_SECRET||"";
   if(value.length<32)throw Error("SESSION_SECRET_NOT_CONFIGURED");
   return value;
 }
-function sign(value:string){
-  return crypto.createHmac("sha256",secret()).update(value).digest("base64url");
-}
-export function verifyPassword(value:string,stored?:string){
-  if(!stored?.startsWith("scrypt$"))return false;
-  const[,salt,digest]=stored.split("$");
-  if(!salt||!digest)return false;
-  try{
-    const actual=crypto.scryptSync(value,Buffer.from(salt,"base64url"),64);
-    const expected=Buffer.from(digest,"base64url");
-    return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected);
-  }catch{return false;}
-}
+function sign(value:string){return crypto.createHmac("sha256",secret()).update(value).digest("base64url");}
 function token(user:User){
-  const raw=Buffer.from(JSON.stringify({
-    id:user.id,
-    role:user.role,
-    exp:Date.now()+SESSION_MAX_AGE*1000
-  })).toString("base64url");
+  const raw=Buffer.from(JSON.stringify({id:user.id,role:user.role,exp:Date.now()+SESSION_MAX_AGE*1000})).toString("base64url");
   return `${raw}.${sign(raw)}`;
 }
 function parse(value?:string|null){
@@ -46,44 +28,27 @@ function parse(value?:string|null){
   }catch{return null;}
 }
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
-function identifiers(user:User){
-  return [user.email,user.secondaryEmail,user.username,user.loginAlias,...(Array.isArray(user.aliases)?user.aliases:[])]
-    .map(value=>String(value||"").trim().toLowerCase()).filter(Boolean);
-}
-async function neonCurrentUser(){
+export function verifyPassword(value:string,stored?:string){
+  if(!stored?.startsWith("scrypt$"))return false;
+  const[,salt,digest]=stored.split("$");
+  if(!salt||!digest)return false;
   try{
-    const requestHeaders=await headers();
-    const cookie=requestHeaders.get("cookie")||"";
-    if(!cookie)return null;
-    const upstream=await fetch(`${AUTH_BASE}/get-session`,{
-      headers:{accept:"application/json",cookie},cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(10000)
-    });
-    if(!upstream.ok)return null;
-    const text=await upstream.text();
-    let data:any=null;
-    try{data=text?JSON.parse(text):null;}catch{return null;}
-    const email=String(data?.user?.email||"").trim().toLowerCase();
-    if(!data?.user||!PORTAL_EMAILS.has(email))return null;
-    const admin=email.startsWith("admin@");
-    const username=admin?"admin":"dealer";
-    const roles=admin?new Set(["platform_admin","tenant_admin","admin"]):new Set(["dealer_agent","dealer"]);
-    const state=await readState();
-    const keys=new Set([email,username]);
-    return state.users.find(user=>active(user)&&roles.has(String(user.role||"").toLowerCase())&&identifiers(user).some(value=>keys.has(value)))||null;
-  }catch{return null;}
+    const actual=crypto.scryptSync(value,Buffer.from(salt,"base64url"),64);
+    const expected=Buffer.from(digest,"base64url");
+    return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected);
+  }catch{return false;}
 }
 export function sessionCookieValue(user:User){return token(user);}
 export function sessionCookieHeader(user:User){return `${SESSION_COOKIE}=${sessionCookieValue(user)}; Path=/; Max-Age=${SESSION_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`;}
 export function clearSessionCookieHeader(){return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;}
 export async function currentUser(){
-  const jar=await cookies();
-  const payload=parse(jar.get(SESSION_COOKIE)?.value);
-  if(payload){
+  try{
+    const jar=await cookies();
+    const payload=parse(jar.get(SESSION_COOKIE)?.value);
+    if(!payload)return null;
     const state=await readState();
-    const user=state.users.find(candidate=>candidate.id===payload.id&&active(candidate));
-    if(user)return user;
-  }
-  return neonCurrentUser();
+    return state.users.find(candidate=>candidate.id===payload.id&&active(candidate))||null;
+  }catch{return null;}
 }
 export async function setSession(user:User){
   const jar=await cookies();
