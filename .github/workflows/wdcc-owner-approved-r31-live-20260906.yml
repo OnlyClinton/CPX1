@@ -1,0 +1,237 @@
+name: WDCC Owner Approved R31 Live Cutover 20260906
+
+# Narrow production exception: exact current owner-approved main head only.
+# Existing DNS/routes remain untouched. Vercel apex/www aliases are the only writes.
+# Every write has captured rollback targets and post-write verification.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: wdcc-production-release
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 0b7789d18822bb3bc7fed5b90003fd50bf41f9af
+  DEALER_SHA: 879c5431a2b319eeb30f30a93090857a7fb54c08
+  TRIGGER: PROMOTE-WDCC-R31-LIVE-0B7789
+  OWNER_MARKER: WDCC_R31_LIVE_APPROVAL 0b7789d18822bb3bc7fed5b90003fd50bf41f9af
+  VERCEL_SCOPE: cpxagency
+  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+  DEALER_ROOT: https://dealer.wedontcarecars.com
+
+jobs:
+  promote:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'PROMOTE-WDCC-R31-LIVE-0B7789'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Fail closed on exact owner authorization
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' > /tmp/comments.json
+          jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" --arg marker "$OWNER_MARKER" \
+            'any(.[]; .user.login==$owner and .author_association=="OWNER" and (.body // "")==$marker)' \
+            /tmp/comments.json >/dev/null
+          for status in queued in_progress; do
+            curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?status=$status&per_page=100" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' > "/tmp/runs-$status.json"
+            jq -e --argjson current "$GITHUB_RUN_ID" \
+              '[.workflow_runs[] | select(.id != $current) | select(.name | startswith("WDCC Owner Approved"))] | length==0' \
+              "/tmp/runs-$status.json" >/dev/null
+          done
+          echo 'OWNER_AND_RELEASE_CONTROL=PASS'
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact source and visual/runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f app/r31-mobile-composition-final.css
+          grep -Fq 'wdcc-hero-v2.webp' app/r31-mobile-composition-final.css
+          grep -Fq '.reference-home .rh-mobile-dock' app/r31-mobile-composition-final.css
+          grep -Fq 'https://dealer.wedontcarecars.com' lib/wdccAuthority.ts
+          grep -Fq 'https://dealer.wedontcarecars.com' wrangler.jsonc
+          node scripts/wdcc-media-integrity.mjs
+          echo 'EXACT_SOURCE_AND_AUTHORITY=PASS'
+
+      - name: Build and visual/animation torture test
+        shell: bash
+        run: |
+          set -euo pipefail
+          export WDCC_RUNTIME_ROLE=frontend
+          export WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com
+          npm ci
+          npm run build
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+          mkdir -p proof
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/wdcc-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill $app_pid 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/ >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/ >/dev/null
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            for(const cfg of [
+              {name:'desktop',width:1440,height:1100,isMobile:false,hasTouch:false},
+              {name:'mobile',width:390,height:844,isMobile:true,hasTouch:true},
+              {name:'touch',width:980,height:1740,isMobile:false,hasTouch:true}
+            ]){
+              const context=await browser.newContext({viewport:{width:cfg.width,height:cfg.height},isMobile:cfg.isMobile,hasTouch:cfg.hasTouch,deviceScaleFactor:1});
+              const page=await context.newPage();
+              const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+              await page.goto('http://127.0.0.1:3000/?intro=1&hard-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+              await page.waitForTimeout(3500);
+              const state=await page.evaluate(()=>{
+                const root=document.documentElement;
+                const hero=document.querySelector('.reference-home .rh-hero');
+                const before=hero?getComputedStyle(hero,'::before').backgroundImage:'';
+                const dock=document.querySelector('.reference-home .rh-mobile-dock,.reference-home .mobile-action-bar,.wdcc-mobile-actions');
+                const intro=document.querySelector('.intro-sequence,.li');
+                return {overflow:root.scrollWidth>root.clientWidth+1,hero:before,dock:!!dock,introVisible:!!intro&&getComputedStyle(intro).display!=='none'&&getComputedStyle(intro).opacity!=='0',heroHeight:hero?.getBoundingClientRect().height||0};
+              });
+              if(state.overflow)throw Error(`${cfg.name}: horizontal overflow`);
+              if(!state.hero.includes('wdcc-hero-v2.webp'))throw Error(`${cfg.name}: wrong hero ${state.hero}`);
+              if(cfg.isMobile && state.dock)throw Error(`${cfg.name}: mobile CTA dock still present`);
+              if(state.introVisible)throw Error(`${cfg.name}: intro did not hand off cleanly`);
+              if(state.heroHeight<=0)throw Error(`${cfg.name}: hero missing`);
+              if(errors.length)throw Error(`${cfg.name}: page errors ${errors.join(' | ')}`);
+              await page.screenshot({path:`proof/${cfg.name}.png`,fullPage:true});
+              await context.close();
+            }
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+          kill "$app_pid" 2>/dev/null || true
+          trap - EXIT
+          echo 'RESPONSIVE_VISUAL_ANIMATION_CONTRACT=PASS'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wdcc-r31-live-proof
+          path: proof/*.png
+          if-no-files-found: error
+
+      - name: Deploy immutable Vercel origin without aliases
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          export WDCC_RUNTIME_ROLE=frontend
+          export WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com
+          vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          target="$(vercel deploy --prebuilt --env WDCC_RUNTIME_ROLE=frontend --env WDCC_DEALER_BACKEND_URL=https://dealer.wedontcarecars.com --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"
+          test -n "$target"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$target?teamId=$VERCEL_TEAM_ID" > /tmp/target.json
+          jq -e --arg sha "$SOURCE_SHA" '.readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/target.json >/dev/null
+          echo "IMMUTABLE_TARGET=$target" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove immutable origin before traffic
+        id: preflight
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /inventory /get-approved /schedule-test-drive /app; do
+            code="$(curl -sS -L --max-time 25 -o /tmp/page -w '%{http_code}' "https://$TARGET$path")"
+            test "$code" = 200
+          done
+          curl -sS -L --max-time 25 "https://$TARGET/api/inventory?scope=public" > /tmp/inventory.json
+          jq -e '(.items // .inventory // []) | length >= 5' /tmp/inventory.json >/dev/null
+          curl -sS -L --max-time 25 -D /tmp/dealer-headers -o /tmp/dealer-health -w '%{http_code}' "$DEALER_ROOT/api/health?release=$SOURCE_SHA" | grep -qx 200
+          jq -e '.ok==true and .degraded==false' /tmp/dealer-health >/dev/null
+          tr -d '\r' < /tmp/dealer-headers | grep -Fxi "x-wdcc-dealer-app-sha: $DEALER_SHA"
+          echo 'IMMUTABLE_ORIGIN_PROOF=PASS'
+
+      - name: Capture exact rollback aliases and dealer fingerprint
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in "$APEX" "$WWW"; do
+            key="${host//./_}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" > "/tmp/before-$key.json"
+            current="$(jq -r '.url // empty' "/tmp/before-$key.json")"
+            test -n "$current"
+            echo "$key=$current" >> "$GITHUB_OUTPUT"
+          done
+          curl -sS -L --max-time 25 -D /tmp/live-dealer-before-h -o /tmp/live-dealer-before "$DEALER_ROOT/api/health"
+          grep -Fxi "x-wdcc-dealer-app-sha: $DEALER_SHA" <(tr -d '\r' < /tmp/live-dealer-before-h)
+
+      - name: Promote apex and www, verify, or rollback
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+          ROLLBACK_APEX: ${{ steps.rollback.outputs.wedontcarecars_com }}
+          ROLLBACK_WWW: ${{ steps.rollback.outputs.www_wedontcarecars_com }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          changed=0
+          rollback(){
+            rc=$?
+            trap - ERR INT TERM
+            if [ "$changed" = 1 ]; then
+              vercel alias set "$ROLLBACK_APEX" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+              vercel alias set "$ROLLBACK_WWW" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR INT TERM
+          changed=1
+          vercel alias set "$TARGET" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$TARGET" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          for i in $(seq 1 45); do
+            ok=1
+            for path in / /inventory /get-approved /schedule-test-drive /app; do
+              code="$(curl -sS -L --max-time 25 -o /tmp/live -w '%{http_code}' "https://$APEX$path")" || ok=0
+              test "$code" = 200 || ok=0
+            done
+            test "$(curl -sS -L --max-time 25 -o /tmp/live-inv -w '%{http_code}' "https://$APEX/api/inventory?scope=public")" = 200 || ok=0
+            jq -e '(.items // .inventory // []) | length >= 5' /tmp/live-inv >/dev/null 2>&1 || ok=0
+            test "$(curl -sS -L --max-time 25 -o /tmp/live-www -w '%{http_code}' "https://$WWW/")" = 200 || ok=0
+            test "$(curl -sS -L --max-time 25 -o /tmp/live-dealer-health -w '%{http_code}' "$DEALER_ROOT/api/health")" = 200 || ok=0
+            jq -e '.ok==true and .degraded==false' /tmp/live-dealer-health >/dev/null 2>&1 || ok=0
+            test "$(curl -sS -L --max-time 25 -o /tmp/live-login -w '%{http_code}' "$DEALER_ROOT/login")" = 200 || ok=0
+            test "$ok" = 1 && break
+            sleep 2
+            test "$i" -lt 45 || { echo 'LIVE_PROOF_FAILED'; exit 1; }
+          done
+          trap - ERR INT TERM
+          echo 'PUBLIC_APEX_WWW_AND_DEALER_LIVE=PASS'
