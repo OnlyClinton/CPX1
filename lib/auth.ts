@@ -38,6 +38,12 @@ export function verifyPassword(value:string,stored?:string){
     return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected);
   }catch{return false;}
 }
+export function passwordPolicyError(value:unknown){
+  const password=String(value??"");
+  if(password.length<12)return "password_must_be_at_least_12_characters";
+  if(password.length>128)return "password_is_too_long";
+  return "";
+}
 export function sessionCookieValue(user:User){return token(user);}
 export function sessionCookieHeader(user:User){return `${SESSION_COOKIE}=${sessionCookieValue(user)}; Path=/; Max-Age=${SESSION_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`;}
 export function clearSessionCookieHeader(){return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;}
