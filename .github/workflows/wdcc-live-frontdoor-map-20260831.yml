@@ -1,0 +1,118 @@
+name: WDCC Live Frontdoor Map 20260831
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: wdcc-live-frontdoor-map-20260831
+  cancel-in-progress: false
+
+jobs:
+  map:
+    if: >-
+      github.event.issue.number == 205 &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.body == 'MAP-WDCC-LIVE-FRONTDOORS-20260831'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      APEX: https://wedontcarecars.com
+      WWW: https://www.wedontcarecars.com
+      DEALER: https://dealer.wedontcarecars.com
+    steps:
+      - name: Fail-closed owner and release-control gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' > /tmp/issue205.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue205.json >/dev/null
+          body="$(jq -r '.body // ""' /tmp/issue205.json)"
+          grep -Fq 'OWNER-APPROVED P0 LIVE PRIORITY — MAIN + DEALER + VEHICLE UPLOAD' <<<"$body"
+          grep -Fq 'OWNER-APPROVED STOREFRONT VISUAL GO — 2026-08-31' <<<"$body"
+          grep -Fq 'fb1a21f2611a6b9ff3bde5dbc2de37fdbab51d32' <<<"$body"
+          grep -Fq 'routes/DNS left attached exactly as they are now' <<<"$body"
+          echo 'FRONTDOOR_MAP_RELEASE_CONTROL=PASS'
+
+      - name: Read Cloudflare DNS, Worker routes, custom domains and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          jq -e '.success==true and (.result|length)>=1' /tmp/zones.json >/dev/null
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"
+          test -n "$zone"
+
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?per_page=500" "${auth[@]}" > /tmp/dns.json
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" "${auth[@]}" > /tmp/domains.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" "${auth[@]}" > /tmp/scripts.json
+          for f in /tmp/dns.json /tmp/routes.json /tmp/domains.json /tmp/scripts.json; do jq -e '.success==true' "$f" >/dev/null; done
+
+          echo '=== WDCC DNS ==='
+          jq -c '[.result[] | select(.name=="wedontcarecars.com" or .name=="www.wedontcarecars.com" or .name=="dealer.wedontcarecars.com") | {type,name,content,proxied,ttl}]' /tmp/dns.json
+          echo '=== WDCC WORKER ROUTES ==='
+          jq -c '[.result[] | select((.pattern // "")|contains("wedontcarecars.com")) | {id,pattern,script:(.script // .script_name // null)}]' /tmp/routes.json
+          echo '=== WDCC WORKERS CUSTOM DOMAINS ==='
+          jq -c '[.result[] | select((.hostname // .domain // "")|contains("wedontcarecars.com")) | {hostname:(.hostname // .domain // null),service:(.service // .script // .script_name // null),environment:(.environment // null),zone_id:(.zone_id // null)}]' /tmp/domains.json
+          echo '=== RELEVANT WORKER SCRIPTS ==='
+          jq -c '[.result[] | (.id // .name // "") as $n | select($n|test("wdcc|storefront|dealer|reference";"i")) | $n]' /tmp/scripts.json
+
+          {
+            echo '### WDCC LIVE FRONTDOOR MAP'
+            echo 'Cloudflare configuration read completed without writes.'
+            echo '```json'
+            jq -c '[.result[] | select(.name=="wedontcarecars.com" or .name=="www.wedontcarecars.com" or .name=="dealer.wedontcarecars.com") | {type,name,content,proxied}]' /tmp/dns.json
+            jq -c '[.result[] | select((.pattern // "")|contains("wedontcarecars.com")) | {pattern,script:(.script // .script_name // null)}]' /tmp/routes.json
+            jq -c '[.result[] | select((.hostname // .domain // "")|contains("wedontcarecars.com")) | {hostname:(.hostname // .domain // null),service:(.service // .script // .script_name // null),environment:(.environment // null)}]' /tmp/domains.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe live public, app and dealer surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe(){
+            label="$1"; url="$2"; headers="/tmp/${label}.headers"; body="/tmp/${label}.body"
+            code="$(curl --http1.1 -sS -D "$headers" -o "$body" -w '%{http_code}' "$url?frontdoor_map=$GITHUB_RUN_ID" || true)"
+            server="$(awk 'BEGIN{IGNORECASE=1} /^server:/{sub(/\r$/,"");sub(/^server:[[:space:]]*/,"");print;exit}' "$headers")"
+            ray="$(awk 'BEGIN{IGNORECASE=1} /^cf-ray:/{sub(/\r$/,"");sub(/^cf-ray:[[:space:]]*/,"");print;exit}' "$headers")"
+            vercel="$(awk 'BEGIN{IGNORECASE=1} /^x-vercel-id:/{sub(/\r$/,"");sub(/^x-vercel-id:[[:space:]]*/,"");print;exit}' "$headers")"
+            wdcc_front="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-frontdoor:/{sub(/\r$/,"");sub(/^x-wdcc-frontdoor:[[:space:]]*/,"");print;exit}' "$headers")"
+            wdcc_dealer="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-dealer-frontdoor:/{sub(/\r$/,"");sub(/^x-wdcc-dealer-frontdoor:[[:space:]]*/,"");print;exit}' "$headers")"
+            wdcc_sha="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-visual-sha:/{sub(/\r$/,"");sub(/^x-wdcc-visual-sha:[[:space:]]*/,"");print;exit}' "$headers")"
+            dealer_sha="$(awk 'BEGIN{IGNORECASE=1} /^x-wdcc-dealer-app-sha:/{sub(/\r$/,"");sub(/^x-wdcc-dealer-app-sha:[[:space:]]*/,"");print;exit}' "$headers")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' "$headers")"
+            ctype="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{sub(/\r$/,"");sub(/^content-type:[[:space:]]*/,"");print;exit}' "$headers")"
+            echo "LIVE_PROBE label=$label HTTP=$code server=${server:-missing} cf_ray=${ray:-missing} vercel=${vercel:-missing} wdcc_front=${wdcc_front:-missing} wdcc_dealer=${wdcc_dealer:-missing} visual_sha=${wdcc_sha:-missing} dealer_sha=${dealer_sha:-missing} location=${location:-missing} content_type=${ctype:-missing}"
+          }
+
+          probe apex_home "$APEX/"
+          probe apex_app "$APEX/app"
+          probe apex_schedule "$APEX/schedule-test-drive"
+          probe apex_approved "$APEX/get-approved"
+          probe apex_inventory "$APEX/inventory"
+          probe apex_api_inventory "$APEX/api/inventory"
+          probe www_home "$WWW/"
+          probe dealer_root "$DEALER/"
+          probe dealer_health "$DEALER/api/health"
+          probe dealer_login "$DEALER/login"
+          probe dealer_new "$DEALER/dealer/inventory/new"
+
+          echo 'FRONTDOOR_LIVE_PROBES=PASS'
+          echo 'FRONTDOOR_MAP_COMPLETE=PASS' >> "$GITHUB_STEP_SUMMARY"
