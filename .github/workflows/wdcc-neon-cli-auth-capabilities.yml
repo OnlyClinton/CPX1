@@ -1,0 +1,51 @@
+name: WDCC Neon CLI Auth Capabilities
+
+on:
+  push:
+    branches:
+      - diag/wdcc-dealer-frontdoor-binding-20260829
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      TARGET_PROJECT_ID: royal-violet-34968484
+      TARGET_BRANCH_ID: br-sparkling-scene-ayoutdzc
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect current CLI and available Neon authority without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${NEON_API_KEY:-}" ] && echo 'NEON_API_KEY_PRESENT=YES' || echo 'NEON_API_KEY_PRESENT=NO'
+          [ -n "${NEON_TOKEN:-}" ] && echo 'NEON_TOKEN_PRESENT=YES' || echo 'NEON_TOKEN_PRESENT=NO'
+          [ -n "${NEON_PROJECT_ID:-}" ] && echo 'NEON_PROJECT_ID_PRESENT=YES' || echo 'NEON_PROJECT_ID_PRESENT=NO'
+          [ -n "${NEON_API_KEY:-}" ] && printf '::add-mask::%s\n' "$NEON_API_KEY"
+          [ -n "${NEON_TOKEN:-}" ] && printf '::add-mask::%s\n' "$NEON_TOKEN"
+          npm install -g neon@latest >/dev/null
+          echo '=== NEON VERSION ==='
+          neon --version || true
+          echo '=== NEON-AUTH HELP ==='
+          neon neon-auth --help || true
+          echo '=== NEON-AUTH USER HELP ==='
+          neon neon-auth user --help || true
+          echo '=== NEON-AUTH USERS HELP ==='
+          neon neon-auth users --help || true
+          if [ -n "${NEON_API_KEY:-}" ]; then
+            echo '=== TARGET PROJECT API ACCESS ==='
+            NEON_API_KEY="$NEON_API_KEY" neon api "/projects/$TARGET_PROJECT_ID" --output json 2>/tmp/neon-api.err | jq '{id,name,region_id}' || { echo 'NEON_API_ACCESS=FAILED'; sed -n '1,8p' /tmp/neon-api.err; }
+          else
+            echo 'NEON_API_ACCESS=SKIPPED_NO_KEY'
+          fi
+          echo 'SECRET_VALUES_PRINTED=NO'
+          echo 'READ_ONLY=YES'

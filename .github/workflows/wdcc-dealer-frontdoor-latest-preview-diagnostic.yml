@@ -1,0 +1,43 @@
+name: WDCC Dealer Frontdoor Latest Preview Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/wdcc-dealer-frontdoor-binding-20260829
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DEALER_ROOT: https://dealer.wedontcarecars.com
+      LATEST_P0_PREVIEW: https://206b3333-wdcc-dealer-frontdoor.clico-global.workers.dev
+    steps:
+      - name: Read latest frontdoor and public-edge evidence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/wdcc-dealer-frontdoor/deployments" "${auth[@]}" > /tmp/deployments.json
+          echo '=== DEALER ROUTE ==='
+          jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
+          echo '=== CURRENT FRONTDOOR DEPLOYMENT ==='
+          jq -c '(.result.deployments[]? // .result[]?) | {id,created_on,annotations,versions}' /tmp/deployments.json | head -3 || true
+          probe(){ label="$1"; url="$2"; out="/tmp/${label}.body"; hdr="/tmp/${label}.hdr"; code="$(curl --http1.1 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$url" || true)"; echo "=== $label HTTP $code ==="; grep -iE '^(server|cf-ray|location|x-wdcc-[^:]+|x-vercel-id|x-matched-path):' "$hdr" || true; head -c 700 "$out" || true; echo; }
+          probe LATEST_PREVIEW_HEALTH "$LATEST_P0_PREVIEW/api/health?diag=$GITHUB_RUN_ID"
+          probe LATEST_PREVIEW_LOGIN "$LATEST_P0_PREVIEW/dealer/login?diag=$GITHUB_RUN_ID"
+          probe LATEST_PREVIEW_NEW "$LATEST_P0_PREVIEW/dealer/inventory/new?diag=$GITHUB_RUN_ID"
+          probe PUBLIC_HEALTH "$DEALER_ROOT/api/health?diag=$GITHUB_RUN_ID"
+          probe PUBLIC_LOGIN "$DEALER_ROOT/dealer/login?diag=$GITHUB_RUN_ID"
+          echo 'DIAGNOSTIC_READ_ONLY=PASS'

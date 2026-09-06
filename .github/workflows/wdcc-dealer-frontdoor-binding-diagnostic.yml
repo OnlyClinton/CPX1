@@ -1,0 +1,75 @@
+name: WDCC Dealer Frontdoor Binding Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wdcc-dealer-frontdoor-binding-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+      DEALER_ROOT: https://dealer.wedontcarecars.com
+      APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+      FAILED_P0_VERSION_PREVIEW: https://5714ffed-wdcc-dealer-frontdoor.clico-global.workers.dev
+    steps:
+      - name: Read exact B063 frontdoor assertions only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Accept: application/json')
+          curl -fsS "https://api.cloudflare.com/client/v4/zones?name=wedontcarecars.com" "${auth[@]}" > /tmp/zones.json
+          zone="$(jq -r '.result[0].id // empty' /tmp/zones.json)"; test -n "$zone"
+          curl -fsS "https://api.cloudflare.com/client/v4/zones/$zone/workers/routes" "${auth[@]}" > /tmp/routes.json
+          echo '=== DEALER WORKER ROUTE ==='
+          jq -c '.result[]? | select((.pattern // "") | contains("dealer.wedontcarecars.com")) | {pattern,script}' /tmp/routes.json || true
+
+          probe_health(){
+            label="$1"; base="$2"
+            code="$(curl --http1.1 -sS -D "/tmp/${label}-health.hdr" -o "/tmp/${label}-health.json" -w '%{http_code}' "$base/api/health?diag=$GITHUB_RUN_ID" || true)"
+            echo "${label}_HEALTH_HTTP=$code"
+            grep -iE '^(x-wdcc-dealer-frontdoor|x-wdcc-dealer-app-sha|x-wdcc-edge|x-wdcc-origin|x-vercel-id):' "/tmp/${label}-health.hdr" || true
+            cat "/tmp/${label}-health.json" || true; echo
+          }
+          probe_ui(){
+            label="$1"; base="$2"
+            login_code="$(curl --http1.1 -sS -D "/tmp/${label}-login.hdr" -o "/tmp/${label}-login.body" -w '%{http_code}' "$base/dealer/login?diag=$GITHUB_RUN_ID" || true)"
+            login_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/,"");sub(/^location:[[:space:]]*/,"");print;exit}' "/tmp/${label}-login.hdr")"
+            new_code="$(curl --http1.1 -sS -o "/tmp/${label}-new.body" -w '%{http_code}' "$base/dealer/inventory/new?diag=$GITHUB_RUN_ID" || true)"
+            echo "${label}_DEALER_LOGIN_HTTP=$login_code"
+            echo "${label}_DEALER_LOGIN_LOCATION=$login_location"
+            echo "${label}_DEALER_NEW_HTTP=$new_code"
+          }
+          auth_probe(){
+            label="$1"; base="$2"; jar="/tmp/${label}.jar"
+            jq -nc --arg p "$WDCC_DEALER_E2E_PASSWORD" '{username:"dealer",password:$p}' > "/tmp/${label}-login.json"
+            login_code="$(curl --http1.1 -sS -D "/tmp/${label}-auth.hdr" -c "$jar" -X POST -H 'Content-Type: application/json' --data-binary @"/tmp/${label}-login.json" -o "/tmp/${label}-login-out.json" -w '%{http_code}' "$base/api/auth/login")"
+            session_code="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-session.json" -w '%{http_code}' "$base/api/auth/session")"
+            protected_code="$(curl --http1.1 -sS -b "$jar" -o "/tmp/${label}-protected.json" -w '%{http_code}' "$base/api/dealer/vehicle-logs?diag=$GITHUB_RUN_ID")"
+            echo "${label}_REAL_LOGIN_HTTP=$login_code"
+            jq -c 'if .ok==true then {ok,role} else {ok,error} end' "/tmp/${label}-login-out.json" || true
+            echo "${label}_SET_COOKIE_NAMES=$(awk 'BEGIN{IGNORECASE=1} /^set-cookie:/{sub(/^set-cookie:[[:space:]]*/,"");split($0,a,"=");gsub(/\r/,"",a[1]);printf "%s%s",sep,a[1];sep=","}' "/tmp/${label}-auth.hdr")"
+            echo "${label}_SESSION_HTTP=$session_code"
+            jq -c '{authenticated,user:{email:.user.email,role:.user.role}}' "/tmp/${label}-session.json" || true
+            echo "${label}_PROTECTED_VEHICLE_LOGS_HTTP=$protected_code"
+            jq -c '{ok,error}' "/tmp/${label}-protected.json" 2>/dev/null || true
+            rm -f "$jar"
+          }
+
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          probe_health PUBLIC "$DEALER_ROOT"
+          probe_health B063 "$FAILED_P0_VERSION_PREVIEW"
+          probe_ui B063 "$FAILED_P0_VERSION_PREVIEW"
+          auth_probe B063 "$FAILED_P0_VERSION_PREVIEW"
+          echo 'DIAGNOSTIC_READ_ONLY=PASS'

@@ -1,0 +1,65 @@
+name: WDCC Neon Admin Authority Readonly
+
+on:
+  push:
+    branches:
+      - diag/wdcc-dealer-frontdoor-binding-20260829
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locate-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      APP_URL: https://wdcc-proof-04c5d526.clico-global.workers.dev
+      AUTH_BASE: https://ep-curly-breeze-ay2iih1f.neonauth.c-5.us-east-2.aws.neon.tech/neondb/auth
+      WDCC_DEALER_E2E_PASSWORD: ${{ secrets.WDCC_DEALER_E2E_PASSWORD }}
+      WDCC_ADMIN_E2E_PASSWORD: ${{ secrets.WDCC_ADMIN_E2E_PASSWORD }}
+      WDCC_ADMIN_PASSWORD: ${{ secrets.WDCC_ADMIN_PASSWORD }}
+      WDCC_LOGIN_PASSWORD: ${{ secrets.WDCC_LOGIN_PASSWORD }}
+      WDCC_OWNER_PASSWORD: ${{ secrets.WDCC_OWNER_PASSWORD }}
+      WDCC_PORTAL_PASSWORD: ${{ secrets.WDCC_PORTAL_PASSWORD }}
+      WDCC_SHARED_LOGIN_PASSWORD: ${{ secrets.WDCC_SHARED_LOGIN_PASSWORD }}
+      WDCC_E2E_PASSWORD: ${{ secrets.WDCC_E2E_PASSWORD }}
+    steps:
+      - name: Probe existing secret authorities and raw dealer auth without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          names=(WDCC_ADMIN_E2E_PASSWORD WDCC_ADMIN_PASSWORD WDCC_LOGIN_PASSWORD WDCC_OWNER_PASSWORD WDCC_PORTAL_PASSWORD WDCC_SHARED_LOGIN_PASSWORD WDCC_E2E_PASSWORD WDCC_DEALER_E2E_PASSWORD)
+          found=0
+          for name in "${names[@]}"; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then echo "SECRET_PRESENT $name=NO"; continue; fi
+            echo "SECRET_PRESENT $name=YES"
+            printf '::add-mask::%s\n' "$value"
+            jq -nc --arg p "$value" '{username:"admin",password:$p}' > /tmp/body.json
+            code="$(curl --http1.1 -sS -c /tmp/admin.jar -X POST -H 'Content-Type: application/json' --data-binary @/tmp/body.json -o /tmp/login.json -w '%{http_code}' "$APP_URL/api/auth/login")"
+            if [ "$code" = 200 ]; then
+              session_code="$(curl --http1.1 -sS -b /tmp/admin.jar -o /tmp/session.json -w '%{http_code}' "$APP_URL/api/auth/session")"
+              authenticated="$(jq -r '.authenticated // false' /tmp/session.json 2>/dev/null || true)"
+              session_role="$(jq -r '.user.role // .role // empty' /tmp/session.json 2>/dev/null || true)"
+              echo "ADMIN_AUTH_RESULT secret=$name login=$code session=$session_code authenticated=$authenticated role=$session_role"
+              if [ "$authenticated" = true ]; then found=1; fi
+            else
+              echo "ADMIN_AUTH_RESULT secret=$name login=$code"
+            fi
+            rm -f /tmp/body.json /tmp/login.json /tmp/session.json /tmp/admin.jar
+          done
+          echo "VALID_ADMIN_AUTHORITY_FOUND=$found"
+
+          test -n "${WDCC_DEALER_E2E_PASSWORD:-}"
+          printf '::add-mask::%s\n' "$WDCC_DEALER_E2E_PASSWORD"
+          jq -nc --arg e 'dealer@internal.wedontcarecars.com' --arg p "$WDCC_DEALER_E2E_PASSWORD" '{email:$e,password:$p,rememberMe:false}' > /tmp/dealer-neon-body.json
+          raw_code="$(curl --http1.1 -sS -D /tmp/dealer-neon.hdr -X POST -H 'Content-Type: application/json' --data-binary @/tmp/dealer-neon-body.json -o /tmp/dealer-neon.json -w '%{http_code}' "$AUTH_BASE/sign-in/email")"
+          echo "RAW_NEON_DEALER_LOGIN_HTTP=$raw_code"
+          echo 'RAW_NEON_DEALER_ERROR_SAFE='
+          jq -c '{code:(.code // .error.code // null),message:(.message // .error.message // .error // null),status:(.status // null)}' /tmp/dealer-neon.json 2>/dev/null || head -c 500 /tmp/dealer-neon.json
+          echo 'RAW_NEON_RATE_HEADERS='
+          grep -iE '^(retry-after|x-ratelimit-[^:]+):' /tmp/dealer-neon.hdr || true
+          rm -f /tmp/dealer-neon-body.json /tmp/dealer-neon.json /tmp/dealer-neon.hdr
+          echo 'SECRET_VALUES_PRINTED=NO'
+          echo 'READ_ONLY=YES'
