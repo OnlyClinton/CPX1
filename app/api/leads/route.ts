@@ -2,12 +2,12 @@ import crypto from "node:crypto";
 import {NextResponse} from "next/server";
 import {currentUser} from "../../../lib/auth";
 import {readState,writeState} from "../../../lib/store";
-import {canonicalDealerBackend,WDCC_DEALER_PROJECT_ID,WDCC_PHOENIX_PROJECT_ID} from "../../../lib/wdccAuthority";
+import {canonicalDealerBackend} from "../../../lib/wdccAuthority";
 import {isDealerRuntime} from "../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../lib/dealerProxy";
 
 export const dynamic="force-dynamic";
-const editorRoles=new Set(["dealer_agent","tenant_admin","platform_admin"]);
+const editorRoles=new Set(["dealer","dealer_agent","tenant_admin","platform_admin"]);
 const supportedKinds=new Set(["schedule","contact","approval"]);
 const text=(value:unknown,max:number)=>String(value??"").trim().slice(0,max);
 const LEAD_UPSTREAM=(process.env.WDCC_LEAD_UPSTREAM_URL||"https://wdcc-lead-email-stage.vercel.app/api/lead").trim();
@@ -46,8 +46,6 @@ async function persistViaUpstream(body:any,kind:string,idempotencyKey:string){
   return {leadId:String(json.leadId),emailStatus:json.emailStatus||json.email||"upstream",smsStatus:json.smsStatus||json.sms||"upstream",mailto:json.mailto||null};
 }
 
-function canonicalHost(req:Request){const host=new URL(req.url).host.toLowerCase();const project=process.env.VERCEL_PROJECT_ID||"";return project===WDCC_DEALER_PROJECT_ID||project===WDCC_PHOENIX_PROJECT_ID||host==="dealer.wedontcarecars.com"||host.includes("wdcc-dealer-portal")||host.includes("wdcc-cpx-launch");}
-
 export async function GET(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/leads");
   const user=await currentUser();
@@ -67,7 +65,7 @@ export async function POST(req:Request){
     const requestFingerprint=hash(JSON.stringify({kind,...normalized,consent:true}));
     const qa=isQaLead(body,normalized,idempotencyKey);
 
-    if(!canonicalHost(req)){
+    if(!isDealerRuntime(req)){
       try{const dealer=await persistViaDealer(normalized,kind,idempotencyKey,qa);return NextResponse.json({...dealer,source:"dealer-ledger"},{status:dealer?.deduplicated?200:201,headers:{"Cache-Control":"no-store"}});}catch(dealerError){
         if(qa)return NextResponse.json({ok:false,persisted:false,qa:true,error:"qa_dealer_persistence_failed",dealerError:dealerError instanceof Error?dealerError.message:"dealer_persistence_failed"},{status:503,headers:{"Cache-Control":"no-store"}});
         if(kind==="approval"&&(normalized.monthlyIncome||normalized.downPaymentInterest||normalized.referralSource))return NextResponse.json({ok:false,persisted:false,error:"secure_approval_storage_unavailable"},{status:503,headers:{"Cache-Control":"no-store"}});

@@ -1,8 +1,10 @@
+import {readState,type User} from "../../../../lib/store";
 import {isDealerRuntime} from "../../../../lib/dealerRuntime";
 import {proxyDealer} from "../../../../lib/dealerProxy";
-import {readState,type User} from "../../../../lib/store";
+import {sessionCookieHeader} from "../../../../lib/auth";
 import {NEON_AUTH_BASE} from "../../../../lib/passwordRecovery";
 
+const AUTH_BASE=NEON_AUTH_BASE.replace(/\/$/,"");
 const LOGIN_MAP:Record<string,string>={
   admin:"admin@internal.wedontcarecars.com",
   bigpussy:"dealer-v2@internal.wedontcarecars.com",
@@ -14,7 +16,7 @@ function resolveLogin(value:unknown){
   const raw=String(value||"").trim().toLowerCase();
   if(LOGIN_MAP[raw])return {email:LOGIN_MAP[raw],username:raw};
   if(raw==="admin@internal.wedontcarecars.com")return {email:raw,username:"admin"};
-  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"bigpussy"};
+  if(raw==="dealer-v2@internal.wedontcarecars.com")return {email:raw,username:"dealer"};
   return null;
 }
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
@@ -27,28 +29,23 @@ async function accessUser(email:string,username:string){
   const admin=email.startsWith("admin@");
   const roles=admin?new Set(["platform_admin","tenant_admin","admin"]):new Set(["dealer_agent","dealer"]);
   const candidates=state.users.filter(user=>active(user)&&roles.has(String(user.role||"").toLowerCase()));
-  const keys=admin?new Set([email.toLowerCase(),"admin"]):new Set([email.toLowerCase(),username.toLowerCase(),"dealer","bigpussy"]);
-  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||candidates[0]||null;
-}
-function copyCookies(upstream:Response,headers:Headers){
-  const getter=(upstream.headers as any).getSetCookie;
-  if(typeof getter==="function")for(const cookie of getter.call(upstream.headers))headers.append("set-cookie",cookie);
-  else{const cookie=upstream.headers.get("set-cookie");if(cookie)headers.append("set-cookie",cookie);}
+  const keys=new Set([email.toLowerCase(),username.toLowerCase()]);
+  return candidates.find(user=>identifiers(user).some(value=>keys.has(value)))||null;
 }
 
 export async function POST(request:Request){
   if(!isDealerRuntime(request))return proxyDealer(request,"/api/auth/login");
   try{
     const body=await request.json().catch(()=>({}));
-    const login=resolveLogin(body?.username||body?.email||body?.login);
+    const login=resolveLogin(body?.username||body?.email);
     const password=String(body?.password||"");
-    if(!login||!password)return Response.json({ok:false,error:"invalid_credentials"},{status:401,headers:{"cache-control":"no-store"}});
+    if(!login||!password)return Response.json({ok:false,error:"login_and_password_required"},{status:400,headers:{"cache-control":"no-store"}});
 
-    const upstream=await fetch(`${NEON_AUTH_BASE}/sign-in/email`,{
+    const upstream=await fetch(`${AUTH_BASE}/sign-in/email`,{
       method:"POST",
       headers:{"content-type":"application/json","accept":"application/json"},
       body:JSON.stringify({email:login.email,password,rememberMe:true}),
-      redirect:"manual",cache:"no-store",signal:AbortSignal.timeout(12_000)
+      redirect:"manual",cache:"no-store",signal:AbortSignal.timeout(12000)
     });
     const text=await upstream.text();
     let data:any={};
@@ -65,19 +62,10 @@ export async function POST(request:Request){
     }
 
     const headers=new Headers({"content-type":"application/json","cache-control":"private, no-store, max-age=0"});
-    copyCookies(upstream,headers);
-    const mustChangePassword=user.mustChangePassword===true;
-    return new Response(JSON.stringify({
-      ok:true,
-      role:user.role,
-      tenantId:user.tenantId||"wdcc",
-      mustChangePassword,
-      user:{
-        id:user.id,email:login.email,username:login.username,
-        displayName:user.displayName||data?.user?.name||(login.username==="admin"?"WDCC Admin":"WDCC Dealer"),
-        role:user.role,tenantId:user.tenantId,mustChangePassword
-      }
-    }),{status:200,headers});
+    // Neon authenticates the credential; WDCC owns the browser session cookie.
+    // Do not forward a cookie scoped to the Neon Auth host.
+    headers.append("set-cookie",sessionCookieHeader(user));
+    return new Response(JSON.stringify({ok:true,role:user.role,user:{id:user.id,email:login.email,username:login.username,displayName:user.displayName||data?.user?.name||(login.username==="admin"?"WDCC Admin":"WDCC Dealer"),role:user.role}}),{status:200,headers});
   }catch(error){
     console.error("WDCC_NEON_AUTH_LOGIN_ERROR",error);
     return Response.json({ok:false,error:"auth_service_unavailable"},{status:503,headers:{"cache-control":"no-store","retry-after":"5"}});

@@ -8,6 +8,7 @@ on:
       - dev/wdcc-cinematic-mockup-v1
       - fix/wdcc-locked-contract-20260826
       - release/wdcc-photoreal-challenger-cloudflare-20260830
+      - codex/wdcc-premium-cta-consolidation-20260902
   workflow_dispatch:
 
 permissions:
@@ -115,4 +116,4 @@ jobs:
           path: preview-url.txt
           retention-days: 7
 
-# Preview trigger: vehicle-detail image verification.
+# Preview trigger: owner mobile hierarchy correction.

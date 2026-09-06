@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/wdcc-mobile-density-polish-20260831
+      - codex/wdcc-premium-cta-consolidation-20260902
 
 permissions:
   contents: read

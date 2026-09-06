@@ -1,1 +1,4 @@
-import{Footer,Header,VehicleGrid}from"../components";export default function Inventory(){return <><Header/><main><section className="inventoryTop"><div className="wrap"><div className="eyebrow">LIVE PUBLISHED INVENTORY</div><h1>FIND THE RIGHT CAR.</h1><p className="lede">Cash price, estimated down payment, mileage and the details that matter. No weekly-payment gimmicks.</p></div></section><section className="section light"><div className="wrap"><VehicleGrid/></div></section></main><Footer/></>}
+import{Footer,Header,VehicleGrid}from"../components";
+import styles from"./inventory-page.module.css";
+
+export default function Inventory(){return <><Header/><main className={styles.page}><section className={styles.hero}><p className={styles.eyebrow}>Live Tampa Bay inventory</p><h1>Find your next car.</h1><p className={styles.lead}>Real vehicles, clear cash prices, estimated down payments, and the details you need to choose confidently.</p></section><section className={styles.section}><VehicleGrid/></section></main><Footer/></>}

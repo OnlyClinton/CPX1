@@ -1,0 +1,179 @@
+/* Final owner sizing lock. Loaded last. Visual/layout only. */
+
+/* Shared inner-page wordmark (inventory, VDP, approval, contact). */
+.premiumHeader .logoBrand{position:relative!important;display:grid!important;place-items:center!important;width:128px!important;height:48px!important;overflow:visible!important}
+.premiumHeader .logoBrand img{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+.premiumHeader .logoBrand::before{content:"WDCC";display:block;font:1000 28px/.82 Arial Black,Impact,sans-serif;letter-spacing:-.065em;background:linear-gradient(90deg,#fff 0 50%,#ef202f 50% 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 1px 0 #000}
+.premiumHeader .logoBrand::after{content:"WE DON'T CARE CARS";display:block;margin-top:2px;color:#fff;font:900 6.5px/1 Arial,sans-serif;letter-spacing:.10em}
+
+@media(max-width:820px), (max-width:1100px) and (orientation:portrait){
+  html{scroll-padding-top:80px!important}
+
+  /* HOME: round logo remains, but chrome and hero are materially shorter. */
+  .reference-home .rh-utility{display:block!important;height:18px!important;min-height:18px!important}
+  .reference-home .rh-utility-inner{height:18px!important;min-height:18px!important;padding:0 6px!important;gap:9px!important;font-size:5.7px!important;letter-spacing:.02em!important}
+  .reference-home .rh-utility-inner span+span::before{left:-5px!important;width:2px!important;height:2px!important}
+  .reference-home .rh-header{height:60px!important;min-height:60px!important;top:18px!important}
+  .reference-home .rh-header-inner{height:60px!important;min-height:60px!important;padding:0 9px!important;grid-template-columns:38px 1fr 38px!important;gap:3px!important}
+  .reference-home .rh-logo{width:84px!important;height:84px!important}
+  .reference-home .rh-logo img{width:80px!important;height:80px!important}
+  .reference-home .rh-menu,.reference-home .rh-call{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}
+  .reference-home .rh-menu>span,.reference-home .rh-menu i{width:18px!important}
+  .reference-home .rh-call svg{width:17px!important;height:17px!important}
+  .reference-home .rh-nav{top:60px!important}
+
+  .reference-home .rh-hero{height:auto!important;min-height:470px!important}
+  .reference-home .rh-hero::before{background-size:max(430px,106vw) auto!important;background-position:68% top!important}
+  .reference-home .rh-hero-inner{height:auto!important;min-height:470px!important}
+  .reference-home .rh-copy{max-width:430px!important;padding:202px 11px 12px!important}
+  .reference-home .rh-kicker{margin-bottom:5px!important;font-size:7.1px!important;letter-spacing:.09em!important}
+  .reference-home .rh-kicker::before{width:20px!important;margin-right:6px!important}
+  .reference-home h1{margin-bottom:8px!important;font-size:clamp(31px,8.8vw,36px)!important;line-height:.91!important;letter-spacing:-.048em!important}
+  .reference-home .rh-lead{max-width:360px!important;font-size:10.6px!important;line-height:1.34!important}
+  .reference-home .rh-hero-actions{gap:5px!important;margin-top:9px!important}
+  .reference-home .rh-btn,.reference-home .rh-hero-actions .rh-btn:first-child,.reference-home .rh-hero-actions .rh-btn:nth-child(2){min-height:38px!important;height:38px!important;padding:0 11px!important;border-radius:5px!important;font-size:8px!important;letter-spacing:.02em!important}
+  .reference-home .rh-phone{display:flex!important;margin-top:7px!important;font-size:7.8px!important}
+  .reference-home .rh-phone svg{width:13px!important;height:13px!important}
+
+  /* Compact benefit bridge. */
+  .reference-home .rh-benefit-wrap{padding:0 6px 8px!important}
+  .reference-home .rh-benefits{border-radius:8px!important}
+  .reference-home .rh-benefit{min-height:44px!important;height:44px!important;padding:5px 9px!important;grid-template-columns:25px 1fr 10px!important;gap:7px!important}
+  .reference-home .rh-benefit::after{font-size:17px!important}
+  .reference-home .rh-icon{width:24px!important;height:24px!important;border-width:1.5px!important}
+  .reference-home .rh-icon svg{width:16px!important;height:16px!important}
+  .reference-home .rh-benefit strong{font-size:7.8px!important}
+  .reference-home .rh-benefit small{margin-top:1px!important;font-size:6.8px!important;line-height:1.12!important}
+
+  /* Featured inventory: three compact cards visible with much less vertical mass. */
+  .reference-home .rh-inventory{padding:14px 7px 18px!important}
+  .reference-home .rh-section-head{margin-bottom:7px!important;gap:5px!important}
+  .reference-home .rh-section-head small{font-size:6px!important;letter-spacing:.06em!important}
+  .reference-home .rh-section-head h2{margin:1px 0!important;font-size:20px!important;line-height:1!important}
+  .reference-home .rh-section-head p{font-size:7px!important}
+  .reference-home .rh-view-all{font-size:6.2px!important}
+  .reference-home [class*="featuredGrid"]{gap:7px!important;padding:4px 1px 7px!important}
+  .reference-home [class*="featured"]{flex:0 0 31%!important;border-radius:7px!important}
+  .reference-home [class*="featured"] [class*="media"]{aspect-ratio:1.55!important}
+  .reference-home [class*="featured"] [class*="body"]{padding:7px!important}
+  .reference-home [class*="featured"] [class*="makeLine"]{font-size:5.8px!important}
+  .reference-home [class*="featured"] [class*="title"]{min-height:1.9em!important;margin-top:2px!important;font-size:8.5px!important;line-height:1.03!important}
+  .reference-home [class*="featured"] [class*="price"]{margin-top:6px!important;font-size:15px!important}
+  .reference-home [class*="featured"] [class*="facts"],.reference-home [class*="featured"] [class*="down"]{margin-top:3px!important;font-size:5.7px!important;line-height:1.15!important}
+
+  /* Financing section: short rail, not tablet-sized blocks. */
+  .reference-home .rh-finance{padding:17px 7px 18px!important}
+  .reference-home .rh-finance-inner{width:100%!important}
+  .reference-home .rh-finance-head{grid-template-columns:minmax(0,1fr) auto!important;gap:7px!important;margin-bottom:7px!important}
+  .reference-home .rh-finance h2{font-size:18px!important;line-height:1!important}
+  .reference-home .rh-finance-head small{font-size:6.2px!important}
+  .reference-home .rh-finance-head>a{min-height:31px!important;height:31px!important;padding:0 9px!important;border-radius:4px!important;font-size:6.3px!important}
+  .reference-home .rh-steps{gap:5px!important}
+  .reference-home .rh-step{min-height:50px!important;height:50px!important;padding:5px 8px!important;grid-template-columns:26px 25px minmax(0,1fr)!important;grid-template-rows:auto auto!important;column-gap:6px!important;border-radius:6px!important}
+  .reference-home .rh-step b{width:25px!important;height:25px!important;font-size:11px!important}
+  .reference-home .rh-step-icon,.reference-home .rh-step-icon svg{width:21px!important;height:21px!important}
+  .reference-home .rh-step strong{font-size:7.5px!important}
+  .reference-home .rh-step small{font-size:6.6px!important;line-height:1.1!important}
+  .reference-home .rh-finance-call{min-height:46px!important;padding:6px 10px!important;margin-top:5px!important;border-radius:6px!important}
+  .reference-home .rh-finance-call svg{width:18px!important;height:18px!important}
+  .reference-home .rh-finance-call span{font-size:6.6px!important}
+  .reference-home .rh-finance-call strong{font-size:13px!important}
+
+  .reference-home .rh-trust{padding:0 6px 7px!important}
+  .reference-home .rh-trust-grid{grid-template-columns:1fr 1fr!important;border-radius:7px!important}
+  .reference-home .rh-trust-grid article{min-height:48px!important;height:48px!important;padding:5px 7px!important;gap:6px!important}
+  .reference-home .rh-trust-icon{width:23px!important;height:23px!important}
+  .reference-home .rh-trust-grid b{font-size:6.8px!important}
+  .reference-home .rh-trust-grid article div span{margin-top:1px!important;font-size:6.1px!important}
+  .reference-home .rh-footer{padding:10px 8px!important}
+  .reference-home .rh-footer-inner{gap:3px!important;font-size:6.6px!important}
+
+  /* INNER-PAGE HEADER: compact wordmark like the supplied inventory/approval references. */
+  .commandStrip{display:none!important}
+  .premiumHeader{height:58px!important;min-height:58px!important;top:0!important}
+  .premiumHeader .nav{height:58px!important;min-height:58px!important;padding:0 9px!important;grid-template-columns:38px minmax(0,1fr) 38px!important;gap:3px!important}
+  .premiumHeader .logoBrand{width:112px!important;height:42px!important}
+  .premiumHeader .logoBrand::before{font-size:25px!important}
+  .premiumHeader .logoBrand::after{font-size:5.7px!important}
+  .premiumHeader .mobileMenuButton,.premiumHeader .mobileCallButton{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}
+  .premiumHeader .mobileMenuButton{font-size:22px!important}
+  .premiumHeader .mobileCallButton svg{width:16px!important;height:16px!important}
+  .mobileHeaderMenu{top:58px!important;left:6px!important;right:6px!important}
+
+  /* Inventory hero and compact horizontal catalog rows. */
+  .inventoryTop{padding:18px 0 15px!important;min-height:125px!important;background:linear-gradient(90deg,rgba(2,7,12,.88),rgba(2,7,12,.38)),url('/wdcc-hero-r31.webp') 72% 48%/cover no-repeat!important}
+  .inventoryTop .wrap{padding:0 10px!important}
+  .inventoryTop .eyebrow{font-size:6.5px!important;letter-spacing:.08em!important}
+  .inventoryTop h1{margin:3px 0 5px!important;font-size:30px!important;line-height:.9!important}
+  .inventoryTop .lede{max-width:72%!important;margin:0!important;font-size:8.5px!important;line-height:1.25!important}
+  .inventoryTop+.section{padding:10px 7px 22px!important}
+  .inventoryTop+.section [class*="catalogToolbar"]{margin-bottom:8px!important;padding:5px 1px 7px!important}
+  .inventoryTop+.section [class*="catalogToolbar"] strong{font-size:8px!important}
+  .inventoryTop+.section [class*="catalogGrid"]{grid-template-columns:1fr!important;gap:6px!important}
+  .inventoryTop+.section [data-inventory-card]{display:grid!important;grid-template-columns:40% 60%!important;min-height:100px!important;border-radius:7px!important;box-shadow:0 3px 10px rgba(10,24,36,.07)!important}
+  .inventoryTop+.section [data-inventory-card]>span:first-child{width:100%!important;height:100%!important;min-height:100px!important;aspect-ratio:auto!important}
+  .inventoryTop+.section [data-inventory-card]>span:last-child{padding:7px 8px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="makeLine"]{font-size:5.8px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="title"]{min-height:0!important;margin-top:2px!important;font-size:9.8px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="price"]{margin-top:5px!important;font-size:16px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="facts"],.inventoryTop+.section [data-inventory-card] [class*="down"]{margin-top:2px!important;font-size:6.1px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="details"]{padding-top:5px!important;margin-top:auto!important;font-size:6.4px!important}
+  .inventoryTop+.section [data-inventory-card] [class*="details"] b{width:19px!important;height:19px!important;font-size:9px!important}
+
+  /* VDP proportions. */
+  .vehicle-detail{padding:10px 0 20px!important}
+  .vehicle-detail>.wrap{padding:0 8px!important}
+  .vehicle-detail>.wrap>.eyebrow{margin:2px 0 3px!important;font-size:6.5px!important}
+  .vehicle-detail>.wrap>h2{margin:0 0 7px!important;font-size:23px!important;line-height:.98!important}
+  .vehicle-detail-grid{gap:7px!important}
+  .vehicle-detail .photo{border-radius:7px!important}
+  .vehicle-detail .vehicle-summary{padding:9px!important;border-radius:7px!important}
+  .vehicle-detail .price{font-size:25px!important}
+  .vehicle-detail .down{font-size:7.5px!important}
+  .vehicle-detail .vehicle-specs{margin:6px 0!important;gap:3px!important}
+  .vehicle-detail .vehicle-specs span{padding:4px 5px!important;font-size:6.2px!important}
+  .vehicle-detail .vehicle-description{font-size:8px!important;line-height:1.25!important}
+  .vehicle-detail .actions{gap:5px!important;margin-top:7px!important}
+  .vehicle-detail .actions .cta{min-height:36px!important;height:36px!important;font-size:7.6px!important;border-radius:5px!important}
+  .vehicle-detail .actions .vdp-call{min-height:24px!important;height:auto!important;font-size:7px!important}
+
+  /* Approval/test-drive/contact: compact mobile card proportions. */
+  .conversionPage{padding-bottom:10px!important}
+  .conversionBackdrop{height:205px!important;background-size:auto 205px!important}
+  .conversionGrid{padding:137px 8px 0!important;gap:8px!important}
+  .conversionCopy h1{font-size:27px!important;line-height:.93!important}
+  .conversionLead{margin-top:5px!important;font-size:8.8px!important;line-height:1.25!important}
+  .conversionCopy ul{gap:3px!important;margin-top:6px!important}
+  .conversionCopy li{padding-left:18px!important;font-size:7.8px!important}
+  .conversionSean{margin-top:7px!important;padding:7px 8px!important}
+  .conversionCard{padding:9px!important;border-radius:7px!important}
+  .conversionCardHead h2{font-size:19px!important}
+  .conversionCardHead p{font-size:7.2px!important}
+  .conversionCard .leadGrid{gap:6px!important}
+  .conversionCard .leadGrid label{gap:3px!important;font-size:6.6px!important}
+  .conversionCard input,.conversionCard select{height:38px!important;font-size:14px!important;padding:0 8px!important}
+  .conversionCard textarea{height:58px!important;font-size:14px!important;padding:7px 8px!important}
+  .conversionCard .cta.red{min-height:38px!important;height:38px!important;margin-top:7px!important;font-size:8px!important}
+  .conversionCard .consent{font-size:6.2px!important;line-height:1.2!important}
+  .conversionTrust{margin-top:7px!important}
+
+  /* DEALER mobile: dense header, wizard, photos and readiness like supplied mockups. */
+  .refDealerTop{height:56px!important;min-height:56px!important;padding:0 8px!important}
+  .refDealerTopBrand{gap:6px!important}
+  .refDealerTopBrand img{width:28px!important;height:28px!important}
+  .refDealerTopBrand b{font-size:9px!important}.refDealerTopBrand span{font-size:5.8px!important}
+  .refDealerContent{padding:8px 7px 62px!important}
+  .refDealerTitle{margin-bottom:8px!important}.refDealerTitle h1{font-size:20px!important}.refDealerTitle p{font-size:8px!important}
+  .refDealerTitleActions{gap:5px!important;margin-top:7px!important}.refDealerTitleActions a,.refDealerTitleActions button{min-height:34px!important;height:34px!important;padding:0 8px!important;font-size:7.5px!important}
+  .refDealerFilters{gap:5px!important;margin-bottom:7px!important}.refDealerFilters input,.refDealerFilters select,.refDealerFilters button{height:34px!important;font-size:8px!important;padding:0 7px!important}
+  .refDealerRows{gap:6px!important}.refDealerVehicleRow{padding:6px!important;gap:5px!important;border-radius:6px!important}.refDealerThumb{width:88px!important;height:56px!important}.refDealerVehicle strong{font-size:8px!important}.refDealerVehicle small,.refDealerVehicleRow small{font-size:5.8px!important}.refReady span{font-size:6.5px!important}.refDealerActions{gap:5px!important;padding-top:5px!important}.refDealerActions a,.refDealerActions button{font-size:11px!important}.refDealerActions small{font-size:5.5px!important}
+  .refDealerMobileNav{height:56px!important}.refDealerMobileNav a{font-size:14px!important}.refDealerMobileNav span{font-size:5.7px!important}.refDealerMobileNav .add{width:42px!important;height:42px!important;flex-basis:42px!important}
+
+  .dealerMain{padding:7px!important}.vehicleWizard{padding-bottom:60px!important}
+  .wizardHeader{padding:8px!important}.wizardHeader h1{font-size:18px!important}.wizardHeader .muted{font-size:7px!important}
+  .wizardSteps{margin-top:7px!important}.wizardStep{font-size:6.2px!important}.wizardStep b{width:22px!important;height:22px!important;font-size:8px!important}
+  .vehicleFormPanel{padding:8px!important;border-radius:6px!important}.vehicleFormGrid{gap:6px!important}.vehicleFormGrid label{font-size:6.5px!important}.vehicleFormGrid input,.vehicleFormGrid select,.vehicleFormGrid textarea{min-height:34px!important;height:34px!important;font-size:12px!important;padding:0 7px!important}.vehicleFormGrid textarea{height:54px!important;padding-top:7px!important}
+  .photoTools{gap:5px!important}.photoTool{min-height:42px!important;height:42px!important;padding:4px!important;font-size:7px!important;border-radius:5px!important}.photoTool svg{width:15px!important;height:15px!important}
+  .photoGallery{gap:5px!important}.photoThumb{min-height:0!important;border-radius:5px!important}.readinessPanel{padding:8px!important}.readinessPanel h3{font-size:14px!important}.readinessTrack{height:4px!important}.readinessList{font-size:7px!important;line-height:1.35!important}
+  .wizardActions{gap:5px!important;margin-top:7px!important}.wizardActions button,.wizardActions a{min-height:36px!important;height:36px!important;font-size:7.6px!important}.wizardActions .publish{min-height:38px!important;height:38px!important}
+}
