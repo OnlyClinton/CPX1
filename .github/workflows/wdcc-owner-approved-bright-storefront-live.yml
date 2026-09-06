@@ -148,12 +148,14 @@ jobs:
               if(!intro||!intro.filter.includes('brightness(1.28)')||Number(intro.opacity)<.95)throw Error(`${cfg.name} intro ${JSON.stringify(intro)}`);
               await page.screenshot({path:`proof/${cfg.name}-intro.png`,fullPage:false});
               await page.waitForTimeout(1400);
-              await page.evaluate(async()=>{
-                const step=Math.max(320,Math.floor(innerHeight*.7));
-                for(let y=0;y<document.documentElement.scrollHeight;y+=step){scrollTo(0,y);await new Promise(r=>setTimeout(r,100));}
-                scrollTo(0,0);
-              });
-              await page.waitForTimeout(400);
+              const reveals=page.locator('[data-rh-reveal]');
+              for(let index=0;index<await reveals.count();index++){
+                await reveals.nth(index).scrollIntoViewIfNeeded();
+                await page.waitForTimeout(140);
+              }
+              await page.waitForFunction(()=>[...document.querySelectorAll('[data-rh-reveal]')].every(node=>node.classList.contains('rh-visible')||Number(getComputedStyle(node).opacity)>=.95),null,{timeout:5000});
+              await page.evaluate(()=>scrollTo(0,0));
+              await page.waitForTimeout(300);
               const home=await page.evaluate(()=>({
                 overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,
                 hero:getComputedStyle(document.querySelector('.rh-hero'),'::before').backgroundImage,
