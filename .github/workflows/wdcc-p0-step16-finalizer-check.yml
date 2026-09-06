@@ -1,0 +1,26 @@
+name: WDCC P0 Step16 Finalizer Check
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/wdcc-p0-step16-finalize.sh'
+      - '.github/workflows/wdcc-p0-step16-finalizer-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x .github/scripts/wdcc-p0-step16-finalize.sh || chmod +x .github/scripts/wdcc-p0-step16-finalize.sh
+          bash -n .github/scripts/wdcc-p0-step16-finalize.sh
+          grep -Fq 'trap - ERR INT TERM' .github/scripts/wdcc-p0-step16-finalize.sh
+          grep -Fq 'exit 0' .github/scripts/wdcc-p0-step16-finalize.sh
+          ! grep -Eq 'wrangler (versions deploy|triggers deploy)|cloudflare.com/client/v4/.*/(routes|domains)|vercel|dns' .github/scripts/wdcc-p0-step16-finalize.sh
+          echo 'P0_STEP16_FINALIZER_CHECK=PASS'
