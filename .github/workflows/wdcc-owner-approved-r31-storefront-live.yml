@@ -1,0 +1,131 @@
+name: WDCC Owner Approved R31 Storefront Live
+
+# Production writes are subordinate to wdcc-production-freeze-check.yml.
+# This is an exact owner-triggered, rollback-protected P0 lane only.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: wdcc-production-release
+  cancel-in-progress: false
+
+env:
+  APPROVED_SHA: 0b7789d18822bb3bc7fed5b90003fd50bf41f9af
+  VISUAL_SHA: f8072425855e16ae2c0ef57a78637e15bbad6322
+  VERCEL_SCOPE: cpxagency
+  VERCEL_TEAM_ID: team_G6jmETRRl8fV3KfivPOdj8JM
+  VERCEL_PROJECT_ID: prj_We7xkAkB5Qy31Pt17USSkQFE0u7h
+  APEX: wedontcarecars.com
+  WWW: www.wedontcarecars.com
+
+jobs:
+  promote:
+    if: github.event.issue.number == 205 && github.event.comment.user.login == github.repository_owner && github.event.comment.body == 'PROMOTE-WDCC-R31-F8072425'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Fail closed owner gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test "$GITHUB_REPOSITORY_OWNER" = "${{ github.event.comment.user.login }}"
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/issue.json
+          jq -e '.number==205 and .state=="open"' /tmp/issue.json >/dev/null
+          curl -fsS "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/205/comments?per_page=100" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' > /tmp/comments.json
+          jq -e --arg owner "$GITHUB_REPOSITORY_OWNER" --arg marker "WDCC_OWNER_VISUAL_APPROVAL $VISUAL_SHA" 'any(.[]; .user.login==$owner and .author_association=="OWNER" and (.body // "")==$marker)' /tmp/comments.json >/dev/null
+          echo OWNER_APPROVAL=PASS
+          echo RELEASE_CONTROL=PASS
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Exact source build
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          test -f app/r31-mobile-composition-final.css
+          grep -Fq "background-image:url('/wdcc-hero-v2.webp')" app/r31-mobile-composition-final.css
+          grep -Fq '.wdcc-mobile-actions{display:none!important}' app/r31-mobile-composition-final.css
+          grep -Fq 'r31-mobile-composition-final.css' app/layout.tsx
+          npm ci
+          npm run build
+
+      - name: Browser visual and animation proof
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install chromium
+          npm run start -- --hostname 127.0.0.1 --port 3000 >/tmp/wdcc-next.log 2>&1 &
+          pid=$!; trap 'kill $pid 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/ >/dev/null && break; sleep 1; done
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch({headless:true});
+            for(const c of [{n:'desktop',w:1440,h:1100,m:false,t:false},{n:'mobile',w:390,h:844,m:true,t:true},{n:'touch',w:980,h:1740,m:false,t:true}]){
+              const x=await b.newContext({viewport:{width:c.w,height:c.h},isMobile:c.m,hasTouch:c.t}); const p=await x.newPage(); const errs=[];
+              p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>errs.push(String(e)));
+              await p.goto('http://127.0.0.1:3000/?hard-proof=1',{waitUntil:'domcontentloaded',timeout:30000});
+              const f=await p.evaluate(async()=>{let a=[],l=performance.now(),s=l;await new Promise(r=>{function q(n){a.push(n-l);l=n;n-s<1800?requestAnimationFrame(q):r()}requestAnimationFrame(q)});a.sort((x,y)=>x-y);return {p95:a[Math.floor(a.length*.95)]||999,slow:a.filter(v=>v>50).length/a.length}});
+              await p.waitForTimeout(1800); const h=await p.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth+1,hero:getComputedStyle(document.querySelector('.rh-hero'),'::before').backgroundImage,hidden:[...document.querySelectorAll('[data-rh-reveal]')].filter(n=>getComputedStyle(n).opacity==='0').length,dock:[...document.querySelectorAll('.rh-mobile-dock,.mobile-action-bar,.wdcc-mobile-actions')].some(n=>getComputedStyle(n).display!=='none'),cards:document.querySelectorAll('.rh-card').length,images:[...document.querySelectorAll('.rh-card img')].filter(i=>i.complete&&i.naturalWidth>0).length}));
+              if(f.p95>75||f.slow>.10)throw Error(c.n+' animation '+JSON.stringify(f)); if(h.overflow||!h.hero.includes('wdcc-hero-v2.webp')||h.hidden||h.dock||h.cards<5||h.images<5||errs.length)throw Error(c.n+' visual '+JSON.stringify({...h,errs:errs.slice(0,2)}));
+              await x.close();
+            } await b.close();})();
+          NODE
+          trap - EXIT; kill $pid 2>/dev/null || true
+          echo RESPONSIVE_VISUAL_ANIMATION=PASS
+
+      - name: Immutable donor
+        id: target
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.5.0
+          mkdir -p .vercel; printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel build --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          target="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")"; test -n "$target"; echo "target=$target" >> "$GITHUB_OUTPUT"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$target?teamId=$VERCEL_TEAM_ID" >/tmp/target.json
+          jq -e --arg sha "$APPROVED_SHA" '.readyState=="READY" and .meta.githubCommitSha==$sha' /tmp/target.json >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /api/health --deployment "$target" >/tmp/health; jq -e '.ok==true and .degraded==false' /tmp/health >/dev/null
+          vercel --scope "$VERCEL_SCOPE" curl /api/inventory --deployment "$target" >/tmp/inv; jq -e '.ok==true and (.items|length)>=5' /tmp/inv >/dev/null
+          echo IMMUTABLE_DONOR=PASS
+
+      - name: Capture rollback aliases
+        id: rollback
+        run: |
+          set -euo pipefail
+          for host in "$APEX" "$WWW"; do k="${host//./_}"; curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID" >/tmp/$k.json; u="$(jq -r '.url // empty' /tmp/$k.json)"; test -n "$u"; echo "$k=$u" >> "$GITHUB_OUTPUT"; done
+
+      - name: Promote with automatic rollback
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+          OLD_APEX: ${{ steps.rollback.outputs.wedontcarecars_com }}
+          OLD_WWW: ${{ steps.rollback.outputs.www_wedontcarecars_com }}
+        run: |
+          set -Eeuo pipefail
+          changed=0
+          rollback(){ rc=$?; trap - ERR INT TERM; if [ "$changed" = 1 ]; then vercel alias set "$OLD_APEX" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true; vercel alias set "$OLD_WWW" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" || true; fi; exit "$rc"; }
+          trap rollback ERR INT TERM; changed=1
+          vercel alias set "$TARGET" "$APEX" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          vercel alias set "$TARGET" "$WWW" --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE"
+          for i in $(seq 1 45); do code="$(curl -sS -L --max-time 20 -o /tmp/home -w '%{http_code}' "https://$APEX/?r31=$APPROVED_SHA")"; [ "$code" = 200 ] && grep -qi 'we don.t care' /tmp/home && break; [ "$i" = 45 ] && exit 1; sleep 2; done
+          for path in / /inventory /get-approved /schedule-test-drive /app; do code="$(curl -sS -L --max-time 20 -o /tmp/live -w '%{http_code}' "https://$APEX$path?r31=$APPROVED_SHA")"; test "$code" = 200; done
+          code="$(curl -sS -L --max-time 20 -o /tmp/www -w '%{http_code}' "https://$WWW/?r31=$APPROVED_SHA")"; test "$code" = 200
+          code="$(curl -sS -L --max-time 20 -o /tmp/dealer -w '%{http_code}' 'https://dealer.wedontcarecars.com/api/health?r31='$APPROVED_SHA)"; test "$code" = 200
+          changed=0; trap - ERR INT TERM
+          echo LIVE_R31_STOREFRONT=PASS
