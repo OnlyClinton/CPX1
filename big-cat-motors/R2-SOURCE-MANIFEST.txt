@@ -1,0 +1,9 @@
+BIG CAT MOTORS R2 SOURCE ARTIFACT
+UTC release date: 2026-08-31
+Artifact: BIG-CAT-MOTORS-R2.zip
+SHA-256: de67441a8c34d3046e99d2ce710d77bdd553a67d90a7406a623c7c82131f5230
+Target Vercel project: big-cat-motors-prod
+Target Vercel project id: prj_wftsVV93Xe2B5TH6Ssrd0CXYVX0I
+Tenant: big-cat-motors
+Production indexing: disabled until approval
+Production domain: unverified / not attached
