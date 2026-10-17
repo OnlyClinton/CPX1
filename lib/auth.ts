@@ -55,3 +55,11 @@ export async function setSession(user:User){
   jar.set(SESSION_COOKIE,sessionCookieValue(user),{httpOnly:true,secure:true,sameSite:"strict",path:"/",maxAge:SESSION_MAX_AGE});
 }
 export async function clearSession(){const jar=await cookies();jar.delete(SESSION_COOKIE);}
+
+// Shared by dealer/admin change-password and reset-confirm endpoints.
+// Return stable error codes consumed by the existing password-change UI.
+export function passwordPolicyError(value: string): string | null {
+  if (value.length < 12) return "password_must_be_at_least_12_characters";
+  if (value.length > 128) return "password_is_too_long";
+  return null;
+}
