@@ -1,0 +1,35 @@
+name: WDCC Auth Typecheck (read-only)
+on:
+  pull_request:
+    paths:
+      - "lib/auth.ts"
+      - "app/api/auth/**"
+      - "lib/passwordRecovery.ts"
+      - "lib/store.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/wdcc-auth-typecheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit
+      - name: Verify TypeScript auth contracts
+        run: npx tsc --noEmit
+      - name: Ensure password-policy export exists
+        run: |
+          grep -q 'export function passwordPolicyError' lib/auth.ts
+          grep -q 'passwordPolicyError' app/api/auth/change-password/route.ts
+          grep -q 'passwordPolicyError' app/api/auth/password-reset/confirm/route.ts
