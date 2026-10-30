@@ -23,7 +23,7 @@ Cloudflare D1 `cpx-estate-engine-v1` exists. At read-only audit: 6 listing rows,
 ## Pilot business target — NOT verified revenue
 - First offer hypothesis: $249 / 30-day customer-authorized property-record operations pilot for a licensed real estate company.
 - First traction gate: 3 independently signed and paid pilots; then document support burden, retention and gross contribution.
-- Public prospect research register: 10 grounded Tampa Bay business listings; 90 unfilled slots. **No outreach sent.**
+- Public prospect research register: 30 grounded Tampa Bay business listings; 70 unfilled slots. **No outreach sent.**
 
 ## Development artifacts
 Complete runnable static demo, restricted-publishing schema proposal, pilot discovery drafts, and financial workbook in the ChatGPT deliverable titled **CPX_RealEstate_Zero_Cash_Launch_20261030.zip**. These do **not** deploy automatically or provide a production backend.
