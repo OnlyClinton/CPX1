@@ -28,6 +28,21 @@ function parse(value?:string|null){
   }catch{return null;}
 }
 function active(user:User){return user.status!=="disabled"&&!user.disabled;}
+/**
+ * Shared reset/change password policy, consistent with account UI.
+ * The canonical identity service remains authoritative for reset tokens and
+ * may enforce additional provider-level credential restrictions.
+ */
+export function passwordPolicyError(value:string):string|null{
+  if(typeof value!=="string"||value.length<12)return "password_must_be_at_least_12_characters";
+  if(value.length>128)return "password_is_too_long";
+  if([...value].some(ch=>ch.charCodeAt(0)<32||ch.charCodeAt(0)===127))
+    return "password_contains_control_characters";
+  const blocked=new Set(["password123456","123456789012","qwerty123456","letmein123456","admin12345678","changeme12345"]);
+  if(blocked.has(value.toLowerCase().replaceAll(" ","")))return "password_too_common";
+  return null;
+}
+
 export function verifyPassword(value:string,stored?:string){
   if(!stored?.startsWith("scrypt$"))return false;
   const[,salt,digest]=stored.split("$");
