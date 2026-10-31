@@ -56,7 +56,7 @@ export default function VehicleEditor(){
     const requestId=crypto.randomUUID(),headers={"Content-Type":"application/json","X-WDCC-Request-ID":requestId};let id=editId;
     try{
       if(id){const r=await fetch(`/api/inventory/${encodeURIComponent(id)}`,{method:"PATCH",credentials:"include",headers,body:JSON.stringify({...payload(),...(intent==="draft"?{status:"draft"}:{})})}),j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.message||j.error||"Vehicle update failed")}
-      else{const r=await fetch("/api/inventory",{method:"POST",credentials:"include",headers,body:JSON.stringify(payload())}),j=await r.json().catch(()=>({}));if(!r.ok||!j?.item?.id)throw Error(j.error||"Vehicle draft could not be created");id=String(j.item.id)}
+      else{const r=await fetch("/api/inventory?scope=dealer",{method:"POST",credentials:"include",headers,body:JSON.stringify(payload())}),j=await r.json().catch(()=>({}));if(!r.ok||!j?.item?.id)throw Error(j.error||"Vehicle draft could not be created");id=String(j.item.id)}
 
       const paths=[...existing];
       for(let i=0;i<files.length;i++){
