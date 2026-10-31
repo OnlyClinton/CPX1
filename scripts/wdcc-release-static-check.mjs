@@ -32,7 +32,7 @@ check("reset token is handled by server",()=>assert.match(read("app/api/auth/pas
 check("public inventory default scoped",()=>assert.match(read("app/api/inventory/route.ts"),/scope==="dealer"\?proxyDealer\(request,"\/api\/inventory"\):proxyPublicInventory\(request\)/));
 check("privileged dealer inventory explicitly scoped",()=>assert.match(read("app/dealer/inventory/page.tsx"),/api\/inventory\?scope=dealer/));
 check("vehicle editor explicitly scoped",()=>assert.match(read("app/dealer/inventory/VehicleEditor.tsx"),/api\/inventory\?scope=dealer/));
-check("five verified recovery photo IDs",()=>assert.equal((read("lib/recoveryVehicleImage.ts").match(/^  "\\d{4}-/gm)||[]).length,5));
+check("five verified recovery photo IDs",()=>assert.equal((read("lib/recoveryVehicleImage.ts").match(/^  "[0-9]{4}-/gm)||[]).length,5));
 check("dealer image source points at verified public media",()=>assert.match(read("lib/recoveryVehicleImage.ts"),/https:\/\/wedontcarecars\.com\/assets\/cars/));
 check("public metadata has explicit canonical",()=>assert.match(read("app/inventory/layout.tsx"),/canonical/));
 check("admin/dealer marked noindex",()=>assert.match(read("app/dealer/layout.tsx"),/index:false/));
