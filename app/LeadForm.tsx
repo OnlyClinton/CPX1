@@ -73,9 +73,9 @@ export default function LeadForm({kind,source}:{kind:Kind;source?:string}){
       const idempotencyKey=crypto.randomUUID();
       const response=await fetch("/api/leads",{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":idempotencyKey},body:JSON.stringify({...payload,idempotencyKey})});
       const json=await response.json().catch(()=>({}));
-      if(!response.ok||json?.ok!==true)throw Error(json.error||"submit_failed");
+      if(!response.ok||json?.ok!==true||json?.persisted!==true)throw Error(json.error||"submit_failed");
       formEl.reset();setSelectedVehicle("");setSuccess(true);
-      setMessage(json?.sync?.upstream==="pending"?`${successLabel[kind]} It is already saved in the dealer dashboard and queued for notification sync.`:`${successLabel[kind]} Sean's team can see it now.`);
+      setMessage(json?.sync?.dealer==="failed"?`${successLabel[kind]} Dealer dashboard synchronization is pending. Call to confirm any time-sensitive request.`:json?.sync?.upstream==="pending"?`${successLabel[kind]} Saved for follow-up; notifications may be delayed. Call to confirm if urgent.`:`${successLabel[kind]} The team will follow up. Call to confirm your appointment or vehicle availability.`);
     }catch(error){
       setSuccess(false);
       const reason=error instanceof Error?error.message:"submit_failed";

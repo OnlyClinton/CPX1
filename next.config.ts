@@ -50,7 +50,7 @@ const dealerHeaders = [
       "object-src 'none'",
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+      "img-src 'self' data: blob: https://wedontcarecars.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
       "connect-src 'self' https://vercel.com https://*.vercel-storage.com https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
       "font-src 'self' data:",
       "media-src 'self' blob:",
@@ -80,10 +80,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async redirects() {
     return [
+      { source: "/:path*", has: [{ type: "host", value: "www.wedontcarecars.com" }], destination: "https://wedontcarecars.com/:path*", permanent: true },
       { source: "/inventory/:id", destination: "/vehicle/:id", permanent: true },
       { source: "/financing", destination: "/get-approved?source=legacy-financing", permanent: true },
-      { source: "/about", destination: "/#how-it-works", permanent: true },
-      { source: "/reviews", destination: "/#how-it-works", permanent: true }
+      { source: "/reviews", destination: "/#reviews", permanent: true }
     ];
   },
   async headers() {

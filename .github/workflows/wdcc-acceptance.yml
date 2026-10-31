@@ -1,122 +1,119 @@
-name: WDCC Acceptance
+name: WDCC Read-Only Release Acceptance
 
+# No production mutations. Prior workflow that sent synthetic customer leads
+# and published proof vehicles remains retrievable from Git history only.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'scripts/wdcc-release-static-check.mjs'
+      - 'scripts/wdcc-live-readonly-audit.mjs'
+      - '.github/workflows/wdcc-acceptance.yml'
+  schedule:
+    - cron: '19 13 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wdcc-readonly-qa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  smoke:
+  static-acceptance:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
+    timeout-minutes: 15
     steps:
-      - name: Homepage visual contract
-        id: home
-        continue-on-error: true
-        shell: bash
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Static product acceptance and route gates
         run: |
-          code="$(curl -sS -L -o /tmp/home.html -w '%{http_code}' https://wedontcarecars.com/)"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          markers=0
-          grep -q 'cinematic' /tmp/home.html && markers=$((markers+1))
-          grep -q 'stickyCtaBar' /tmp/home.html && markers=$((markers+1))
-          grep -q 'SCHEDULE A TEST DRIVE' /tmp/home.html && markers=$((markers+1))
-          grep -q 'GET PRE-APPROVED' /tmp/home.html && markers=$((markers+1))
-          grep -q 'CALL SEAN' /tmp/home.html && markers=$((markers+1))
-          echo "markers=$markers" >> "$GITHUB_OUTPUT"
-          test "$code" = "200" && test "$markers" = "5"
-
-      - name: Backend health
-        id: health
-        continue-on-error: true
-        shell: bash
-        run: |
-          code="$(curl -sS -o /tmp/backend-health.json -w '%{http_code}' https://wdcc-cpx-launch.vercel.app/api/health)"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          release="$(jq -r '.release // "unknown"' /tmp/backend-health.json 2>/dev/null || echo invalid-json)"
-          ok="$(jq -r '.ok // false' /tmp/backend-health.json 2>/dev/null || echo false)"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-          echo "ok=$ok" >> "$GITHUB_OUTPUT"
-          test "$code" = "200" && test "$ok" = "true"
-
-      - name: Submit storefront lead
-        id: lead
-        continue-on-error: true
-        shell: bash
-        run: |
-          RUN="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          code="$(curl -sS -o /tmp/lead.json -w '%{http_code}' -X POST https://wedontcarecars.com/api/leads -H 'content-type: application/json' -H "idempotency-key: wdcc-current-smoke-$RUN" --data "{\"kind\":\"schedule\",\"name\":\"WDCC LIVE QA $RUN\",\"phone\":\"813-555-0101\",\"email\":\"qa-$RUN@invalid.example\",\"vehicleInterest\":\"Live QA Test Vehicle\",\"message\":\"Automated WDCC production smoke test - do not contact\",\"preferredTime\":\"QA only\",\"consent\":true,\"source\":\"live-smoke\"}")"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          ok="$(jq -r '.ok // false' /tmp/lead.json 2>/dev/null || echo false)"
-          persisted="$(jq -r '.persisted // false' /tmp/lead.json 2>/dev/null || echo false)"
-          id="$(jq -r '.item.id // .leadId // "none"' /tmp/lead.json 2>/dev/null || echo none)"
-          email="$(jq -r '.notifications.email // .emailStatus // "unknown"' /tmp/lead.json 2>/dev/null || echo unknown)"
-          sms="$(jq -r '.notifications.sms // .smsStatus // "unknown"' /tmp/lead.json 2>/dev/null || echo unknown)"
-          source="$(jq -r '.source // .item.source // "unknown"' /tmp/lead.json 2>/dev/null || echo unknown)"
-          echo "ok=$ok" >> "$GITHUB_OUTPUT"
-          echo "persisted=$persisted" >> "$GITHUB_OUTPUT"
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-          echo "email=$email" >> "$GITHUB_OUTPUT"
-          echo "sms=$sms" >> "$GITHUB_OUTPUT"
-          echo "source=$source" >> "$GITHUB_OUTPUT"
-          test "$code" -ge 200 && test "$code" -lt 300 && test "$ok" = "true" && test "$persisted" = "true"
-
-      - name: Inventory publish proof
-        id: inventory
-        continue-on-error: true
-        shell: bash
-        run: |
-          pcode="$(curl -sS -o /tmp/proof.json -w '%{http_code}' -X POST https://wdcc-cpx-launch.vercel.app/api/qa-proof -H 'content-type: application/json' --data '{}')"
-          echo "proof_code=$pcode" >> "$GITHUB_OUTPUT"
-          pok="$(jq -r '.ok // false' /tmp/proof.json 2>/dev/null || echo false)"
-          vid="$(jq -r '.vehicle.id // "none"' /tmp/proof.json 2>/dev/null || echo none)"
-          vstatus="$(jq -r '.vehicle.status // "none"' /tmp/proof.json 2>/dev/null || echo none)"
-          echo "proof_ok=$pok" >> "$GITHUB_OUTPUT"
-          echo "vehicle_id=$vid" >> "$GITHUB_OUTPUT"
-          echo "vehicle_status=$vstatus" >> "$GITHUB_OUTPUT"
-          icode="$(curl -sS -o /tmp/inventory.json -w '%{http_code}' https://wedontcarecars.com/api/inventory)"
-          echo "read_code=$icode" >> "$GITHUB_OUTPUT"
-          visible="$(jq -r --arg id "$vid" 'if (.items|type)=="array" then any(.items[]; .id==$id) else false end' /tmp/inventory.json 2>/dev/null || echo false)"
-          echo "visible=$visible" >> "$GITHUB_OUTPUT"
-          test "$pcode" -ge 200 && test "$pcode" -lt 300 && test "$pok" = "true" && test "$vstatus" = "published" && test "$icode" = "200" && test "$visible" = "true"
-
-      - name: Dealer security gate
-        id: dealer
-        continue-on-error: true
-        shell: bash
-        run: |
-          hcode="$(curl -sS -o /tmp/dealer-health.json -w '%{http_code}' https://dealer.wedontcarecars.com/api/health)"
-          acode="$(curl -sS -o /tmp/dealer-post.json -w '%{http_code}' -X POST https://dealer.wedontcarecars.com/api/inventory -H 'content-type: application/json' --data '{"year":2020,"make":"QA","model":"AUTH-GATE","price":1}')"
-          echo "health_code=$hcode" >> "$GITHUB_OUTPUT"
-          echo "auth_code=$acode" >> "$GITHUB_OUTPUT"
-          test "$acode" = "401" -o "$acode" = "403"
-
-      - name: Report current live smoke result
-        if: always()
+          node --check scripts/wdcc-release-static-check.mjs
+          node scripts/wdcc-release-static-check.mjs
+      - name: Install reproducibly without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Verify immutable media assets
+        run: node scripts/wdcc-media-integrity.mjs
+      - name: Compile release candidate without production secrets
         env:
-          GH_TOKEN: ${{ github.token }}
-          HOME_OUTCOME: ${{ steps.home.outcome }}
-          HOME_CODE: ${{ steps.home.outputs.code }}
-          HOME_MARKERS: ${{ steps.home.outputs.markers }}
-          HEALTH_OUTCOME: ${{ steps.health.outcome }}
-          BACKEND_CODE: ${{ steps.health.outputs.code }}
-          BACKEND_RELEASE: ${{ steps.health.outputs.release }}
-          LEAD_OUTCOME: ${{ steps.lead.outcome }}
-          LEAD_CODE: ${{ steps.lead.outputs.code }}
-          LEAD_ID: ${{ steps.lead.outputs.id }}
-          LEAD_SOURCE: ${{ steps.lead.outputs.source }}
-          EMAIL_STATUS: ${{ steps.lead.outputs.email }}
-          SMS_STATUS: ${{ steps.lead.outputs.sms }}
-          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
-          PROOF_CODE: ${{ steps.inventory.outputs.proof_code }}
-          VEHICLE_ID: ${{ steps.inventory.outputs.vehicle_id }}
-          VEHICLE_STATUS: ${{ steps.inventory.outputs.vehicle_status }}
-          INVENTORY_READ_CODE: ${{ steps.inventory.outputs.read_code }}
-          INVENTORY_VISIBLE: ${{ steps.inventory.outputs.visible }}
-          DEALER_OUTCOME: ${{ steps.dealer.outcome }}
-          DEALER_HEALTH: ${{ steps.dealer.outputs.health_code }}
-          DEALER_AUTH: ${{ steps.dealer.outputs.auth_code }}
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+      - name: Local read-only route smoke
         shell: bash
         run: |
-          body=$(printf 'Homepage: `%s` HTTP `%s` markers `%s/5`\nBackend: `%s` HTTP `%s` release `%s`\nLead: `%s` HTTP `%s` id `%s` source `%s` email `%s` sms `%s`\nInventory proof: `%s` POST `%s` vehicle `%s` status `%s` storefront GET `%s` visible `%s`\nDealer gate: `%s` health `%s` unauth POST `%s`' "$HOME_OUTCOME" "$HOME_CODE" "$HOME_MARKERS" "$HEALTH_OUTCOME" "$BACKEND_CODE" "$BACKEND_RELEASE" "$LEAD_OUTCOME" "$LEAD_CODE" "$LEAD_ID" "$LEAD_SOURCE" "$EMAIL_STATUS" "$SMS_STATUS" "$INVENTORY_OUTCOME" "$PROOF_CODE" "$VEHICLE_ID" "$VEHICLE_STATUS" "$INVENTORY_READ_CODE" "$INVENTORY_VISIBLE" "$DEALER_OUTCOME" "$DEALER_HEALTH" "$DEALER_AUTH")
-          gh issue create --repo "$GITHUB_REPOSITORY" --title "WDCC current live diagnostic ${GITHUB_SHA:0:7}" --body "$body" || true
+          set -euo pipefail
+          npm run start -- -p 3197 >/tmp/wdcc-next-local.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 24); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:3197/about -o /dev/null; then break; fi
+            sleep 1
+          done
+          for route in / /inventory /about /login /forgot-password /reset-password /robots.txt /sitemap.xml; do
+            code="$(curl -s -o /tmp/wdcc-route -w '%{http_code}' --max-time 6 "http://127.0.0.1:3197$route")"
+            echo "$route => $code"
+            test "$code" = '200'
+          done
+          curl -fsS --max-time 6 http://127.0.0.1:3197/login | grep -F -q '/forgot-password'
+          curl -fsS --max-time 6 http://127.0.0.1:3197/sitemap.xml | grep -F -q 'wedontcarecars.com/about'
+
+      - name: Local browser acceptance with screenshot evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME_BIN" ]; then echo 'Browser unavailable in this runner; cannot certify visual QA'; exit 1; fi
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+          npm run start -- -p 3197 >/tmp/wdcc-visual-next.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:3197/about -o /dev/null; then break; fi
+            sleep 1
+          done
+          CHROME_BIN="$CHROME_BIN" WDCC_VISUAL_DIR=wdcc-browser-evidence node scripts/wdcc-local-browser-acceptance.mjs
+          CHROME_BIN="$CHROME_BIN" node scripts/wdcc-local-conversion-acceptance.mjs
+      - name: Archive browser screenshots and acceptance output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wdcc-local-visual-evidence-${{ github.run_id }}
+          path: wdcc-browser-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+
+  read-only-production-observation:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+      - name: Bounded GET-only production evidence check
+        env:
+          WDCC_AUDIT_OUTPUT: wdcc-observation.json
+        run: |
+          node --check scripts/wdcc-live-readonly-audit.mjs
+          node scripts/wdcc-live-readonly-audit.mjs
+      - name: Preserve dated read-only observation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wdcc-readonly-evidence-${{ github.run_id }}
+          path: wdcc-observation.json
+          retention-days: 30
+          if-no-files-found: warn

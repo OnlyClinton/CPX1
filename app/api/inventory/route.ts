@@ -43,7 +43,7 @@ function toPublicVehicle(item:any){
 async function proxyPublicInventory(request:Request){
   const upstream=await proxyDealer(request,"/api/inventory");
   if(!upstream.ok){
-    if(upstream.status<500)return NextResponse.json({ok:true,count:0,items:[],degraded:false},{status:200,headers:{"Cache-Control":"public, max-age=30","X-WDCC-Inventory-Source":"canonical-empty"}});
+    if(upstream.status<500)return NextResponse.json({ok:false,count:0,items:[],degraded:true,error:"published_inventory_source_unavailable"},{status:502,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"canonical-unavailable"}});
     const fallbackItems=PUBLIC_INVENTORY_FALLBACK.map(toPublicVehicle);
     return NextResponse.json({ok:true,count:fallbackItems.length,items:fallbackItems,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}});
   }
@@ -59,14 +59,14 @@ async function proxyPublicInventory(request:Request){
 }
 
 export async function GET(request:Request){
-  const publicScope=new URL(request.url).searchParams.get("scope")==="public";
+  const scope=new URL(request.url).searchParams.get("scope");
+  const publicScope=scope==="public";
   if(!isDealerRuntime(request)){
-    // Customer pages always ask for the explicitly filtered public contract.
-    // Every no-scope request belongs to the dealer UI and must be passed through
-    // with the canonical service's current Neon-backed session cookies.  The old
-    // __Host-wdcc_session name belonged to the retired Blob runtime and caused a
-    // valid dealer login to be silently downgraded to public inventory.
-    return publicScope?proxyPublicInventory(request):proxyDealer(request,"/api/inventory");
+    // Storefront reads default to the published, tenant-filtered public contract.
+    // Privileged dealer UI must explicitly request scope=dealer and remains
+    // guarded by the canonical session and role checks at the dealer backend.
+    // This stops the public unscoped route reporting a misleading healthy 0.
+    return scope==="dealer"?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
   }
   const rid=requestId(request);
   try{

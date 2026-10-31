@@ -22,7 +22,7 @@ function sessionAuthority(){
 }
 
 function integrations(){
-  const email=Boolean((process.env.RESEND_API_KEY||"").trim());
+  const email=Boolean((process.env.RESEND_API_KEY||"").trim()&&(process.env.WDCC_LEAD_NOTIFICATION_EMAILS||"").trim());
   const sms=Boolean((process.env.TWILIO_ACCOUNT_SID||"").trim()&&(process.env.TWILIO_AUTH_TOKEN||"").trim()&&(process.env.TWILIO_FROM_NUMBER||"").trim()&&(process.env.WDCC_LEAD_NOTIFICATION_PHONE||"").trim());
   const webhook=Boolean((process.env.WDCC_LEAD_WEBHOOK_URL||"").trim());
   return{email:{configured:email},sms:{configured:sms},webhook:{configured:webhook},dashboard:{configured:true}};
