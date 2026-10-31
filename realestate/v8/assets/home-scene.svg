@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 920" role="img" aria-label="Architectural sunset illustration with a modern waterfront property">
+<defs>
+<linearGradient id="sky" x2=".15" y2="1"><stop stop-color="#121f36"/><stop offset=".5" stop-color="#2d4655"/><stop offset=".7" stop-color="#8e6a62"/><stop offset="1" stop-color="#132d36"/></linearGradient>
+<linearGradient id="sea" x2="0" y2="1"><stop stop-color="#6a7d7d"/><stop offset=".25" stop-color="#315362"/><stop offset="1" stop-color="#0c2435"/></linearGradient>
+<linearGradient id="glass" x2="1" y2="1"><stop stop-color="#1f3846"/><stop offset=".5" stop-color="#54747a"/><stop offset="1" stop-color="#1d323e"/></linearGradient>
+<linearGradient id="amber" x2="0" y2="1"><stop stop-color="#f7e6b3"/><stop offset="1" stop-color="#b07848"/></linearGradient>
+<linearGradient id="terrace" x2="0" y2="1"><stop stop-color="#817464"/><stop offset="1" stop-color="#263641"/></linearGradient>
+</defs>
+<rect width="1600" height="920" fill="url(#sky)"/>
+<ellipse cx="1020" cy="330" rx="460" ry="150" fill="#d39d77" opacity=".22"/>
+<path d="M0 588Q300 540 500 565T1020 562Q1250 535 1600 575V920H0Z" fill="url(#sea)"/>
+<path d="M0 575Q350 580 480 565T1110 584H1600" stroke="#c8ae98" stroke-width="4" opacity=".3" fill="none"/>
+<g fill="#182d3a" opacity=".85">
+<rect x="230" y="452" width="19" height="110"/><rect x="260" y="433" width="32" height="126"/><rect x="300" y="474" width="28" height="88"/><rect x="335" y="444" width="18" height="119"/><rect x="365" y="460" width="28" height="104"/><rect x="400" y="424" width="44" height="139"/><rect x="456" y="470" width="28" height="100"/><rect x="500" y="478" width="24" height="90"/>
+</g>
+<g opacity=".7" fill="#dcb88b"><rect x="272" y="450" width="3" height="8"/><rect x="280" y="465" width="3" height="9"/><rect x="408" y="440" width="5" height="11"/><rect x="419" y="461" width="4" height="8"/><rect x="304" y="490" width="4" height="9"/><rect x="375" y="482" width="5" height="11"/></g>
+<!-- Stylized, modern angular glass residence on right -->
+<path d="M835 360L1170 260L1590 335V665L1180 728L835 625Z" fill="#14252d" stroke="#c5a37c" stroke-opacity=".6" stroke-width="4"/>
+<path d="M849 379L1166 290L1555 355L1227 438Z" fill="#6a594b" stroke="#c8a67c" stroke-width="3"/>
+<path d="M864 416L1205 447V655L864 605Z" fill="url(#glass)" stroke="#9ab0b3" stroke-width="4"/>
+<path d="M1218 447L1561 367V640L1218 669Z" fill="url(#glass)" stroke="#9ab0b3" stroke-width="4"/>
+<path d="M886 458L1176 481V617L886 582Z" fill="#d2a069" opacity=".55"/>
+<path d="M1260 454L1508 398V611L1260 648Z" fill="#e8b47f" opacity=".49"/>
+<path d="M1000 428V625M1103 441V642M1335 415V657M1429 393V636" stroke="#152934" stroke-width="13"/>
+<path d="M859 504L1205 538M1218 534L1561 477" stroke="#243945" stroke-width="11"/>
+<path d="M837 365L1174 254L1580 322" fill="none" stroke="#e3c89d" stroke-width="14"/>
+<path d="M825 645L1163 681L1594 637L1600 739L1169 775L799 714Z" fill="url(#terrace)"/>
+<!-- Pool with light reflections -->
+<path d="M670 722L1169 760L1600 721V920H940Z" fill="#0a4c5a" stroke="#bfb4a7" stroke-width="10"/>
+<g stroke="#b0d7d8" opacity=".2" stroke-width="4"><path d="M720 768l450 38 370-52"/><path d="M790 818l400 34 340-56"/><path d="M890 878l360 12 230-50"/></g>
+<g fill="#e1bb89" opacity=".6"><rect x="1200" y="747" width="94" height="3"/><rect x="1270" y="770" width="125" height="3"/><rect x="1160" y="831" width="100" height="2"/><rect x="1490" y="806" width="70" height="2"/></g>
+<path d="M0 920V710Q235 640 516 715T930 920Z" fill="#0b2231" opacity=".82"/>
+</svg>
