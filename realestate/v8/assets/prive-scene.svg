@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 930" role="img" aria-label="Modern cliffside estate architectural illustration">
+<defs><linearGradient id="s" x2="0" y2="1"><stop stop-color="#162333"/><stop offset=".62" stop-color="#817b79"/><stop offset=".85" stop-color="#5e7a7e"/><stop offset="1" stop-color="#123748"/></linearGradient><linearGradient id="water" x2="0" y2="1"><stop stop-color="#87a7a5"/><stop offset="1" stop-color="#163e4b"/></linearGradient><linearGradient id="glass" x2=".8" y2="1"><stop stop-color="#324953"/><stop offset=".5" stop-color="#b1a88e"/><stop offset="1" stop-color="#203842"/></linearGradient></defs>
+<rect width="1600" height="930" fill="url(#s)"/>
+<path d="M0 545Q360 515 740 557T1600 537V930H0Z" fill="url(#water)"/>
+<path d="M0 610L452 570L673 602L970 580L1040 745L1600 745V930H0Z" fill="#1d3136"/>
+<path d="M540 340L850 244L1430 315L1525 652L800 680L570 608Z" fill="#172832"/>
+<path d="M565 340L852 270L1415 340L840 419Z" fill="#e0c69d" opacity=".9"/>
+<path d="M582 405L830 442V620L582 584ZM845 443L1417 356V622L845 653Z" fill="url(#glass)" stroke="#dac498" stroke-width="5"/>
+<path d="M937 420V641M1127 394V633M1300 368V618M675 419V602M766 431V620" stroke="#182a36" stroke-width="14"/>
+<path d="M570 515L830 550L1417 470" stroke="#182a36" stroke-width="13"/>
+<path d="M850 675L1500 632L1560 739L775 791Z" fill="#57534a" stroke="#e0c79c" stroke-width="6"/>
+<path d="M754 779L1560 732L1600 890L1030 930L610 930Z" fill="#1b6471" stroke="#b9c2b0" stroke-width="7"/>
+<path d="M796 834L1566 789M960 873L1480 845" stroke="#b6dcdb" stroke-width="4" opacity=".3"/>
+<path d="M0 785Q220 630 450 726L610 930H0Z" fill="#142a2d"/>
+<path d="M0 800Q320 738 470 835" stroke="#bfa47f" stroke-width="4" opacity=".4" fill="none"/>
+<g fill="#f2c98f" opacity=".5"><rect x="985" y="486" width="110" height="7"/><rect x="1160" y="460" width="80" height="6"/><rect x="1280" y="530" width="70" height="6"/></g>
+</svg>
