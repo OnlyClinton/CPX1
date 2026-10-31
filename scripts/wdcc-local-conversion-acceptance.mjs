@@ -17,7 +17,8 @@ async function context(){
   await c.route("**/api/**",async route=>{
     if(route.request().method()!=="GET")return route.fulfill({status:418,json:{ok:false,error:"blocked_unmocked_write"}});
     if(route.request().url().includes("/api/inventory"))return route.fulfill({status:200,json:{ok:true,count:0,items:[],degraded:false}});
-    return route.continue();
+    if(route.request().url().includes("/api/auth/session"))return route.fulfill({status:200,json:{authenticated:false}});
+    return route.fulfill({status:503,json:{ok:false,error:"isolated_fixture_only"}});
   });
   return c;
 }
