@@ -36,6 +36,10 @@ check("five verified recovery photo IDs",()=>assert.equal((read("lib/recoveryVeh
 check("dealer image source points at verified public media",()=>assert.match(read("lib/recoveryVehicleImage.ts"),/https:\/\/wedontcarecars\.com\/assets\/cars/));
 check("public metadata has explicit canonical",()=>assert.match(read("app/inventory/layout.tsx"),/canonical/));
 check("admin/dealer marked noindex",()=>assert.match(read("app/dealer/layout.tsx"),/index:false/));
+check("recovery records never labeled available now",()=>assert.doesNotMatch(read("app/components.tsx"),/vehicle\{shown\.length===1\?"":"s"\} available now/));
+check("failed inventory source cannot report healthy zero",()=>assert.match(read("app/api/inventory/route.ts"),/published_inventory_source_unavailable/));
+check("obsolete About redirect removed",()=>assert.doesNotMatch(read("next.config.ts"),/source: "\/about", destination:/));
+check("www canonical host redirect present",()=>assert.match(read("next.config.ts"),/www\.wedontcarecars\.com/));
 const failures=checks.filter(x=>!x.pass);
 console.log(JSON.stringify({kind:"WDCC_STATIC_RELEASE_GATE",tests:checks.length,pass:checks.length-failures.length,fail:failures.length,failures},null,2));
 if(failures.length)process.exitCode=1;
