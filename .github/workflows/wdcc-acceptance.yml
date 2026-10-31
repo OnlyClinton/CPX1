@@ -67,6 +67,30 @@ jobs:
           curl -fsS --max-time 6 http://127.0.0.1:3197/login | grep -F -q '/forgot-password'
           curl -fsS --max-time 6 http://127.0.0.1:3197/sitemap.xml | grep -F -q 'wedontcarecars.com/about'
 
+      - name: Local browser acceptance with screenshot evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$CHROME_BIN" ]; then echo 'Browser unavailable in this runner; cannot certify visual QA'; exit 1; fi
+          npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+          npm run start -- -p 3197 >/tmp/wdcc-visual-next.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:3197/about -o /dev/null; then break; fi
+            sleep 1
+          done
+          CHROME_BIN="$CHROME_BIN" WDCC_VISUAL_DIR=wdcc-browser-evidence node scripts/wdcc-local-browser-acceptance.mjs
+      - name: Archive browser screenshots and acceptance output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wdcc-local-visual-evidence-${{ github.run_id }}
+          path: wdcc-browser-evidence/
+          retention-days: 30
+          if-no-files-found: warn
+
   read-only-production-observation:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
