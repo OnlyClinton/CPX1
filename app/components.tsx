@@ -100,11 +100,24 @@ function customerVisible(v:any){
 }
 
 export function VehicleGrid({limit}:{limit?:number}){
+  // Recovery seed is only a temporary visual reference until the canonical
+  // published feed responds. Never label seed vehicles as available stock.
   const[items,setItems]=useState<any[]>(PUBLIC_INVENTORY_FALLBACK);
-  useEffect(()=>{fetch("/api/inventory?scope=public",{cache:"no-store"}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j?.error||"Inventory unavailable");const source=Array.isArray(j?.items)?j.items:Array.isArray(j?.inventory)?j.inventory:null;if(!source)throw Error("Invalid inventory response");setItems(source.filter(customerVisible))}).catch(()=>setItems(PUBLIC_INVENTORY_FALLBACK))},[]);
+  const[feedStatus,setFeedStatus]=useState<"verifying"|"published"|"unverified">("verifying");
+  useEffect(()=>{
+    let active=true;
+    fetch("/api/inventory?scope=public",{cache:"no-store"})
+      .then(async r=>{const j=await r.json();if(!r.ok)throw Error(j?.error||"Inventory unavailable");const source=Array.isArray(j?.items)?j.items:Array.isArray(j?.inventory)?j.inventory:null;if(!source)throw Error("Invalid inventory response");return {items:source.filter(customerVisible),degraded:j?.degraded===true}})
+      .then(data=>{if(active){setItems(data.items);setFeedStatus(data.degraded?"unverified":"published")}})
+      .catch(()=>{if(active){setItems(PUBLIC_INVENTORY_FALLBACK);setFeedStatus("unverified")}});
+    return()=>{active=false};
+  },[]);
   const shown=limit?items.slice(0,limit):items;
   return <div>
-    <div className={inventoryCardStyles.catalogToolbar}><strong>{shown.length} vehicle{shown.length===1?"":"s"} available now</strong></div>
+    <div className={inventoryCardStyles.catalogToolbar}>
+      <strong>{shown.length} vehicle listing{shown.length===1?"":"s"}</strong>
+      <span role="status" aria-live="polite">{feedStatus==="published"?"Published feed · Confirm actual availability, condition and final price before visiting.":"Inventory verification pending · These may be recovery references, not vehicles confirmed on the lot. Call before visiting."}</span>
+    </div>
     <div className={inventoryCardStyles.catalogGrid}>{shown.length?shown.map((vehicle,index)=><InventoryCard vehicle={vehicle} index={index} variant="catalog" key={String(vehicle.id||vehicle.slug||index)}/>):<div className="emptyInventory"><h3>Inventory is being updated.</h3><p>Call or text Sean for vehicles being prepared now.</p></div>}</div>
   </div>
 }
