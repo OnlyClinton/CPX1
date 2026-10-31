@@ -44,6 +44,28 @@ jobs:
         run: npx tsc --noEmit
       - name: Verify immutable media assets
         run: node scripts/wdcc-media-integrity.mjs
+      - name: Compile release candidate without production secrets
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+      - name: Local read-only route smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3197 >/tmp/wdcc-next-local.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 24); do
+            if curl --silent --fail --max-time 2 http://127.0.0.1:3197/about -o /dev/null; then break; fi
+            sleep 1
+          done
+          for route in / /inventory /about /login /forgot-password /reset-password /robots.txt /sitemap.xml; do
+            code="$(curl -s -o /tmp/wdcc-route -w '%{http_code}' --max-time 6 "http://127.0.0.1:3197$route")"
+            echo "$route => $code"
+            test "$code" = '200'
+          done
+          curl -fsS --max-time 6 http://127.0.0.1:3197/login | grep -F -q '/forgot-password'
+          curl -fsS --max-time 6 http://127.0.0.1:3197/sitemap.xml | grep -F -q 'wedontcarecars.com/about'
 
   read-only-production-observation:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
