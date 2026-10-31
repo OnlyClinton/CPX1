@@ -25,7 +25,7 @@ export default function DealerInventory(){
   const[page,setPage]=useState(1);
   const perPage=10;
 
-  async function load(){const r=await fetch("/api/inventory",{cache:"no-store",credentials:"include"});if(r.status===401||r.status===403){location.replace("/dealer");return}const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||`Inventory list failed (${r.status})`);setItems(j.items||[]);setMessage("")}
+  async function load(){const r=await fetch("/api/inventory?scope=dealer",{cache:"no-store",credentials:"include"});if(r.status===401||r.status===403){location.replace("/dealer");return}const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||`Inventory list failed (${r.status})`);setItems(j.items||[]);setMessage("")}
   useEffect(()=>{
     const requested=new URLSearchParams(window.location.search).get("status");if(requested)setStatus(requested.toLowerCase());
     (async()=>{try{const response=await fetch("/api/auth/session",{cache:"no-store",credentials:"include"});const session=await response.json().catch(()=>({}));const role=session?.user?.role||session?.role||session?.session?.role;if((response.status===401||response.status===403)||(response.ok&&session.authenticated!==true)){setAuthorized(false);location.replace("/dealer");return}if(!response.ok||!dealerRole(role)){setAuthorized(false);setAuthError(response.ok?"This account does not have dealer access.":"Dealer access could not be verified. Try again when the connection is restored.");return}setAuthorized(true);setAuthError("");await load()}catch(error){setAuthorized(false);setAuthError(error instanceof Error?error.message:"Dealer access could not be verified.")}})();
