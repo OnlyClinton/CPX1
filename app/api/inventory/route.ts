@@ -59,14 +59,14 @@ async function proxyPublicInventory(request:Request){
 }
 
 export async function GET(request:Request){
-  const publicScope=new URL(request.url).searchParams.get("scope")==="public";
+  const scope=new URL(request.url).searchParams.get("scope");
+  const publicScope=scope==="public";
   if(!isDealerRuntime(request)){
-    // Customer pages always ask for the explicitly filtered public contract.
-    // Every no-scope request belongs to the dealer UI and must be passed through
-    // with the canonical service's current Neon-backed session cookies.  The old
-    // __Host-wdcc_session name belonged to the retired Blob runtime and caused a
-    // valid dealer login to be silently downgraded to public inventory.
-    return publicScope?proxyPublicInventory(request):proxyDealer(request,"/api/inventory");
+    // Storefront reads default to the published, tenant-filtered public contract.
+    // Privileged dealer UI must explicitly request scope=dealer and remains
+    // guarded by the canonical session and role checks at the dealer backend.
+    // This stops the public unscoped route reporting a misleading healthy 0.
+    return scope==="dealer"?proxyDealer(request,"/api/inventory"):proxyPublicInventory(request);
   }
   const rid=requestId(request);
   try{
