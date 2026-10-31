@@ -24,7 +24,7 @@ export function vehicleImageSource(vehicle:any){
   const direct=String(vehicle?.primary_image_url||vehicle?.image||vehicle?.photo||vehicle?.primaryPhotoUrl||vehicle?.primaryPhoto||vehicle?.imageUrl||"").trim();
   // Canonical records may still carry a relative static image path from the
   // storefront. A dealer-page host has no local copy of those static files.
-  if(/^\\/assets\\/cars\\/[a-z0-9-]+\\.webp$/i.test(direct))
+  if(direct.startsWith("/assets/cars/") && direct.endsWith(".webp") && !direct.includes(".."))
     return "https://wedontcarecars.com"+direct;
   return direct||recoveryVehicleImage(vehicle);
 }
