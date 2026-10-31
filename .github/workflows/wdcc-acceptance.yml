@@ -82,6 +82,7 @@ jobs:
             sleep 1
           done
           CHROME_BIN="$CHROME_BIN" WDCC_VISUAL_DIR=wdcc-browser-evidence node scripts/wdcc-local-browser-acceptance.mjs
+          CHROME_BIN="$CHROME_BIN" node scripts/wdcc-local-conversion-acceptance.mjs
       - name: Archive browser screenshots and acceptance output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
