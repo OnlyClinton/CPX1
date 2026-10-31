@@ -43,7 +43,7 @@ function toPublicVehicle(item:any){
 async function proxyPublicInventory(request:Request){
   const upstream=await proxyDealer(request,"/api/inventory");
   if(!upstream.ok){
-    if(upstream.status<500)return NextResponse.json({ok:true,count:0,items:[],degraded:false},{status:200,headers:{"Cache-Control":"public, max-age=30","X-WDCC-Inventory-Source":"canonical-empty"}});
+    if(upstream.status<500)return NextResponse.json({ok:false,count:0,items:[],degraded:true,error:"published_inventory_source_unavailable"},{status:502,headers:{"Cache-Control":"no-store","X-WDCC-Inventory-Source":"canonical-unavailable"}});
     const fallbackItems=PUBLIC_INVENTORY_FALLBACK.map(toPublicVehicle);
     return NextResponse.json({ok:true,count:fallbackItems.length,items:fallbackItems,degraded:true},{status:200,headers:{"Cache-Control":"public, max-age=60, stale-while-revalidate=300","X-WDCC-Inventory-Source":"launch-fallback"}});
   }
