@@ -10,6 +10,8 @@ Do not promote storefront into production or issue complete security sign-off. T
 - Dealer runtime logs identify path private/state/platform-v3.json with authority token and Vercel Blob HTTP 400 Bad Request.
 - Production Blob token is configured; the configured Blob store is private, exists and is available. Token-to-store correctness and file integrity are not established.
 
+- Private Blob store connection metadata lists exactly one connected project, wdcc-cpx-launch, and does NOT list wdcc-dealer-portal. The dealer portal's environment still shows a production Blob token plus store ID. This mismatch is a concrete remediation target but not conclusive proof of the token's provenance.
+
 ## Non-destructive recovery sequence
 1. Freeze customer-data writes and release promotion. Do not create or overwrite an empty state file or seed synthetic stock.
 2. From the owning Vercel account, compare production Blob credential's store binding to the configured private store. Do not paste credentials or private data into GitHub.
