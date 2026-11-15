@@ -1,31 +1,25 @@
-# GHOSTremote ONE v0.8.0 — HP Ubuntu Live deployment
+# GHOSTremote ONE — v0.9.0 OWNER BETA (NOT LIVE)
 
-## Scope
+**IMPORTANT: v0.8.0 was withdrawn** after a cleanup and installation-order audit. Do not use the old setup line. The updated source is staged on this separate branch, with no passwords or tokens embedded. Hardware and phone-to-HP acceptance still pending.
 
-Only the Ubuntu Live version of GHOSTremote ONE is currently prepared. It supports temporary outbound tunnel + browser SSH to the HP without internal SSD. Not verified on physical hardware, NOT a persistent installation, and not evidence that Windows or macOS host adapters work.
+## One-line HP Ubuntu Live enrollment
 
-## Single command from Ubuntu Live Terminal
-
-Run locally on BOOTFORGE, never remotely. It masks the standard SSH port 22 in systemd runtime to prevent unintentional LAN exposure, downloads a static gzip-base64 script from this isolated branch, verifies **SHA-256 of the decompressed script** against a fixed digest, installs a local CLI, and launches guided enrollment. It does NOT need curl or a ZIP.
+Open Terminal on the existing BOOTFORGE Ubuntu Live session and paste the complete command below. It requires Python 3 (already available in Ubuntu Live), but no installed `curl`, no ZIP transfer, and no usable internal SSD. It retrieves the installer from an immutable Git commit and verifies the decompressed SHA-256 before execution.
 
 ```bash
-sudo systemctl mask --runtime ssh.service ssh.socket && python3 -c 'import urllib.request,gzip,base64,hashlib,pathlib,os;u="https://raw.githubusercontent.com/OnlyClinton/CPX1/ghostremote-one-bootstrap-20261115/ghostremote/ghostremote-one-v0.8.0.sh.gz.b64";d=gzip.decompress(base64.b64decode(urllib.request.urlopen(u,timeout=30).read()));assert hashlib.sha256(d).hexdigest()=="2238490066c422731f960bbf555ee8e3a1d96792e59d31ab93f6145c174bf4ad","GHOSTremote installer hash mismatch";p=pathlib.Path.home()/".local/bin/ghostremote";p.parent.mkdir(parents=True,exist_ok=True);q=p.with_suffix(".new");q.write_bytes(d);q.chmod(0o700);q.replace(p);os.execv("/bin/bash",["bash",str(p),"connect"])'
+python3 -c 'import urllib.request,base64,gzip,hashlib,pathlib,os;u="https://raw.githubusercontent.com/OnlyClinton/CPX1/aa5143ce942eb956b44248ad63a2f5ea57c825ed/ghostremote/ghostremote-one-v0.9.0.sh.gz.b64";d=gzip.decompress(base64.b64decode(urllib.request.urlopen(u,timeout=30).read()));assert hashlib.sha256(d).hexdigest()=="68125d8af3bca7b9ddb91135758bfb480ee8c2e42e073946c1ddf309099bbb7a","GHOSTremote checksum mismatch";p=pathlib.Path.home()/".local/bin/ghostremote";p.parent.mkdir(parents=True,exist_ok=True);q=p.with_suffix(".new");q.write_bytes(d);q.chmod(0o700);os.replace(q,p);os.execv("/bin/bash",["bash",str(p),"connect"])'
 ```
 
-## Next prompts
+The installer **must be run locally and interactively on your own HP**; its checks block non-Live systems, unexpected existing services or accounts, and declared persistence. It will request the owner email prefix (as a Linux username), explicit confirmation that Ventoy persistence is disabled, a separate 16+ character remote password, a yes/no choice for granting administrator rights (default **NO**), and your **existing HP tunnel token** via a hidden terminal prompt. Never paste any credential into ChatGPT or GitHub.
 
-The script asks you to confirm LIVE-ONLY with no persistence; input your Cloudflare owner Access email locally (for SSH username matching), choose a different 16+ character SSH password, optionally permit sudo (default NO), and enter the existing HP tunnel token in a hidden prompt. Do not transmit credentials to ChatGPT or GitHub.
+Once it succeeds, use `ghostremote status`, `ghostremote doctor`, and `ghostremote disconnect`. For recovery of interrupted installation, use `~/.local/bin/ghostremote recover` locally. Browser portal: **https://ssh.hp.remote.cpx.agency**.
 
-## Operation
+## Scope and limitations
 
-```bash
-~/.local/bin/ghostremote status
-~/.local/bin/ghostremote disconnect
-```
+- Ubuntu Live adapter only. Browser clients on Windows, macOS, Android, iOS and Linux are supported architecturally through Cloudflare browser SSH, but host adapters for installed Windows/macOS/Linux and GUI desktop control are **not ready**.
+- The existing BOOTFORGE USB partitions, Ventoy config, bootloader, internal SSD and BIOS are not intentionally written or changed. A Live OS with hidden persistence might write to external storage; the operator must verify no persistence is enabled.
+- The installer temporarily installs signed Ubuntu and Cloudflare APT packages in the Live overlay; the default SSH daemon is runtime-masked to avoid a LAN listener. The mask persists until reboot. Packages may remain in the Live overlay until reboot.
+- SSH listens only at `127.0.0.1:22222`, disables root login and forwarding, and only permits the separate owner-matched account. Cloudflare token is stored in root-only `/run` tmpfs, passed to the service via systemd credentials, not in process args.
+- **No unattended access after reboot.** Cloudflare sign-in and MFA, actual host service install, phone-to-HP browser SSH, and teardown on the physical HP remain unverified.
 
-Client browser: https://ssh.hp.remote.cpx.agency. Existing owner-only Cloudflare Access and outbound tunnel staging. Browser sign-in not tested. Shutdown ends Live mode. No BOOTFORGE partition modifications. Commands only work if internet and signed apt repositories can be reached and on a truly nonpersistent Live session.
-
-## Verification
-
-SHA-256 of decompressed script: `2238490066c422731f960bbf555ee8e3a1d96792e59d31ab93f6145c174bf4ad`
-Source is packed for portable bootstrap; a readable script is also included in the GHOSTremote ONE ZIP artifact from ChatGPT. The code has passed shell syntax and offline structural checks, not a physical install or an external browser SSH login.
+Installer SHA-256: `68125d8af3bca7b9ddb91135758bfb480ee8c2e42e073946c1ddf309099bbb7a`. Distribution content is matched to the published GitHub blob. This protects against accidental download changes but is not a code-signature or independent audit.
