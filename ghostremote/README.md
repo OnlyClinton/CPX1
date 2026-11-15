@@ -1,25 +1,30 @@
-# GHOSTremote ONE v1.0.0 — current owner-beta release candidate
+# GHOSTremote ONE v1.1.0 — GUI enrollment (current owner beta)
 
-**v0.8.0 and v0.9.0 are deprecated; do not run their installers.**
+**Older v0.8 through v1.0.1 installers are superseded.** Use the exact v1.1.0 command below from the HP's local graphical Ubuntu Live session.
 
-This is the SSD-less Ubuntu Live (BOOTFORGE) adapter, not a verified physical installation. It uses an existing owner-only Cloudflare Access SSH route. No internal SSD or BOOTFORGE partition change required.
+This release is tailored for SSD-less HP Spectre booted from BOOTFORGE Live Ubuntu. No changes to BOOTFORGE partitions or the internal SSD.
 
-## One command in the HP Ubuntu terminal
+## One-command installer
 
 ```bash
-python3 -c 'import urllib.request,base64,gzip,hashlib,pathlib,os;u="https://raw.githubusercontent.com/OnlyClinton/CPX1/be239c78c0894580383a045852aca74de7b70c90/ghostremote/ghostremote-one-v1.0.0.sh.gz.b64";b=urllib.request.urlopen(u,timeout=30).read(100000);d=gzip.decompress(base64.b64decode(b,validate=True));assert len(d)<100000 and hashlib.sha256(d).hexdigest()=="048c7a8dbd10f08f83d525c7ce1cddec7274197cc79b49e0223b9eadbe8be432","GHOSTremote integrity check FAILED";p=pathlib.Path.home()/".local/bin/ghostremote";p.parent.mkdir(parents=True,exist_ok=True);t=p.with_suffix(".new");t.write_bytes(d);t.chmod(0o700);os.replace(t,p);os.execv("/bin/bash",["bash",str(p),"connect"])'
+GHOSTREMOTE_OWNER=onlyclinton python3 -c 'import urllib.request,base64,gzip,hashlib,pathlib,os;u="https://raw.githubusercontent.com/OnlyClinton/CPX1/e51e54d330a2d2e7dfbd01318866e4e6773fc262/ghostremote/ghostremote-one-v1.1.0.gui.sh.gz.b64";b=urllib.request.urlopen(u,timeout=30).read(100000);d=gzip.decompress(base64.b64decode(b,validate=True));assert len(d)<100000 and hashlib.sha256(d).hexdigest()=="94454ec25e18658d7f490a8337c70a885eb9aa74e37d283ba0d55d816dd9ecd4","GHOSTremote integrity check FAILED";p=pathlib.Path.home()/".local/bin/ghostremote";p.parent.mkdir(parents=True,exist_ok=True);t=p.with_suffix(".new");t.write_bytes(d);t.chmod(0o700);os.replace(t,p);os.execv("/bin/bash",["bash",str(p),"connect"])'
 ```
 
-The command downloads a package from an immutable Git commit using Python, checks SHA-256 of the decompressed installer, then starts guided local enrollment. The installer asks for LIVE-ONLY authorization, your Cloudflare owner's email prefix, a separate new remote password (16+ characters), optional sudo (default no), and your existing HP Cloudflare tunnel token in a hidden local prompt. Never share passwords or tunnel tokens in chat.
+The command pins an immutable Git commit, verifies SHA-256 of the decompressed script, and launches the native GTK wizard. The approved Cloudflare owner username is **preselected**, never requested as text input. The user sees a consent popup, two masked password popups, optional admin-access question (off by default), and a masked token-paste popup. If the passwords differ, the wizard retries without recreating any accounts; cancellation triggers cleanup.
 
-After the connector reports ready, test from another browser at https://ssh.hp.remote.cpx.agency. Then use ghostremote status / ghostremote disconnect from the HP. This is SSH terminal only, not a GUI desktop. Reboot ends an ordinary Live session.
+The package uses Ubuntu-signed Zenity if needed and may require your local Ubuntu password for sudo. Cloudflare's existing HP tunnel token must be pasted locally in the hidden popup. Never send it to chat, GitHub or the web page.
 
-## Evidence and limits
+## Operator use
 
-- SHA-256 source: 048c7a8dbd10f08f83d525c7ce1cddec7274197cc79b49e0223b9eadbe8be432
-- Immutable release commit: be239c78c0894580383a045852aca74de7b70c90
-- Exact Git compressed blob SHA-1: 87f1f842d3b8e7fdfaa7d43e8e44b83efb197ea6
-- 24 local/offline tests pass, including simulated cleanup; no physical HP installation or phone login tested.
-- Owner-only Access policy exists; MFA enforcement remains unverified.
-- Windows, macOS, installed Linux host adapters are diagnostics-only; cross-platform browser access is a design, not an acceptance result.
-- Do not enable Ventoy persistence without verified backup and testing.
+- After success, GHOSTremote ONE appears in the Ubuntu applications menu as a local popup control center.
+- Terminal commands remain `ghostremote status`, `ghostremote doctor`, and `ghostremote disconnect`.
+- Browser client: https://ssh.hp.remote.cpx.agency, protected by owner-restricted Cloudflare Access.
+- Shutdown ends the Live session; HP tunnel and phone login are not verified until the user completes setup.
+
+## Release evidence
+
+- Decompressed source SHA-256: `94454ec25e18658d7f490a8337c70a885eb9aa74e37d283ba0d55d816dd9ecd4`
+- Git blob SHA-1: `c7eb4f39fc859f80ec444938da8c2e9fb62fc56a` (verified by live GitHub fetch)
+- Immutable release commit: `e51e54d330a2d2e7dfbd01318866e4e6773fc262`
+- 39 local offline tests pass; actual Ubuntu/GTK dialogs and phone-to-HP connection remain pending.
+- This adapter supports Ubuntu Live as remote host. Windows/macOS installed-host components are not claimed working.
